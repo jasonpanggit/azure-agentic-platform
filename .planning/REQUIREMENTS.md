@@ -1,7 +1,7 @@
 # Azure Agentic Platform (AAP) — Requirements
 
 > Version: 1.0 | Date: 2026-03-25
-> Derived from: PROJECT.md (Active requirements) · FEATURES.md (table stakes) · ARCHITECTURE.md
+> Derived from: PROJECT.md (Active requirements) · FEATURES.md (table stakes) · ARCHITECTURE.md · microsoftgbb/agentic-platform-engineering research
 
 ---
 
@@ -55,6 +55,7 @@
 | AGENT-006 | All Arc MCP Server list tools exhaust `nextLink` pagination and return `total_count`; no tool silently returns a partial estate | Phase 3 |
 | AGENT-007 | Per-session token budget is tracked in Cosmos DB; sessions are aborted at a configurable threshold (default $5); `max_iterations` is capped at ≤10 per agent session with exponential backoff on tool retries | Phase 2 |
 | AGENT-008 | All agent containers authenticate to Azure APIs using `DefaultAzureCredential` resolving the system-assigned managed identity via IMDS; no service principal secrets or credentials are stored in code or environment variables | Phase 2 |
+| AGENT-009 | Each domain agent (Orchestrator, Compute, Network, Storage, Security, Arc, SRE) has a `.spec.md` file committed alongside its code defining: Persona, Goals, Workflow steps, Tool permissions, Safety constraints, and Example flows; spec must be reviewed and approved before agent implementation begins | Phase 2 |
 
 ---
 
@@ -66,7 +67,7 @@
 | DETECT-002 | Fabric Eventhouse ingests raw alerts from Event Hub via streaming connector into a `RawAlerts` table; KQL update policies enrich alerts into `EnrichedAlerts` (joined with resource inventory) and classify into `DetectionResults` using the `classify_domain()` function | Phase 4 |
 | DETECT-003 | Fabric Activator triggers on new rows in `DetectionResults` where `domain != null`; routes to Power Automate flow (simple alerts) or Fabric User Data Function (complex enrichment) which posts to `POST /api/v1/incidents` on the API gateway | Phase 4 |
 | DETECT-004 | The `POST /api/v1/incidents` endpoint accepts a structured incident payload (`incident_id`, `severity`, `domain`, `affected_resources`, `detection_rule`, `kql_evidence`) and creates a new Foundry thread dispatched to the Orchestrator | Phase 2 |
-| DETECT-005 | Alert deduplication collapses repeated alerts for the same resource within a configurable time window (default: 5 min) into a single incident record in Cosmos DB using ETag optimistic concurrency | Phase 4 |
+| DETECT-005 | Alert deduplication uses two layers: (1) time-window dedup collapses repeated alerts for the same resource within a configurable window (default: 5 min) into a single Cosmos DB incident record using ETag optimistic concurrency; (2) open-incident check queries Cosmos DB for any active incident for the same `resource_id` before creating a new one — if found, the new alert is correlated to the existing incident rather than spawning a duplicate agent thread | Phase 4 |
 | DETECT-006 | Alert state transitions (New → Acknowledged → Closed) are tracked in Cosmos DB with timestamps and actor; state is bidirectionally synced back to Azure Monitor | Phase 4 |
 | DETECT-007 | Azure Monitor alert processing rules are respected by the platform; suppressed alerts are not routed to agents | Phase 4 |
 
@@ -107,7 +108,8 @@
 | REMEDI-001 | No remediation action is executed without an explicit human approval; every action is proposed with: description, target resource(s), estimated impact, risk level, and reversibility statement | Phase 2 |
 | REMEDI-002 | Remediation proposals with `risk_level: high | critical` trigger a HITL approval gate: an Adaptive Card is posted to Teams and the Foundry thread is parked (no polling); the thread resumes only on webhook callback from the approval endpoint | Phase 5 |
 | REMEDI-003 | Approval records are written to Cosmos DB with `{ id, action_id, thread_id, status, expires_at }` using ETag concurrency; proposals expire after a configurable timeout (default: 30 min) and are never executed after expiry | Phase 5 |
-| REMEDI-004 | Pre-execution safety check: the agent takes a resource state snapshot at approval time and compares it against the current state before executing; the action is aborted if the resource has diverged since approval | Phase 5 |
+| REMEDI-004 | Pre-execution Resource Identity Certainty: before executing any remediation, the agent verifies the target resource using at least 2 independent signals (e.g., resource ID + ARM resource health query + tags match); the action is aborted if any signal is inconsistent or if the resource has diverged in state since approval was granted | Phase 5 |
+| REMEDI-008 | GitOps Remediation Path: for Arc K8s clusters where Flux or ArgoCD is detected as the GitOps controller, agents create a PR against the GitOps repo instead of applying changes directly via kubectl; direct-apply path is used only for non-GitOps clusters | Phase 5 |
 | REMEDI-005 | Operator can approve or reject any remediation proposal from either the Web UI or Teams; approval from either surface updates the same Cosmos DB record and resumes the same Foundry thread | Phase 5 |
 | REMEDI-006 | Remediation actions are rate-limited per agent per subscription (max N actions/minute); agents cannot act on resources tagged "protected"; production-subscription actions require explicit subscription scope confirmation | Phase 5 |
 | REMEDI-007 | Every executed remediation action (and every rejected proposal) is recorded in Fabric OneLake with the full action log schema (`agentId`, `toolName`, `toolParameters`, `approvedBy`, `outcome`, `durationMs`) | Phase 7 |
@@ -199,9 +201,9 @@ These requirements are explicitly out of scope for v1 and are tracked here for f
 | Phase | REQ-IDs |
 |---|---|
 | Phase 1 — Foundation | INFRA-001, INFRA-002, INFRA-003, INFRA-004, INFRA-008 |
-| Phase 2 — Agent Core | INFRA-005, INFRA-006, AGENT-001, AGENT-002, AGENT-003, AGENT-004, AGENT-007, AGENT-008, DETECT-004, MONITOR-001, MONITOR-002, MONITOR-003, MONITOR-007, TRIAGE-001, TRIAGE-002, TRIAGE-003, TRIAGE-004, REMEDI-001, AUDIT-001, AUDIT-005 |
+| Phase 2 — Agent Core | INFRA-005, INFRA-006, AGENT-001, AGENT-002, AGENT-003, AGENT-004, AGENT-007, AGENT-008, AGENT-009, DETECT-004, MONITOR-001, MONITOR-002, MONITOR-003, MONITOR-007, TRIAGE-001, TRIAGE-002, TRIAGE-003, TRIAGE-004, REMEDI-001, AUDIT-001, AUDIT-005 |
 | Phase 3 — Arc MCP Server | AGENT-005, AGENT-006, MONITOR-004, MONITOR-005, MONITOR-006, TRIAGE-006, E2E-006 |
 | Phase 4 — Detection Plane | INFRA-007, DETECT-001, DETECT-002, DETECT-003, DETECT-005, DETECT-006, DETECT-007, AUDIT-003 |
-| Phase 5 — Triage & Remediation | TRIAGE-005, TRIAGE-007, REMEDI-002, REMEDI-003, REMEDI-004, REMEDI-005, REMEDI-006, UI-001, UI-002, UI-003, UI-004, UI-005, UI-006, UI-007, UI-008, AUDIT-002, AUDIT-004 |
+| Phase 5 — Triage & Remediation | TRIAGE-005, TRIAGE-007, REMEDI-002, REMEDI-003, REMEDI-004, REMEDI-005, REMEDI-006, REMEDI-008, UI-001, UI-002, UI-003, UI-004, UI-005, UI-006, UI-007, UI-008, AUDIT-002, AUDIT-004 |
 | Phase 6 — Teams Integration | TEAMS-001, TEAMS-002, TEAMS-003, TEAMS-004, TEAMS-005, TEAMS-006 |
 | Phase 7 — Quality & Hardening | REMEDI-007, AUDIT-006, E2E-001, E2E-002, E2E-003, E2E-004, E2E-005 |
