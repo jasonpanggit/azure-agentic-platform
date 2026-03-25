@@ -1489,6 +1489,177 @@ Why Arc MCP Server is the longest pole:
 
 ---
 
+## 12. Resource Identity Certainty Protocol
+
+> Source: Adapted from microsoftgbb/agentic-platform-engineering Cluster Doctor "Cluster Identity Certainty" pattern. Generalizes the "Approve-Then-Stale" pitfall (PITFALLS.md Section 10) into a formal, mandatory pre-execution protocol.
+
+### 12.1 Principle
+
+Before any remediation execution, the agent MUST verify that the target resource state matches the triage snapshot using at least two independent signals. This prevents acting on stale approvals where the resource has changed since the operator approved the action.
+
+### 12.2 Verification Signals (minimum 2 required)
+
+1. **Resource ID match** — The ARM resource ID in the remediation action matches the incident record exactly.
+2. **Resource state hash** — A hash of critical resource properties (tags, provisioning state, configuration) taken at triage time is compared against a fresh read. Divergence beyond a configurable threshold triggers an abort.
+3. **Subscription/resource group stability** — The resource's subscription and resource group haven't been deleted, moved, or renamed since triage.
+
+### 12.3 Pre-Execution Check Flow
+
+```
+Agent receives approved remediation action
+    │
+    ▼
+Re-read resource via Azure MCP / Arc MCP
+    │
+    ▼
+Compare resource state hash against triage snapshot
+    │
+    ├── Hash matches ──────────────► Proceed with execution
+    │                                    │
+    │                                    ▼
+    │                              Execute remediation tool
+    │                                    │
+    │                                    ▼
+    │                              Log outcome + audit trail
+    │
+    └── Hash diverged ─────────────► Abort execution
+                                         │
+                                         ▼
+                                    Notify operator:
+                                    "Resource state changed since approval.
+                                     Original state: {snapshot}
+                                     Current state: {current}
+                                     Please re-triage and re-approve."
+                                         │
+                                         ▼
+                                    Update incident record in Cosmos DB
+                                    with STALE_APPROVAL status
+```
+
+### 12.4 Implementation Notes
+
+- The state hash should cover: `provisioning_state`, `tags`, `sku`, `location`, and resource-type-specific critical fields (e.g., `power_state` for VMs, `replica_count` for deployments).
+- Hash comparison uses a configurable divergence threshold — some fields (like `last_modified_timestamp`) are expected to change and should be excluded.
+- The pre-execution check is a read-only operation and does not require additional RBAC beyond what the agent already has for triage.
+- Approval TTL (default: 15 minutes for destructive actions) provides a time-based backstop in addition to the state-based check.
+
+---
+
+## 13. Agent Specification Format
+
+> Source: Adapted from microsoftgbb/agentic-platform-engineering Cluster Doctor agent definition pattern (`.github/agents/cluster-doctor.agent.md`). Extended for AAP's multi-agent, multi-domain architecture.
+
+### 13.1 Purpose
+
+Every domain agent MUST have a human-readable specification document written before agent code. These specs serve as:
+
+- **Design artifacts** — Stakeholders review agent behavior before implementation begins.
+- **Version-controlled contracts** — Git history shows how agent scope and behavior evolve.
+- **Onboarding documentation** — New team members understand agent capabilities from the spec, not the code.
+- **RBAC validation source** — The Permission Model section defines the expected RBAC scope, which Terraform modules enforce.
+
+### 13.2 Specification Location
+
+```
+docs/agents/{domain}-agent.spec.md
+```
+
+One spec per domain agent: `compute-agent.spec.md`, `network-agent.spec.md`, `storage-agent.spec.md`, `security-agent.spec.md`, `arc-agent.spec.md`, `sre-agent.spec.md`, `orchestrator-agent.spec.md`.
+
+### 13.3 Template Sections
+
+Each agent specification document MUST contain the following sections (derived from the GBB Cluster Doctor format, extended for enterprise AIOps):
+
+| Section | Description |
+|---|---|
+| **Persona & Expertise** | Role definition, domain expertise, communication style (e.g., "Senior Azure Compute Engineer specializing in VM performance and availability") |
+| **Goals & Success Criteria** | What the agent is trying to achieve and how success is measured (e.g., "Reduce MTTR for VM-related incidents by 60%") |
+| **Workflow Phases** | Ordered phases: Collect → Verify → Diagnose → Triage → Remediate. Each phase defines inputs, outputs, and exit criteria. |
+| **Tool Access** | Explicit list of MCP tools and Azure APIs the agent may invoke. No wildcards — every tool is named. |
+| **Permission Model** | RBAC scope (subscriptions, resource groups, roles). Read-only vs read-write boundaries. Maps to Terraform `rbac` module. |
+| **Safety Constraints** | Resource Identity Certainty protocol adherence, max blast radius, forbidden actions, rate limits. |
+| **Example Diagnostic Flows** | 2-3 concrete scenarios with step-by-step agent reasoning and tool calls. |
+| **Handoff Conditions** | When and why this agent escalates to the Orchestrator or another domain agent. Includes cross-domain trigger patterns. |
+
+### 13.4 Lifecycle
+
+1. **Draft** — Written during Phase 2 (Agent Core) before any agent code.
+2. **Review** — Team reviews via PR; stakeholders validate scope and safety constraints.
+3. **Approved** — Spec is merged; agent implementation may begin.
+4. **Updated** — Spec evolves with agent capabilities; each change is a PR with rationale.
+
+---
+
+## 14. GitOps Remediation Path for Arc K8s
+
+> Source: Inspired by microsoftgbb/agentic-platform-engineering ArgoCD → GitHub Issue → PR pattern. Adapted for AAP's Flux/GitOps-managed Arc Kubernetes clusters.
+
+### 14.1 Dual Remediation Path
+
+Arc Kubernetes resources managed by Flux/GitOps require a different remediation strategy than direct Azure API calls. The agent must classify the root cause and choose the appropriate remediation path automatically.
+
+| Root Cause Type | Remediation Path | Example |
+|---|---|---|
+| **Manifest drift** (wrong resource limits, bad config, incorrect image tag) | Create a PR against the GitOps repository | Pod OOMKilled due to memory limit set too low in deployment manifest |
+| **Infrastructure issue** (node down, disk full, network unreachable) | Direct remediation via Arc MCP Server tools | Arc K8s node NotReady due to kubelet crash; requires node drain + restart |
+
+### 14.2 Decision Flow
+
+```
+Agent diagnosis complete
+    │
+    ▼
+Classify root_cause_type from diagnosis result
+    │
+    ├── root_cause_type == "manifest_drift"
+    │       │
+    │       ▼
+    │   Identify affected GitOps repo + file path
+    │   (from Flux kustomization source reference)
+    │       │
+    │       ▼
+    │   Generate fix (updated YAML manifest)
+    │       │
+    │       ▼
+    │   Create PR against GitOps repo via GitHub API
+    │   (branch: aiops/fix-{incident_id}, title: remediation summary)
+    │       │
+    │       ▼
+    │   Post PR link to incident record + notify operator
+    │   "PR created: {url}. Flux will reconcile on merge."
+    │
+    └── root_cause_type == "infra_issue"
+            │
+            ▼
+        Propose direct remediation action
+        (standard approval workflow — Section 2.4)
+            │
+            ▼
+        Human approves → execute via Arc MCP Server
+```
+
+### 14.3 GitOps PR Template
+
+When the agent creates a PR for manifest remediation:
+
+- **Branch name**: `aiops/fix-{incident_id}-{short_description}`
+- **PR title**: `[AAP] {remediation_summary}`
+- **PR body**:
+  - Incident reference (link to AAP incident view)
+  - Root cause analysis summary
+  - Change description (what was modified and why)
+  - Test plan (how to verify the fix after Flux reconciliation)
+  - Rollback instructions (`git revert` the PR commit)
+
+### 14.4 Scope & Constraints
+
+- GitOps remediation is **Phase 2+** — MVP uses direct remediation only.
+- The agent requires a GitHub PAT or GitHub App credential (stored in Key Vault) to create PRs. This is a separate credential from Azure managed identity.
+- Only Flux-managed clusters are eligible; the agent checks for Flux kustomization presence via `arc_k8s_gitops_status` tool before attempting GitOps remediation.
+- The agent NEVER pushes directly to the default branch — always creates a feature branch for human review.
+
+---
+
 ## Appendix: Key Package Versions
 
 | Package | Version | Usage |

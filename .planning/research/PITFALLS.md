@@ -202,3 +202,34 @@
 - ⚠️ **Risk**: A user approves a remediation action (e.g., "restart deployment X") via Adaptive Card. By the time the agent executes the action, the resource state has changed (the deployment already self-healed, or a new deployment is in progress). Executing stale-approved actions causes unintended disruption.
 - 🛡️ **Prevention**: Every approved action must include a pre-execution state snapshot hash. Before executing, the agent re-reads the resource state and compares it against the snapshot. If state has diverged beyond a configurable threshold, the action is aborted and the user is notified to re-approve. Approval is valid for a maximum configurable TTL (recommend 15 minutes for destructive actions).
 - 📍 **Phase**: Remediation workflow — build the pre-execution state check before any destructive action tool is registered.
+
+---
+
+## 11. Wildcard Tool Access
+
+> Source: microsoftgbb/agentic-platform-engineering uses `"tools": ["*"]` in MCP server configuration, granting agents unrestricted access to all tools. This is acceptable for demos but is a security risk in production.
+
+### Unrestricted MCP Tool Access
+- ⚠️ **Risk**: Agents configured with `tools: ["*"]` or `allowed_tools: ["*"]` gain access to every tool in every connected MCP server. A compromised or misbehaving agent can invoke destructive tools it was never designed to use — for example, a Compute agent invoking security-scoped key rotation tools, or an SRE agent calling Arc MCP Server's cluster management tools without appropriate RBAC.
+- 🛡️ **Prevention**:
+  1. Always use explicit `allowed_tools` lists in MCP tool configuration. Each agent's tool allowlist is defined in its agent specification (`.spec.md`, see ARCHITECTURE.md Section 13).
+  2. Add a CI lint rule that scans agent configuration files and flags any wildcard tool access (`"*"`, `"tools": ["*"]`, `"allowed_tools": ["*"]`).
+  3. Use MCP tool namespace prefixes (`azure_*` for Azure MCP, `arc_*` for Arc MCP) to enforce logical separation.
+  4. Periodically audit actual tool invocations (via OpenTelemetry traces) against declared allowlists to detect drift.
+- 📍 **Phase**: Agent registration — enforce before any agent is connected to MCP servers.
+
+---
+
+## 12. Incident Deduplication Race Conditions
+
+> Source: microsoftgbb/agentic-platform-engineering ArgoCD failure handler implements incident deduplication via GitHub Issue search before creation. This pattern is critical for AAP's alert-storm resilience.
+
+### Concurrent Incident Creation During Alert Storms
+- ⚠️ **Risk**: During alert storms, multiple concurrent Fabric Activator triggers for the same resource can race to create incident records in Cosmos DB. Without deduplication, parallel agent sessions launch for the same issue, wasting tokens (potentially thousands of dollars during a major outage) and producing conflicting remediation proposals that confuse operators.
+- 🛡️ **Prevention**:
+  1. Use Cosmos DB conditional writes (ETag-based optimistic concurrency) on incident creation. The deduplication key is `(resource_id, alert_type, time_window)` where `time_window` is a configurable bucketing interval (default: 5 minutes).
+  2. The first write succeeds and creates the incident record. Subsequent writes for the same deduplication key within the window receive a `409 Conflict` response.
+  3. On `409`, the incident creation endpoint correlates the new alert to the existing incident by appending it to the incident's `correlated_alerts` array (using Cosmos DB partial document update / patch).
+  4. Implement an idempotency token in the Activator trigger payload to prevent exact-duplicate triggers from creating even a single incident.
+  5. Monitor the deduplication hit rate as a platform health metric — a high rate during normal operations may indicate misconfigured alert rules.
+- 📍 **Phase**: Incident creation endpoint — implement before production alert rules are enabled.

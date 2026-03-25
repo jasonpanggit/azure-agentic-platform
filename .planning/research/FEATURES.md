@@ -93,6 +93,7 @@
 | **Confidence scoring** — agent-assigned probability that a correlated alert cluster represents a real incident | Differentiator | Gate incident creation behind confidence threshold to avoid incident noise. |
 | **PagerDuty / ServiceNow integration** — push incidents to ITSM; sync state back | Differentiator | Expected by enterprise teams with existing tooling. Azure SRE Agent already does this — use same pattern. |
 | **Alert processing rules** — Azure Monitor native suppression + action group modifications | Table Stakes | Must configure these in Terraform and respect them in the platform (don't route suppressed alerts to agents). |
+| **Incident deduplication at creation** — before creating a new incident in Cosmos DB, check for existing open incidents affecting the same resource | Table Stakes | Prevents duplicate parallel agent investigations during alert storms. Uses Cosmos DB conditional writes (ETag-based optimistic concurrency) keyed by `(resource_id, alert_type, time_window)`. First write succeeds; subsequent writes for the same key within the deduplication window are rejected and correlated to the existing incident. Source: microsoftgbb/agentic-platform-engineering ArgoCD failure handler deduplication pattern. |
 | **Recommended alert rules at-scale** — deploy baseline alert rules via Azure Policy across all subscriptions | Differentiator | Azure Monitor Baseline Alerts (AMBA) pattern; Terraform manages at-scale deployment. |
 
 ### 2.2 Incident Lifecycle
@@ -153,6 +154,7 @@ Rule-based runs first (fast, cheap, predictable). AI escalates when rules don't 
 | **Hypothesis ranking** — agent presents top 3 probable root causes with supporting evidence and confidence scores | Differentiator | Transparency and auditability: operators can see why the agent thinks what it thinks. |
 | **Cross-incident pattern detection** — "this looks like the incident from 2025-11-14; that was caused by X" | Differentiator | Requires historical incident embeddings; high-value but Phase 2+. |
 | **Automated investigation plans** — agent generates an ordered list of investigation steps before executing them | Differentiator | Operator can review and redirect the plan before the agent acts. High trust-building value. |
+| **Suggested Investigation Queries** — pre-populated KQL queries included in incident records that operators can run to manually verify agent findings | Table Stakes | Increases agent transparency and trust. Operators can independently verify the agent's data sources and conclusions by running the same queries in Log Analytics. Source: microsoftgbb/agentic-platform-engineering Cluster Doctor "troubleshooting commands" pattern. |
 
 ### 3.3 Agent Transparency
 
@@ -358,6 +360,7 @@ Every agent action log entry MUST contain:
 | **Hybrid connectivity monitoring** — express route / VPN health affecting Arc agent connectivity | Differentiator | Network Watcher connection monitor to track latency/packet loss on connectivity paths. |
 | **Arc-enabled K8s cluster health summary** — nodes ready/not-ready, pods running/pending/failed, PVC claims | Table Stakes for Arc K8s | Container Insights via Arc extension provides this. |
 | **Custom location health** — Azure services deployed at Arc custom locations (Container Apps, data services) | Differentiator | Surfaces health of the Azure-at-edge pattern. |
+| **In-Cluster MCP Server for Arc K8s** — Helm chart deploying a lightweight MCP server into Arc K8s clusters for pod-level, node-level, and workload-level diagnostics | Differentiator (Phase 3) | Enables deeper K8s triage beyond ARM-level queries. The custom Arc MCP Server handles ARM-level operations; this in-cluster server provides real-time pod logs, exec capabilities, and workload-level telemetry from inside the cluster. Out of scope for MVP. Deployed via Flux as a Helm chart. Source: microsoftgbb/agentic-platform-engineering AKS MCP Server pattern. |
 
 ### 6.2 Arc Extensions — What They Unlock for AIOps
 
@@ -666,6 +669,33 @@ The smallest set of features that delivers the core value proposition: *"Operato
 - Arc SQL MI monitoring
 - Full compliance reporting framework
 - PagerDuty/ServiceNow integration
+
+### 11.4 Feature Maturity Levels
+
+> Source: Derived from microsoftgbb/agentic-platform-engineering Crawl-Walk-Run deployment strategy. Defines a maturity model for how features progress from manual invocation to supervised automation.
+
+Each feature area progresses through maturity levels independently. Not all features will reach L3 — the target level depends on risk tolerance and operational confidence.
+
+| Level | Name | Description | Human Involvement |
+|---|---|---|---|
+| **L0** | Manual | Operator invokes agent via chat for ad-hoc investigation. No automated detection or routing. | Operator initiates everything |
+| **L1** | Monitored | Alert fires, incident created automatically. Operator manually routes to the appropriate agent. | Operator routes and reviews |
+| **L2** | Assisted | Alert fires, incident created, orchestrator auto-routes to domain agent. Human approves all remediation actions. | Operator approves remediation |
+| **L3** | Supervised | Full automation with human approval only for high-risk actions. Low-risk actions (restart pod, scale up) execute with notification-only. | Operator monitors; approves high-risk only |
+
+**Phase-to-Maturity Mapping:**
+
+| Phase | Target Maturity | Scope |
+|---|---|---|
+| **MVP (Phase 1)** | L1–L2 | Automated detection + agent-assisted triage; all remediation requires approval |
+| **Phase 2** | L2–L3 for core scenarios | Auto-routing established; L3 enabled for low-risk actions with high confidence (e.g., pod restart, disk expansion) |
+| **Phase 3** | L3 for low-risk; L2 maintained for high-risk | Supervised automation for well-understood scenarios; high-risk actions (NSG changes, node drain) always require explicit approval |
+
+**Rules for L3 eligibility:**
+- Action must have a proven rollback path
+- Action must have been approved manually at least 10 times without rejection
+- Action risk level must be "Low" per the remediation risk matrix (Section 4.1)
+- Platform must have full observability (OTel traces, audit logs) enabled for the action type
 
 ---
 
