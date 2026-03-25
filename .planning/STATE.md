@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-25 — Milestone v1.0 started
+> Last updated: 2026-03-25 — Milestone v1.0 roadmap created
 
 ---
 
 ## Current Phase
 
-**None — defining requirements for Milestone v1.0**
+**None — roadmap created, implementation not yet started**
 
 ---
 
