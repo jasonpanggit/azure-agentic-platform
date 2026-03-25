@@ -1,18 +1,18 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-25 - Completed quick task 260325-gqo: Research microsoftgbb/agentic-platform-engineering repo and incorporate findings into planning docs
+> Last updated: 2026-03-25 — Milestone v1.0 started
 
 ---
 
 ## Current Phase
 
-**None — not started**
+**None — defining requirements for Milestone v1.0**
 
 ---
 
 ## Project
 
-**Azure Agentic Platform (AAP)**
+**Azure Agentic Platform (AAP) — Milestone v1.0**
 
 ---
 

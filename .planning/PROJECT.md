@@ -1,5 +1,18 @@
 # Azure Agentic Platform (AAP)
 
+## Current Milestone: v1.0 Azure Agentic Platform MVP
+
+**Goal:** Build the full AAP platform — multi-agent AIOps across Azure subscriptions with Arc support, Fabric detection, Web UI, Teams bot, and human-in-the-loop remediation.
+
+**Target features:**
+- 7-phase delivery: Foundation → Agent Core → Arc MCP Server → Detection Plane → Triage & Remediation + Web UI → Teams Integration → Quality & Hardening
+- Resource Identity Certainty: 2-signal pre-execution verification before any remediation (strengthens REMEDI-004)
+- GitOps Remediation Path: conditional PR-based path for Flux/ArgoCD-managed Arc K8s clusters
+- Agent Spec Documents: `.spec.md` per domain agent as Phase 2 design deliverable
+- Incident Dedup Protocol: open-incident check before creating new incidents (extends DETECT-005)
+
+---
+
 ## What This Is
 
 An enterprise-grade AI operations platform that uses a domain-specialist multi-agent architecture to perform continuous monitoring, auditing, alerting, triage, troubleshooting, and automated remediation across all Azure subscriptions and Arc-enabled resources (servers, Kubernetes, data services). The platform exposes a hybrid web UI (Fluent UI 2 + Next.js) with co-equal conversational chat and live operational dashboards, and integrates with Microsoft Teams for two-way agent interaction, alert delivery, and human-in-the-loop remediation approvals.
@@ -158,4 +171,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after initialization*
+*Last updated: 2026-03-25 — Milestone v1.0 started*
