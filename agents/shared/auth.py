@@ -1,0 +1,75 @@
+"""Authentication helpers for AAP agents (AGENT-008).
+
+All agents authenticate via DefaultAzureCredential resolving
+system-assigned managed identity. No service principal secrets
+or credentials are stored in code or environment variables.
+"""
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+
+from azure.identity import DefaultAzureCredential
+from azure.ai.projects import AIProjectClient
+
+
+@lru_cache(maxsize=1)
+def get_credential() -> DefaultAzureCredential:
+    """Return a cached DefaultAzureCredential instance.
+
+    In Azure Container Apps, this resolves the system-assigned
+    managed identity via IMDS. Locally, it falls back to
+    Azure CLI / VS Code / environment credentials.
+
+    Returns:
+        DefaultAzureCredential instance (cached, thread-safe).
+    """
+    return DefaultAzureCredential()
+
+
+def get_foundry_client() -> AIProjectClient:
+    """Create an AIProjectClient connected to the Foundry project.
+
+    Reads AZURE_PROJECT_ENDPOINT from environment. This is the
+    Foundry account endpoint provisioned in Phase 1 and passed
+    to each Container App via the agent-apps Terraform module.
+
+    Returns:
+        AIProjectClient configured for the platform's Foundry project.
+
+    Raises:
+        ValueError: If AZURE_PROJECT_ENDPOINT is not set.
+    """
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT")
+    if not endpoint:
+        raise ValueError(
+            "AZURE_PROJECT_ENDPOINT environment variable is required. "
+            "This should be set by the agent-apps Terraform module."
+        )
+
+    return AIProjectClient(
+        endpoint=endpoint,
+        credential=get_credential(),
+    )
+
+
+def get_agent_identity() -> str:
+    """Return the current agent's Entra object ID for AUDIT-005 attribution.
+
+    Reads AGENT_ENTRA_ID from environment, set by the agent-apps
+    Terraform module from the Container App's system-assigned identity
+    principal_id.
+
+    Returns:
+        Entra Agent ID object ID string.
+
+    Raises:
+        ValueError: If AGENT_ENTRA_ID is not set.
+    """
+    agent_id = os.environ.get("AGENT_ENTRA_ID")
+    if not agent_id:
+        raise ValueError(
+            "AGENT_ENTRA_ID environment variable is required. "
+            "This must be the system-assigned managed identity principal_id."
+        )
+    return agent_id
