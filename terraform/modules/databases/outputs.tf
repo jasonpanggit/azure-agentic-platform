@@ -34,3 +34,8 @@ output "postgres_database_name" {
   description = "Name of the PostgreSQL database"
   value       = azurerm_postgresql_flexible_server_database.main.name
 }
+
+output "cosmos_sessions_container_name" {
+  description = "Name of the Cosmos DB sessions container for budget tracking (AGENT-007)"
+  value       = azurerm_cosmosdb_sql_container.sessions.name
+}

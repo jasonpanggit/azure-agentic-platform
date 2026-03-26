@@ -97,5 +97,30 @@ resource "azurerm_cosmosdb_sql_container" "approvals" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "sessions" {
+  name                  = "sessions"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/incident_id"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/iterations/history/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
