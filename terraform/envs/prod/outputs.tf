@@ -98,3 +98,19 @@ output "cosmos_private_endpoint_id" {
 output "acr_private_endpoint_id" {
   value = module.private_endpoints.acr_private_endpoint_id
 }
+
+# --- Agent Apps ---
+output "agent_entra_ids" {
+  description = "Agent Entra object IDs for Agent 365 discovery"
+  value       = module.agent_apps.agent_entra_ids
+}
+
+output "api_gateway_url" {
+  description = "API gateway URL"
+  value       = module.agent_apps.api_gateway_url
+}
+
+output "rbac_assignment_count" {
+  description = "Total RBAC assignments provisioned"
+  value       = module.rbac.role_assignment_count
+}

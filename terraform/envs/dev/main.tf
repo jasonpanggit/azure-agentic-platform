@@ -131,3 +131,35 @@ module "private_endpoints" {
   private_dns_zone_keyvault_id  = module.networking.private_dns_zone_keyvault_id
   private_dns_zone_cognitive_id = module.networking.private_dns_zone_cognitive_id
 }
+
+# --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
+
+module "agent_apps" {
+  source = "../../modules/agent-apps"
+
+  resource_group_name            = azurerm_resource_group.main.name
+  location                       = var.location
+  environment                    = var.environment
+  required_tags                  = local.required_tags
+  container_apps_environment_id  = module.compute_env.container_apps_environment_id
+  acr_login_server               = module.compute_env.acr_login_server
+  foundry_account_endpoint       = module.foundry.foundry_account_endpoint
+  foundry_project_id             = module.foundry.foundry_project_id
+  foundry_model_deployment_name  = module.foundry.foundry_model_deployment_name
+  app_insights_connection_string = module.monitoring.app_insights_connection_string
+  cosmos_endpoint                = module.databases.cosmos_endpoint
+  cosmos_database_name           = module.databases.cosmos_database_name
+}
+
+# --- RBAC (depends on: agent-apps) ---
+
+module "rbac" {
+  source = "../../modules/rbac"
+
+  agent_principal_ids      = module.agent_apps.agent_principal_ids
+  platform_subscription_id = var.subscription_id
+  all_subscription_ids     = [var.subscription_id]
+
+  # In dev, all agents target the same subscription.
+  # Override in staging/prod with separate subscription IDs via variables.
+}

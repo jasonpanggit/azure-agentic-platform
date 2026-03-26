@@ -25,3 +25,27 @@ variable "postgres_admin_password" {
   type        = string
   sensitive   = true
 }
+
+variable "compute_subscription_id" {
+  description = "Subscription ID for compute resources (may differ from platform in prod)"
+  type        = string
+  default     = ""
+}
+
+variable "network_subscription_id" {
+  description = "Subscription ID for network resources (may differ from platform in prod)"
+  type        = string
+  default     = ""
+}
+
+variable "storage_subscription_id" {
+  description = "Subscription ID for storage resources (may differ from platform in prod)"
+  type        = string
+  default     = ""
+}
+
+variable "all_subscription_ids" {
+  description = "All in-scope subscription IDs for cross-subscription reader roles"
+  type        = list(string)
+  default     = []
+}
