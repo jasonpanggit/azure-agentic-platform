@@ -1,0 +1,21 @@
+name: Build API Gateway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/api-gateway/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-gateway:
+    name: Build & Push API Gateway
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/api-gateway
+      dockerfile_path: services/api-gateway/Dockerfile
+      build_context: services/api-gateway/
+    secrets: inherit
