@@ -132,6 +132,7 @@ No UI, no Arc-specific capabilities (those come in Phase 3), no runbook RAG (Pha
 <deferred>
 ## Deferred Ideas
 
+- **Azure API Management (APIM)** — evaluated as an alternative to the standalone FastAPI gateway. Deferred to Phase 5/6 when multiple public APIs exist (chat API, runbook API, approval API, Teams webhook receiver). At that point APIM Standard v2 (~$400/month) centralises JWT validation, rate limiting, and analytics across all APIs. Not viable in Phase 2 because D-11 requires Python SDK (`azure-ai-projects`) for Foundry thread dispatch — APIM cannot run Python, so FastAPI would still be needed behind it, making APIM purely additive cost ($150–700/month) for a single endpoint. Target Phase 5/6 architecture: `APIM Standard v2 → [api-gateway, chat-api, approval-api, runbook-api]`.
 - **Agent 365 governance features** (registry dashboards, lifecycle policies, audit logging via Agent 365) — deferred to Phase 7 Quality & Hardening when the GA APIs are stable and we have production telemetry to inform the integration.
 - **Custom RBAC role definitions** — built-in roles used in Phase 2; custom roles with minimal ARM operation lists deferred to Phase 7 hardening once production operation data is available.
 - **In-cluster MCP Server for Arc K8s** (Helm chart deploying lightweight MCP server into Arc K8s clusters) — identified in SUMMARY.md as a Phase 3 differentiator; not Phase 2 scope.
