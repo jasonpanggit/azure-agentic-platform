@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 1, Plan 01 complete
+> Last updated: 2026-03-26 — Phase 1, Plan 02 complete
 
 ---
 
 ## Current Phase
 
-**Phase 1: Foundation — Plan 01 of 05 complete (Repository Scaffold & State Bootstrap)**
+**Phase 1: Foundation — Plan 02 of 05 complete (Networking Module Implementation)**
 
 ---
 
@@ -26,7 +26,7 @@
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | In Progress (1/5 plans) |
+| 1 | Foundation | In Progress (2/5 plans) |
 | 2 | Agent Core | Not started |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
@@ -49,6 +49,9 @@ None.
 | Centralized private-endpoints module | 1-01 | All PEs in one module eliminates duplication and avoids circular deps between networking and resource modules |
 | PostgreSQL VNet injection over PE | 1-01 | Azure-recommended approach for Flexible Server; delegated subnet is simpler than PE |
 | Interface-first module design | 1-01 | All variables.tf/outputs.tf fully defined before implementation enables parallel work in Plans 02-04 |
+| No PEs in networking module | 1-02 | Centralized in modules/private-endpoints to avoid circular deps where networking needs resource IDs from dependent modules |
+| Reserved subnet for Phase 4 Event Hub | 1-02 | Pre-allocate snet-reserved-1 at 10.0.64.0/24 to avoid VNet CIDR changes later |
+| Foundry subnet gets own NSG | 1-02 | ISSUE-08: Foundry subnet needs inbound 443 from Container Apps for future PE traffic |
 
 ---
 
