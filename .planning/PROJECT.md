@@ -25,7 +25,13 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 
 ### Validated
 
-(None yet — ship to validate)
+**Infrastructure as Code (Terraform)** — Validated in Phase 1: Foundation
+- [x] Terraform modules for all platform infrastructure: Foundry, Container Apps, Cosmos DB, PostgreSQL, VNet, private endpoints
+- [x] Environment-specific configs: dev, staging, prod (tfvars per environment)
+- [x] Terraform remote state in Azure Storage with state locking
+- [x] CI/CD integration: Terraform plan on PR, Terraform apply on merge to main
+- [x] Azure RBAC assignments via Terraform (agent identities scoping deferred to Phase 2)
+- [x] Private networking: VNet integration for Container Apps, private endpoints for all data services centralized in dedicated module
 
 ### Active
 
@@ -171,4 +177,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 — Milestone v1.0 started*
+*Last updated: 2026-03-26 — Phase 1: Foundation complete (5/5 plans, verification passed)*
