@@ -139,9 +139,20 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (Arc MCP Container App)
 
+**Status:** In progress (3/4 plans complete)
+
 > **Parallelism note:** This phase starts in Week 2 alongside Phase 2. It is the longest-pole
 > deliverable and does NOT block Phases 2, 4, or 5. Arc-specific capabilities (TRIAGE-006,
 > MONITOR-004–006) are unavailable until this phase completes.
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 03-01 | Arc MCP Server — Core + Terraform | ✅ Complete | AGENT-005, AGENT-006, MONITOR-004, MONITOR-005, MONITOR-006 |
+| 03-02 | Arc Agent Upgrade | ✅ Complete | TRIAGE-006, AGENT-005, AGENT-006 |
+| 03-03 | Unit Tests + CI | ✅ Complete | AGENT-005, AGENT-006, MONITOR-004, MONITOR-005, MONITOR-006 |
+| 03-04 | E2E-006 Playwright Test | Not started | E2E-006 |
 
 ### Success Criteria
 
