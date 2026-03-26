@@ -1,0 +1,19 @@
+// DetectionResults — classified alerts ready for Fabric Activator trigger
+// Source: EnrichedAlerts (update policy: ClassifyAlerts())
+// Adds: domain (from classify_domain()), kql_evidence, classified_at
+// Activator triggers on rows where domain IS NOT NULL
+
+.create-merge table DetectionResults (
+    alert_id: string,
+    severity: string,
+    domain: string,
+    fired_at: datetime,
+    resource_id: string,
+    resource_type: string,
+    subscription_id: string,
+    resource_name: string,
+    alert_rule: string,
+    description: string,
+    kql_evidence: string,
+    classified_at: datetime
+)

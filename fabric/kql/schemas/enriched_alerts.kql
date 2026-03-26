@@ -1,0 +1,21 @@
+// EnrichedAlerts — resource inventory join applied via KQL update policy
+// Source: RawAlerts (update policy: EnrichAlerts())
+// Adds: resource_name, resource_location, resource_tags
+
+.create-merge table EnrichedAlerts (
+    alert_id: string,
+    alert_name: string,
+    severity: string,
+    fired_at: datetime,
+    resource_id: string,
+    resource_type: string,
+    subscription_id: string,
+    resource_group: string,
+    resource_name: string,
+    resource_location: string,
+    resource_tags: dynamic,
+    alert_rule: string,
+    description: string,
+    signal_type: string,
+    ingestion_time: datetime
+)
