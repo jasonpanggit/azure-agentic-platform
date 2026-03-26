@@ -1,0 +1,24 @@
+# Arc MCP Server dependencies (AGENT-005)
+# Do NOT extend agents/Dockerfile.base — that image includes agent-framework
+# and agentserver packages that are not needed for an MCP server.
+
+# FastMCP server framework
+mcp[cli]==1.26.0
+
+# Azure identity (shared pattern with agents/shared/auth.py)
+azure-identity>=1.17.0
+
+# Azure Arc SDK packages (AGENT-005)
+# CRITICAL package naming: use azure-mgmt-hybridkubernetes (NOT azure-mgmt-connectedk8s)
+# CRITICAL package naming: use azure-mgmt-azurearcdata (NOT azure-mgmt-arcdata)
+azure-mgmt-hybridcompute==9.0.0
+azure-mgmt-hybridkubernetes==1.1.0
+azure-mgmt-azurearcdata==1.0.0
+azure-mgmt-kubernetesconfiguration==3.1.0
+
+# Observability
+azure-monitor-opentelemetry>=1.6.0
+opentelemetry-sdk>=1.25.0
+
+# Pydantic (FastMCP uses pydantic for schema generation)
+pydantic>=2.8.0

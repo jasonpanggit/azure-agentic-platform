@@ -163,3 +163,26 @@ module "rbac" {
   # In dev, all agents target the same subscription.
   # Override in staging/prod with separate subscription IDs via variables.
 }
+
+# --- Arc MCP Server (depends on: compute-env, monitoring) ---
+# Phase 3: Internal-only Container App exposing Arc resource tools.
+# Arc Agent calls it at http://{arc_mcp_server_fqdn}/mcp (ARC_MCP_SERVER_URL).
+
+module "arc_mcp_server" {
+  source = "../../modules/arc-mcp-server"
+
+  resource_group_name            = azurerm_resource_group.main.name
+  location                       = var.location
+  environment                    = var.environment
+  required_tags                  = local.required_tags
+  container_apps_environment_id  = module.compute_env.container_apps_environment_id
+  container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
+  acr_login_server               = module.compute_env.acr_login_server
+  app_insights_connection_string = module.monitoring.app_insights_connection_string
+
+  # In dev, Arc resources live in the same subscription as the platform.
+  # Override in staging/prod with actual Arc subscription IDs.
+  arc_subscription_ids = [var.subscription_id]
+
+  arc_disconnect_alert_hours = 1
+}
