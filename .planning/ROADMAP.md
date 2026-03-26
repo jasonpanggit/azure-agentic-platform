@@ -82,7 +82,7 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (agent identities and RBAC)
 
-**Status:** In Progress — Plans 02-01 and 02-02 complete
+**Status:** In Progress — Plans 02-01, 02-02, and 02-03 complete
 
 > **Design-first gate (AGENT-009):** `.spec.md` files for all 7 domain agents must be committed
 > and reviewed before any agent implementation code is written. This is the first deliverable
@@ -94,6 +94,7 @@ Ph 7                                                                ████
 |---|---|---|---|
 | 02-01 | Agent Specs + CI Lint Gate + Terraform Identity/RBAC | ✅ Complete | AGENT-009, INFRA-005, INFRA-006, AUDIT-005 |
 | 02-02 | Shared Agent Infrastructure | ✅ Complete | AGENT-002, AGENT-007, AGENT-008, MONITOR-007, AUDIT-001, AUDIT-005 |
+| 02-03 | API Gateway — Incident Endpoint | ✅ Complete | DETECT-004, MONITOR-001, MONITOR-002, MONITOR-003 |
 
 ### Success Criteria
 

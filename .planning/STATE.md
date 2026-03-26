@@ -8,18 +8,18 @@ progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 2 Plan 02 complete (shared agent infrastructure: envelope, OTel, auth, budget, base image, CI, tests)
+> Last updated: 2026-03-26 — Phase 2 Plan 03 complete (API gateway: POST /api/v1/incidents, Entra auth, Foundry dispatch, Dockerfile, CI, 9 tests)
 
 ---
 
 ## Current Phase
 
-**Phase 2: Agent Core — In Progress (Plans 02-01 and 02-02 complete)**
+**Phase 2: Agent Core — In Progress (Plans 02-01, 02-02, 02-03 complete)**
 
 ---
 
@@ -40,7 +40,7 @@ progress:
 | # | Phase | Status |
 |---|---|---|
 | 1 | Foundation | Complete (5/5 plans) |
-| 2 | Agent Core | In Progress (2/5 plans) |
+| 2 | Agent Core | In Progress (3/5 plans) |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
 | 5 | Triage & Remediation + Web UI | Not started |
@@ -80,6 +80,10 @@ None.
 | Prod multi-subscription RBAC variables | 2-01 | compute/network/storage/all_subscription_ids vars added to prod only; dev/staging default all to platform subscription_id |
 | ETag optimistic concurrency for Cosmos budget records | 2-02 | Prevents lost-update race conditions when multiple agent iterations write to the same session record |
 | pythonpath=["."] in pyproject.toml | 2-02 | Required for pytest to resolve `agents.shared.*` imports from repo root without installing the package |
+| Dev-mode auth fallback for gateway | 2-03 | AZURE_CLIENT_ID absent → validator is None → all requests allowed with WARNING; enables local development without Entra credentials |
+| Optional[X] over X\|None in FastAPI signatures | 2-03 | FastAPI's get_type_hints() evaluates annotations at runtime; `|` union fails on Python 3.9 even with `from __future__ import annotations` |
+| conftest.py hyphenated package shim | 2-03 | Python cannot import hyphenated directories; shim registers `services/api-gateway` as `sys.modules["services.api_gateway"]` + setattr on parent for mock.patch compat |
+| Gateway as thin router only | 2-03 | No business logic in gateway; all incident reasoning deferred to Foundry agent threads; keeps gateway small and independently testable |
 
 ---
 
