@@ -1,0 +1,23 @@
+name: Build Agent Base Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agents/Dockerfile.base'
+      - 'agents/requirements-base.txt'
+      - 'agents/shared/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-base:
+    name: Build & Push Base Image
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/base
+      dockerfile_path: agents/Dockerfile.base
+      build_context: agents/
+    secrets: inherit
