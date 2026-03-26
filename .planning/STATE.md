@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 1, Plan 04 complete
+> Last updated: 2026-03-26 — Phase 1 complete (all 5 plans)
 
 ---
 
 ## Current Phase
 
-**Phase 1: Foundation — Plan 04 of 05 complete (Environment Composition)**
+**Phase 1: Foundation — Complete (5/5 plans)**
 
 ---
 
@@ -26,7 +26,7 @@
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | In Progress (4/5 plans) |
+| 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Not started |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
@@ -58,6 +58,9 @@ None.
 | Dev/staging Cosmos Serverless; prod Provisioned Autoscale | 1-04 | Cost optimization for non-prod; multi-region westus2 secondary for prod HA |
 | Tiered PostgreSQL SKUs per environment | 1-04 | dev B1ms, staging B2ms, prod GP_Standard_D4s_v3 — General Purpose needed for prod workloads |
 | Identical env structure, parameter-only differences | 1-04 | All envs share same provider/output/variable structure; only module parameters differ to minimize env drift |
+| Tag lint via jq on tfplan.json | 1-05 | Catches both null tags and missing required keys; runs only when plan succeeds (ISSUE-05/06) |
+| pgvector setup via temporary firewall rule in CI | 1-05 | ISSUE-04 resolution: GitHub runners can't reach VNet-injected PG directly; temporary firewall rule pattern with always-cleanup |
+| Docker push as reusable workflow_call | 1-05 | Avoids duplication across agent image builds in Phase 2+; composable per-agent |
 
 ---
 
