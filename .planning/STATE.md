@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-26T17:00:00.000Z"
+last_updated: "2026-03-26T18:00:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 4: plan 04-03 complete (dedup, alert state, payload mapping, gateway integration, Fabric UDF, 37 unit tests)
+> Last updated: 2026-03-26 — Phase 4: COMPLETE (4/4 plans) — 92 unit tests passing, 18 integration stubs scaffolded, CI workflows live, DETECT-007 documented
 
 ---
 
 ## Current Phase
 
-**Phase 4: Detection Plane — In Progress (3/4 plans)**
+**Phase 4: Detection Plane — ✅ Complete (4/4 plans)**
 
-Current position: 04-03 complete — two-layer dedup with ETag concurrency, alert state lifecycle with Azure Monitor sync, DetectionResults→IncidentPayload mapping, Fabric User Data Function with MSAL auth, API gateway dedup integration, 37 passing unit tests.
+Current position: 04-04 complete — shared conftest.py fixtures, 14 KQL pipeline unit tests, 10 UDF unit tests, 18 integration stubs (all skipped), Detection Plane CI workflow, Terraform detection workflow, SUPPRESSION.md. All 8 Phase 4 requirements covered. 92 unit tests passing.
 
 ---
 
@@ -44,7 +44,7 @@ Current position: 04-03 complete — two-layer dedup with ETag concurrency, aler
 | 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
-| 4 | Detection Plane | In Progress (3/4 plans — 04-01, 04-02, 04-03 complete) |
+| 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
 | 5 | Triage & Remediation + Web UI | Not started |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
@@ -100,6 +100,9 @@ None.
 | Fire-and-forget Azure Monitor sync | 4-03 | Platform state transition must never block on external sync; Azure Monitor failures logged but not raised (non-blocking by design) |
 | Self-contained UDF mapping copy in Fabric | 4-03 | Fabric runtime cannot import services/detection-plane; mapping logic duplicated intentionally, clearly commented with canonical reference |
 | det- prefix on incident_id | 4-03 | Provides traceability: any incident ID starting with det- was created via the detection plane (vs. manual/API ingestion) |
+| UDF tests import at module level (not per-test reload) | 4-04 | importlib.reload() pattern caused MSAL ConfidentialClientApplication to call Entra authority discovery before @patch applied; module-level import + patch("main.func") resolves correctly |
+| KQL consistency test regex requires full path (has /) | 4-04 | classify_domain.kql uses has_any() with both full paths and prefix-only values (Microsoft.Security); regex r'"(Microsoft\.[^/"]+/[^"]+)"' skips prefix-only values avoiding false "sre" failures |
+| Integration stubs use @pytest.mark.skip on class + pytestmark | 4-04 | Both marks required: pytestmark for -m filtering, @pytest.mark.skip so tests don't run without infra even when -m integration is specified |
 
 ---
 
