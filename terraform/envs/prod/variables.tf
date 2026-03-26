@@ -49,3 +49,15 @@ variable "all_subscription_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "gateway_app_client_id" {
+  description = "API gateway Entra app registration client ID for Fabric SP role assignment"
+  type        = string
+  default     = ""
+}
+
+variable "gateway_incidents_write_role_id" {
+  description = "incidents.write app role ID on the gateway app registration"
+  type        = string
+  default     = ""
+}
