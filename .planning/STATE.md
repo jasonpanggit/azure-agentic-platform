@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-25 — Milestone v1.0 roadmap created
+> Last updated: 2026-03-26 — Phase 1, Plan 01 complete
 
 ---
 
 ## Current Phase
 
-**None — roadmap created, implementation not yet started**
+**Phase 1: Foundation — Plan 01 of 05 complete (Repository Scaffold & State Bootstrap)**
 
 ---
 
@@ -26,7 +26,7 @@
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | Not started |
+| 1 | Foundation | In Progress (1/5 plans) |
 | 2 | Agent Core | Not started |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
@@ -39,6 +39,16 @@
 ## Blockers/Concerns
 
 None.
+
+---
+
+## Key Decisions
+
+| Decision | Phase | Rationale |
+|---|---|---|
+| Centralized private-endpoints module | 1-01 | All PEs in one module eliminates duplication and avoids circular deps between networking and resource modules |
+| PostgreSQL VNet injection over PE | 1-01 | Azure-recommended approach for Flexible Server; delegated subnet is simpler than PE |
+| Interface-first module design | 1-01 | All variables.tf/outputs.tf fully defined before implementation enables parallel work in Plans 02-04 |
 
 ---
 

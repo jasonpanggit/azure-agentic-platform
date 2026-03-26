@@ -28,7 +28,8 @@
     "skip_discuss": false,
     "e2e_testing": true,
     "e2e_tool": "playwright-skill",
-    "deploy_target": "azure-container-apps"
+    "deploy_target": "azure-container-apps",
+    "_auto_chain_active": false
   },
   "hooks": {
     "context_warnings": true
