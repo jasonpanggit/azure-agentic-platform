@@ -186,7 +186,7 @@ module "eventhub" {
   environment              = var.environment
   required_tags            = local.required_tags
   subnet_reserved_1_id     = module.networking.subnet_reserved_1_id
-  eventhub_partition_count = 10  # Prod: 10 partitions for throughput
+  eventhub_partition_count = 10 # Prod: 10 partitions for throughput
   eventhub_capacity        = 2
 }
 
@@ -200,7 +200,7 @@ module "fabric" {
   location            = var.location
   environment         = var.environment
   required_tags       = local.required_tags
-  fabric_capacity_sku = "F4"  # Prod: higher capacity
+  fabric_capacity_sku = "F4" # Prod: higher capacity
   fabric_admin_email  = var.fabric_admin_email
 }
 
@@ -246,7 +246,7 @@ resource "azuread_application_password" "fabric_sp" {
   count          = var.gateway_app_client_id != "" ? 1 : 0
   application_id = azuread_application.fabric_sp[0].id
   display_name   = "fabric-detection-secret"
-  end_date       = "2027-03-26T00:00:00Z"  # Fixed 1-year expiry — rotate before this date
+  end_date       = "2027-03-26T00:00:00Z" # Fixed 1-year expiry — rotate before this date
 }
 
 resource "azurerm_key_vault_secret" "fabric_sp_client_id" {
