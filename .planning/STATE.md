@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 1, Plan 02 complete
+> Last updated: 2026-03-26 — Phase 1, Plan 03 complete
 
 ---
 
 ## Current Phase
 
-**Phase 1: Foundation — Plan 02 of 05 complete (Networking Module Implementation)**
+**Phase 1: Foundation — Plan 03 of 05 complete (Resource Module Implementations)**
 
 ---
 
@@ -26,7 +26,7 @@
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | In Progress (2/5 plans) |
+| 1 | Foundation | In Progress (3/5 plans) |
 | 2 | Agent Core | Not started |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
@@ -52,6 +52,9 @@ None.
 | No PEs in networking module | 1-02 | Centralized in modules/private-endpoints to avoid circular deps where networking needs resource IDs from dependent modules |
 | Reserved subnet for Phase 4 Event Hub | 1-02 | Pre-allocate snet-reserved-1 at 10.0.64.0/24 to avoid VNet CIDR changes later |
 | Foundry subnet gets own NSG | 1-02 | ISSUE-08: Foundry subnet needs inbound 443 from Container Apps for future PE traffic |
+| No local-exec for pgvector on VNet-isolated PostgreSQL | 1-03 | ISSUE-04: GitHub runners can't reach VNet-injected PG; deferred to PLAN-05 CI workflow |
+| ACR name uses random_string suffix | 1-03 | ISSUE-10: Azure Container Registry names must be globally unique |
+| Foundry project inherits identity from parent account | 1-03 | ISSUE-09: azurerm_cognitive_account_project does not support identity block |
 
 ---
 
