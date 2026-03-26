@@ -52,6 +52,43 @@ jobs:
         working-directory: terraform/envs/dev
         run: terraform apply -auto-approve -input=false
 
+      - name: Get Runner Egress IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Add Temporary PostgreSQL Firewall Rule
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --resource-group "rg-aap-dev" \
+            --name "aap-postgres-dev" \
+            --rule-name "gh-runner-temp-$$" \
+            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Create pgvector Extension
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          psql \
+            -h "aap-postgres-dev.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Remove Temporary PostgreSQL Firewall Rule
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "rg-aap-dev" \
+            --name "aap-postgres-dev" \
+            --rule-name "gh-runner-temp-$$" \
+            --yes || true
+
   apply-staging:
     name: Apply (staging)
     runs-on: ubuntu-latest
@@ -90,6 +127,43 @@ jobs:
         working-directory: terraform/envs/staging
         run: terraform apply -auto-approve -input=false
 
+      - name: Get Runner Egress IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Add Temporary PostgreSQL Firewall Rule
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --resource-group "rg-aap-staging" \
+            --name "aap-postgres-staging" \
+            --rule-name "gh-runner-temp-$$" \
+            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Create pgvector Extension
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          psql \
+            -h "aap-postgres-staging.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Remove Temporary PostgreSQL Firewall Rule
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "rg-aap-staging" \
+            --name "aap-postgres-staging" \
+            --rule-name "gh-runner-temp-$$" \
+            --yes || true
+
   apply-prod:
     name: Apply (prod)
     runs-on: ubuntu-latest
@@ -127,3 +201,40 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/envs/prod
         run: terraform apply -auto-approve -input=false
+
+      - name: Get Runner Egress IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Add Temporary PostgreSQL Firewall Rule
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --resource-group "rg-aap-prod" \
+            --name "aap-postgres-prod" \
+            --rule-name "gh-runner-temp-$$" \
+            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Create pgvector Extension
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          psql \
+            -h "aap-postgres-prod.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Remove Temporary PostgreSQL Firewall Rule
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "rg-aap-prod" \
+            --name "aap-postgres-prod" \
+            --rule-name "gh-runner-temp-$$" \
+            --yes || true
