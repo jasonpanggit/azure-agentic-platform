@@ -83,3 +83,173 @@ resource "azurerm_subnet" "reserved_1" {
 
   # Reserved for Phase 4 Event Hub networking. Do not use until Phase 4.
 }
+
+# --- Network Security Groups ---
+
+# Container Apps NSG — minimal rules; Container Apps manages its own networking
+resource "azurerm_network_security_group" "container_apps" {
+  name                = "nsg-snet-container-apps-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "container_apps_allow_vnet_inbound" {
+  name                        = "AllowVNetInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_network_security_rule" "container_apps_allow_azure_outbound" {
+  name                        = "AllowAzureCloudOutbound"
+  priority                    = 100
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureCloud"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "container_apps" {
+  subnet_id                 = azurerm_subnet.container_apps.id
+  network_security_group_id = azurerm_network_security_group.container_apps.id
+}
+
+# Private Endpoints NSG — allow inbound from Container Apps subnet
+resource "azurerm_network_security_group" "private_endpoints" {
+  name                = "nsg-snet-private-endpoints-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "pe_allow_container_apps_inbound" {
+  name                        = "AllowContainerAppsInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges     = ["443", "5432", "10255"]
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_private_endpoints_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_network_security_rule" "pe_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
+  subnet_id                 = azurerm_subnet.private_endpoints.id
+  network_security_group_id = azurerm_network_security_group.private_endpoints.id
+}
+
+# PostgreSQL NSG — allow inbound TCP 5432 from Container Apps subnet only
+resource "azurerm_network_security_group" "postgres" {
+  name                = "nsg-snet-postgres-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "postgres_allow_container_apps" {
+  name                        = "AllowPostgresFromContainerApps"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_postgres_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.postgres.name
+}
+
+resource "azurerm_network_security_rule" "postgres_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.postgres.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "postgres" {
+  subnet_id                 = azurerm_subnet.postgres.id
+  network_security_group_id = azurerm_network_security_group.postgres.id
+}
+
+# Foundry NSG (ISSUE-08) — allow inbound HTTPS from Container Apps subnet
+resource "azurerm_network_security_group" "foundry" {
+  name                = "nsg-snet-foundry-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "foundry_allow_container_apps_inbound" {
+  name                        = "AllowContainerAppsInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_foundry_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.foundry.name
+}
+
+resource "azurerm_network_security_rule" "foundry_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.foundry.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "foundry" {
+  subnet_id                 = azurerm_subnet.foundry.id
+  network_security_group_id = azurerm_network_security_group.foundry.id
+}
