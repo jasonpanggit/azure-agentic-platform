@@ -57,3 +57,13 @@ output "private_dns_zone_cognitive_id" {
   description = "Resource ID of the Cognitive Services private DNS zone"
   value       = azurerm_private_dns_zone.cognitive.id
 }
+
+output "subnet_reserved_1_id" {
+  description = "Resource ID of the reserved-1 subnet (Event Hub)"
+  value       = azurerm_subnet.reserved_1.id
+}
+
+output "private_dns_zone_servicebus_id" {
+  description = "Resource ID of the Service Bus private DNS zone"
+  value       = azurerm_private_dns_zone.servicebus.id
+}
