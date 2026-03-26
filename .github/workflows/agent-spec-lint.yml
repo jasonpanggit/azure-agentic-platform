@@ -1,0 +1,51 @@
+name: Agent Spec Lint
+
+on:
+  pull_request:
+    paths:
+      - 'agents/**/*.py'
+      - 'docs/agents/**'
+
+jobs:
+  check-specs:
+    name: Verify Agent Spec Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify agent specs exist
+        run: |
+          EXIT_CODE=0
+          # Find all agent directories (exclude 'shared')
+          for agent_dir in agents/*/; do
+            # Skip if glob returns literal (no agents/ dir yet)
+            [ -d "$agent_dir" ] || continue
+            agent_name=$(basename "$agent_dir")
+            # Skip shared utilities directory
+            if [ "$agent_name" = "shared" ]; then
+              continue
+            fi
+            # Check if directory contains Python files (top-level or nested)
+            py_count=$(find "$agent_dir" -name "*.py" 2>/dev/null | wc -l)
+            if [ "$py_count" -gt 0 ]; then
+              spec_file="docs/agents/${agent_name}-agent.spec.md"
+              if [ ! -f "$spec_file" ]; then
+                echo "::error file=${spec_file}::Missing spec file: ${spec_file} (required by AGENT-009 before any agent implementation)"
+                EXIT_CODE=1
+              else
+                echo "OK: ${spec_file} exists"
+                # Verify all 6 required sections exist
+                for section in "## Persona" "## Goals" "## Workflow" "## Tool Permissions" "## Safety Constraints" "## Example Flows"; do
+                  if ! grep -qF "$section" "$spec_file"; then
+                    echo "::error file=${spec_file}::Missing required section '${section}' in ${spec_file} (required by AGENT-009)"
+                    EXIT_CODE=1
+                  fi
+                done
+              fi
+            fi
+          done
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "All agent spec files present and valid."
+          fi
+          exit $EXIT_CODE
