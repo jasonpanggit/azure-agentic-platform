@@ -1,0 +1,22 @@
+// Update policies — chained pipeline: RawAlerts -> EnrichedAlerts -> DetectionResults
+// Chain depth: 2 (max supported: 3)
+//
+// *** INTENTIONAL: IsTransactional=false on hop 1 (RawAlerts -> EnrichedAlerts) ***
+// This OVERRIDES the RESEARCH.md example (which shows IsTransactional: true for both hops).
+// Rationale (Risk 6 mitigation from 04-RESEARCH.md):
+//   If the EnrichAlerts() function fails and IsTransactional=true, the source ingestion
+//   into RawAlerts is also rolled back — causing DATA LOSS of the raw alert.
+//   By setting IsTransactional=false, raw data is NEVER lost even if enrichment fails.
+//   A failed enrichment will leave the record in RawAlerts only, preservable for
+//   manual investigation or re-processing.
+//   Validated by test_first_hop_is_non_transactional() in 04-04 test suite.
+//
+// IsTransactional=true on hop 2 (EnrichedAlerts -> DetectionResults): ensures consistency
+// between enriched and classified data. classify_domain() always succeeds (sre fallback),
+// so this hop should never fail in practice.
+
+.alter table EnrichedAlerts policy update
+@'[{"IsEnabled": true, "Source": "RawAlerts", "Query": "EnrichAlerts()", "IsTransactional": false, "PropagateIngestionProperties": true}]'
+
+.alter table DetectionResults policy update
+@'[{"IsEnabled": true, "Source": "EnrichedAlerts", "Query": "ClassifyAlerts()", "IsTransactional": true, "PropagateIngestionProperties": true}]'

@@ -1,0 +1,27 @@
+// EnrichAlerts() — Update policy function: RawAlerts -> EnrichedAlerts
+// Extracts resource_name from ARM resource_id. MVP uses alert payload data
+// for resource enrichment; full resource inventory join is a Phase 5+ enhancement.
+
+.create-or-alter function EnrichAlerts() {
+    RawAlerts
+    | extend resource_name = extract(@"/providers/[^/]+/[^/]+/(.+)$", 1, resource_id)
+    | extend resource_name = coalesce(resource_name, extract(@"/resourceGroups/([^/]+)", 1, resource_id), "unknown")
+    | extend resource_location = ""
+    | extend resource_tags = dynamic({})
+    | project
+        alert_id,
+        alert_name,
+        severity,
+        fired_at,
+        resource_id,
+        resource_type,
+        subscription_id,
+        resource_group,
+        resource_name,
+        resource_location,
+        resource_tags,
+        alert_rule,
+        description,
+        signal_type,
+        ingestion_time
+}

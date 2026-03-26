@@ -1,0 +1,31 @@
+// ClassifyAlerts() — Update policy function: EnrichedAlerts -> DetectionResults
+// Applies classify_domain() to assign each alert to an agent domain.
+// All alerts get a domain (D-06: sre is the fallback), so domain IS NOT NULL
+// is always true — guaranteeing Activator triggers on every classified row.
+
+.create-or-alter function ClassifyAlerts() {
+    EnrichedAlerts
+    | extend domain = classify_domain(resource_type)
+    | where isnotempty(domain)
+    | extend kql_evidence = strcat(
+        "Alert: ", alert_name,
+        " | Resource: ", resource_id,
+        " | Severity: ", severity,
+        " | Fired: ", fired_at,
+        " | Signal: ", signal_type
+    )
+    | extend classified_at = now()
+    | project
+        alert_id,
+        severity,
+        domain,
+        fired_at,
+        resource_id,
+        resource_type,
+        subscription_id,
+        resource_name,
+        alert_rule,
+        description,
+        kql_evidence,
+        classified_at
+}

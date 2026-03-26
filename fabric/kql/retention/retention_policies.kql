@@ -1,0 +1,10 @@
+// Retention policies for detection pipeline tables
+// RawAlerts: 7 days (enriched data preserved downstream)
+// EnrichedAlerts: 30 days (intermediate, classification preserved in DetectionResults)
+// DetectionResults: 90 days (primary query table for detection analysis)
+
+.alter-merge table RawAlerts policy retention softdelete = 7d recoverability = disabled
+
+.alter-merge table EnrichedAlerts policy retention softdelete = 30d recoverability = disabled
+
+.alter-merge table DetectionResults policy retention softdelete = 90d recoverability = disabled
