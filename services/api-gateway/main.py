@@ -83,6 +83,27 @@ async def ingest_incident(
         payload.domain,
     )
 
+    # Dedup check (DETECT-005) — before Foundry dispatch
+    from services.api_gateway.dedup_integration import check_dedup
+
+    dedup_result = await check_dedup(
+        incident_id=payload.incident_id,
+        resource_id=payload.affected_resources[0].resource_id,
+        severity=payload.severity,
+        domain=payload.domain,
+        detection_rule=payload.detection_rule,
+        affected_resources=[r.model_dump() for r in payload.affected_resources],
+        kql_evidence=payload.kql_evidence,
+        title=payload.title,
+        description=payload.description,
+    )
+
+    if dedup_result is not None:
+        return IncidentResponse(
+            thread_id=dedup_result.get("thread_id", ""),
+            status=dedup_result.get("status", "deduplicated"),
+        )
+
     try:
         result = await create_foundry_thread(payload)
     except ValueError as exc:
