@@ -1,0 +1,11 @@
+# API Gateway dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.8.0
+
+# Azure authentication
+azure-identity>=1.17.0
+fastapi-azure-auth>=5.0.0
+
+# Azure AI Foundry SDK
+azure-ai-projects>=2.0.1
