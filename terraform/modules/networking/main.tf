@@ -253,3 +253,92 @@ resource "azurerm_subnet_network_security_group_association" "foundry" {
   subnet_id                 = azurerm_subnet.foundry.id
   network_security_group_id = azurerm_network_security_group.foundry.id
 }
+
+# --- Private DNS Zones ---
+
+resource "azurerm_private_dns_zone" "cosmos" {
+  name                = "privatelink.documents.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "acr" {
+  name                = "privatelink.azurecr.io"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "keyvault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "cognitive" {
+  name                = "privatelink.cognitiveservices.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+# --- VNet Links ---
+
+resource "azurerm_private_dns_zone_virtual_network_link" "cosmos" {
+  name                  = "vnetlink-cosmos-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.cosmos.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "vnetlink-postgres-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
+  name                  = "vnetlink-acr-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.acr.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
+  name                  = "vnetlink-keyvault-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "cognitive" {
+  name                  = "vnetlink-cognitive-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.cognitive.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
