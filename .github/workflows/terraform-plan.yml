@@ -1,0 +1,139 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: '1.9.8'
+  ARM_USE_OIDC: true
+
+jobs:
+  plan:
+    name: Plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+        include:
+          - environment: dev
+            working_directory: terraform/envs/dev
+          - environment: staging
+            working_directory: terraform/envs/staging
+          - environment: prod
+            working_directory: terraform/envs/prod
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+      TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: true
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        working-directory: ${{ matrix.working_directory }}
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ matrix.working_directory }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ matrix.working_directory }}
+        run: terraform plan -no-color -input=false -out=tfplan
+        continue-on-error: true
+
+      - name: Tag Lint Check
+        # ISSUE-06: Only run tag lint when terraform plan succeeded and tfplan file exists
+        if: steps.plan.outcome == 'success'
+        working-directory: ${{ matrix.working_directory }}
+        run: |
+          terraform show -json tfplan > tfplan.json
+          # ISSUE-05: Check ALL resources for required tags, including those with null tags.
+          # Resources with null tags field are caught (they're missing all required tags).
+          # Resources with tags present but missing required keys are also caught.
+          UNTAGGED=$(jq -r '
+            [.resource_changes[]? |
+              select(.change.actions != ["delete"]) |
+              select(
+                (.change.after.tags == null) or
+                (.change.after.tags.environment == null) or
+                (.change.after.tags["managed-by"] != "terraform") or
+                (.change.after.tags.project != "aap")
+              ) |
+              .address
+            ] | join("\n")
+          ' tfplan.json)
+          if [ -n "$UNTAGGED" ]; then
+            echo "::error::The following resources are missing required tags (environment, managed-by: terraform, project: aap):"
+            echo "$UNTAGGED"
+            exit 1
+          fi
+          echo "All resources have required tags."
+
+      - name: Post Plan to PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const planOutput = `${{ steps.plan.outputs.stdout }}`.substring(0, 65000);
+            const planExitCode = `${{ steps.plan.outcome }}`;
+            const env = `${{ matrix.environment }}`;
+            const status = planExitCode === 'success' ? ':white_check_mark:' : ':x:';
+
+            const body = `### ${status} Terraform Plan — \`${env}\`
+
+            <details>
+            <summary>Plan output (click to expand)</summary>
+
+            \`\`\`
+            ${planOutput}
+            \`\`\`
+
+            </details>
+
+            *Triggered by @${{ github.actor }} on \`${{ github.event.pull_request.head.ref }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
