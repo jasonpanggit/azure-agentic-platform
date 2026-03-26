@@ -6,20 +6,20 @@ status: in_progress
 last_updated: "2026-03-26T00:00:00.000Z"
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 3
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 3 in progress: 03-01, 03-02, 03-03 complete (3/4 plans done)
+> Last updated: 2026-03-26 — Phase 3 complete: all 4 plans done (03-01, 03-02, 03-03, 03-04)
 
 ---
 
 ## Current Phase
 
-**Phase 3: Arc MCP Server — In progress (3/4 plans complete)**
+**Phase 3: Arc MCP Server — Complete (4/4 plans)**
 
 ---
 
@@ -41,7 +41,7 @@ progress:
 |---|---|---|
 | 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Complete (2026-03-26) |
-| 3 | Arc MCP Server | In progress (3/4 plans complete) |
+| 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | Not started |
 | 5 | Triage & Remediation + Web UI | Not started |
 | 6 | Teams Integration | Not started |
@@ -84,6 +84,8 @@ None.
 | Optional[X] over X\|None in FastAPI signatures | 2-03 | FastAPI's get_type_hints() evaluates annotations at runtime; `|` union fails on Python 3.9 even with `from __future__ import annotations` |
 | conftest.py hyphenated package shim | 2-03 | Python cannot import hyphenated directories; shim registers `services/api-gateway` as `sys.modules["services.api_gateway"]` + setattr on parent for mock.patch compat |
 | Gateway as thin router only | 2-03 | No business logic in gateway; all incident reasoning deferred to Foundry agent threads; keeps gateway small and independently testable |
+| Integration tests excluded from fast unit CI run | 3-04 | pytest.mark.integration prevents prolonged disconnection and triage workflow tests from running in the fast unit test CI job; they run in a separate integration job |
+| E2E pagination tests use mock ARM server via AZURE_ARM_BASE_URL | 3-04 | Avoids real Azure credentials and expensive Arc estate provisioning in CI; mock ARM seeded with 120 Arc machines covers the >100 E2E-006 requirement |
 
 ---
 
