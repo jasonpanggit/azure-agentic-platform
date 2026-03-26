@@ -6,20 +6,20 @@ status: in_progress
 last_updated: "2026-03-26T00:00:00.000Z"
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 10
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 2 Plan 03 complete (API gateway: POST /api/v1/incidents, Entra auth, Foundry dispatch, Dockerfile, CI, 9 tests)
+> Last updated: 2026-03-26 — Phase 2 complete (98/98 tests pass, all agent-core requirements satisfied)
 
 ---
 
 ## Current Phase
 
-**Phase 2: Agent Core — In Progress (Plans 02-01, 02-02, 02-03 complete)**
+**Phase 3: Arc MCP Server — Not started**
 
 ---
 
@@ -40,7 +40,7 @@ progress:
 | # | Phase | Status |
 |---|---|---|
 | 1 | Foundation | Complete (5/5 plans) |
-| 2 | Agent Core | In Progress (3/5 plans) |
+| 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
 | 5 | Triage & Remediation + Web UI | Not started |

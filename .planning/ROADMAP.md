@@ -76,13 +76,13 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 2: Agent Core
+## ✅ Phase 2: Agent Core
 
 **Goal:** Full agent graph running on Foundry Hosted Agents with `HandoffOrchestrator`, all non-Arc domain agents wired to Azure MCP Server, incident ingestion endpoint live.
 
 **UI:** No | **IaC:** Yes (agent identities and RBAC)
 
-**Status:** In Progress — Plans 02-01, 02-02, and 02-03 complete
+**Status:** ✅ Complete (2026-03-26) — 98/98 tests pass, all requirements satisfied
 
 > **Design-first gate (AGENT-009):** `.spec.md` files for all 7 domain agents must be committed
 > and reviewed before any agent implementation code is written. This is the first deliverable
