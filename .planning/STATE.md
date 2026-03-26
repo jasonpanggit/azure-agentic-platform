@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-26T03:37:31.875Z"
+status: in_progress
+last_updated: "2026-03-26T00:00:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 10
+  completed_plans: 6
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 1 complete (all 5 plans)
+> Last updated: 2026-03-26 — Phase 2 Plan 01 complete (agent specs + CI gate + identities + RBAC)
 
 ---
 
 ## Current Phase
 
-**Phase 1: Foundation — Complete (5/5 plans)**
+**Phase 2: Agent Core — In Progress (Plan 02-01 complete)**
 
 ---
 
@@ -40,7 +40,7 @@ progress:
 | # | Phase | Status |
 |---|---|---|
 | 1 | Foundation | Complete (5/5 plans) |
-| 2 | Agent Core | Not started |
+| 2 | Agent Core | In Progress (1/? plans) |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
 | 5 | Triage & Remediation + Web UI | Not started |
@@ -74,6 +74,10 @@ None.
 | Tag lint via jq on tfplan.json | 1-05 | Catches both null tags and missing required keys; runs only when plan succeeds (ISSUE-05/06) |
 | pgvector setup via temporary firewall rule in CI | 1-05 | ISSUE-04 resolution: GitHub runners can't reach VNet-injected PG directly; temporary firewall rule pattern with always-cleanup |
 | Docker push as reusable workflow_call | 1-05 | Avoids duplication across agent image builds in Phase 2+; composable per-agent |
+| SystemAssigned identity IS the Entra Agent ID | 2-01 | Container App SystemAssigned managed identity registers as Entra Agent ID automatically; no separate azapi_data_plane_resource block needed |
+| RBAC merge() pattern for flat map | 2-01 | merge() with flat keyed map avoids Terraform index instability vs. concat() list approach; replace(sub_id, "-", "") for safe keys |
+| Arc Agent as Phase 2 stub | 2-01 | Arc Agent Container App + identity provisioned but returns structured pending response; full tooling deferred to Phase 3 Arc MCP Server |
+| Prod multi-subscription RBAC variables | 2-01 | compute/network/storage/all_subscription_ids vars added to prod only; dev/staging default all to platform subscription_id |
 
 ---
 
