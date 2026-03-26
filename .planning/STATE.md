@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-26T15:30:00.000Z"
+last_updated: "2026-03-26T16:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 4 started: plan 04-01 complete (Fabric + Event Hub infra)
+> Last updated: 2026-03-26 — Phase 4: plan 04-02 complete (KQL pipeline schemas, classify_domain(), Python mirror, 31 unit tests)
 
 ---
 
 ## Current Phase
 
-**Phase 4: Detection Plane — In Progress (1/4 plans)**
+**Phase 4: Detection Plane — In Progress (2/4 plans)**
 
-Current position: 04-01 complete — infrastructure layer done (Fabric, Event Hub, networking, activity log).
+Current position: 04-02 complete — KQL three-table pipeline, classify_domain() KQL function + Python mirror, update/retention policies, detection-plane Python package with 31 passing unit tests.
 
 ---
 
@@ -44,7 +44,7 @@ Current position: 04-01 complete — infrastructure layer done (Fabric, Event Hu
 | 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
-| 4 | Detection Plane | In Progress (1/4 plans — 04-01 complete) |
+| 4 | Detection Plane | In Progress (2/4 plans — 04-01, 04-02 complete) |
 | 5 | Triage & Remediation + Web UI | Not started |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
@@ -93,6 +93,9 @@ None.
 | Fixed end_date for azuread_application_password | 4-01 | Avoids perpetual diff from timeadd(timestamp(),...) per WARN-D4a; fixed to 2027-03-26T00:00:00Z |
 | Activity Log module with for_each over subscription IDs | 4-01 | Supports multi-subscription export — single sub in dev/staging, all_subscription_ids in prod |
 | Service Bus DNS zone in networking module | 4-01 | Follows existing pattern: DNS zones + VNet links in networking, PEs in private-endpoints |
+| IsTransactional=false on KQL hop 1 (RawAlerts→EnrichedAlerts) | 4-02 | Prevents data loss: if EnrichAlerts() fails with IsTransactional=true, source ingestion into RawAlerts is rolled back; false ensures raw alert is always preserved (Risk 6 mitigation) |
+| Python classify_domain() uses exact then prefix match | 4-02 | Exact match covers known types; prefix match handles broad categories (microsoft.security/*, microsoft.azurearcdata/*) — mirrors KQL has_any substring behavior |
+| DETECT-007 satisfied by architecture | 4-02 | Suppressed alerts never reach Event Hub (Azure Monitor processing rules suppress Action Group invocation upstream); no code needed, documented in KQL comments |
 
 ---
 
