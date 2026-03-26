@@ -1,12 +1,12 @@
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 1, Plan 03 complete
+> Last updated: 2026-03-26 — Phase 1, Plan 04 complete
 
 ---
 
 ## Current Phase
 
-**Phase 1: Foundation — Plan 03 of 05 complete (Resource Module Implementations)**
+**Phase 1: Foundation — Plan 04 of 05 complete (Environment Composition)**
 
 ---
 
@@ -26,7 +26,7 @@
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | In Progress (3/5 plans) |
+| 1 | Foundation | In Progress (4/5 plans) |
 | 2 | Agent Core | Not started |
 | 3 | Arc MCP Server | Not started |
 | 4 | Detection Plane | Not started |
@@ -55,6 +55,9 @@ None.
 | No local-exec for pgvector on VNet-isolated PostgreSQL | 1-03 | ISSUE-04: GitHub runners can't reach VNet-injected PG; deferred to PLAN-05 CI workflow |
 | ACR name uses random_string suffix | 1-03 | ISSUE-10: Azure Container Registry names must be globally unique |
 | Foundry project inherits identity from parent account | 1-03 | ISSUE-09: azurerm_cognitive_account_project does not support identity block |
+| Dev/staging Cosmos Serverless; prod Provisioned Autoscale | 1-04 | Cost optimization for non-prod; multi-region westus2 secondary for prod HA |
+| Tiered PostgreSQL SKUs per environment | 1-04 | dev B1ms, staging B2ms, prod GP_Standard_D4s_v3 — General Purpose needed for prod workloads |
+| Identical env structure, parameter-only differences | 1-04 | All envs share same provider/output/variable structure; only module parameters differ to minimize env drift |
 
 ---
 
