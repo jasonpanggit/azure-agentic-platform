@@ -7,7 +7,7 @@ Authorization header. No API keys or shared secrets.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -52,7 +52,7 @@ class EntraTokenValidator:
 
     async def validate(
         self,
-        credentials: HTTPAuthorizationCredentials | None = Depends(_security_scheme),
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security_scheme),
     ) -> dict[str, Any]:
         """Validate the Bearer token from the Authorization header.
 
@@ -87,7 +87,7 @@ _token_validator = EntraTokenValidator()
 
 
 async def verify_token(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_security_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security_scheme),
 ) -> dict[str, Any]:
     """FastAPI dependency for Entra token validation.
 
