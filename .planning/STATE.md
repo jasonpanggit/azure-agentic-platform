@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-26T16:00:00.000Z"
+last_updated: "2026-03-26T17:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 4: plan 04-02 complete (KQL pipeline schemas, classify_domain(), Python mirror, 31 unit tests)
+> Last updated: 2026-03-26 — Phase 4: plan 04-03 complete (dedup, alert state, payload mapping, gateway integration, Fabric UDF, 37 unit tests)
 
 ---
 
 ## Current Phase
 
-**Phase 4: Detection Plane — In Progress (2/4 plans)**
+**Phase 4: Detection Plane — In Progress (3/4 plans)**
 
-Current position: 04-02 complete — KQL three-table pipeline, classify_domain() KQL function + Python mirror, update/retention policies, detection-plane Python package with 31 passing unit tests.
+Current position: 04-03 complete — two-layer dedup with ETag concurrency, alert state lifecycle with Azure Monitor sync, DetectionResults→IncidentPayload mapping, Fabric User Data Function with MSAL auth, API gateway dedup integration, 37 passing unit tests.
 
 ---
 
@@ -44,7 +44,7 @@ Current position: 04-02 complete — KQL three-table pipeline, classify_domain()
 | 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
-| 4 | Detection Plane | In Progress (2/4 plans — 04-01, 04-02 complete) |
+| 4 | Detection Plane | In Progress (3/4 plans — 04-01, 04-02, 04-03 complete) |
 | 5 | Triage & Remediation + Web UI | Not started |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
@@ -96,6 +96,10 @@ None.
 | IsTransactional=false on KQL hop 1 (RawAlerts→EnrichedAlerts) | 4-02 | Prevents data loss: if EnrichAlerts() fails with IsTransactional=true, source ingestion into RawAlerts is rolled back; false ensures raw alert is always preserved (Risk 6 mitigation) |
 | Python classify_domain() uses exact then prefix match | 4-02 | Exact match covers known types; prefix match handles broad categories (microsoft.security/*, microsoft.azurearcdata/*) — mirrors KQL has_any substring behavior |
 | DETECT-007 satisfied by architecture | 4-02 | Suppressed alerts never reach Event Hub (Azure Monitor processing rules suppress Action Group invocation upstream); no code needed, documented in KQL comments |
+| Dedup check is non-blocking in gateway | 4-03 | COSMOS_ENDPOINT absent → skip dedup silently; ImportError → skip silently; prevents dedup bugs from taking down incident ingestion |
+| Fire-and-forget Azure Monitor sync | 4-03 | Platform state transition must never block on external sync; Azure Monitor failures logged but not raised (non-blocking by design) |
+| Self-contained UDF mapping copy in Fabric | 4-03 | Fabric runtime cannot import services/detection-plane; mapping logic duplicated intentionally, clearly commented with canonical reference |
+| det- prefix on incident_id | 4-03 | Provides traceability: any incident ID starting with det- was created via the detection plane (vs. manual/API ingestion) |
 
 ---
 

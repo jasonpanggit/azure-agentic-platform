@@ -183,7 +183,7 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (Fabric resources)
 
-**Status:** 🔄 In Progress (2/4 plans)
+**Status:** 🔄 In Progress (3/4 plans)
 
 ### Plan Progress
 
@@ -191,7 +191,7 @@ Ph 7                                                                ████
 |---|---|---|---|
 | 04-01 | Infrastructure: Fabric, Event Hub, Networking & Activity Log | ✅ Complete | INFRA-007, DETECT-001, AUDIT-003 |
 | 04-02 | KQL Pipeline — Table Schemas, classify_domain(), Update Policies | ✅ Complete | DETECT-002, DETECT-007 |
-| 04-03 | Fabric Activator + User Data Function (DETECT-003) | ⬜ Not started | DETECT-003 |
+| 04-03 | Fabric Activator + User Data Function (DETECT-003) | ✅ Complete | DETECT-003, DETECT-005, DETECT-006 |
 | 04-04 | Dedup, State Sync, Processing Rules & Tests (DETECT-005/006/007) | ⬜ Not started | DETECT-005, DETECT-006 |
 
 ### Success Criteria
