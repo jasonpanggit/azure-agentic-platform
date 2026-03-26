@@ -155,7 +155,7 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 | Custom Arc MCP Server | Azure MCP Server has no Arc support; Arc estate is full scope (servers + K8s + data); must bridge this gap | ✅ Validated Phase 3 — FastMCP server with 9 tools, Terraform Container App module, internal ingress |
 | Both token streaming + agent trace events | Addresses latency concern (token stream = fast first response) + transparency (trace events = agent JSON visibility) | — Pending |
 | Container Apps over AKS | Simpler ops; event-driven scaling fits agent workloads; Foundry Hosted Agents already container-backed; add AKS if scale demands it | — Pending |
-| Fabric as detection plane (not primary data store) | Fabric Eventhouse + Activator is best-in-class for real-time telemetry and rule-based triggers; not suited for hot-path transactional writes | — Pending |
+| Fabric as detection plane (not primary data store) | Fabric Eventhouse + Activator is best-in-class for real-time telemetry and rule-based triggers; not suited for hot-path transactional writes | ✅ Validated Phase 4 — Eventhouse KQL pipeline, classify_domain() routing, Activator trigger, dedup + state machine |
 
 ---
 
@@ -177,4 +177,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 — Phase 3: Arc MCP Server complete (4/4 plans, 29/29 must-haves verified, 95 tests passing)*
+*Last updated: 2026-03-26 — Phase 4: Detection Plane complete (4/4 plans, 8/8 requirements verified, 92 unit tests passing)*
