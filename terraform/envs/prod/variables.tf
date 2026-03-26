@@ -61,3 +61,8 @@ variable "gateway_incidents_write_role_id" {
   type        = string
   default     = ""
 }
+
+variable "fabric_admin_email" {
+  description = "Email address of the Fabric capacity administrator"
+  type        = string
+}
