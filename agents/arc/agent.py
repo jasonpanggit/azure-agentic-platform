@@ -3,7 +3,7 @@
 Domain specialist for Azure Arc-enabled resources: Arc Servers
 (HybridCompute), Arc Kubernetes (ConnectedClusters), and Arc Data Services.
 
-Mounts the custom Arc MCP Server via McpTool — the Arc MCP Server is an
+Mounts the custom Arc MCP Server via MCPTool — the Arc MCP Server is an
 internal Container App built in Phase 3 that fills the Azure MCP Server's
 Arc coverage gap (AGENT-005).
 
@@ -14,7 +14,7 @@ Requirements:
     TRIAGE-003: Must check Activity Log (prior 2h) as FIRST RCA step.
     TRIAGE-004: Must include confidence score (0.0–1.0) in every diagnosis.
     REMEDI-001: Must NOT execute any remediation without human approval.
-    AGENT-005: Mounts Arc MCP Server tools via McpTool; ALLOWED_MCP_TOOLS
+    AGENT-005: Mounts Arc MCP Server tools via MCPTool; ALLOWED_MCP_TOOLS
         is non-empty explicit list (not the Phase 2 empty stub list).
 
 RBAC scope: Reader on Arc subscriptions (enforced by Terraform).
@@ -25,7 +25,7 @@ from __future__ import annotations
 import os
 
 from agent_framework import ChatAgent
-from azure.ai.projects.models import McpTool
+from azure.ai.projects.models import MCPTool
 
 from agents.shared.auth import get_foundry_client
 from agents.shared.otel import setup_telemetry
@@ -129,7 +129,7 @@ estimated_impact, risk_level (low/medium/high/critical), reversibility statement
 def create_arc_agent() -> ChatAgent:
     """Create and configure the Arc Agent with Arc MCP Server tooling.
 
-    Mounts the custom Arc MCP Server as a McpTool. The server URL is provided
+    Mounts the custom Arc MCP Server as a MCPTool. The server URL is provided
     via ARC_MCP_SERVER_URL environment variable (set by Terraform arc-mcp-server
     module output → agent-apps env var injection).
 
@@ -149,8 +149,8 @@ def create_arc_agent() -> ChatAgent:
 
     client = get_foundry_client()
 
-    # Mount the Arc MCP Server via McpTool (AGENT-005)
-    arc_mcp_tool = McpTool(
+    # Mount the Arc MCP Server via MCPTool (AGENT-005)
+    arc_mcp_tool = MCPTool(
         server_label="arc-mcp",
         server_url=arc_mcp_server_url,
         allowed_tools=ALLOWED_MCP_TOOLS,
