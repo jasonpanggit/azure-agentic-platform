@@ -183,6 +183,17 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (Fabric resources)
 
+**Status:** 🔄 In Progress (1/4 plans)
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 04-01 | Infrastructure: Fabric, Event Hub, Networking & Activity Log | ✅ Complete | INFRA-007, DETECT-001, AUDIT-003 |
+| 04-02 | Eventhouse Schema, KQL Update Policies & Eventstream | ⬜ Not started | DETECT-002 |
+| 04-03 | Fabric Activator + User Data Function (DETECT-003) | ⬜ Not started | DETECT-003 |
+| 04-04 | Dedup, State Sync, Processing Rules & Tests (DETECT-005/006/007) | ⬜ Not started | DETECT-005, DETECT-006, DETECT-007 |
+
 ### Success Criteria
 
 1. A fired Azure Monitor alert appears in the Eventhouse `RawAlerts` table within 30 seconds of firing; KQL update policies enrich it into `EnrichedAlerts` (with resource inventory join) and classify it into `DetectionResults` with a non-null `domain` value — confirmed by querying the Eventhouse tables after injecting a synthetic alert via the Azure Monitor API.

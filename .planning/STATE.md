@@ -2,24 +2,26 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-26T12:28:47.302Z"
+status: in_progress
+last_updated: "2026-03-26T15:30:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 10
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-26 — Phase 3 complete: all 4 plans done (03-01, 03-02, 03-03, 03-04)
+> Last updated: 2026-03-26 — Phase 4 started: plan 04-01 complete (Fabric + Event Hub infra)
 
 ---
 
 ## Current Phase
 
-**Phase 3: Arc MCP Server — Complete (4/4 plans)**
+**Phase 4: Detection Plane — In Progress (1/4 plans)**
+
+Current position: 04-01 complete — infrastructure layer done (Fabric, Event Hub, networking, activity log).
 
 ---
 
@@ -42,7 +44,7 @@ progress:
 | 1 | Foundation | Complete (5/5 plans) |
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
-| 4 | Detection Plane | Not started |
+| 4 | Detection Plane | In Progress (1/4 plans — 04-01 complete) |
 | 5 | Triage & Remediation + Web UI | Not started |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
@@ -86,6 +88,11 @@ None.
 | Gateway as thin router only | 2-03 | No business logic in gateway; all incident reasoning deferred to Foundry agent threads; keeps gateway small and independently testable |
 | Integration tests excluded from fast unit CI run | 3-04 | pytest.mark.integration prevents prolonged disconnection and triage workflow tests from running in the fast unit test CI job; they run in a separate integration job |
 | E2E pagination tests use mock ARM server via AZURE_ARM_BASE_URL | 3-04 | Avoids real Azure credentials and expensive Arc estate provisioning in CI; mock ARM seeded with 120 Arc machines covers the >100 E2E-006 requirement |
+| azapi_resource for all Fabric data-plane items | 4-01 | Fabric REST API types supported via azapi; consistent with project Fabric Terraform pattern |
+| count gate on Fabric SP resources | 4-01 | gateway_app_client_id="" default allows deploy before API gateway Entra app is registered |
+| Fixed end_date for azuread_application_password | 4-01 | Avoids perpetual diff from timeadd(timestamp(),...) per WARN-D4a; fixed to 2027-03-26T00:00:00Z |
+| Activity Log module with for_each over subscription IDs | 4-01 | Supports multi-subscription export — single sub in dev/staging, all_subscription_ids in prod |
+| Service Bus DNS zone in networking module | 4-01 | Follows existing pattern: DNS zones + VNet links in networking, PEs in private-endpoints |
 
 ---
 
