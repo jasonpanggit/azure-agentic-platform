@@ -1,0 +1,29 @@
+# Pinned base requirements for all AAP agent containers
+# Update versions here to propagate to all agents
+
+# Microsoft Agent Framework (RC — pin exactly)
+agent-framework==1.0.0rc5
+
+# Azure AI Foundry SDK (GA)
+azure-ai-projects>=2.0.1
+
+# Foundry Hosted Agent adapters
+azure-ai-agentserver-core
+azure-ai-agentserver-agentframework
+
+# Azure Identity (managed identity via IMDS)
+azure-identity>=1.17.0
+
+# Cosmos DB SDK (session budget tracking)
+azure-cosmos>=4.7.0
+
+# OpenTelemetry + Azure Monitor
+azure-monitor-opentelemetry>=1.6.0
+opentelemetry-sdk>=1.25.0
+opentelemetry-exporter-otlp>=1.25.0
+
+# MCP SDK (tool surface)
+mcp[cli]>=1.26.0
+
+# Data validation
+pydantic>=2.8.0

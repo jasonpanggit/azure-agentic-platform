@@ -1,0 +1,32 @@
+# agents/Dockerfile.base
+# Shared base image for all AAP domain agent containers.
+# Installs all common Python dependencies; per-agent Dockerfiles
+# extend this with FROM and add agent-specific code only.
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+# System dependencies for Azure Identity SDK + crypto
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install shared Python dependencies
+COPY requirements-base.txt .
+RUN pip install --no-cache-dir -r requirements-base.txt
+
+# Copy shared utilities (telemetry, auth, envelope, budget)
+COPY shared/ ./shared/
+
+# Non-root user for security
+RUN useradd --create-home --shell /bin/bash agentuser
+USER agentuser
+
+# Health check endpoint (agents expose on 8088 for Foundry adapter)
+EXPOSE 8088
+
+# Default entrypoint — overridden by per-agent Dockerfiles
+CMD ["python", "-m", "shared"]
