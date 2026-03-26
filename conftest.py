@@ -3,12 +3,77 @@
 Registers hyphenated service directories as importable Python packages.
 The directory `services/api-gateway/` is registered as `services.api_gateway`
 to match the production import path used in the Dockerfile and runtime.
+
+Also installs a lightweight agent_framework stub so that agent source modules
+can be imported during tests without requiring the real agent-framework RC
+package to be installed (it requires Python >=3.10 and is pre-release).
+The stub exposes the symbols used by our source code; actual framework
+behaviour is not needed for unit/integration tests.
 """
 import sys
 import types
 from pathlib import Path
 
 _ROOT = Path(__file__).parent
+
+
+# ---------------------------------------------------------------------------
+# agent_framework stub
+# ---------------------------------------------------------------------------
+
+def _install_agent_framework_stub() -> None:
+    """Install a minimal agent_framework stub into sys.modules.
+
+    Provides the symbols referenced in our agent source files:
+        AgentTarget, HandoffOrchestrator, ChatAgent, ai_function
+    Real framework behaviour is not required for unit/integration tests.
+    Only installed when the real package is not present OR when the real
+    package does not export these symbols (RC API mismatch).
+    """
+    # Check if the real package already exports the symbols we need
+    real_pkg = sys.modules.get("agent_framework")
+    if real_pkg is not None and hasattr(real_pkg, "ai_function"):
+        return  # Real package is present and has the right API
+
+    stub = types.ModuleType("agent_framework")
+
+    def ai_function(fn=None, **kwargs):
+        """No-op decorator — returns the function unchanged."""
+        if fn is None:
+            # Called as @ai_function(name=...) — return decorator
+            def decorator(f):
+                return f
+            return decorator
+        return fn
+
+    class _Base:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_target(self, target):
+            pass
+
+        def serve(self):
+            pass
+
+    class AgentTarget(_Base):
+        pass
+
+    class HandoffOrchestrator(_Base):
+        pass
+
+    class ChatAgent(_Base):
+        pass
+
+    stub.ai_function = ai_function
+    stub.AgentTarget = AgentTarget
+    stub.HandoffOrchestrator = HandoffOrchestrator
+    stub.ChatAgent = ChatAgent
+
+    sys.modules["agent_framework"] = stub
+
+
+_install_agent_framework_stub()
 
 
 def _register_hyphenated_package(hyphenated_path: Path, import_name: str) -> None:
