@@ -1,0 +1,1205 @@
+# Plan 01: Repository Scaffold & State Bootstrap
+
+```yaml
+wave: 1
+depends_on: []
+files_modified:
+  - terraform/modules/monitoring/main.tf
+  - terraform/modules/monitoring/variables.tf
+  - terraform/modules/monitoring/outputs.tf
+  - terraform/modules/networking/main.tf
+  - terraform/modules/networking/variables.tf
+  - terraform/modules/networking/outputs.tf
+  - terraform/modules/foundry/main.tf
+  - terraform/modules/foundry/variables.tf
+  - terraform/modules/foundry/outputs.tf
+  - terraform/modules/foundry/capability-host.tf
+  - terraform/modules/databases/cosmos.tf
+  - terraform/modules/databases/postgres.tf
+  - terraform/modules/databases/variables.tf
+  - terraform/modules/databases/outputs.tf
+  - terraform/modules/compute-env/main.tf
+  - terraform/modules/compute-env/variables.tf
+  - terraform/modules/compute-env/outputs.tf
+  - terraform/modules/keyvault/main.tf
+  - terraform/modules/keyvault/variables.tf
+  - terraform/modules/keyvault/outputs.tf
+  - terraform/modules/private-endpoints/main.tf
+  - terraform/modules/private-endpoints/variables.tf
+  - terraform/modules/private-endpoints/outputs.tf
+  - scripts/bootstrap-state.sh
+  - .gitignore
+  - .terraform-version
+autonomous: true
+requirements:
+  - INFRA-001
+  - INFRA-002
+  - INFRA-003
+  - INFRA-004
+  - INFRA-008
+```
+
+## Goal
+
+Create the complete Terraform directory structure, all shared module skeletons with variable/output interfaces defined, the state bootstrap script, and repo-level configuration files. This is the scaffolding wave — no resource implementations yet (those come in Plans 02-04), but every module's `variables.tf` and `outputs.tf` must be fully defined so downstream plans can work on modules in parallel without interface conflicts.
+
+---
+
+## Tasks
+
+<task id="01.01">
+<title>Create .gitignore and .terraform-version</title>
+<read_first>
+- (no files to read — greenfield)
+</read_first>
+<action>
+Create `.gitignore` at repo root with the following content:
+
+```
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+dist/
+```
+
+Create `.terraform-version` at repo root with content:
+```
+1.9.8
+```
+</action>
+<acceptance_criteria>
+- `.gitignore` exists at repo root and contains `**/.terraform/`
+- `.gitignore` contains `*.tfstate`
+- `.gitignore` contains `*.tfplan`
+- `.gitignore` contains `node_modules/`
+- `.terraform-version` exists at repo root and contains `1.9.8`
+</acceptance_criteria>
+</task>
+
+<task id="01.02">
+<title>Create state backend bootstrap script</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 9: State Backend & OIDC Authentication)
+- .planning/phases/01-foundation/01-CONTEXT.md (Decisions D-05, D-06)
+</read_first>
+<action>
+Create `scripts/bootstrap-state.sh` with the following content:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Bootstrap Terraform state storage accounts for AAP
+# Run this script ONCE per environment before terraform init.
+#
+# Prerequisites:
+#   - Azure CLI authenticated (`az login`)
+#   - Permissions to create resource groups and storage accounts
+#   - AZURE_SUBSCRIPTION_ID set or passed as argument
+#
+# Usage:
+#   ./scripts/bootstrap-state.sh [subscription_id]
+
+SUBSCRIPTION_ID="${1:-${AZURE_SUBSCRIPTION_ID:-}}"
+LOCATION="eastus2"
+PROJECT="aap"
+
+if [[ -z "$SUBSCRIPTION_ID" ]]; then
+  echo "ERROR: Pass subscription_id as argument or set AZURE_SUBSCRIPTION_ID"
+  exit 1
+fi
+
+az account set --subscription "$SUBSCRIPTION_ID"
+
+for env in dev stg prod; do
+  RG_NAME="rg-${PROJECT}-tfstate-${env}"
+  SA_NAME="st${PROJECT}tfstate${env}"
+  CONTAINER_NAME="tfstate"
+
+  echo "=== Bootstrapping state backend for environment: ${env} ==="
+
+  # Create resource group
+  az group create \
+    --name "$RG_NAME" \
+    --location "$LOCATION" \
+    --tags environment="$env" managed-by=script project="$PROJECT"
+
+  # Create storage account (no public blob access, TLS 1.2, Entra auth only)
+  az storage account create \
+    --name "$SA_NAME" \
+    --resource-group "$RG_NAME" \
+    --location "$LOCATION" \
+    --sku Standard_LRS \
+    --kind StorageV2 \
+    --allow-blob-public-access false \
+    --min-tls-version TLS1_2 \
+    --allow-shared-key-access false \
+    --tags environment="$env" managed-by=script project="$PROJECT"
+
+  # Create blob container for tfstate
+  az storage container create \
+    --name "$CONTAINER_NAME" \
+    --account-name "$SA_NAME" \
+    --auth-mode login
+
+  echo "  Created: ${SA_NAME}/${CONTAINER_NAME}"
+done
+
+echo ""
+echo "=== Bootstrap complete ==="
+echo "Next steps:"
+echo "  1. Grant GitHub Actions service principal 'Storage Blob Data Contributor' on each storage account"
+echo "  2. Configure federated credentials for OIDC in the App Registration"
+echo "  3. Run 'terraform init' in each envs/<env>/ directory"
+```
+
+Make the script executable: `chmod +x scripts/bootstrap-state.sh`
+</action>
+<acceptance_criteria>
+- `scripts/bootstrap-state.sh` exists
+- Script contains `set -euo pipefail` on line 2
+- Script contains `st${PROJECT}tfstate${env}` pattern for storage account naming (resolves to `staaptfstatedev`, `staaptfstatestg`, `staaptfstateprod`)
+- Script contains `--allow-shared-key-access false` (Entra auth only, per D-06)
+- Script contains `--allow-blob-public-access false`
+- Script contains `--min-tls-version TLS1_2`
+- Script contains `az storage container create` with `--auth-mode login`
+- Script is executable (`chmod +x`)
+</acceptance_criteria>
+</task>
+
+<task id="01.03">
+<title>Create monitoring module (variables, outputs, main)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 2: Module Dependency Order — monitoring has no deps)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 12: Terraform Outputs for Downstream Phases)
+- CLAUDE.md (Technology Stack — Application Insights, Log Analytics)
+</read_first>
+<action>
+Create `terraform/modules/monitoring/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+variable "log_analytics_sku" {
+  description = "SKU for Log Analytics workspace"
+  type        = string
+  default     = "PerGB2018"
+}
+
+variable "log_analytics_retention_days" {
+  description = "Data retention in days for Log Analytics"
+  type        = number
+  default     = 30
+}
+```
+
+Create `terraform/modules/monitoring/outputs.tf`:
+
+```hcl
+output "log_analytics_workspace_id" {
+  description = "Resource ID of the Log Analytics workspace"
+  value       = azurerm_log_analytics_workspace.main.id
+}
+
+output "log_analytics_workspace_name" {
+  description = "Name of the Log Analytics workspace"
+  value       = azurerm_log_analytics_workspace.main.name
+}
+
+output "app_insights_id" {
+  description = "Resource ID of Application Insights"
+  value       = azurerm_application_insights.main.id
+}
+
+output "app_insights_connection_string" {
+  description = "Connection string for Application Insights"
+  value       = azurerm_application_insights.main.connection_string
+  sensitive   = true
+}
+
+output "app_insights_instrumentation_key" {
+  description = "Instrumentation key for Application Insights (legacy)"
+  value       = azurerm_application_insights.main.instrumentation_key
+  sensitive   = true
+}
+```
+
+Create `terraform/modules/monitoring/main.tf`:
+
+```hcl
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "law-aap-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = var.log_analytics_sku
+  retention_in_days   = var.log_analytics_retention_days
+
+  tags = var.required_tags
+}
+
+resource "azurerm_application_insights" "main" {
+  name                = "appi-aap-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  workspace_id        = azurerm_log_analytics_workspace.main.id
+  application_type    = "other"
+
+  tags = var.required_tags
+}
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/monitoring/variables.tf` exists and contains `variable "required_tags"` with the validation block checking `managed-by` == `terraform` and `project` == `aap`
+- `terraform/modules/monitoring/outputs.tf` exists and contains `output "log_analytics_workspace_id"`
+- `terraform/modules/monitoring/outputs.tf` contains `output "app_insights_connection_string"` with `sensitive = true`
+- `terraform/modules/monitoring/main.tf` exists and contains `resource "azurerm_log_analytics_workspace" "main"`
+- `terraform/modules/monitoring/main.tf` contains `resource "azurerm_application_insights" "main"`
+- `azurerm_application_insights.main` has `workspace_id = azurerm_log_analytics_workspace.main.id` (workspace-based App Insights)
+</acceptance_criteria>
+</task>
+
+<task id="01.04">
+<title>Create networking module skeleton (variables + outputs + empty main)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 4: Networking Deep Dive — subnet plan, CIDR, DNS zones)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 2: Module Dependency Order)
+</read_first>
+<action>
+Create `terraform/modules/networking/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+variable "vnet_address_space" {
+  description = "Address space for the VNet"
+  type        = list(string)
+  default     = ["10.0.0.0/16"]
+}
+
+variable "subnet_container_apps_cidr" {
+  description = "CIDR for the Container Apps subnet"
+  type        = string
+  default     = "10.0.0.0/23"
+}
+
+variable "subnet_private_endpoints_cidr" {
+  description = "CIDR for the private endpoints subnet"
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
+variable "subnet_postgres_cidr" {
+  description = "CIDR for the PostgreSQL delegated subnet"
+  type        = string
+  default     = "10.0.3.0/24"
+}
+
+variable "subnet_foundry_cidr" {
+  description = "CIDR for the Foundry private endpoint subnet (reserved)"
+  type        = string
+  default     = "10.0.4.0/24"
+}
+
+variable "subnet_reserved_1_cidr" {
+  description = "CIDR for reserved subnet (Phase 4 Event Hub networking)"
+  type        = string
+  default     = "10.0.64.0/24"
+}
+```
+
+Create `terraform/modules/networking/outputs.tf`:
+
+```hcl
+output "vnet_id" {
+  description = "Resource ID of the VNet"
+  value       = azurerm_virtual_network.main.id
+}
+
+output "vnet_name" {
+  description = "Name of the VNet"
+  value       = azurerm_virtual_network.main.name
+}
+
+output "subnet_container_apps_id" {
+  description = "Resource ID of the Container Apps subnet"
+  value       = azurerm_subnet.container_apps.id
+}
+
+output "subnet_private_endpoints_id" {
+  description = "Resource ID of the private endpoints subnet"
+  value       = azurerm_subnet.private_endpoints.id
+}
+
+output "subnet_postgres_id" {
+  description = "Resource ID of the PostgreSQL delegated subnet"
+  value       = azurerm_subnet.postgres.id
+}
+
+output "subnet_foundry_id" {
+  description = "Resource ID of the Foundry subnet (reserved)"
+  value       = azurerm_subnet.foundry.id
+}
+
+output "nsg_foundry_id" {
+  description = "Resource ID of the Foundry subnet NSG"
+  value       = azurerm_network_security_group.foundry.id
+}
+
+output "private_dns_zone_cosmos_id" {
+  description = "Resource ID of the Cosmos DB private DNS zone"
+  value       = azurerm_private_dns_zone.cosmos.id
+}
+
+output "private_dns_zone_postgres_id" {
+  description = "Resource ID of the PostgreSQL private DNS zone"
+  value       = azurerm_private_dns_zone.postgres.id
+}
+
+output "private_dns_zone_acr_id" {
+  description = "Resource ID of the ACR private DNS zone"
+  value       = azurerm_private_dns_zone.acr.id
+}
+
+output "private_dns_zone_keyvault_id" {
+  description = "Resource ID of the Key Vault private DNS zone"
+  value       = azurerm_private_dns_zone.keyvault.id
+}
+
+output "private_dns_zone_cognitive_id" {
+  description = "Resource ID of the Cognitive Services private DNS zone"
+  value       = azurerm_private_dns_zone.cognitive.id
+}
+```
+
+Create `terraform/modules/networking/main.tf` as an empty placeholder with a comment header:
+
+```hcl
+# Networking module — VNet, subnets, NSGs, private DNS zones
+# Implementation: PLAN-02 (Wave 2)
+#
+# Resources created here:
+#   - azurerm_virtual_network.main
+#   - azurerm_subnet.container_apps (delegated: Microsoft.App/environments)
+#   - azurerm_subnet.private_endpoints
+#   - azurerm_subnet.postgres (delegated: Microsoft.DBforPostgreSQL/flexibleServers)
+#   - azurerm_subnet.foundry (reserved for future PE)
+#   - azurerm_subnet.reserved_1 (reserved for Phase 4 Event Hub)
+#   - azurerm_network_security_group (per subnet, including foundry)
+#   - azurerm_subnet_network_security_group_association (per subnet)
+#   - azurerm_private_dns_zone (cosmos, postgres, acr, keyvault, cognitive)
+#   - azurerm_private_dns_zone_virtual_network_link (per zone)
+#
+# NOTE: Private endpoints are NOT created in this module.
+#       They live in the dedicated private-endpoints module (PLAN-03).
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/networking/variables.tf` exists and contains `variable "vnet_address_space"` with default `["10.0.0.0/16"]`
+- `terraform/modules/networking/variables.tf` contains `variable "subnet_container_apps_cidr"` with default `"10.0.0.0/23"`
+- `terraform/modules/networking/variables.tf` contains `variable "subnet_postgres_cidr"` with default `"10.0.3.0/24"`
+- `terraform/modules/networking/variables.tf` contains `variable "subnet_reserved_1_cidr"` with default `"10.0.64.0/24"`
+- `terraform/modules/networking/outputs.tf` exists and contains `output "vnet_id"`
+- `terraform/modules/networking/outputs.tf` contains `output "subnet_container_apps_id"`
+- `terraform/modules/networking/outputs.tf` contains `output "private_dns_zone_cosmos_id"`
+- `terraform/modules/networking/outputs.tf` contains `output "nsg_foundry_id"`
+- `terraform/modules/networking/main.tf` exists
+- `terraform/modules/networking/main.tf` does NOT contain private endpoint resources
+</acceptance_criteria>
+</task>
+
+<task id="01.05">
+<title>Create foundry module skeleton (variables + outputs)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 5: Azure AI Foundry Provisioning)
+- CLAUDE.md (Technology Stack — Foundry Account, Project, Model Deployment, Capability Host)
+</read_first>
+<action>
+Create `terraform/modules/foundry/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+variable "model_name" {
+  description = "Name of the model to deploy"
+  type        = string
+  default     = "gpt-4o"
+}
+
+variable "model_version" {
+  description = "Version of the model to deploy"
+  type        = string
+  default     = "2024-11-20"
+}
+
+variable "model_capacity" {
+  description = "Model deployment capacity in thousands of tokens per minute"
+  type        = number
+  default     = 10
+}
+
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of the Log Analytics workspace for diagnostic settings"
+  type        = string
+}
+```
+
+Create `terraform/modules/foundry/outputs.tf`:
+
+```hcl
+output "foundry_account_id" {
+  description = "Resource ID of the Foundry (AI Services) account"
+  value       = azurerm_cognitive_account.foundry.id
+}
+
+output "foundry_account_endpoint" {
+  description = "Endpoint URL of the Foundry account"
+  value       = azurerm_cognitive_account.foundry.endpoint
+}
+
+output "foundry_account_name" {
+  description = "Name of the Foundry account"
+  value       = azurerm_cognitive_account.foundry.name
+}
+
+output "foundry_project_id" {
+  description = "Resource ID of the Foundry project"
+  value       = azurerm_cognitive_account_project.main.id
+}
+
+output "foundry_model_deployment_name" {
+  description = "Name of the gpt-4o model deployment"
+  value       = azurerm_cognitive_deployment.gpt4o.name
+}
+
+output "foundry_principal_id" {
+  description = "Principal ID of the Foundry account system-assigned identity"
+  value       = azurerm_cognitive_account.foundry.identity[0].principal_id
+}
+```
+
+Create `terraform/modules/foundry/main.tf` as placeholder:
+
+```hcl
+# Foundry module — AI Services account, project, model deployment
+# Implementation: PLAN-03 (Wave 3)
+```
+
+Create `terraform/modules/foundry/capability-host.tf` as placeholder:
+
+```hcl
+# Capability Host — azapi_resource (Preview, long-running operation)
+# Implementation: PLAN-03 (Wave 3)
+#
+# Uses: Microsoft.CognitiveServices/accounts/capabilityHosts@2025-10-01-preview
+# Timeouts: create = "30m", delete = "30m"
+# Known issue: May show perpetual drift — may need lifecycle { ignore_changes }
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/foundry/variables.tf` exists and contains `variable "model_name"` with default `"gpt-4o"`
+- `terraform/modules/foundry/variables.tf` contains `variable "model_version"` with default `"2024-11-20"`
+- `terraform/modules/foundry/variables.tf` contains `variable "log_analytics_workspace_id"` of type string
+- `terraform/modules/foundry/outputs.tf` exists and contains `output "foundry_account_id"`
+- `terraform/modules/foundry/outputs.tf` contains `output "foundry_account_endpoint"`
+- `terraform/modules/foundry/outputs.tf` contains `output "foundry_project_id"`
+- `terraform/modules/foundry/outputs.tf` contains `output "foundry_model_deployment_name"`
+- `terraform/modules/foundry/main.tf` exists
+- `terraform/modules/foundry/capability-host.tf` exists and contains `capabilityHosts`
+</acceptance_criteria>
+</task>
+
+<task id="01.06">
+<title>Create databases module skeleton (variables + outputs)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 6: Database Provisioning)
+- .planning/phases/01-foundation/01-CONTEXT.md (Decisions — partition keys)
+</read_first>
+<action>
+Create `terraform/modules/databases/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+# Cosmos DB variables
+variable "cosmos_serverless" {
+  description = "Use Serverless capacity mode (true for dev/staging, false for prod)"
+  type        = bool
+  default     = true
+}
+
+variable "cosmos_secondary_location" {
+  description = "Secondary region for Cosmos DB multi-region (prod only, ignored if serverless)"
+  type        = string
+  default     = ""
+}
+
+variable "cosmos_max_throughput" {
+  description = "Max autoscale throughput in RU/s (prod only, ignored if serverless)"
+  type        = number
+  default     = 4000
+}
+
+# PostgreSQL variables
+variable "postgres_subnet_id" {
+  description = "Subnet ID for PostgreSQL VNet injection (delegated subnet)"
+  type        = string
+}
+
+variable "postgres_dns_zone_id" {
+  description = "Private DNS zone ID for PostgreSQL"
+  type        = string
+}
+
+variable "postgres_sku" {
+  description = "SKU for PostgreSQL Flexible Server"
+  type        = string
+  default     = "B_Standard_B1ms"
+}
+
+variable "postgres_storage_mb" {
+  description = "Storage in MB for PostgreSQL Flexible Server"
+  type        = number
+  default     = 32768
+}
+
+variable "postgres_admin_login" {
+  description = "Administrator login for PostgreSQL"
+  type        = string
+  default     = "aap_admin"
+}
+
+variable "postgres_admin_password" {
+  description = "Administrator password for PostgreSQL"
+  type        = string
+  sensitive   = true
+}
+
+variable "tenant_id" {
+  description = "Entra tenant ID for PostgreSQL Entra auth"
+  type        = string
+}
+```
+
+> **REVISION (ISSUE-01):** Removed `private_endpoint_subnet_id` and `private_dns_zone_cosmos_id` variables.
+> Cosmos DB private endpoint is now created by the dedicated `modules/private-endpoints` module, not here.
+
+Create `terraform/modules/databases/outputs.tf`:
+
+```hcl
+# Cosmos DB outputs
+output "cosmos_account_id" {
+  description = "Resource ID of the Cosmos DB account"
+  value       = azurerm_cosmosdb_account.main.id
+}
+
+output "cosmos_account_name" {
+  description = "Name of the Cosmos DB account"
+  value       = azurerm_cosmosdb_account.main.name
+}
+
+output "cosmos_endpoint" {
+  description = "Endpoint URL of the Cosmos DB account"
+  value       = azurerm_cosmosdb_account.main.endpoint
+}
+
+output "cosmos_database_name" {
+  description = "Name of the Cosmos DB SQL database"
+  value       = azurerm_cosmosdb_sql_database.main.name
+}
+
+# PostgreSQL outputs
+output "postgres_server_id" {
+  description = "Resource ID of the PostgreSQL Flexible Server"
+  value       = azurerm_postgresql_flexible_server.main.id
+}
+
+output "postgres_fqdn" {
+  description = "FQDN of the PostgreSQL Flexible Server"
+  value       = azurerm_postgresql_flexible_server.main.fqdn
+}
+
+output "postgres_database_name" {
+  description = "Name of the PostgreSQL database"
+  value       = azurerm_postgresql_flexible_server_database.main.name
+}
+```
+
+Create `terraform/modules/databases/cosmos.tf` as placeholder:
+
+```hcl
+# Cosmos DB — Serverless (dev/staging) or Provisioned Autoscale (prod)
+# Implementation: PLAN-03 (Wave 3)
+#
+# Containers:
+#   - incidents (partition key: /resource_id)
+#   - approvals (partition key: /thread_id)
+#
+# NOTE: Private endpoint for Cosmos DB is created by the dedicated
+#       modules/private-endpoints module, NOT in this file.
+```
+
+Create `terraform/modules/databases/postgres.tf` as placeholder:
+
+```hcl
+# PostgreSQL Flexible Server with pgvector extension
+# Implementation: PLAN-03 (Wave 3)
+#
+# Uses VNet injection (delegated subnet), NOT private endpoint
+# pgvector: azure.extensions = "VECTOR" (uppercase required)
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/databases/variables.tf` exists and contains `variable "cosmos_serverless"` with default `true`
+- `terraform/modules/databases/variables.tf` contains `variable "postgres_subnet_id"` of type string
+- `terraform/modules/databases/variables.tf` contains `variable "postgres_admin_password"` with `sensitive = true`
+- `terraform/modules/databases/variables.tf` does NOT contain `variable "private_endpoint_subnet_id"` or `variable "private_dns_zone_cosmos_id"`
+- `terraform/modules/databases/outputs.tf` exists and contains `output "cosmos_account_id"`
+- `terraform/modules/databases/outputs.tf` contains `output "cosmos_endpoint"`
+- `terraform/modules/databases/outputs.tf` contains `output "postgres_fqdn"`
+- `terraform/modules/databases/outputs.tf` contains `output "postgres_database_name"`
+- `terraform/modules/databases/cosmos.tf` exists and contains `/resource_id`
+- `terraform/modules/databases/postgres.tf` exists and contains `VECTOR`
+</acceptance_criteria>
+</task>
+
+<task id="01.07">
+<title>Create compute-env module skeleton (variables + outputs)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 7: Container Apps & ACR)
+</read_first>
+<action>
+Create `terraform/modules/compute-env/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+variable "container_apps_subnet_id" {
+  description = "Subnet ID for the Container Apps environment"
+  type        = string
+}
+
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of the Log Analytics workspace"
+  type        = string
+}
+```
+
+> **REVISION (ISSUE-01):** Removed `private_endpoint_subnet_id` and `private_dns_zone_acr_id` variables.
+> ACR private endpoint is now created by the dedicated `modules/private-endpoints` module, not here.
+
+Create `terraform/modules/compute-env/outputs.tf`:
+
+```hcl
+output "container_apps_environment_id" {
+  description = "Resource ID of the Container Apps environment"
+  value       = azurerm_container_app_environment.main.id
+}
+
+output "container_apps_environment_name" {
+  description = "Name of the Container Apps environment"
+  value       = azurerm_container_app_environment.main.name
+}
+
+output "container_apps_environment_default_domain" {
+  description = "Default domain of the Container Apps environment"
+  value       = azurerm_container_app_environment.main.default_domain
+}
+
+output "acr_id" {
+  description = "Resource ID of the Azure Container Registry"
+  value       = azurerm_container_registry.main.id
+}
+
+output "acr_login_server" {
+  description = "Login server URL of the Azure Container Registry"
+  value       = azurerm_container_registry.main.login_server
+}
+
+output "acr_name" {
+  description = "Name of the Azure Container Registry"
+  value       = azurerm_container_registry.main.name
+}
+```
+
+Create `terraform/modules/compute-env/main.tf` as placeholder:
+
+```hcl
+# Container Apps Environment + Azure Container Registry
+# Implementation: PLAN-03 (Wave 3)
+#
+# Container Apps Environment:
+#   - Workload profiles mode (Consumption profile)
+#   - internal_load_balancer_enabled = false (per-app ingress control)
+#   - VNet integrated via container_apps_subnet_id
+#
+# ACR:
+#   - Premium SKU (required for private endpoint)
+#   - admin_enabled = false (managed identity auth)
+#   - public_network_access_enabled = false
+#   - Uses random_string suffix for globally unique name (ISSUE-10)
+#
+# NOTE: ACR private endpoint is created by the dedicated
+#       modules/private-endpoints module, NOT in this file.
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/compute-env/variables.tf` exists and contains `variable "container_apps_subnet_id"`
+- `terraform/modules/compute-env/variables.tf` contains `variable "log_analytics_workspace_id"`
+- `terraform/modules/compute-env/variables.tf` does NOT contain `variable "private_endpoint_subnet_id"` or `variable "private_dns_zone_acr_id"`
+- `terraform/modules/compute-env/outputs.tf` exists and contains `output "container_apps_environment_id"`
+- `terraform/modules/compute-env/outputs.tf` contains `output "acr_login_server"`
+- `terraform/modules/compute-env/outputs.tf` contains `output "acr_id"`
+- `terraform/modules/compute-env/main.tf` exists and contains `internal_load_balancer_enabled = false`
+</acceptance_criteria>
+</task>
+
+<task id="01.08">
+<title>Create keyvault module skeleton (variables + outputs)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 8: Key Vault)
+</read_first>
+<action>
+Create `terraform/modules/keyvault/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+variable "tenant_id" {
+  description = "Entra tenant ID"
+  type        = string
+}
+```
+
+> **REVISION (ISSUE-01):** Removed `private_endpoint_subnet_id` and `private_dns_zone_keyvault_id` variables.
+> Key Vault private endpoint is now created by the dedicated `modules/private-endpoints` module, not here.
+
+Create `terraform/modules/keyvault/outputs.tf`:
+
+```hcl
+output "keyvault_id" {
+  description = "Resource ID of the Key Vault"
+  value       = azurerm_key_vault.main.id
+}
+
+output "keyvault_uri" {
+  description = "URI of the Key Vault"
+  value       = azurerm_key_vault.main.vault_uri
+}
+
+output "keyvault_name" {
+  description = "Name of the Key Vault"
+  value       = azurerm_key_vault.main.name
+}
+```
+
+Create `terraform/modules/keyvault/main.tf` as placeholder:
+
+```hcl
+# Key Vault — RBAC authorization, no access policies
+# Implementation: PLAN-03 (Wave 3)
+#
+# Settings:
+#   - enable_rbac_authorization = true (no access policies)
+#   - purge_protection_enabled = true
+#   - soft_delete_retention_days = 90
+#   - public_network_access_enabled = false
+#
+# Phase 1 scope: provision vault only. Secret seeding deferred to Phase 2.
+#
+# NOTE: Key Vault private endpoint is created by the dedicated
+#       modules/private-endpoints module, NOT in this file.
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/keyvault/variables.tf` exists and contains `variable "tenant_id"` of type string
+- `terraform/modules/keyvault/variables.tf` does NOT contain `variable "private_endpoint_subnet_id"` or `variable "private_dns_zone_keyvault_id"`
+- `terraform/modules/keyvault/outputs.tf` exists and contains `output "keyvault_id"`
+- `terraform/modules/keyvault/outputs.tf` contains `output "keyvault_uri"`
+- `terraform/modules/keyvault/main.tf` exists and contains `enable_rbac_authorization = true`
+</acceptance_criteria>
+</task>
+
+<task id="01.09">
+<title>Create private-endpoints module skeleton (variables + outputs)</title>
+<read_first>
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 4: Private Endpoint Subresource Names table)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 2: Module Dependency Order)
+</read_first>
+<action>
+
+> **NEW TASK (ISSUE-01, ISSUE-02):** This dedicated private-endpoints module eliminates duplicate PE
+> definitions and breaks the circular dependency between networking and resource modules.
+> All private endpoints for Cosmos DB, ACR, Key Vault, and Foundry are centralized here.
+
+Create `terraform/modules/private-endpoints/variables.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+}
+
+variable "required_tags" {
+  description = "Required tags for all resources"
+  type        = map(string)
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.required_tags), "environment"),
+      contains(keys(var.required_tags), "managed-by"),
+      contains(keys(var.required_tags), "project"),
+      var.required_tags["managed-by"] == "terraform",
+      var.required_tags["project"] == "aap",
+    ])
+    error_message = "Tags must include 'environment', 'managed-by: terraform', and 'project: aap'."
+  }
+}
+
+# Subnet for all private endpoints
+variable "private_endpoint_subnet_id" {
+  description = "Subnet ID for private endpoints"
+  type        = string
+}
+
+# Target resource IDs
+variable "cosmos_account_id" {
+  description = "Resource ID of the Cosmos DB account"
+  type        = string
+}
+
+variable "acr_id" {
+  description = "Resource ID of the ACR"
+  type        = string
+}
+
+variable "keyvault_id" {
+  description = "Resource ID of the Key Vault"
+  type        = string
+}
+
+variable "foundry_account_id" {
+  description = "Resource ID of the Foundry/AI Services account"
+  type        = string
+}
+
+# Private DNS zone IDs
+variable "private_dns_zone_cosmos_id" {
+  description = "Private DNS zone ID for Cosmos DB"
+  type        = string
+}
+
+variable "private_dns_zone_acr_id" {
+  description = "Private DNS zone ID for ACR"
+  type        = string
+}
+
+variable "private_dns_zone_keyvault_id" {
+  description = "Private DNS zone ID for Key Vault"
+  type        = string
+}
+
+variable "private_dns_zone_cognitive_id" {
+  description = "Private DNS zone ID for Cognitive Services (Foundry)"
+  type        = string
+}
+```
+
+Create `terraform/modules/private-endpoints/outputs.tf`:
+
+```hcl
+output "cosmos_private_endpoint_id" {
+  description = "Resource ID of the Cosmos DB private endpoint"
+  value       = azurerm_private_endpoint.cosmos.id
+}
+
+output "acr_private_endpoint_id" {
+  description = "Resource ID of the ACR private endpoint"
+  value       = azurerm_private_endpoint.acr.id
+}
+
+output "keyvault_private_endpoint_id" {
+  description = "Resource ID of the Key Vault private endpoint"
+  value       = azurerm_private_endpoint.keyvault.id
+}
+
+output "foundry_private_endpoint_id" {
+  description = "Resource ID of the Foundry private endpoint"
+  value       = azurerm_private_endpoint.foundry.id
+}
+```
+
+Create `terraform/modules/private-endpoints/main.tf` as placeholder:
+
+```hcl
+# Private Endpoints module — centralized PE creation for all platform services
+# Implementation: PLAN-03, task 03.07 (Wave 3)
+#
+# This module depends on BOTH the networking module (for subnet + DNS zone IDs)
+# AND the resource modules (for target resource IDs). It must be instantiated
+# AFTER all resource modules in the environment root.
+#
+# Resources created here:
+#   - azurerm_private_endpoint.cosmos (subresource: "Sql")
+#   - azurerm_private_endpoint.acr (subresource: "registry")
+#   - azurerm_private_endpoint.keyvault (subresource: "vault")
+#   - azurerm_private_endpoint.foundry (subresource: "account")
+#
+# NOTE: PostgreSQL Flexible Server uses VNet injection (delegated subnet),
+#       NOT a private endpoint. No PE is created for PostgreSQL.
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/private-endpoints/variables.tf` exists and contains `variable "private_endpoint_subnet_id"`
+- `terraform/modules/private-endpoints/variables.tf` contains `variable "cosmos_account_id"` of type string (no default)
+- `terraform/modules/private-endpoints/variables.tf` contains `variable "acr_id"` of type string (no default)
+- `terraform/modules/private-endpoints/variables.tf` contains `variable "keyvault_id"` of type string (no default)
+- `terraform/modules/private-endpoints/variables.tf` contains `variable "foundry_account_id"` of type string (no default)
+- `terraform/modules/private-endpoints/variables.tf` contains `variable "private_dns_zone_cosmos_id"`
+- `terraform/modules/private-endpoints/outputs.tf` exists and contains `output "cosmos_private_endpoint_id"`
+- `terraform/modules/private-endpoints/outputs.tf` contains `output "acr_private_endpoint_id"`
+- `terraform/modules/private-endpoints/main.tf` exists and contains comment about depending on networking AND resource modules
+</acceptance_criteria>
+</task>
+
+---
+
+## Verification
+
+After all tasks complete:
+1. `find terraform/modules -name "*.tf" | sort` shows all 20+ files across 7 module directories
+2. `scripts/bootstrap-state.sh` is executable
+3. `.gitignore` exists at repo root
+4. Every module has `variables.tf` and `outputs.tf` with complete interface definitions
+5. No circular dependencies in the module dependency graph (monitoring and networking have no module deps; private-endpoints depends on networking + resource modules)
+
+## must_haves
+
+- [ ] All 7 module directories exist under `terraform/modules/` (monitoring, networking, foundry, databases, compute-env, keyvault, private-endpoints)
+- [ ] Every module has `variables.tf` with `required_tags` validation block
+- [ ] Every module has `outputs.tf` with all downstream-consumed outputs defined
+- [ ] Bootstrap script creates 3 storage accounts with Entra-only auth
+- [ ] `.gitignore` prevents Terraform state files from being committed
+- [ ] Private endpoints are ONLY defined in `modules/private-endpoints/` — not in networking, databases, compute-env, or keyvault modules
+- [ ] Networking module outputs include `nsg_foundry_id`
+- [ ] Networking module variables include `subnet_reserved_1_cidr`

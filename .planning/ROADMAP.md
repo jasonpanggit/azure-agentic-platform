@@ -49,7 +49,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 1 — Foundation
+## Phase 1: Foundation
 
 **Goal:** All Azure infrastructure provisioned by Terraform, ready for agent workloads.
 
@@ -76,7 +76,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 2 — Agent Core
+## Phase 2: Agent Core
 
 **Goal:** Full agent graph running on Foundry Hosted Agents with `HandoffOrchestrator`, all non-Arc domain agents wired to Azure MCP Server, incident ingestion endpoint live.
 
@@ -123,7 +123,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 3 — Arc MCP Server
+## Phase 3: Arc MCP Server
 
 **Goal:** Custom Arc MCP Server deployed as an internal-only Container App; Arc Agent fully operational with paginated Arc estate tooling.
 
@@ -156,7 +156,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 4 — Detection Plane
+## Phase 4: Detection Plane
 
 **Goal:** End-to-end Fabric detection pipeline live — Azure Monitor alerts flow from Event Hub through Eventhouse KQL enrichment to Fabric Activator and trigger the agent platform's incident endpoint.
 
@@ -186,7 +186,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 5 — Triage & Remediation + Web UI
+## Phase 5: Triage & Remediation + Web UI
 
 **Goal:** Operators can investigate and act on incidents through the Web UI — dual SSE streaming, runbook RAG active, full HITL approval flow operational.
 
@@ -226,7 +226,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 6 — Teams Integration
+## Phase 6: Teams Integration
 
 **Goal:** Teams bot is a co-equal interface to the Web UI — alert cards, investigate by chat, approve/reject remediation, shared Foundry thread context across both surfaces.
 
@@ -254,7 +254,7 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 7 — Quality & Hardening
+## Phase 7: Quality & Hardening
 
 **Goal:** Platform is production-ready — full Playwright E2E suite running in CI, observability complete, runbook library seeded, security review passed, Terraform prod environment applied.
 

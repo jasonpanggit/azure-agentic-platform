@@ -1,0 +1,467 @@
+# Plan 02: Networking Module Implementation
+
+```yaml
+wave: 2
+depends_on:
+  - PLAN-01-scaffold-and-bootstrap
+files_modified:
+  - terraform/modules/networking/main.tf
+autonomous: true
+requirements:
+  - INFRA-001
+```
+
+## Goal
+
+Implement the complete networking module: VNet, all subnets with correct delegations, NSGs with service-tag-based rules (including Foundry subnet NSG), private DNS zones with VNet links, and a reserved subnet for Phase 4 Event Hub. This module is the foundation for every other module in the platform.
+
+> **REVISION (ISSUE-01, ISSUE-02):** Private endpoints are NO LONGER created in this module.
+> They are centralized in the dedicated `modules/private-endpoints/` module (PLAN-03, task 03.07).
+> This eliminates duplicate PE definitions and breaks the circular dependency where the networking
+> module would need resource IDs from modules that depend on networking outputs.
+
+> **REVISION (ISSUE-07):** Added `snet-reserved-1` subnet for Phase 4 Event Hub networking.
+
+> **REVISION (ISSUE-08):** Added `nsg-foundry` NSG for the Foundry subnet.
+
+---
+
+## Tasks
+
+<task id="02.01">
+<title>Implement VNet, subnets, and delegations</title>
+<read_first>
+- terraform/modules/networking/variables.tf (current variable definitions from Plan 01)
+- terraform/modules/networking/outputs.tf (current output definitions from Plan 01)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 4: Networking Deep Dive — subnet plan, delegations)
+</read_first>
+<action>
+Replace the placeholder content in `terraform/modules/networking/main.tf` with full implementation.
+
+**VNet:**
+```hcl
+resource "azurerm_virtual_network" "main" {
+  name                = "vnet-aap-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  address_space       = var.vnet_address_space
+
+  tags = var.required_tags
+}
+```
+
+**Subnets (5 subnets):**
+
+1. Container Apps subnet — `/23`, delegated to `Microsoft.App/environments`:
+```hcl
+resource "azurerm_subnet" "container_apps" {
+  name                 = "snet-container-apps"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.subnet_container_apps_cidr]
+
+  delegation {
+    name = "container-apps-delegation"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+```
+
+2. Private endpoints subnet — `/24`, no delegation, private endpoint network policies enabled:
+```hcl
+resource "azurerm_subnet" "private_endpoints" {
+  name                              = "snet-private-endpoints"
+  resource_group_name               = var.resource_group_name
+  virtual_network_name              = azurerm_virtual_network.main.name
+  address_prefixes                  = [var.subnet_private_endpoints_cidr]
+  private_endpoint_network_policies = "Enabled"
+}
+```
+
+3. PostgreSQL subnet — `/24`, delegated to `Microsoft.DBforPostgreSQL/flexibleServers`:
+```hcl
+resource "azurerm_subnet" "postgres" {
+  name                 = "snet-postgres"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.subnet_postgres_cidr]
+
+  delegation {
+    name = "postgres-delegation"
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+```
+
+4. Foundry subnet — `/24`, reserved for future Foundry PE:
+```hcl
+resource "azurerm_subnet" "foundry" {
+  name                              = "snet-foundry"
+  resource_group_name               = var.resource_group_name
+  virtual_network_name              = azurerm_virtual_network.main.name
+  address_prefixes                  = [var.subnet_foundry_cidr]
+  private_endpoint_network_policies = "Enabled"
+}
+```
+
+5. Reserved subnet — `/24`, pre-allocated for Phase 4 Event Hub networking **(ISSUE-07)**:
+```hcl
+resource "azurerm_subnet" "reserved_1" {
+  name                 = "snet-reserved-1"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.subnet_reserved_1_cidr]
+
+  # Reserved for Phase 4 Event Hub networking. Do not use until Phase 4.
+}
+```
+</action>
+<acceptance_criteria>
+- `terraform/modules/networking/main.tf` contains `resource "azurerm_virtual_network" "main"` with `address_space = var.vnet_address_space`
+- File contains `resource "azurerm_subnet" "container_apps"` with delegation to `Microsoft.App/environments`
+- File contains `resource "azurerm_subnet" "private_endpoints"` with `private_endpoint_network_policies = "Enabled"`
+- File contains `resource "azurerm_subnet" "postgres"` with delegation to `Microsoft.DBforPostgreSQL/flexibleServers`
+- File contains `resource "azurerm_subnet" "foundry"`
+- File contains `resource "azurerm_subnet" "reserved_1"` with CIDR `var.subnet_reserved_1_cidr` and a comment documenting it is reserved for Phase 4 Event Hub
+- All 5 subnets reference `azurerm_virtual_network.main.name` for `virtual_network_name`
+- All resources have `tags = var.required_tags` where applicable (VNet has tags; subnets do not support tags in azurerm)
+</acceptance_criteria>
+</task>
+
+<task id="02.02">
+<title>Implement NSGs and subnet associations (including Foundry NSG)</title>
+<read_first>
+- terraform/modules/networking/main.tf (current state after task 02.01)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 4: NSG Strategy — service tags, per-subnet rules)
+</read_first>
+<action>
+Add NSG resources to `terraform/modules/networking/main.tf` (append after subnet definitions):
+
+**Container Apps NSG** — minimal rules; Container Apps manages its own networking:
+```hcl
+resource "azurerm_network_security_group" "container_apps" {
+  name                = "nsg-snet-container-apps-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "container_apps_allow_vnet_inbound" {
+  name                        = "AllowVNetInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_network_security_rule" "container_apps_allow_azure_outbound" {
+  name                        = "AllowAzureCloudOutbound"
+  priority                    = 100
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureCloud"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "container_apps" {
+  subnet_id                 = azurerm_subnet.container_apps.id
+  network_security_group_id = azurerm_network_security_group.container_apps.id
+}
+```
+
+**Private Endpoints NSG** — allow inbound from Container Apps subnet:
+```hcl
+resource "azurerm_network_security_group" "private_endpoints" {
+  name                = "nsg-snet-private-endpoints-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "pe_allow_container_apps_inbound" {
+  name                        = "AllowContainerAppsInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges     = ["443", "5432", "10255"]
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_private_endpoints_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_network_security_rule" "pe_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
+  subnet_id                 = azurerm_subnet.private_endpoints.id
+  network_security_group_id = azurerm_network_security_group.private_endpoints.id
+}
+```
+
+**PostgreSQL NSG** — allow inbound TCP 5432 from Container Apps subnet only:
+```hcl
+resource "azurerm_network_security_group" "postgres" {
+  name                = "nsg-snet-postgres-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "postgres_allow_container_apps" {
+  name                        = "AllowPostgresFromContainerApps"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_postgres_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.postgres.name
+}
+
+resource "azurerm_network_security_rule" "postgres_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.postgres.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "postgres" {
+  subnet_id                 = azurerm_subnet.postgres.id
+  network_security_group_id = azurerm_network_security_group.postgres.id
+}
+```
+
+**Foundry NSG (ISSUE-08)** — allow inbound HTTPS from Container Apps subnet:
+```hcl
+resource "azurerm_network_security_group" "foundry" {
+  name                = "nsg-snet-foundry-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "foundry_allow_container_apps_inbound" {
+  name                        = "AllowContainerAppsInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = var.subnet_container_apps_cidr
+  destination_address_prefix  = var.subnet_foundry_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.foundry.name
+}
+
+resource "azurerm_network_security_rule" "foundry_deny_all_inbound" {
+  name                        = "DenyAllInbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.foundry.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "foundry" {
+  subnet_id                 = azurerm_subnet.foundry.id
+  network_security_group_id = azurerm_network_security_group.foundry.id
+}
+```
+</action>
+<acceptance_criteria>
+- File contains `resource "azurerm_network_security_group" "container_apps"` with `tags = var.required_tags`
+- File contains `resource "azurerm_network_security_group" "private_endpoints"`
+- File contains `resource "azurerm_network_security_group" "postgres"`
+- File contains `resource "azurerm_network_security_group" "foundry"` **(ISSUE-08)**
+- File contains 4 `azurerm_subnet_network_security_group_association` resources (one per NSG-subnet pair)
+- Container Apps NSG has an outbound rule with `destination_address_prefix = "AzureCloud"` (service tag)
+- Private endpoints NSG has an inbound rule with `source_address_prefix = var.subnet_container_apps_cidr`
+- PostgreSQL NSG has an inbound rule on port `5432` from Container Apps CIDR
+- Foundry NSG has an inbound rule on port `443` from Container Apps CIDR **(ISSUE-08)**
+- Private endpoints, postgres, and foundry NSGs all have a `DenyAllInbound` rule at priority `4096`
+</acceptance_criteria>
+</task>
+
+<task id="02.03">
+<title>Implement private DNS zones and VNet links</title>
+<read_first>
+- terraform/modules/networking/main.tf (current state after task 02.02)
+- terraform/modules/networking/outputs.tf (output names that must match)
+- .planning/phases/01-foundation/01-RESEARCH.md (Section 4: Private DNS Zones Required table)
+</read_first>
+<action>
+Add private DNS zone resources to `terraform/modules/networking/main.tf` (append after NSG section):
+
+```hcl
+# --- Private DNS Zones ---
+
+resource "azurerm_private_dns_zone" "cosmos" {
+  name                = "privatelink.documents.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "acr" {
+  name                = "privatelink.azurecr.io"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "keyvault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone" "cognitive" {
+  name                = "privatelink.cognitiveservices.azure.com"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+# --- VNet Links ---
+
+resource "azurerm_private_dns_zone_virtual_network_link" "cosmos" {
+  name                  = "vnetlink-cosmos-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.cosmos.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "vnetlink-postgres-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
+  name                  = "vnetlink-acr-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.acr.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
+  name                  = "vnetlink-keyvault-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "cognitive" {
+  name                  = "vnetlink-cognitive-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.cognitive.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+```
+</action>
+<acceptance_criteria>
+- File contains 5 `azurerm_private_dns_zone` resources: `cosmos`, `postgres`, `acr`, `keyvault`, `cognitive`
+- DNS zone names are exactly: `privatelink.documents.azure.com`, `privatelink.postgres.database.azure.com`, `privatelink.azurecr.io`, `privatelink.vaultcore.azure.net`, `privatelink.cognitiveservices.azure.com`
+- File contains 5 `azurerm_private_dns_zone_virtual_network_link` resources (one per zone)
+- All VNet links reference `azurerm_virtual_network.main.id`
+- All VNet links have `registration_enabled = false`
+- All DNS zones and VNet links have `tags = var.required_tags`
+</acceptance_criteria>
+</task>
+
+---
+
+## Verification
+
+After all tasks complete:
+1. `terraform/modules/networking/main.tf` contains VNet + 5 subnets + 4 NSGs + 4 NSG associations + 5 DNS zones + 5 VNet links
+2. All output references in `outputs.tf` match resource names in `main.tf` (e.g., `azurerm_virtual_network.main`, `azurerm_subnet.container_apps`, etc.)
+3. No hardcoded IP addresses — all CIDRs come from variables
+4. **No private endpoint resources in this module** (moved to `modules/private-endpoints/`)
+5. Foundry subnet has its own NSG (`nsg-foundry`)
+6. Reserved subnet `snet-reserved-1` exists with Phase 4 Event Hub comment
+
+## must_haves
+
+- [ ] VNet with configurable address space (default `10.0.0.0/16`)
+- [ ] Container Apps subnet delegated to `Microsoft.App/environments`
+- [ ] PostgreSQL subnet delegated to `Microsoft.DBforPostgreSQL/flexibleServers`
+- [ ] Reserved subnet `snet-reserved-1` (CIDR `10.0.64.0/24`) for Phase 4 Event Hub
+- [ ] NSGs on Container Apps, private endpoints, PostgreSQL, and Foundry subnets (4 NSGs total)
+- [ ] 5 private DNS zones with correct Azure service domain names
+- [ ] NO private endpoint resources in this module (centralized in `modules/private-endpoints/`)
