@@ -1,0 +1,3 @@
+# Network agent — requires azure-mgmt-network for VNet/NSG/LB SDK wrappers.
+# The Azure MCP Server does not cover direct VNet/NSG/LB operations (GA gap).
+azure-mgmt-network>=27.0.0

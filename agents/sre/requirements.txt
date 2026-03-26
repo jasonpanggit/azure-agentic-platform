@@ -1,0 +1,2 @@
+# SRE agent — no additional requirements beyond the base image.
+# All shared dependencies are installed in agents/Dockerfile.base.

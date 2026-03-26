@@ -1,0 +1,127 @@
+name: Build Agent Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agents/orchestrator/**'
+      - 'agents/compute/**'
+      - 'agents/network/**'
+      - 'agents/storage/**'
+      - 'agents/security/**'
+      - 'agents/sre/**'
+      - 'agents/arc/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect Changed Agents
+    runs-on: ubuntu-latest
+    outputs:
+      orchestrator: ${{ steps.changes.outputs.orchestrator }}
+      compute: ${{ steps.changes.outputs.compute }}
+      network: ${{ steps.changes.outputs.network }}
+      storage: ${{ steps.changes.outputs.storage }}
+      security: ${{ steps.changes.outputs.security }}
+      sre: ${{ steps.changes.outputs.sre }}
+      arc: ${{ steps.changes.outputs.arc }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            orchestrator:
+              - 'agents/orchestrator/**'
+            compute:
+              - 'agents/compute/**'
+            network:
+              - 'agents/network/**'
+            storage:
+              - 'agents/storage/**'
+            security:
+              - 'agents/security/**'
+            sre:
+              - 'agents/sre/**'
+            arc:
+              - 'agents/arc/**'
+
+  build-orchestrator:
+    name: Build Orchestrator
+    needs: detect-changes
+    if: needs.detect-changes.outputs.orchestrator == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/orchestrator
+      dockerfile_path: agents/orchestrator/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-compute:
+    name: Build Compute Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.compute == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/compute
+      dockerfile_path: agents/compute/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-network:
+    name: Build Network Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.network == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/network
+      dockerfile_path: agents/network/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-storage:
+    name: Build Storage Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.storage == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/storage
+      dockerfile_path: agents/storage/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-security:
+    name: Build Security Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.security == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/security
+      dockerfile_path: agents/security/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-sre:
+    name: Build SRE Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.sre == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/sre
+      dockerfile_path: agents/sre/Dockerfile
+      build_context: agents/
+    secrets: inherit
+
+  build-arc:
+    name: Build Arc Agent
+    needs: detect-changes
+    if: needs.detect-changes.outputs.arc == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/arc
+      dockerfile_path: agents/arc/Dockerfile
+      build_context: agents/
+    secrets: inherit
