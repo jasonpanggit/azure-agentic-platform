@@ -1,0 +1,114 @@
+name: Arc MCP Server — Build & Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/arc-mcp-server/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/arc-mcp-server/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Job 1: Unit tests — run in CI without Azure credentials
+  # -------------------------------------------------------------------------
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: services/arc-mcp-server
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          # Test dependencies
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run unit tests
+        working-directory: services/arc-mcp-server
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          ARC_DISCONNECT_ALERT_HOURS: "1"
+        run: |
+          pytest tests/ -m unit \
+            --tb=short \
+            -v \
+            --cov=arc_mcp_server \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+
+  # -------------------------------------------------------------------------
+  # Job 2: Build Docker image (validates Dockerfile syntax + layer ordering)
+  # -------------------------------------------------------------------------
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Arc MCP Server image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: services/arc-mcp-server
+          file: services/arc-mcp-server/Dockerfile
+          push: false
+          tags: arc-mcp-server:ci-${{ github.sha }}
+          build-args: |
+            IMAGE_TAG=ci-${{ github.sha }}
+
+  # -------------------------------------------------------------------------
+  # Job 3: Push to ACR (main branch only)
+  # -------------------------------------------------------------------------
+  push:
+    name: Push to ACR
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Arc MCP Server image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/arc-mcp-server
+          file: services/arc-mcp-server/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/arc-mcp-server:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/arc-mcp-server:latest
+          build-args: |
+            IMAGE_TAG=${{ github.sha }}
