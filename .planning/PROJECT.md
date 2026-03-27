@@ -68,11 +68,12 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 - [ ] Remediation proposal cards: proposed action + estimated impact + approve/reject buttons
 - [ ] Audit log viewer with full agent decision trail
 
-**Teams Integration**
-- [ ] Full two-way Teams bot: users can chat with agents, run investigations, approve/reject remediation
-- [ ] Alert notifications posted to Teams channels with structured Adaptive Cards
-- [ ] Remediation approval flow via Teams Adaptive Cards (approve/reject without leaving Teams)
-- [ ] Teams as a co-equal interface alongside the web UI
+**Teams Integration** — Validated in Phase 6: Teams Integration
+- [x] Full two-way Teams bot: users can chat with agents, run investigations, approve/reject remediation
+- [x] Alert notifications posted to Teams channels with structured Adaptive Cards (buildAlertCard, buildApprovalCard, buildOutcomeCard, buildReminderCard)
+- [x] Remediation approval flow via Teams Adaptive Cards using Action.Execute (in-place card update on approve/reject)
+- [x] Teams as a co-equal interface alongside the web UI — cross-surface thread sharing via Foundry thread_id
+- [x] Escalation scheduler: reminders for unacted approvals after configurable threshold (default 15 min)
 
 **Data Platform (Polyglot Persistence)**
 - [ ] Microsoft Foundry Agent Service manages conversation threads and agent state (managed, hosted)
