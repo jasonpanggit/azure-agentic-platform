@@ -3,23 +3,23 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T07:29:08.000Z"
+last_updated: "2026-03-27T15:35:00.000Z"
 progress:
-  total_phases: 6
-  completed_phases: 3
-  total_plans: 25
-  completed_plans: 17
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 26
+  completed_plans: 23
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (4/5 plans) — 06-04: Escalation Scheduler + Proactive Card Posting — Background escalation scheduler with 2-minute polling, in-memory dedup, notify route pre-flight guard, 16 new tests, 100 total teams-bot tests at 92.34% coverage.
+> Last updated: 2026-03-27 — Phase 6 COMPLETE (5/5 plans) — 06-05: Teams App Manifest + Integration Tests + Deployment Config — Teams v1.17 manifest, .env.example, 6 integration test stubs (SC-1 through SC-6), vitest.config.ts, CI integration exclusion, UI-SPEC cleanup. 100 total teams-bot tests at 92.34% coverage, 71 api-gateway tests passing.
 
 ---
 
 ## Current Phase
 
-**Phase 6: Teams Integration — 🔄 IN PROGRESS (4/5 plans)**
+**Phase 6: Teams Integration — ✅ COMPLETE (5/5 plans)**
 
 Plan 06-01 complete: `services/teams-bot/` scaffold with all card builders, notify endpoint, 58 unit tests at 93.31% coverage, and CI workflow.
 
@@ -28,6 +28,8 @@ Plan 06-02 complete: Bot Framework Integration — AapTeamsBot extends TeamsActi
 Plan 06-03 complete: API Gateway changes — ChatRequest thread_id/user_id, thread continuation, GET /api/v1/approvals, body thread_id for Action.Execute, teams_notifier refactored to bot internal endpoint. 22 new tests, 71 api-gateway tests passing.
 
 Plan 06-04 complete: Escalation Scheduler + Proactive Card Posting — Background escalation scheduler polling every 2 minutes with in-memory dedup, notify route pre-flight guard (503 if bot not installed), scheduler wired into index.ts with 30-second startup delay. 16 new tests, 100 total tests at 92.34% coverage.
+
+Plan 06-05 complete: Teams App Manifest + Integration Tests + Deployment Config — Teams v1.17 manifest with bot registration and /investigate command, .env.example documenting all 11 env vars, 6 integration test stubs covering all Phase 6 success criteria, vitest.config.ts with v8 coverage, CI integration exclusion, 06-UI-SPEC.md cleaned of Action.Http references. Full verification: 100 tests at 92.34% coverage, Docker build succeeds, api-gateway 71 tests pass.
 
 ---
 
@@ -52,7 +54,7 @@ Plan 06-04 complete: Escalation Scheduler + Proactive Card Posting — Backgroun
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
-| 6 | Teams Integration | 🔄 In progress (4/5 plans) |
+| 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | Not started |
 
 ---
@@ -124,6 +126,9 @@ None.
 | In-memory dedup Map for escalation reminders | 6-04 | Map<approvalId, lastReminderTimestamp> sufficient for single-instance MVP; upgrade to Cosmos DB if HA/multi-instance needed |
 | 503 pre-flight on notify route | 6-04 | hasConversationReference() check returns 503 Service Unavailable when bot not installed — prevents silent failures from api-gateway calls |
 | 30-second startup delay for escalation scheduler | 6-04 | Allows bot installation event to fire and ConversationReference to be captured before scheduler attempts proactive posting |
+| Placeholder PNG icons for Teams manifest | 6-05 | Minimal single-color PNGs (32x32 outline, 192x192 color); real icons deferred to pre-production design phase |
+| describe.skip for integration test stubs | 6-05 | Stubs define full test plans but require live Teams environment; Phase 7 Quality & Hardening will implement real integration tests |
+| vitest.config.ts + CI --exclude double-guard | 6-05 | Both vitest config exclude and CI --exclude flag ensure integration stubs never run in unit test CI |
 
 ---
 
