@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T12:00:00.000Z"
+last_updated: "2026-03-27T14:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 20
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 5: Plan 05-00 COMPLETE — Wave 0 test infrastructure scaffolded: 51 tests collected (42 skipped stubs + 9 passing existing), web-ui skeleton, Playwright config, shared conftest, SC markers
+> Last updated: 2026-03-27 — Phase 5: Plan 05-01 COMPLETE — Web UI Foundation: root layout, MSAL auth gates, split-pane AppLayout, ChatPanel/DashboardPanel shells, auth route pages (login/callback), Dockerfile, CI workflow
 
 ---
 
 ## Current Phase
 
-**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (1/7 plans)**
+**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (2/7 plans)**
 
-Current position: 05-00 complete — Wave 0 test infrastructure. Next.js package.json (Fluent UI v9.73.4, MSAL v3, Playwright 1.58.2), Playwright config, 4 E2E stub specs (sc1/sc2/sc5/sc6), shared pytest conftest (9 fixtures: Foundry, Cosmos approvals/incidents, Teams, ARM, pgvector embeddings), 8 Python stub test files (51 tests total), 2 web-ui Jest stub files, pyproject.toml with 6 SC markers.
+Current position: 05-01 complete — Web UI Foundation. Root layout (Segoe UI Variable), MSAL PKCE auth gates (AuthenticatedApp, DesktopOnlyGate), react-resizable-panels split-pane AppLayout (35/65 chat/dashboard), 4-tab dashboard shell (Alerts/Topology/Resources/Audit Log), multiselect SubscriptionSelector, MSAL login/callback pages, multi-stage Dockerfile (node:20-slim standalone), CI workflow (web-ui-build.yml path-triggered).
 
 ---
 
@@ -45,7 +45,7 @@ Current position: 05-00 complete — Wave 0 test infrastructure. Next.js package
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
-| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 1/7 plans (05-00 complete) |
+| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 2/7 plans (05-00, 05-01 complete) |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
 
