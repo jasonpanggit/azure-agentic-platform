@@ -259,3 +259,76 @@ async def get_approval_status(
     """Get the current status of an approval record."""
     record = await get_approval(approval_id, thread_id)
     return ApprovalRecord(**{k: v for k, v in record.items() if not k.startswith("_")})
+
+
+@app.get("/api/v1/incidents", response_model=list[IncidentSummary])
+async def list_incidents_endpoint(
+    since: Optional[str] = None,
+    subscription: Optional[str] = None,
+    severity: Optional[str] = None,
+    domain: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    token: dict[str, Any] = Depends(verify_token),
+) -> list[IncidentSummary]:
+    """List incidents for the alert feed (UI-006).
+
+    Args:
+        since: ISO 8601 timestamp; return only incidents created after this time.
+        subscription: Comma-separated subscription IDs to filter by.
+        severity: Filter by severity level (Sev0–Sev3).
+        domain: Filter by domain (compute, network, storage, security, arc, sre).
+        status: Filter by status (new, acknowledged, closed).
+        limit: Maximum results to return (default 50).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    sub_ids = subscription.split(",") if subscription else None
+    results = await list_incidents(
+        since=since,
+        subscription_ids=sub_ids,
+        severity=severity,
+        domain=domain,
+        status=status,
+        limit=limit,
+    )
+    return [
+        IncidentSummary(**{k: v for k, v in r.items() if not k.startswith("_")})
+        for r in results
+    ]
+
+
+@app.get("/api/v1/audit", response_model=list[AuditEntry])
+async def get_audit_log(
+    incident_id: Optional[str] = None,
+    agent: Optional[str] = None,
+    action: Optional[str] = None,
+    resource: Optional[str] = None,
+    from_time: Optional[str] = None,
+    to_time: Optional[str] = None,
+    limit: int = 50,
+    token: dict[str, Any] = Depends(verify_token),
+) -> list[AuditEntry]:
+    """Query agent action history for the Audit Log tab (AUDIT-004).
+
+    Args:
+        incident_id: Filter by incident ID (matched against span properties).
+        agent: Filter by agent name (e.g., compute, network, sre).
+        action: Filter by action/tool name.
+        resource: Filter by resource ID (matched against span properties).
+        from_time: ISO 8601 start of time range.
+        to_time: ISO 8601 end of time range.
+        limit: Maximum results to return (default 50).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    results = await query_audit_log(
+        incident_id=incident_id,
+        agent=agent,
+        action=action,
+        resource=resource,
+        from_time=from_time,
+        to_time=to_time,
+        limit=limit,
+    )
+    return [AuditEntry(**r) for r in results]
