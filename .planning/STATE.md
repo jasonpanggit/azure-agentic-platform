@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T15:00:00.000Z"
+last_updated: "2026-03-27T16:30:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 19
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 5: Plans 05-01, 05-02 and 05-03 COMPLETE — 05-02: SSE streaming (ring buffer, route handler /api/stream, useSSE hook), POST /api/v1/chat endpoint, full ChatPanel with dual SSE connections + token accumulation + approval_gate handling, ChatBubble/UserBubble/ThinkingIndicator/ChatInput/ProposalCard stub/TraceTree components
+> Last updated: 2026-03-27 — Phase 5: Plans 05-01 through 05-05 COMPLETE — 05-05: GET /api/v1/incidents (Cosmos DB, multi-subscription filter), GET /api/v1/audit (KQL AppDependencies), audit_trail.py (OneLake dual write), AlertFeed (5s polling DataGrid), AlertFilters (severity/domain/status dropdowns), AuditLogViewer (KQL-backed agent history), DashboardPanel (real tabs with AlertFeed+AuditLogViewer), AppLayout (tab state moved to DashboardPanel)
 
 ---
 
 ## Current Phase
 
-**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (4/7 plans)**
+**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (6/7 plans)**
 
-Current position: 05-02 complete — SSE Streaming + Chat Panel. POST /api/v1/chat endpoint (Foundry thread creation, AGENT-002 envelope), SSE ring buffer (1000 events, 30-min TTL), SSE type definitions (ApprovalGateTracePayload), GET /api/stream route handler (20s heartbeat, Last-Event-ID replay), useSSE hook (monotonic seq validation, auto-reconnect), ChatBubble/UserBubble/ThinkingIndicator/ChatInput/ProposalCard stub/TraceTree components, full ChatPanel with dual SSE connections.
+Current position: 05-05 complete — Alert Feed, Audit Log, DashboardPanel real components. GET /api/v1/incidents endpoint (Cosmos DB, ORDER BY created_at DESC, multi-subscription client-side filter), GET /api/v1/audit endpoint (KQL AppDependencies via LogsQueryClient), audit_trail.py (OneLake dual write, fire-and-forget, DataLakeServiceClient), AlertFeed (5s polling, Fluent UI DataGrid, severity badge colors), AlertFilters (Severity/Domain/Status dropdowns), AuditLogViewer (agent/action filters, outcome badge), DashboardPanel (replaced shell with real tabs: alerts+audit+topology placeholder+resources placeholder), AppLayout (tab state moved into DashboardPanel, selectedIncidentId state added).
 
 ---
 
@@ -45,7 +45,7 @@ Current position: 05-02 complete — SSE Streaming + Chat Panel. POST /api/v1/ch
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
-| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 4/7 plans (05-00, 05-01, 05-02, 05-03 complete) |
+| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 6/7 plans (05-00 through 05-05 complete) |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
 
