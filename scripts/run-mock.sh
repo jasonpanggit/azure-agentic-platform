@@ -3,8 +3,11 @@
 # All Azure dependencies (OTel, Cosmos, Foundry, Postgres) are stubbed out
 # via absent or placeholder env vars. Auth is bypassed (dev mode).
 #
-# Usage: ./run-mock.sh [--port PORT]
+# Usage: ./scripts/run-mock.sh [--port PORT]
 set -euo pipefail
+
+# Always run from the repo root so relative paths work regardless of CWD
+cd "$(dirname "$0")/.."
 
 PORT=${PORT:-8000}
 
