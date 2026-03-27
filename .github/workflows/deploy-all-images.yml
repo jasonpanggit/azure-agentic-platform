@@ -23,7 +23,6 @@ jobs:
     name: Build Agent Base Image
     runs-on: ubuntu-latest
     outputs:
-      base_image: ${{ steps.meta.outputs.base_image }}
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +35,6 @@ jobs:
             TAG="${{ github.sha }}"
           fi
           echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "base_image=${{ secrets.ACR_LOGIN_SERVER }}/agents/base:$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Azure Login
         uses: azure/login@v1
@@ -75,7 +73,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-compute:
@@ -88,7 +86,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-network:
@@ -101,7 +99,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-storage:
@@ -114,7 +112,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-security:
@@ -127,7 +125,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-sre:
@@ -140,7 +138,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   build-arc:
@@ -153,7 +151,7 @@ jobs:
       build_context: agents/
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
     secrets: inherit
 
   # ---------------------------------------------------------------------------

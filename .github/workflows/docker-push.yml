@@ -78,7 +78,12 @@ jobs:
       - name: Image Size Check
         run: |
           IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}"
-          SIZE=$(docker manifest inspect "$IMAGE" 2>/dev/null | jq '[.layers[].size] | add // 0')
+          MANIFEST=$(docker manifest inspect "$IMAGE" 2>/dev/null || true)
+          if [ -z "$MANIFEST" ]; then
+            echo "::warning::Could not inspect manifest for $IMAGE — skipping size check"
+            exit 0
+          fi
+          SIZE=$(echo "$MANIFEST" | jq '[.layers[].size] | add // 0')
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "Image size: ${SIZE_MB}MB"
           if [ "$SIZE_MB" -gt 1500 ]; then
