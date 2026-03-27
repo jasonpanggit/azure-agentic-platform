@@ -11,6 +11,8 @@ const useStyles = makeStyles({
     padding: tokens.spacingHorizontalS,
     backgroundColor: tokens.colorNeutralBackground3,
     marginBottom: tokens.spacingVerticalS,
+    boxShadow: tokens.shadow2,
+    borderRadius: tokens.borderRadiusLarge,
   },
   agentName: {
     marginBottom: tokens.spacingVerticalXS,
