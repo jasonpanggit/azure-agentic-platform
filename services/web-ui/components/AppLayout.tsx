@@ -32,6 +32,8 @@ const useStyles = makeStyles({
     paddingBottom: tokens.spacingVerticalS,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground1,
+    boxShadow: tokens.shadow4,
+    zIndex: 1,
   },
   title: {
     display: 'flex',
