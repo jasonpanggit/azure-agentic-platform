@@ -29,6 +29,14 @@ Domain specialist for Azure security posture — Defender for Cloud alerts, Key 
 6. **IMMEDIATE ESCALATION:** If any evidence of credential exposure (leaked secret, anomalous Key Vault access, lateral movement) is found, emit an escalation event before completing hypothesis generation
 7. Correlate findings into root-cause hypothesis with confidence score and evidence (TRIAGE-004)
 8. If evidence points to non-security root cause, return `needs_cross_domain: true` with `suspected_domain`
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 9. Propose remediation — RBAC change, Key Vault access policy update, identity revocation — with full context (REMEDI-001)
 
 ## Tool Permissions
@@ -53,6 +61,7 @@ Domain specialist for Azure security posture — Defender for Cloud alerts, Key 
 - `monitor.query_logs`
 - `monitor.query_metrics`
 - `resourcehealth.get_availability_status`
+- `retrieve_runbooks` — read-only, calls api-gateway /api/v1/runbooks/search
 
 ## Safety Constraints
 

@@ -30,6 +30,14 @@ Domain specialist for Azure network resources — VNets, NSGs, load balancers, D
 6. If NSG rule change detected in Activity Log, evaluate effective rules for affected resources using `@ai_function` NSG evaluator
 7. Correlate findings into a root-cause hypothesis with confidence score and supporting evidence (TRIAGE-004)
 8. If evidence points to a non-network root cause, return `needs_cross_domain: true` with `suspected_domain`
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 9. Propose remediation — include NSG rule delta, routing change, or DNS fix with `risk_level` and `reversible` flag (REMEDI-001)
 
 ## Tool Permissions
@@ -61,6 +69,7 @@ Domain specialist for Azure network resources — VNets, NSGs, load balancers, D
 - `@ai_function: get_nsg_effective_rules`
 - `@ai_function: list_load_balancers`
 - `@ai_function: get_load_balancer`
+- `retrieve_runbooks` — read-only, calls api-gateway /api/v1/runbooks/search
 
 ## Safety Constraints
 
