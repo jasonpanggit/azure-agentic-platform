@@ -124,7 +124,7 @@ export class AapTeamsBot extends TeamsActivityHandler {
    */
   protected async onAdaptiveCardInvoke(
     context: TurnContext,
-    _invokeValue?: AdaptiveCardInvokeValue,
+    _invokeValue?: AdaptiveCardInvokeValue, // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<AdaptiveCardInvokeResponse> {
     const verb = context.activity.value?.action?.verb;
     const data = context.activity.value?.action?.data;

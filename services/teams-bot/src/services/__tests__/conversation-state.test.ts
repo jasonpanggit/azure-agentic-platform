@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 describe("conversation-state", () => {
   beforeEach(async () => {
@@ -57,7 +57,7 @@ describe("conversation-state", () => {
   });
 
   it("getThreadId() refreshes lastUsed timestamp on access", async () => {
-    const { getThreadId, setThreadId, clearExpired, _resetState } =
+    const { getThreadId, setThreadId, _resetState } =
       await import("../conversation-state");
     _resetState();
 

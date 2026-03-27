@@ -1,4 +1,4 @@
-import { type GatewayClient, type ApprovalRecord } from "./gateway-client";
+import type { GatewayClient } from "./gateway-client";
 import { buildReminderCard } from "../cards/reminder-card";
 import { sendProactiveCard, hasConversationReference } from "./proactive";
 import type { AppConfig } from "../config";

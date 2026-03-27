@@ -86,9 +86,10 @@ export function createNotifyRouter(config: AppConfig): Router {
             return;
         }
 
+        const payloadObj = body.payload as unknown as Record<string, unknown>;
         const cardIdentifier =
-          (body.payload as Record<string, unknown>)?.incident_id ??
-          (body.payload as Record<string, unknown>)?.approval_id ??
+          payloadObj?.incident_id ??
+          payloadObj?.approval_id ??
           "unknown";
         console.log(
           `[notify] Sending ${body.card_type} card for ${cardIdentifier}`,
