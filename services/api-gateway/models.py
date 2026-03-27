@@ -108,3 +108,63 @@ class ChatResponse(BaseModel):
 
     thread_id: str
     status: str = "created"
+
+
+class ApprovalAction(BaseModel):
+    """Payload for approve/reject actions (D-09)."""
+
+    decided_by: str = Field(..., description="UPN or object ID of the operator")
+    scope_confirmed: Optional[bool] = Field(
+        default=None, description="Required True for prod subscriptions (REMEDI-006)"
+    )
+
+
+class ApprovalResponse(BaseModel):
+    """Response returned after approve/reject."""
+
+    approval_id: str
+    status: str  # approved, rejected, expired, error
+
+
+class ApprovalRecord(BaseModel):
+    """Full approval record from Cosmos DB (D-12)."""
+
+    id: str
+    action_id: str
+    thread_id: str
+    incident_id: Optional[str] = None
+    agent_name: str
+    status: str  # pending, approved, rejected, expired, executed, aborted
+    risk_level: str
+    proposed_at: str
+    expires_at: str
+    decided_at: Optional[str] = None
+    decided_by: Optional[str] = None
+    executed_at: Optional[str] = None
+    abort_reason: Optional[str] = None
+    resource_snapshot: Optional[dict] = None
+    proposal: dict
+
+
+class IncidentSummary(BaseModel):
+    """Summary of an incident for the alert feed (UI-006)."""
+
+    incident_id: str
+    severity: str
+    domain: str
+    status: str
+    created_at: str
+    title: Optional[str] = None
+    resource_id: Optional[str] = None
+    subscription_id: Optional[str] = None
+
+
+class AuditEntry(BaseModel):
+    """Single audit log entry from Application Insights (AUDIT-004)."""
+
+    timestamp: str
+    agent: str
+    tool: str
+    outcome: str
+    duration_ms: float
+    properties: Optional[str] = None
