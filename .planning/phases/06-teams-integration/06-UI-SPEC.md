@@ -52,7 +52,7 @@ Adaptive Cards use a predefined spacing enum — not pixel values. All card elem
 - Heading to first body element: `"spacing": "small"`
 - Between FactSet and actions: `"spacing": "medium"`
 - Between body TextBlocks: `"spacing": "default"`
-- Use `"separator": true` between major card sections (e.g., facts → actions)
+- Use `"separator": true` between major card sections (e.g., facts -> actions)
 
 Exceptions: none — all cards use the Adaptive Card spacing enum exclusively.
 
@@ -174,7 +174,7 @@ Phase 6 defines exactly 4 card types, each triggered by the api-gateway calling 
 
 **Trigger:** High-risk remediation proposal created (REMEDI-002 triggers HITL gate).
 **Requirement:** TEAMS-003
-**Source pattern:** Direct port of `_build_adaptive_card()` from `services/api-gateway/teams_notifier.py` — preserves the Action.Http + FactSet structure per D-08.
+**Source pattern:** Direct port of `_build_adaptive_card()` from `services/api-gateway/teams_notifier.py` — migrated to Action.Execute + FactSet structure (Action.Http is not supported for bot-sent cards in Teams; see 06-RESEARCH.md Section 2).
 
 ```json
 {
@@ -209,19 +209,17 @@ Phase 6 defines exactly 4 card types, each triggered by the api-gateway calling 
   ],
   "actions": [
     {
-      "type": "Action.Http",
+      "type": "Action.Execute",
       "title": "Approve",
-      "method": "POST",
-      "url": "{API_GATEWAY_PUBLIC_URL}/api/v1/approvals/{approval_id}/approve",
-      "body": "{\"decided_by\": \"{{userName}}\"}",
+      "verb": "approve",
+      "data": { "approval_id": "{approval_id}", "thread_id": "{thread_id}" },
       "style": "positive"
     },
     {
-      "type": "Action.Http",
+      "type": "Action.Execute",
       "title": "Reject",
-      "method": "POST",
-      "url": "{API_GATEWAY_PUBLIC_URL}/api/v1/approvals/{approval_id}/reject",
-      "body": "{\"decided_by\": \"{{userName}}\"}",
+      "verb": "reject",
+      "data": { "approval_id": "{approval_id}", "thread_id": "{thread_id}" },
       "style": "destructive"
     }
   ]
@@ -350,19 +348,17 @@ Phase 6 defines exactly 4 card types, each triggered by the api-gateway calling 
   ],
   "actions": [
     {
-      "type": "Action.Http",
+      "type": "Action.Execute",
       "title": "Approve",
-      "method": "POST",
-      "url": "{API_GATEWAY_PUBLIC_URL}/api/v1/approvals/{approval_id}/approve",
-      "body": "{\"decided_by\": \"{{userName}}\"}",
+      "verb": "approve",
+      "data": { "approval_id": "{approval_id}", "thread_id": "{thread_id}" },
       "style": "positive"
     },
     {
-      "type": "Action.Http",
+      "type": "Action.Execute",
       "title": "Reject",
-      "method": "POST",
-      "url": "{API_GATEWAY_PUBLIC_URL}/api/v1/approvals/{approval_id}/reject",
-      "body": "{\"decided_by\": \"{{userName}}\"}",
+      "verb": "reject",
+      "data": { "approval_id": "{approval_id}", "thread_id": "{thread_id}" },
       "style": "destructive"
     },
     {
@@ -527,7 +523,7 @@ services/teams-bot/
 | `BOT_PASSWORD` | yes | — | Azure AD app registration client secret (or certificate) |
 | `API_GATEWAY_INTERNAL_URL` | yes | — | Internal VNet URL of api-gateway (e.g., `http://api-gateway.internal.svc`) |
 | `WEB_UI_PUBLIC_URL` | yes | — | Public URL of web UI for deep links in cards |
-| `API_GATEWAY_PUBLIC_URL` | yes | — | Public URL of api-gateway for Action.Http URLs in cards |
+| `API_GATEWAY_PUBLIC_URL` | no | — | DEPRECATED: Public URL of api-gateway (unused post-Action.Execute migration; kept for forward-compatibility) |
 | `TEAMS_CHANNEL_ID` | yes | — | Default Teams channel ID for proactive card posting |
 | `ESCALATION_INTERVAL_MINUTES` | no | `15` | Minutes before an unacted approval triggers a reminder |
 | `AZURE_CLIENT_ID` | no | — | Managed identity client ID (auto-resolved on Container Apps) |
@@ -574,9 +570,9 @@ Adapted for Adaptive Card context (no empty states, no traditional CTAs — card
 
 **Destructive actions:**
 - Reject is the only destructive action in card context
-- Reject uses `"style": "destructive"` on the Action.Http button
-- No additional confirmation modal (Teams does not support modals on Action.Http)
-- The `{{userName}}` template in the Action.Http body captures the actor for audit
+- Reject uses `"style": "destructive"` on the Action.Execute button
+- No additional confirmation modal (Teams does not support modals on Action.Execute)
+- The bot extracts the actor UPN from the Teams activity context on Action.Execute invoke
 
 ---
 
@@ -594,7 +590,7 @@ Adapted for Adaptive Card context (no empty states, no traditional CTAs — card
 ## Checker Sign-Off
 
 - [x] Dimension 1 Copywriting: PASS
-- [x] Dimension 2 Card Schemas: PASS (ReminderPayload interface added; card_type union updated to include "reminder")
+- [x] Dimension 2 Card Schemas: PASS (ReminderPayload interface added; card_type union updated to include "reminder"; Action.Http replaced with Action.Execute per 06-RESEARCH.md Section 2)
 - [x] Dimension 3 Color (semantic tokens only): PASS
 - [x] Dimension 4 Typography (size/weight tokens): PASS
 - [x] Dimension 5 Spacing (Adaptive Card enum): PASS
