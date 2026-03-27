@@ -224,7 +224,7 @@ Ph 7                                                                ████
 
 **UI:** Yes | **IaC:** No
 
-**Status:** 🔄 In Progress — Plan 05-00 complete (Wave 0 test infrastructure)
+**Status:** ✅ Complete (7/7 plans)
 
 ### Plan Progress
 
@@ -277,6 +277,18 @@ Ph 7                                                                ████
 **Goal:** Teams bot is a co-equal interface to the Web UI — alert cards, investigate by chat, approve/reject remediation, shared Foundry thread context across both surfaces.
 
 **UI:** Yes (Teams bot) | **IaC:** No
+
+**Status:** 🔄 In Progress — Plan 06-01 complete
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 06-01 | Teams Bot Scaffold + Card Builders + CI | ✅ Complete | TEAMS-001, TEAMS-002, TEAMS-003, TEAMS-005, TEAMS-006 |
+| 06-02 | Bot Framework Adapter + Proactive Messaging | Not started | TEAMS-001, TEAMS-002, TEAMS-006 |
+| 06-03 | Conversation Handler + Thread Sharing | Not started | TEAMS-001, TEAMS-004 |
+| 06-04 | Escalation Scheduler + API Gateway Changes | Not started | TEAMS-005 |
+| 06-05 | Phase 6 Integration + E2E | Not started | Full integration |
 
 ### Success Criteria
 

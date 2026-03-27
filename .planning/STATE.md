@@ -2,26 +2,26 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-03-27T02:00:00.000Z"
+status: unknown
+last_updated: "2026-03-27T14:43:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
+  completed_phases: 3
+  total_plans: 25
+  completed_plans: 14
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 5 COMPLETE (7/7 plans) — 05-06: 40 unit tests passing (chat, SSE, runbook RAG, approval lifecycle, resource identity, rate limiting, gitops, audit trail), 4 Playwright E2E test specs (SC-1/SC-2/SC-5/SC-6), phase5-ci.yml with --cov-fail-under=80. Envelope test regression fixed (5→7 message types). 146 total tests pass.
+> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (1/5 plans) — 06-01: teams-bot TypeScript scaffold, 4 Adaptive Card v1.5 builders (Action.Execute for approval/reminder, Action.OpenUrl for alert/outcome), POST /teams/internal/notify endpoint, 58 unit tests passing (93.31% coverage), phase6-ci.yml with --coverage.thresholds.lines=80.
 
 ---
 
 ## Current Phase
 
-**Phase 5: Triage & Remediation + Web UI — ✅ COMPLETE (7/7 plans)**
+**Phase 6: Teams Integration — 🔄 IN PROGRESS (1/5 plans)**
 
-All plans complete. 146 tests passing (40 Phase 5 unit tests + 106 prior phases). 4 Playwright E2E specs implemented. CI workflow enforces 80% coverage. Last fix: envelope test updated for 7 message types (approval_request + approval_response added by Plan 05-04).
+Plan 06-01 complete: `services/teams-bot/` scaffold with all card builders, notify endpoint, 58 unit tests at 93.31% coverage, and CI workflow.
 
 ---
 
@@ -46,7 +46,7 @@ All plans complete. 146 tests passing (40 Phase 5 unit tests + 106 prior phases)
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
-| 6 | Teams Integration | Not started |
+| 6 | Teams Integration | 🔄 In progress (1/5 plans) |
 | 7 | Quality & Hardening | Not started |
 
 ---
@@ -103,6 +103,10 @@ None.
 | UDF tests import at module level (not per-test reload) | 4-04 | importlib.reload() pattern caused MSAL ConfidentialClientApplication to call Entra authority discovery before @patch applied; module-level import + patch("main.func") resolves correctly |
 | KQL consistency test regex requires full path (has /) | 4-04 | classify_domain.kql uses has_any() with both full paths and prefix-only values (Microsoft.Security); regex r'"(Microsoft\.[^/"]+/[^"]+)"' skips prefix-only values avoiding false "sre" failures |
 | Integration stubs use @pytest.mark.skip on class + pytestmark | 4-04 | Both marks required: pytestmark for -m filtering, @pytest.mark.skip so tests don't run without infra even when -m integration is specified |
+| Action.Execute for teams-bot approval/reminder cards | 6-01 | Action.Http is NOT supported for bot-sent Adaptive Cards in Teams (per 06-RESEARCH.md Section 2); must use Action.Execute with verb + data fields |
+| createNotifyRouter(config) factory for Express testability | 6-01 | Module-level router binds config at import time, requiring env vars in tests; factory pattern allows injecting mock AppConfig cleanly |
+| ESLint 9 requires flat config (eslint.config.js) | 6-01 | ESLint 9 dropped .eslintrc.* support; CJS eslint.config.js used to match commonjs tsconfig output |
+| API_GATEWAY_PUBLIC_URL empty-string default (deprecated) | 6-01 | Post-Action.Execute migration, api-gateway public URL is not used in card action URLs; retained in config for forward-compatibility with default "" |
 
 ---
 
