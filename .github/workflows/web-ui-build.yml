@@ -1,0 +1,21 @@
+name: Build Web UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/web-ui/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-web-ui:
+    name: Build & Push Web UI
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/web-ui
+      dockerfile_path: services/web-ui/Dockerfile
+      build_context: services/web-ui/
+    secrets: inherit
