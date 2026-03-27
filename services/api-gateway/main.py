@@ -18,8 +18,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.api_gateway.auth import verify_token
+from services.api_gateway.chat import create_chat_thread
 from services.api_gateway.foundry import create_foundry_thread
 from services.api_gateway.models import (
+    ChatRequest,
+    ChatResponse,
     HealthResponse,
     IncidentPayload,
     IncidentResponse,
@@ -154,3 +157,33 @@ async def search_runbooks_endpoint(
     embedding = await generate_query_embedding(query)
     results = await search_runbooks(embedding, domain=domain, limit=limit)
     return [RunbookResult(**r) for r in results]
+
+
+@app.post(
+    "/api/v1/chat",
+    response_model=ChatResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_chat(
+    payload: ChatRequest,
+    token: dict[str, Any] = Depends(verify_token),
+) -> ChatResponse:
+    """Start an operator-initiated chat conversation.
+
+    Creates a Foundry thread and dispatches the operator message
+    to the Orchestrator agent.
+
+    Authentication: Entra ID Bearer token required.
+    """
+    user_id = token.get("sub", "unknown")
+    logger.info("Chat request from user %s: %s", user_id, payload.message[:100])
+
+    try:
+        result = await create_chat_thread(payload, user_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Foundry dispatch unavailable: {exc}",
+        ) from exc
+
+    return ChatResponse(thread_id=result["thread_id"], status="created")

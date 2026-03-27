@@ -92,3 +92,19 @@ class RunbookResult(BaseModel):
     version: str
     similarity: float
     content_excerpt: str
+
+
+class ChatRequest(BaseModel):
+    """Operator-initiated chat message (D-06)."""
+
+    message: str = Field(..., description="Operator message text", min_length=1)
+    incident_id: Optional[str] = Field(
+        default=None, description="Optionally attach to existing incident"
+    )
+
+
+class ChatResponse(BaseModel):
+    """Response returned after chat thread creation."""
+
+    thread_id: str
+    status: str = "created"
