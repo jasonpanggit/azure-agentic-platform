@@ -66,3 +66,9 @@ variable "fabric_admin_email" {
   description = "Email address of the Fabric capacity administrator"
   type        = string
 }
+
+variable "cors_allowed_origins" {
+  description = "CORS allowed origins for api-gateway in prod"
+  type        = string
+  default     = "*"
+}

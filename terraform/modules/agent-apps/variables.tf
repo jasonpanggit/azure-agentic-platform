@@ -64,3 +64,9 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "cors_allowed_origins" {
+  description = "Comma-separated CORS allowed origins for the api-gateway (D-15)"
+  type        = string
+  default     = "*"
+}

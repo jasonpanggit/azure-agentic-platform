@@ -1,0 +1,108 @@
+name: Security Review (D-15)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'
+  pull_request:
+    paths:
+      - 'services/**'
+
+jobs:
+  python-security:
+    name: Python Security (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit on Python services
+        run: |
+          bandit -r \
+            services/api-gateway/ \
+            services/arc-mcp-server/ \
+            services/detection-plane/ \
+            agents/ \
+            -f json \
+            -o bandit-report.json \
+            --severity-level high \
+            || true
+
+      - name: Check for high/critical findings
+        run: |
+          python3 -c "
+          import json, sys
+          with open('bandit-report.json') as f:
+              report = json.load(f)
+          high_issues = [r for r in report.get('results', [])
+                        if r.get('issue_severity') in ('HIGH', 'MEDIUM')]
+          if high_issues:
+              print(f'Found {len(high_issues)} security issues:')
+              for issue in high_issues:
+                  print(f'  [{issue[\"issue_severity\"]}] {issue[\"filename\"]}:{issue[\"line_number\"]} - {issue[\"issue_text\"]}')
+              sys.exit(1)
+          print('No high/medium security issues found')
+          "
+
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  typescript-security:
+    name: TypeScript Security (npm audit)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [services/web-ui, services/teams-bot]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service }}
+        run: npm ci --ignore-scripts
+
+      - name: Run npm audit
+        working-directory: ${{ matrix.service }}
+        run: npm audit --audit-level=high
+
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Scanning for potential hardcoded secrets..."
+          FOUND=0
+          # Check Python files
+          if grep -rn --include="*.py" -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" services/ agents/ 2>/dev/null | grep -v "test_\|mock\|example\|placeholder\|__pycache__"; then
+            echo "WARNING: Potential hardcoded secrets in Python files"
+            FOUND=1
+          fi
+          # Check TypeScript files
+          if grep -rn --include="*.ts" --include="*.tsx" -E "(password|secret|apiKey|token)\s*[:=]\s*['\"][^'\"]+['\"]" services/ 2>/dev/null | grep -v "test\|mock\|example\|placeholder\|node_modules\|\.d\.ts"; then
+            echo "WARNING: Potential hardcoded secrets in TypeScript files"
+            FOUND=1
+          fi
+          if [ $FOUND -eq 1 ]; then
+            echo "Review the above lines for hardcoded secrets"
+            exit 1
+          fi
+          echo "No hardcoded secrets detected"

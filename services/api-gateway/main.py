@@ -11,6 +11,7 @@ routing layer between external callers and the Foundry agent runtime.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Any, Optional
 
@@ -18,6 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.api_gateway.audit import query_audit_log
+from services.api_gateway.audit_export import generate_remediation_report
 from services.api_gateway.auth import verify_token
 from services.api_gateway.chat import create_chat_thread
 from services.api_gateway.foundry import create_foundry_thread
@@ -27,6 +29,7 @@ from services.api_gateway.models import (
     ApprovalRecord,
     ApprovalResponse,
     AuditEntry,
+    AuditExportResponse,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -45,16 +48,28 @@ from services.api_gateway.runbook_rag import generate_query_embedding, search_ru
 
 logger = logging.getLogger(__name__)
 
+# OpenTelemetry auto-instrumentation (D-05)
+_appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
+if _appinsights_conn:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(connection_string=_appinsights_conn)
+    logger.info("Azure Monitor OpenTelemetry configured")
+else:
+    logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set — OTel disabled")
+
 app = FastAPI(
     title="AAP API Gateway",
     description="Azure Agentic Platform — Incident ingestion and agent dispatch",
     version="1.0.0",
 )
 
-# CORS for Web UI (Phase 5)
+# CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
+CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
+_cors_origins = [o.strip() for o in CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tightened in production via env var
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -370,3 +385,24 @@ async def get_audit_log(
         limit=limit,
     )
     return [AuditEntry(**r) for r in results]
+
+
+@app.get("/api/v1/audit/export", response_model=AuditExportResponse)
+async def export_audit_report(
+    from_time: str,
+    to_time: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> AuditExportResponse:
+    """Export remediation activity report (AUDIT-006).
+
+    Returns a structured JSON document with all remediation events in the
+    given time range, including approval chains. Designed for SOC 2 auditors.
+
+    Args:
+        from_time: ISO 8601 start of period (required).
+        to_time: ISO 8601 end of period (required).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    report = await generate_remediation_report(from_time=from_time, to_time=to_time)
+    return AuditExportResponse(**report)
