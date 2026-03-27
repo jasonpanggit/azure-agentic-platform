@@ -278,7 +278,7 @@ Ph 7                                                                ████
 
 **UI:** Yes (Teams bot) | **IaC:** No
 
-**Status:** 🔄 In Progress — Plan 06-01 complete
+**Status:** 🔄 In Progress — Plans 06-01, 06-03 complete
 
 ### Plan Progress
 
@@ -286,7 +286,7 @@ Ph 7                                                                ████
 |---|---|---|---|
 | 06-01 | Teams Bot Scaffold + Card Builders + CI | ✅ Complete | TEAMS-001, TEAMS-002, TEAMS-003, TEAMS-005, TEAMS-006 |
 | 06-02 | Bot Framework Adapter + Proactive Messaging | Not started | TEAMS-001, TEAMS-002, TEAMS-006 |
-| 06-03 | Conversation Handler + Thread Sharing | Not started | TEAMS-001, TEAMS-004 |
+| 06-03 | API Gateway Changes + Cross-Surface Thread Sharing | ✅ Complete | TEAMS-003, TEAMS-004, TEAMS-005 |
 | 06-04 | Escalation Scheduler + API Gateway Changes | Not started | TEAMS-005 |
 | 06-05 | Phase 6 Integration + E2E | Not started | Full integration |
 

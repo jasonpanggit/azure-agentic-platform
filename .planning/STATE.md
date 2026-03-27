@@ -3,25 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T14:43:00.000Z"
+last_updated: "2026-03-27T09:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (1/5 plans) — 06-01: teams-bot TypeScript scaffold, 4 Adaptive Card v1.5 builders (Action.Execute for approval/reminder, Action.OpenUrl for alert/outcome), POST /teams/internal/notify endpoint, 58 unit tests passing (93.31% coverage), phase6-ci.yml with --coverage.thresholds.lines=80.
+> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (2/5 plans) — 06-03: API Gateway changes for Teams integration — ChatRequest.thread_id/user_id (TEAMS-004, D-07), GET /api/v1/approvals?status=pending (TEAMS-005), ApprovalAction.thread_id for Action.Execute (TEAMS-003), teams_notifier refactored to bot internal notify endpoint (D-04), 22 new tests, 71 total api-gateway tests passing.
 
 ---
 
 ## Current Phase
 
-**Phase 6: Teams Integration — 🔄 IN PROGRESS (1/5 plans)**
+**Phase 6: Teams Integration — 🔄 IN PROGRESS (2/5 plans)**
 
 Plan 06-01 complete: `services/teams-bot/` scaffold with all card builders, notify endpoint, 58 unit tests at 93.31% coverage, and CI workflow.
+
+Plan 06-03 complete: API Gateway changes — ChatRequest thread_id/user_id, thread continuation, GET /api/v1/approvals, body thread_id for Action.Execute, teams_notifier refactored to bot internal endpoint. 22 new tests, 71 api-gateway tests passing.
 
 ---
 
@@ -46,7 +48,7 @@ Plan 06-01 complete: `services/teams-bot/` scaffold with all card builders, noti
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
-| 6 | Teams Integration | 🔄 In progress (1/5 plans) |
+| 6 | Teams Integration | 🔄 In progress (2/5 plans) |
 | 7 | Quality & Hardening | Not started |
 
 ---
@@ -107,6 +109,10 @@ None.
 | createNotifyRouter(config) factory for Express testability | 6-01 | Module-level router binds config at import time, requiring env vars in tests; factory pattern allows injecting mock AppConfig cleanly |
 | ESLint 9 requires flat config (eslint.config.js) | 6-01 | ESLint 9 dropped .eslintrc.* support; CJS eslint.config.js used to match commonjs tsconfig output |
 | API_GATEWAY_PUBLIC_URL empty-string default (deprecated) | 6-01 | Post-Action.Execute migration, api-gateway public URL is not used in card action URLs; retained in config for forward-compatibility with default "" |
+| body.thread_id takes precedence over query param | 6-03 | Action.Execute sends data in card body; body is more explicit than query param; backward compat maintained |
+| GET /api/v1/approvals before /{approval_id} route | 6-03 | FastAPI path matching: parameterized route would match query-only requests as approval_id |
+| notify_teams() generic dispatcher replaces _build_adaptive_card | 6-03 | Card rendering moved to TypeScript bot; gateway sends structured payloads via single dispatcher |
+| Cross-partition query for pending approvals | 6-03 | Acceptable for small pending counts; used by scheduler, not hot-path |
 
 ---
 
