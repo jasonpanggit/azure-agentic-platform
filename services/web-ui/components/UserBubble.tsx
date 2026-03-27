@@ -11,6 +11,8 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandBackground,
     color: tokens.colorNeutralForegroundOnBrand,
     marginBottom: tokens.spacingVerticalS,
+    borderRadius: tokens.borderRadiusLarge,
+    boxShadow: tokens.shadow2,
   },
 });
 
