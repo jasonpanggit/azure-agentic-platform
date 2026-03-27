@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: '../../e2e',
+  testMatch: '**/*.spec.ts',  // Only pick up spec files; exclude global-setup, global-teardown, fixtures
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
