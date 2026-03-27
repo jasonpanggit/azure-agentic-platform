@@ -174,7 +174,7 @@ Phase 6 defines exactly 4 card types, each triggered by the api-gateway calling 
 
 **Trigger:** High-risk remediation proposal created (REMEDI-002 triggers HITL gate).
 **Requirement:** TEAMS-003
-**Source pattern:** Direct port of `_build_adaptive_card()` from `services/api-gateway/teams_notifier.py` — migrated to Action.Execute + FactSet structure (Action.Http is not supported for bot-sent cards in Teams; see 06-RESEARCH.md Section 2).
+**Source pattern:** Direct port of `_build_adaptive_card()` from `services/api-gateway/teams_notifier.py` — migrated to Action.Execute + FactSet structure (bot-sent cards in Teams require Action.Execute; see 06-RESEARCH.md Section 2).
 
 ```json
 {
@@ -590,7 +590,7 @@ Adapted for Adaptive Card context (no empty states, no traditional CTAs — card
 ## Checker Sign-Off
 
 - [x] Dimension 1 Copywriting: PASS
-- [x] Dimension 2 Card Schemas: PASS (ReminderPayload interface added; card_type union updated to include "reminder"; Action.Http replaced with Action.Execute per 06-RESEARCH.md Section 2)
+- [x] Dimension 2 Card Schemas: PASS (ReminderPayload interface added; card_type union updated to include "reminder"; all card actions use Action.Execute per 06-RESEARCH.md Section 2)
 - [x] Dimension 3 Color (semantic tokens only): PASS
 - [x] Dimension 4 Typography (size/weight tokens): PASS
 - [x] Dimension 5 Spacing (Adaptive Card enum): PASS
