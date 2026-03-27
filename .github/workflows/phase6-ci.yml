@@ -1,0 +1,76 @@
+name: Phase 6 - Teams Integration CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/teams-bot/**'
+      - 'services/api-gateway/**'
+  pull_request:
+    paths:
+      - 'services/teams-bot/**'
+      - 'services/api-gateway/**'
+
+permissions:
+  contents: read
+
+jobs:
+  teams-bot-tests:
+    name: Teams Bot TypeScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: services/teams-bot/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/teams-bot
+        run: npm ci
+
+      - name: Lint
+        working-directory: services/teams-bot
+        run: npm run lint
+
+      - name: Type check
+        working-directory: services/teams-bot
+        run: npm run typecheck
+
+      - name: Unit tests with coverage
+        working-directory: services/teams-bot
+        run: npx vitest run --coverage --coverage.thresholds.lines=80
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-bot-coverage
+          path: services/teams-bot/coverage/
+
+  api-gateway-tests:
+    name: API Gateway Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/api-gateway/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest services/api-gateway/tests/ agents/shared/ \
+            --ignore=tests/integration \
+            -v --tb=short \
+            --cov=services/api-gateway --cov=agents/shared \
+            --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=80
