@@ -1,19 +1,21 @@
 locals {
   agents = {
-    orchestrator = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    compute      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    network      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    storage      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    security     = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    arc          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
-    sre          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3 }
+    orchestrator = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    compute      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    network      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    storage      = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    security     = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    arc          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    sre          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
   }
 
-  api_gateway = {
-    api-gateway = { cpu = 0.5, memory = "1Gi", ingress_external = true, min_replicas = 1, max_replicas = 5 }
+  services = {
+    api-gateway = { cpu = 0.5, memory = "1Gi", ingress_external = true, min_replicas = 1, max_replicas = 5, target_port = 8000 }
+    web-ui      = { cpu = 0.5, memory = "1Gi", ingress_external = true, min_replicas = 1, max_replicas = 3, target_port = 3000 }
+    teams-bot   = { cpu = 0.5, memory = "1Gi", ingress_external = true, min_replicas = 1, max_replicas = 3, target_port = 3978 }
   }
 
-  all_apps = merge(local.agents, local.api_gateway)
+  all_apps = merge(local.agents, local.services)
 }
 
 resource "azurerm_container_app" "agents" {
@@ -34,7 +36,7 @@ resource "azurerm_container_app" "agents" {
 
     container {
       name   = each.key
-      image  = "${var.acr_login_server}/agents/${each.key}:${var.image_tag}"
+      image  = "${var.acr_login_server}/${contains(keys(local.agents), each.key) ? "agents" : "services"}/${each.key}:${var.image_tag}"
       cpu    = each.value.cpu
       memory = each.value.memory
 
@@ -70,6 +72,10 @@ resource "azurerm_container_app" "agents" {
         name  = "ENVIRONMENT"
         value = var.environment
       }
+      env {
+        name  = "CORS_ALLOWED_ORIGINS"
+        value = var.cors_allowed_origins
+      }
     }
   }
 
@@ -82,7 +88,7 @@ resource "azurerm_container_app" "agents" {
     for_each = each.value.ingress_external ? [1] : []
     content {
       external_enabled = true
-      target_port      = 8000
+      target_port      = each.value.target_port
       transport        = "http"
       traffic_weight {
         percentage      = 100

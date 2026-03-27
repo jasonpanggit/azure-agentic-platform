@@ -28,6 +28,14 @@ Site Reliability Engineering generalist — cross-domain monitoring, SLA/SLO tra
 6. Query Azure Monitor Advisor recommendations for affected resources
 7. Correlate cross-domain findings into a root-cause hypothesis with confidence score and evidence (TRIAGE-004)
 8. Assess SLA/SLO impact based on incident severity and affected resource criticality
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 9. Propose escalation or remediation path with description, risk level, and reversibility (REMEDI-001)
 10. If domain specialist is appropriate, recommend re-routing to the specific domain agent with accumulated evidence
 
@@ -51,6 +59,7 @@ Site Reliability Engineering generalist — cross-domain monitoring, SLA/SLO tra
 - `advisor.list_recommendations`
 - `resourcehealth.get_availability_status`
 - `resourcehealth.list_events`
+- `retrieve_runbooks` — read-only, calls api-gateway /api/v1/runbooks/search
 
 ## Safety Constraints
 

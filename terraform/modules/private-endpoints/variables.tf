@@ -76,3 +76,15 @@ variable "private_dns_zone_cognitive_id" {
   description = "Private DNS zone ID for Cognitive Services (Foundry)"
   type        = string
 }
+
+variable "eventhub_namespace_id" {
+  description = "Resource ID of the Event Hub namespace for PE (empty string to skip)"
+  type        = string
+  default     = ""
+}
+
+variable "private_dns_zone_servicebus_id" {
+  description = "Resource ID of the Service Bus private DNS zone"
+  type        = string
+  default     = ""
+}

@@ -28,6 +28,14 @@ Domain specialist for Azure storage resources — Blob Storage, Azure Files, Tab
 6. Identify throttling patterns: check if transactions per second or bandwidth is exceeding account limits
 7. Correlate all findings into a root-cause hypothesis with confidence score and evidence (TRIAGE-004)
 8. If evidence points to non-storage root cause, return `needs_cross_domain: true` with `suspected_domain`
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 9. Propose remediation — include description, target resources, risk level, reversibility (REMEDI-001); never delete blobs or containers
 
 ## Tool Permissions
@@ -51,6 +59,7 @@ Domain specialist for Azure storage resources — Blob Storage, Azure Files, Tab
 - `monitor.query_logs`
 - `monitor.query_metrics`
 - `resourcehealth.get_availability_status`
+- `retrieve_runbooks` — read-only, calls api-gateway /api/v1/runbooks/search
 
 ## Safety Constraints
 

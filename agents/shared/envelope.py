@@ -21,6 +21,8 @@ class IncidentMessage(TypedDict):
         "remediation_proposal",
         "cross_domain_request",
         "status_update",
+        "approval_request",
+        "approval_response",
     ]
     payload: dict[str, Any]
     timestamp: str  # ISO 8601
@@ -32,6 +34,8 @@ VALID_MESSAGE_TYPES = frozenset({
     "remediation_proposal",
     "cross_domain_request",
     "status_update",
+    "approval_request",
+    "approval_response",
 })
 
 

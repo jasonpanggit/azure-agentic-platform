@@ -1,0 +1,20 @@
+// RawAlerts — landing table for Event Hub ingestion (Common Alert Schema)
+// Source: Azure Monitor Action Groups -> Event Hub -> Eventhouse streaming connector
+// Retention: 7 days (enriched data preserved in downstream tables)
+
+.create-merge table RawAlerts (
+    alert_id: string,
+    alert_name: string,
+    severity: string,
+    status: string,
+    fired_at: datetime,
+    resource_id: string,
+    resource_type: string,
+    subscription_id: string,
+    resource_group: string,
+    signal_type: string,
+    alert_rule: string,
+    description: string,
+    raw_payload: dynamic,
+    ingestion_time: datetime
+)

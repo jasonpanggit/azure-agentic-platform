@@ -130,6 +130,10 @@ module "private_endpoints" {
   private_dns_zone_acr_id       = module.networking.private_dns_zone_acr_id
   private_dns_zone_keyvault_id  = module.networking.private_dns_zone_keyvault_id
   private_dns_zone_cognitive_id = module.networking.private_dns_zone_cognitive_id
+
+  # Phase 4: Event Hub private endpoint
+  eventhub_namespace_id          = module.eventhub.eventhub_namespace_id
+  private_dns_zone_servicebus_id = module.networking.private_dns_zone_servicebus_id
 }
 
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
@@ -162,4 +166,115 @@ module "rbac" {
 
   # In dev, all agents target the same subscription.
   # Override in staging/prod with separate subscription IDs via variables.
+}
+
+# --- Arc MCP Server (depends on: compute-env, monitoring) ---
+# Phase 3: Internal-only Container App exposing Arc resource tools.
+# Arc Agent calls it at http://{arc_mcp_server_fqdn}/mcp (ARC_MCP_SERVER_URL).
+
+module "arc_mcp_server" {
+  source = "../../modules/arc-mcp-server"
+
+  resource_group_name            = azurerm_resource_group.main.name
+  location                       = var.location
+  environment                    = var.environment
+  required_tags                  = local.required_tags
+  container_apps_environment_id  = module.compute_env.container_apps_environment_id
+  container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
+  acr_login_server               = module.compute_env.acr_login_server
+  app_insights_connection_string = module.monitoring.app_insights_connection_string
+
+  # In dev, Arc resources live in the same subscription as the platform.
+  # Override in staging/prod with actual Arc subscription IDs.
+  arc_subscription_ids = [var.subscription_id]
+
+  arc_disconnect_alert_hours = 1
+}
+
+# --- Event Hub (depends on: networking) ---
+# Phase 4: Azure Monitor alerts flow to Event Hub as the single ingest point.
+
+module "eventhub" {
+  source = "../../modules/eventhub"
+
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = var.location
+  environment              = var.environment
+  required_tags            = local.required_tags
+  subnet_reserved_1_id     = module.networking.subnet_reserved_1_id
+  eventhub_partition_count = 2 # Dev: 2 partitions
+  eventhub_capacity        = 1
+}
+
+# --- Fabric (depends on: nothing, but logically after Event Hub) ---
+# Phase 4: Fabric capacity, workspace, Eventhouse, Activator, OneLake lakehouse.
+
+module "fabric" {
+  source = "../../modules/fabric"
+
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+  environment         = var.environment
+  required_tags       = local.required_tags
+  fabric_capacity_sku = "F2" # Dev: smallest capacity
+  fabric_admin_email  = var.fabric_admin_email
+}
+
+# --- Activity Log Export (depends on: monitoring) ---
+# AUDIT-003: Export Activity Log from all subscriptions to Log Analytics.
+
+module "activity_log" {
+  source = "../../modules/activity-log"
+
+  subscription_ids           = [var.subscription_id]
+  log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
+  environment                = var.environment
+}
+
+# --- Fabric Service Principal (D-08, D-09) ---
+# App registration for the Fabric User Data Function to authenticate
+# to the API gateway's POST /api/v1/incidents endpoint.
+# Only provisioned when gateway_app_client_id is set.
+
+resource "azuread_application" "fabric_sp" {
+  count        = var.gateway_app_client_id != "" ? 1 : 0
+  display_name = "aap-fabric-detection-${var.environment}"
+
+  required_resource_access {
+    resource_app_id = var.gateway_app_client_id
+
+    resource_access {
+      id   = var.gateway_incidents_write_role_id
+      type = "Role"
+    }
+  }
+}
+
+resource "azuread_service_principal" "fabric_sp" {
+  count     = var.gateway_app_client_id != "" ? 1 : 0
+  client_id = azuread_application.fabric_sp[0].client_id
+}
+
+# IMPORTANT: Use a fixed end_date, NOT timeadd(timestamp(), ...).
+# timestamp() returns a new value on every plan/apply, causing perpetual diff.
+# See WARN-D4a in 04-01-PLAN.md. Update this date during scheduled secret rotation.
+resource "azuread_application_password" "fabric_sp" {
+  count          = var.gateway_app_client_id != "" ? 1 : 0
+  application_id = azuread_application.fabric_sp[0].id
+  display_name   = "fabric-detection-secret"
+  end_date       = "2027-03-26T00:00:00Z" # Fixed 1-year expiry — rotate before this date
+}
+
+resource "azurerm_key_vault_secret" "fabric_sp_client_id" {
+  count        = var.gateway_app_client_id != "" ? 1 : 0
+  name         = "fabric-sp-client-id"
+  value        = azuread_application.fabric_sp[0].client_id
+  key_vault_id = module.keyvault.keyvault_id
+}
+
+resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
+  count        = var.gateway_app_client_id != "" ? 1 : 0
+  name         = "fabric-sp-client-secret"
+  value        = azuread_application_password.fabric_sp[0].value
+  key_vault_id = module.keyvault.keyvault_id
 }

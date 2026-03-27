@@ -73,6 +73,28 @@ resource "azurerm_cosmosdb_sql_container" "incidents" {
     excluded_path {
       path = "/_etag/?"
     }
+
+    # Composite index for dedup queries (DETECT-005):
+    #   Layer 1: WHERE resource_id = @rid AND detection_rule = @rule AND created_at >= @window_start AND status != 'closed'
+    #   Layer 2: WHERE resource_id = @rid AND status IN ('new', 'acknowledged')
+    composite_index {
+      index {
+        path  = "/resource_id"
+        order = "ascending"
+      }
+      index {
+        path  = "/detection_rule"
+        order = "ascending"
+      }
+      index {
+        path  = "/created_at"
+        order = "descending"
+      }
+      index {
+        path  = "/status"
+        order = "ascending"
+      }
+    }
   }
 }
 

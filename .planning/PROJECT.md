@@ -46,7 +46,7 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 
 **Azure Integration**
 - [ ] Azure MCP Server (GA) as primary tool surface for ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health
-- [ ] Custom Arc MCP Server bridging the Azure MCP Server gap for Arc-enabled servers, Kubernetes, and data services
+- [x] Custom Arc MCP Server bridging the Azure MCP Server gap for Arc-enabled servers, Kubernetes, and data services — Validated in Phase 3: Arc MCP Server
 - [ ] Single Entra tenant, multi-subscription: agents authenticate via managed identity with cross-subscription RBAC
 - [ ] Integration with Azure Monitor Alerts as the native incident detection trigger
 - [ ] Arc-enabled resources (servers, K8s, SQL, data services) fully inventoried and managed
@@ -68,11 +68,12 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 - [ ] Remediation proposal cards: proposed action + estimated impact + approve/reject buttons
 - [ ] Audit log viewer with full agent decision trail
 
-**Teams Integration**
-- [ ] Full two-way Teams bot: users can chat with agents, run investigations, approve/reject remediation
-- [ ] Alert notifications posted to Teams channels with structured Adaptive Cards
-- [ ] Remediation approval flow via Teams Adaptive Cards (approve/reject without leaving Teams)
-- [ ] Teams as a co-equal interface alongside the web UI
+**Teams Integration** — Validated in Phase 6: Teams Integration
+- [x] Full two-way Teams bot: users can chat with agents, run investigations, approve/reject remediation
+- [x] Alert notifications posted to Teams channels with structured Adaptive Cards (buildAlertCard, buildApprovalCard, buildOutcomeCard, buildReminderCard)
+- [x] Remediation approval flow via Teams Adaptive Cards using Action.Execute (in-place card update on approve/reject)
+- [x] Teams as a co-equal interface alongside the web UI — cross-surface thread sharing via Foundry thread_id
+- [x] Escalation scheduler: reminders for unacted approvals after configurable threshold (default 15 min)
 
 **Data Platform (Polyglot Persistence)**
 - [ ] Microsoft Foundry Agent Service manages conversation threads and agent state (managed, hosted)
@@ -96,7 +97,7 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 **Infrastructure as Code (Terraform)**
 - [ ] Terraform modules for all platform infrastructure: Foundry, Container Apps, Cosmos DB, PostgreSQL, Fabric, VNet, private endpoints
 - [ ] Terraform modules for agent identity provisioning: Entra Agent ID (service principals + managed identities per domain agent)
-- [ ] Terraform modules for Azure MCP Server deployment and custom Arc MCP Server
+- [ ] Terraform modules for Azure MCP Server deployment — Terraform module for custom Arc MCP Server validated in Phase 3: Arc MCP Server
 - [ ] Environment-specific configs: dev, staging, prod (tfvars per environment)
 - [ ] Terraform remote state in Azure Storage with state locking
 - [ ] CI/CD integration: Terraform plan on PR, Terraform apply on merge to main
@@ -152,10 +153,10 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 | Domain-specialist agents (Compute/Network/Storage/Security/Arc/SRE) | Cleaner tool scoping; each agent owns its Azure resource type; easier to add new domains | — Pending |
 | Human-in-the-loop always for remediation | Trust, compliance, safety; agents propose, humans approve via UI or Teams Adaptive Cards | — Pending |
 | Polyglot persistence (Foundry + Cosmos + PostgreSQL + Fabric) | Each service optimized for its use case; future-proof; avoids over-fitting to one data model | — Pending |
-| Custom Arc MCP Server | Azure MCP Server has no Arc support; Arc estate is full scope (servers + K8s + data); must bridge this gap | — Pending |
+| Custom Arc MCP Server | Azure MCP Server has no Arc support; Arc estate is full scope (servers + K8s + data); must bridge this gap | ✅ Validated Phase 3 — FastMCP server with 9 tools, Terraform Container App module, internal ingress |
 | Both token streaming + agent trace events | Addresses latency concern (token stream = fast first response) + transparency (trace events = agent JSON visibility) | — Pending |
 | Container Apps over AKS | Simpler ops; event-driven scaling fits agent workloads; Foundry Hosted Agents already container-backed; add AKS if scale demands it | — Pending |
-| Fabric as detection plane (not primary data store) | Fabric Eventhouse + Activator is best-in-class for real-time telemetry and rule-based triggers; not suited for hot-path transactional writes | — Pending |
+| Fabric as detection plane (not primary data store) | Fabric Eventhouse + Activator is best-in-class for real-time telemetry and rule-based triggers; not suited for hot-path transactional writes | ✅ Validated Phase 4 — Eventhouse KQL pipeline, classify_domain() routing, Activator trigger, dedup + state machine |
 
 ---
 
@@ -177,4 +178,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 — Phase 1: Foundation complete (5/5 plans, verification passed)*
+*Last updated: 2026-03-26 — Phase 4: Detection Plane complete (4/4 plans, 8/8 requirements verified, 92 unit tests passing)*

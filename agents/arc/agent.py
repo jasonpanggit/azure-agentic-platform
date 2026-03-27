@@ -1,115 +1,124 @@
-"""Arc Agent — Azure Arc resource specialist stub (Phase 2).
+"""Arc Agent — Azure Arc resource specialist (Phase 3, TRIAGE-006).
 
-PHASE 2 STATUS: STUB
+Domain specialist for Azure Arc-enabled resources: Arc Servers
+(HybridCompute), Arc Kubernetes (ConnectedClusters), and Arc Data Services.
 
-The Arc Agent is provisioned with a system-assigned managed identity and Container App
-in Phase 2, but all Arc-specific tooling requires the custom Arc MCP Server which is
-not available until Phase 3.
+Mounts the custom Arc MCP Server via MCPTool — the Arc MCP Server is an
+internal Container App built in Phase 3 that fills the Azure MCP Server's
+Arc coverage gap (AGENT-005).
 
-In Phase 2, this agent returns a structured stub response for all incidents, directing
-operators to the SRE Agent for general Azure Monitor-based monitoring of Arc resources.
+Requirements:
+    TRIAGE-006: Performs Arc-specific triage using Arc MCP Server tools:
+        connectivity check → extension health → GitOps status → diagnosis.
+    TRIAGE-002: Must query Log Analytics AND Resource Health before diagnosis.
+    TRIAGE-003: Must check Activity Log (prior 2h) as FIRST RCA step.
+    TRIAGE-004: Must include confidence score (0.0–1.0) in every diagnosis.
+    REMEDI-001: Must NOT execute any remediation without human approval.
+    AGENT-005: Mounts Arc MCP Server tools via MCPTool; ALLOWED_MCP_TOOLS
+        is non-empty explicit list (not the Phase 2 empty stub list).
 
-Safety constraints:
-    - MUST NOT attempt to query Arc resources using Azure MCP Server (Arc coverage gap confirmed).
-    - MUST NOT call Arc MCP Server tools in Phase 2 — the server does not exist yet.
-    - MUST clearly communicate stub status: every response includes "phase_available": 3.
-    - MUST recommend SRE Agent as the Phase 2 escalation path.
-    - MUST NOT use wildcard tool permissions.
+RBAC scope: Reader on Arc subscriptions (enforced by Terraform).
+Arc MCP Server: ARC_MCP_SERVER_URL environment variable (required).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+import os
 
-from agent_framework import ChatAgent, ai_function
+from agent_framework import ChatAgent
+from azure.ai.projects.models import MCPTool
 
 from agents.shared.auth import get_foundry_client
 from agents.shared.otel import setup_telemetry
+from agents.arc.tools import (
+    ALLOWED_MCP_TOOLS,
+    query_activity_log,
+    query_log_analytics,
+    query_resource_health,
+)
 
 tracer = setup_telemetry("aiops-arc-agent")
 
 # ---------------------------------------------------------------------------
-# Phase 2: No MCP tools permitted — Arc MCP Server not available until Phase 3.
+# System prompt — TRIAGE-006 workflow
 # ---------------------------------------------------------------------------
 
-ALLOWED_MCP_TOOLS: list[str] = []
+ARC_AGENT_SYSTEM_PROMPT = """You are the AAP Arc Agent — domain specialist for Azure Arc-enabled resources.
 
-# ---------------------------------------------------------------------------
-# System prompt
-# ---------------------------------------------------------------------------
+## Scope
 
-ARC_AGENT_SYSTEM_PROMPT = """You are the AAP Arc Agent.
+You investigate incidents involving:
+  - Arc-enabled Servers (Microsoft.HybridCompute/machines)
+  - Arc-enabled Kubernetes clusters (Microsoft.Kubernetes/connectedClusters)
+  - Arc-enabled Data Services (SQL Managed Instance, PostgreSQL)
 
-## Phase 2 Status: STUB
+## Mandatory Triage Workflow (TRIAGE-006)
 
-Arc-specific capabilities are NOT yet available in Phase 2. The custom Arc MCP Server
-required for Arc server, Arc Kubernetes, and Arc data service tooling will be built
-in Phase 3.
+**You MUST follow these steps IN ORDER for every incident:**
 
-For every incident you receive, you MUST:
-1. Immediately return the Phase 2 stub response via `handle_arc_incident`.
-2. Clearly communicate that Arc capabilities are pending Phase 3.
-3. Recommend escalation to the SRE Agent for general Azure Monitor-based monitoring.
-4. Include "phase_available": 3 in every response.
+### Step 1 — Activity Log first (TRIAGE-003)
+Call `query_activity_log` for all affected resources with a 2-hour look-back window.
+Check for: Arc agent upgrades, extension installs/removals, RBAC changes, policy
+assignments, connectivity policy changes. This is MANDATORY before any Arc MCP
+Server calls.
 
-## What NOT to do in Phase 2
+### Step 2 — Arc Connectivity Check (MONITOR-004)
+Call `arc_servers_list` or `arc_k8s_list` for the affected subscription(s).
+Identify: status (Connected/Disconnected/Error), last_status_change, agent_version,
+prolonged_disconnection flag. For K8s clusters: check connectivity_status and
+last_connectivity_time.
 
-- Do NOT attempt to query Arc resources via Azure MCP Server (confirmed coverage gap).
-- Do NOT attempt to call Arc MCP Server tools — the server does not exist yet.
-- Do NOT attempt Activity Log queries, Resource Health queries, or any Azure API calls
-  for Arc resources without the Arc MCP Server.
+### Step 3 — Extension Health Check (MONITOR-005)
+For any Arc server with status != 'Connected', call `arc_extensions_list` for that
+machine. Check: AMA (AzureMonitorWindowsAgent/LinuxAgent), VM Insights (DependencyAgent),
+Change Tracking, Azure Policy (GuestConfiguration). Note any with provisioning_state
+!= 'Succeeded' or status_level == 'Error'.
+
+### Step 4 — GitOps Reconciliation Status (MONITOR-006, K8s clusters only)
+If the incident involves an Arc K8s cluster, call `arc_k8s_gitops_status` for the
+cluster. Check: flux_detected (True/False), compliance_state for each Flux
+configuration (Compliant/NonCompliant/Pending/Suspended).
+
+### Step 5 — Log Analytics and Resource Health (TRIAGE-002)
+Call `query_log_analytics` for Arc Heartbeat / connectivity events.
+Call `query_resource_health` for each affected Arc resource.
+Diagnosis is INVALID without both signals (TRIAGE-002).
+
+### Step 6 — Structured Triage Summary (TRIAGE-004)
+Produce a structured diagnosis with ALL of the following fields:
+  - `hypothesis`: natural-language root cause description
+  - `evidence`: list of supporting items from Steps 1–5
+  - `confidence_score`: float 0.0–1.0
+  - `connectivity_findings`: summary from Step 2
+  - `extension_health_findings`: summary from Step 3 (or "N/A — not a server incident")
+  - `gitops_findings`: summary from Step 4 (or "N/A — not a K8s incident")
+  - `needs_cross_domain`: true if root cause is outside Arc domain
+  - `suspected_domain`: domain to route to if needs_cross_domain is true
+
+### Step 7 — Remediation Proposal (REMEDI-001)
+If a clear remediation path exists, propose it with: description, target_resources,
+estimated_impact, risk_level (low/medium/high/critical), reversibility statement.
+**MUST NOT execute without explicit human approval (REMEDI-001).**
+
+## Safety Constraints
+
+- MUST NOT attempt to reconnect an Arc agent, reinstall extensions, or modify K8s
+  resources without human approval (REMEDI-001).
+- MUST NOT use the Azure MCP Server for Arc resources — it has a confirmed coverage
+  gap. Use Arc MCP Server tools only.
+- MUST complete all 5 diagnostic steps before producing a diagnosis.
+- MUST NOT produce a diagnosis with confidence_score > 0.3 based only on Activity Log
+  without Arc MCP Server tool results.
 
 ## Allowed Tools
 
-- `handle_arc_incident` (stub response only)
-
-No MCP tools are permitted in Phase 2.
-"""
-
-
-# ---------------------------------------------------------------------------
-# Tool functions
-# ---------------------------------------------------------------------------
-
-
-@ai_function
-def handle_arc_incident(incident: Dict[str, Any]) -> Dict[str, Any]:
-    """Return the Phase 2 structured stub response for all Arc incidents.
-
-    In Phase 2, the Arc MCP Server is not available. This function returns
-    a structured response acknowledging the pending Phase 3 capabilities and
-    directing operators to the SRE Agent for general monitoring.
-
-    Phase 3 will replace this stub with full Arc diagnostic tooling:
-    arc_servers_list, arc_servers_get, arc_k8s_list, arc_k8s_get,
-    arc_extensions_list, arc_data_services_list.
-
-    Args:
-        incident: Incident dict from the Orchestrator handoff payload.
-            Expected keys: incident_id, correlation_id, affected_resources,
-            detection_rule.
-
-    Returns:
-        Structured stub response with status="pending_phase3",
-        phase_available=3, needs_cross_domain=True, suspected_domain="sre".
-    """
-    incident_id = incident.get("incident_id", "unknown")
-
-    return {
-        "status": "pending_phase3",
-        "message": (
-            "Arc-specific capabilities are pending Phase 3 implementation. "
-            "Please triage Arc incidents manually until Phase 3 is complete."
-        ),
-        "incident_id": incident_id,
-        "recommendation": "Escalate to SRE agent",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        # Phase 3 details for operator awareness
-        "phase_available": 3,
-        "agent": "arc-agent",
-        "needs_cross_domain": True,
-        "suspected_domain": "sre",
-    }
+{allowed_tools}
+""".format(
+    allowed_tools="\n".join(
+        f"- `{t}`"
+        for t in ALLOWED_MCP_TOOLS
+        + ["query_activity_log", "query_log_analytics", "query_resource_health"]
+    )
+)
 
 
 # ---------------------------------------------------------------------------
@@ -118,22 +127,49 @@ def handle_arc_incident(incident: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def create_arc_agent() -> ChatAgent:
-    """Create and configure the Arc ChatAgent stub instance.
+    """Create and configure the Arc Agent with Arc MCP Server tooling.
+
+    Mounts the custom Arc MCP Server as a MCPTool. The server URL is provided
+    via ARC_MCP_SERVER_URL environment variable (set by Terraform arc-mcp-server
+    module output → agent-apps env var injection).
 
     Returns:
-        ChatAgent configured with stub tools and Phase 2 system prompt.
+        ChatAgent configured with Arc domain tools and TRIAGE-006 prompt.
+
+    Raises:
+        ValueError: If ARC_MCP_SERVER_URL is not set.
     """
+    arc_mcp_server_url = os.environ.get("ARC_MCP_SERVER_URL")
+    if not arc_mcp_server_url:
+        raise ValueError(
+            "ARC_MCP_SERVER_URL environment variable is required. "
+            "This should be set to the internal FQDN of the Arc MCP Server Container App, "
+            "e.g. http://ca-arc-mcp-server-dev.{env_domain}/mcp"
+        )
+
     client = get_foundry_client()
+
+    # Mount the Arc MCP Server via MCPTool (AGENT-005)
+    arc_mcp_tool = MCPTool(
+        server_label="arc-mcp",
+        server_url=arc_mcp_server_url,
+        allowed_tools=ALLOWED_MCP_TOOLS,
+    )
 
     return ChatAgent(
         name="arc-agent",
         description=(
-            "Azure Arc domain specialist — Phase 2 stub; "
-            "full Arc capabilities available in Phase 3."
+            "Azure Arc domain specialist — Arc Servers, Arc K8s, Arc Data Services. "
+            "Uses custom Arc MCP Server for ARM-native Arc tooling (Phase 3)."
         ),
         system_prompt=ARC_AGENT_SYSTEM_PROMPT,
         client=client,
-        tools=[handle_arc_incident],
+        tools=[
+            query_activity_log,
+            query_log_analytics,
+            query_resource_health,
+        ],
+        tool_resources=[arc_mcp_tool],
     )
 
 

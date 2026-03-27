@@ -13,6 +13,8 @@ Requirements:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
@@ -175,4 +177,48 @@ class RemediationProposal:
             # REMEDI-001: All remediation proposals require explicit human approval.
             # No remediation action may be executed without operator confirmation.
             "requires_approval": True,
+        }
+
+
+class ResourceSnapshot:
+    """Pre-execution resource state snapshot for Resource Identity Certainty (REMEDI-004).
+
+    Captures 2+ independent signals about a resource at proposal time.
+    Before execution, the snapshot is re-verified. If any signal has diverged,
+    the action is aborted with stale_approval.
+    """
+
+    def __init__(
+        self,
+        resource_id: str,
+        provisioning_state: str,
+        tags: dict,
+        resource_health: str,
+        captured_at: Optional[str] = None,
+    ) -> None:
+        self.resource_id = resource_id
+        self.provisioning_state = provisioning_state
+        self.tags = tags
+        self.resource_health = resource_health
+        self.captured_at = captured_at or datetime.now(timezone.utc).isoformat()
+        self.snapshot_hash = self._compute_hash()
+
+    def _compute_hash(self) -> str:
+        """Compute SHA-256 hash of resource state fields."""
+        state_string = (
+            f"{self.resource_id}|"
+            f"{self.provisioning_state}|"
+            f"{json.dumps(self.tags, sort_keys=True)}|"
+            f"{self.resource_health}"
+        )
+        return hashlib.sha256(state_string.encode()).hexdigest()
+
+    def to_dict(self) -> dict:
+        return {
+            "resource_id": self.resource_id,
+            "provisioning_state": self.provisioning_state,
+            "tags": self.tags,
+            "resource_health": self.resource_health,
+            "snapshot_hash": self.snapshot_hash,
+            "captured_at": self.captured_at,
         }

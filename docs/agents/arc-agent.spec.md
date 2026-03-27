@@ -50,6 +50,14 @@ Domain specialist for Azure Arc-enabled resources — Arc-enabled servers, Arc-e
 5. If K8s cluster: query Arc K8s cluster health — nodes ready/not-ready, pod status rollup, Flux GitOps reconciliation status (MONITOR-006)
 6. Query Azure Resource Health for Arc resources
 7. Correlate findings into root-cause hypothesis with confidence score (TRIAGE-004)
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 8. Propose remediation — Arc agent reconnect procedure, extension reinstall, GitOps drift correction (REMEDI-001)
 
 ## Tool Permissions
@@ -78,6 +86,7 @@ Domain specialist for Azure Arc-enabled resources — Arc-enabled servers, Arc-e
 | `resourcehealth.get_availability_status` | ✅ | Arc resource health (MONITOR-003) |
 | Arc resource modification | ❌ | Propose only; never execute |
 | GitOps repository write | ❌ | Propose PR-based path only (REMEDI-001) |
+| `retrieve_runbooks` | ✅ | Phase 3+ only — read-only, calls api-gateway /api/v1/runbooks/search |
 
 ## Safety Constraints
 

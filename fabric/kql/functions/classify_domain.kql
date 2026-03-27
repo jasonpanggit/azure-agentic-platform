@@ -1,0 +1,55 @@
+// classify_domain() — Maps ARM resource_type to AAP domain for agent routing.
+// Decision D-05: ARM resource_type is the primary classification signal.
+// Decision D-06: Unclassifiable resources fall back to 'sre' domain.
+//
+// Domains: compute, network, storage, security, arc, sre
+// The SRE agent is the catch-all for unrecognized resource types.
+
+.create-or-alter function classify_domain(resource_type: string) {
+    case(
+        // Compute domain
+        resource_type has_any (
+            "Microsoft.Compute/virtualMachines",
+            "Microsoft.Compute/virtualMachineScaleSets",
+            "Microsoft.Compute/disks",
+            "Microsoft.Batch/batchAccounts",
+            "Microsoft.Compute/availabilitySets",
+            "Microsoft.Compute/images"
+        ), "compute",
+        // Network domain
+        resource_type has_any (
+            "Microsoft.Network/virtualNetworks",
+            "Microsoft.Network/networkSecurityGroups",
+            "Microsoft.Network/loadBalancers",
+            "Microsoft.Network/applicationGateways",
+            "Microsoft.Network/azureFirewalls",
+            "Microsoft.Network/publicIPAddresses",
+            "Microsoft.Network/trafficManagerProfiles",
+            "Microsoft.Network/frontDoors",
+            "Microsoft.Network/dnsZones",
+            "Microsoft.Network/expressRouteCircuits",
+            "Microsoft.Network/vpnGateways"
+        ), "network",
+        // Storage domain
+        resource_type has_any (
+            "Microsoft.Storage/storageAccounts",
+            "Microsoft.Storage/fileServices",
+            "Microsoft.Storage/blobServices",
+            "Microsoft.StorageSync/storageSyncServices"
+        ), "storage",
+        // Security domain
+        resource_type has_any (
+            "Microsoft.KeyVault/vaults",
+            "Microsoft.Security",
+            "Microsoft.Sentinel"
+        ), "security",
+        // Arc domain (hybrid resources)
+        resource_type has_any (
+            "Microsoft.HybridCompute/machines",
+            "Microsoft.Kubernetes/connectedClusters",
+            "Microsoft.AzureArcData"
+        ), "arc",
+        // SRE fallback (D-06) — all unrecognized resource types
+        "sre"
+    )
+}

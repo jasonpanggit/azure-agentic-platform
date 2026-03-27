@@ -64,10 +64,12 @@ class TestMcpToolAllowlists:
         assert "monitor.query_logs" in sre_tools
         assert "*" not in sre_tools
 
-    def test_arc_has_empty_allowlist(self):
-        from agents.arc.agent import ALLOWED_MCP_TOOLS as arc_tools
+    def test_arc_has_explicit_allowlist(self):
+        """Phase 3 upgrade: Arc agent now has a non-empty explicit allowlist (AGENT-005)."""
+        from agents.arc.tools import ALLOWED_MCP_TOOLS as arc_tools
         assert isinstance(arc_tools, list)
-        assert len(arc_tools) == 0
+        assert len(arc_tools) > 0
+        assert "*" not in arc_tools
 
 
 @pytest.mark.integration

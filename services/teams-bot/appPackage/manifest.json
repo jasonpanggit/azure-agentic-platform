@@ -1,0 +1,45 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "${{BOT_ID}}",
+  "developer": {
+    "name": "AAP Platform",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "name": {
+    "short": "AAP Operations Bot",
+    "full": "Azure Agentic Platform Operations Bot"
+  },
+  "description": {
+    "short": "AI-powered infrastructure operations assistant",
+    "full": "Investigate incidents, approve remediations, and monitor Azure infrastructure health across all subscriptions and Arc-enabled resources. Part of the Azure Agentic Platform."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "bots": [
+    {
+      "botId": "${{BOT_ID}}",
+      "scopes": ["team", "personal"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["team", "personal"],
+          "commands": [
+            {
+              "title": "/investigate",
+              "description": "Investigate a specific incident by ID (e.g., /investigate INC-123)"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["${{CONTAINER_APP_FQDN}}"]
+}

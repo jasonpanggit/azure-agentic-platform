@@ -81,7 +81,8 @@ resource "azurerm_subnet" "reserved_1" {
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_reserved_1_cidr]
 
-  # Reserved for Phase 4 Event Hub networking. Do not use until Phase 4.
+  # Phase 4: Event Hub networking — service endpoint enables VNet rule on Event Hub namespace.
+  service_endpoints = ["Microsoft.EventHub"]
 }
 
 # --- Network Security Groups ---
@@ -254,6 +255,48 @@ resource "azurerm_subnet_network_security_group_association" "foundry" {
   network_security_group_id = azurerm_network_security_group.foundry.id
 }
 
+# Reserved-1 NSG — Event Hub subnet; allow VNet traffic and Azure outbound HTTPS
+resource "azurerm_network_security_group" "reserved_1" {
+  name                = "nsg-snet-reserved-1-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "reserved_1_allow_vnet_inbound" {
+  name                        = "AllowVNetInbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.reserved_1.name
+}
+
+resource "azurerm_network_security_rule" "reserved_1_allow_azure_outbound" {
+  name                        = "AllowAzureCloudOutbound"
+  priority                    = 100
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureCloud"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.reserved_1.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "reserved_1" {
+  subnet_id                 = azurerm_subnet.reserved_1.id
+  network_security_group_id = azurerm_network_security_group.reserved_1.id
+}
+
 # --- Private DNS Zones ---
 
 resource "azurerm_private_dns_zone" "cosmos" {
@@ -337,6 +380,25 @@ resource "azurerm_private_dns_zone_virtual_network_link" "cognitive" {
   name                  = "vnetlink-cognitive-${var.environment}"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.cognitive.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  registration_enabled  = false
+
+  tags = var.required_tags
+}
+
+# --- Service Bus private DNS zone (for Event Hub private endpoint) ---
+
+resource "azurerm_private_dns_zone" "servicebus" {
+  name                = "privatelink.servicebus.windows.net"
+  resource_group_name = var.resource_group_name
+
+  tags = var.required_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "servicebus" {
+  name                  = "vnetlink-servicebus-${var.environment}"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.servicebus.name
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
 

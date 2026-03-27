@@ -14,4 +14,11 @@ markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (require external services)",
     "slow: Tests that take more than 10 seconds",
+    "e2e: End-to-end tests with Playwright",
+    "sc1: Success Criterion 1 — FMP and first token latency",
+    "sc2: Success Criterion 2 — SSE reconnect continuity",
+    "sc3: Success Criterion 3 — Runbook RAG similarity and latency",
+    "sc4: Success Criterion 4 — HITL gate lifecycle",
+    "sc5: Success Criterion 5 — Resource Identity Certainty",
+    "sc6: Success Criterion 6 — GitOps vs direct-apply path",
 ]

@@ -1,6 +1,15 @@
-# Arc agent — Phase 2 stub: no additional requirements beyond the base image.
-#
-# Phase 3 will add the following SDK packages for Arc MCP Server implementation:
-#   azure-mgmt-hybridcompute    — Arc-enabled server management
-#   azure-mgmt-connectedk8s     — Arc-enabled Kubernetes cluster management
-#   azure-mgmt-azurearcdata     — Arc-enabled data services (SQL MI, PostgreSQL)
+# Arc Agent — Phase 3 dependencies
+# Base agent-framework and agentserver packages are in agents/Dockerfile.base.
+# These packages are added for: local development, integration tests,
+# and any direct Arc SDK calls needed beyond what the Arc MCP Server exposes.
+
+# Azure Arc SDK — same versions as services/arc-mcp-server/requirements.txt
+# CRITICAL: azure-mgmt-hybridkubernetes (NOT azure-mgmt-connectedk8s)
+# CRITICAL: azure-mgmt-azurearcdata (NOT azure-mgmt-arcdata)
+azure-mgmt-hybridcompute==9.0.0
+azure-mgmt-hybridkubernetes==1.1.0
+azure-mgmt-azurearcdata==1.0.0
+azure-mgmt-kubernetesconfiguration==3.1.0
+
+# HTTP client for calling Arc MCP Server directly in integration tests
+httpx>=0.27.0

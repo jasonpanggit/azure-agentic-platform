@@ -139,9 +139,20 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (Arc MCP Container App)
 
+**Status:** ✅ Complete (2026-03-26) — All 7 requirements satisfied, all 4 plans complete
+
 > **Parallelism note:** This phase starts in Week 2 alongside Phase 2. It is the longest-pole
 > deliverable and does NOT block Phases 2, 4, or 5. Arc-specific capabilities (TRIAGE-006,
 > MONITOR-004–006) are unavailable until this phase completes.
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 03-01 | Arc MCP Server — Core + Terraform | ✅ Complete | AGENT-005, AGENT-006, MONITOR-004, MONITOR-005, MONITOR-006 |
+| 03-02 | Arc Agent Upgrade | ✅ Complete | TRIAGE-006, AGENT-005, AGENT-006 |
+| 03-03 | Unit Tests + CI | ✅ Complete | AGENT-005, AGENT-006, MONITOR-004, MONITOR-005, MONITOR-006 |
+| 03-04 | E2E-006 Playwright Test | ✅ Complete | E2E-006 |
 
 ### Success Criteria
 
@@ -172,6 +183,17 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** Yes (Fabric resources)
 
+**Status:** ✅ Complete (2026-03-26) — all 4 plans complete, 92 unit tests passing, 18 integration stubs scaffolded, CI workflows live
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 04-01 | Infrastructure: Fabric, Event Hub, Networking & Activity Log | ✅ Complete | INFRA-007, DETECT-001, AUDIT-003 |
+| 04-02 | KQL Pipeline — Table Schemas, classify_domain(), Update Policies | ✅ Complete | DETECT-002, DETECT-007 |
+| 04-03 | Fabric Activator + User Data Function (DETECT-003) | ✅ Complete | DETECT-003, DETECT-005, DETECT-006 |
+| 04-04 | Dedup, State Sync, Processing Rules & Tests (DETECT-005/006/007) | ✅ Complete | DETECT-005, DETECT-006 |
+
 ### Success Criteria
 
 1. A fired Azure Monitor alert appears in the Eventhouse `RawAlerts` table within 30 seconds of firing; KQL update policies enrich it into `EnrichedAlerts` (with resource inventory join) and classify it into `DetectionResults` with a non-null `domain` value — confirmed by querying the Eventhouse tables after injecting a synthetic alert via the Azure Monitor API.
@@ -201,6 +223,20 @@ Ph 7                                                                ████
 **Goal:** Operators can investigate and act on incidents through the Web UI — dual SSE streaming, runbook RAG active, full HITL approval flow operational.
 
 **UI:** Yes | **IaC:** No
+
+**Status:** ✅ Complete (7/7 plans)
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 05-00 | Wave 0 — Test Infrastructure & Stubs | ✅ Complete | UI-001, UI-002, TRIAGE-005, TRIAGE-007, UI-008, REMEDI-002–006, REMEDI-008, AUDIT-002, AUDIT-004 |
+| 05-01 | Web UI Shell | Not started | UI-001, UI-002, UI-007 |
+| 05-02 | SSE Streaming | Not started | UI-002, UI-003, UI-004, UI-008, TRIAGE-007 |
+| 05-03 | Runbook RAG | Not started | TRIAGE-005, REMEDI-008 |
+| 05-04 | HITL Approval Gate | Not started | REMEDI-002, REMEDI-003, REMEDI-004, REMEDI-005, REMEDI-006 |
+| 05-05 | Audit Trail + Remediation UI | Not started | AUDIT-002, AUDIT-004, UI-005, UI-006 |
+| 05-06 | Phase 5 Integration | Not started | Full integration + E2E |
 
 ### Success Criteria
 
@@ -242,6 +278,18 @@ Ph 7                                                                ████
 
 **UI:** Yes (Teams bot) | **IaC:** No
 
+**Status:** ✅ Complete (2026-03-27) — all 5 plans complete, 100 tests at 92.34% coverage, 6 TEAMS requirements satisfied
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 06-01 | Teams Bot Scaffold + Card Builders + CI | ✅ Complete | TEAMS-001, TEAMS-002, TEAMS-003, TEAMS-005, TEAMS-006 |
+| 06-02 | Bot Framework Adapter + Proactive Messaging | ✅ Complete | TEAMS-001, TEAMS-004 |
+| 06-03 | API Gateway Changes + Cross-Surface Thread Sharing | ✅ Complete | TEAMS-003, TEAMS-004, TEAMS-005 |
+| 06-04 | Escalation Scheduler + Proactive Card Posting | ✅ Complete | TEAMS-002, TEAMS-005, TEAMS-006 |
+| 06-05 | Teams App Manifest + Integration Tests + Deployment Config | ✅ Complete | TEAMS-001, TEAMS-002, TEAMS-003, TEAMS-004, TEAMS-005, TEAMS-006 |
+
 ### Success Criteria
 
 1. A natural-language message sent to the Teams bot is routed to the Orchestrator, processed by the appropriate domain agent, and the response streams back inline in Teams — confirmed by an integration test sending "investigate the CPU alert on vm-prod-01" and receiving a structured triage summary within 30 seconds.
@@ -264,11 +312,24 @@ Ph 7                                                                ████
 
 ---
 
-## Phase 7: Quality & Hardening
+## ✅ Phase 7: Quality & Hardening
 
 **Goal:** Platform is production-ready — full Playwright E2E suite running in CI, observability complete, runbook library seeded, security review passed, Terraform prod environment applied.
 
 **UI:** No | **IaC:** Yes (prod environment)
+
+**Status:** ✅ Complete (2026-03-27) — all 6 plans complete, 7 requirements satisfied (E2E-001–005, REMEDI-007, AUDIT-006), 60 runbooks seeded, security CI live, Terraform prod 12-module config complete
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 07-01 | OTel Auto-Instrumentation + Observability Tab | ✅ Complete | D-05, D-06, D-07 |
+| 07-02 | Remediation Audit Trail + Audit Export | ✅ Complete | REMEDI-007, AUDIT-006 |
+| 07-03 | Runbook Library Seed | ✅ Complete | D-08, D-09, D-10 |
+| 07-04 | Terraform Prod + Security Review | ✅ Complete | D-11, D-12, D-13, D-14, D-15 |
+| 07-05 | E2E Infrastructure + Real Endpoint Migration | ✅ Complete | E2E-001 |
+| 07-06 | E2E Specs — Incident Flow, HITL, RBAC, SSE Reconnect | ✅ Complete | E2E-002, E2E-003, E2E-004, E2E-005, AUDIT-006 |
 
 ### Success Criteria
 

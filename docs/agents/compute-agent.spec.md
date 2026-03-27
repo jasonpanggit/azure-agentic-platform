@@ -27,6 +27,14 @@ Domain specialist for Azure compute resources — VMs, VMSS, AKS node-level issu
 5. Query Azure Monitor metrics (CPU, memory, disk I/O, network) for affected resources over the incident window (MONITOR-001)
 6. Correlate all findings into a root-cause hypothesis with a confidence score (0.0–1.0) and supporting evidence (TRIAGE-004)
 7. If evidence strongly suggests a non-compute root cause (e.g., storage throttling, NSG block), return `needs_cross_domain: true` with `suspected_domain` field
+
+### Retrieve Relevant Runbooks (TRIAGE-005)
+- Call `retrieve_runbooks(query=<diagnosis_hypothesis>, domain=<agent_domain>, limit=3)`
+- Filter results with similarity >= 0.75
+- Cite the top-3 runbooks (title + version) in the triage response
+- Use runbook content to inform the remediation proposal
+- If runbook service is unavailable, proceed without citation (non-blocking)
+
 8. Propose remediation: include `description`, `target_resources`, `estimated_impact`, `risk_level` (`low`/`medium`/`high`), and `reversible` (bool) — do NOT execute (REMEDI-001)
 
 ## Tool Permissions
@@ -55,6 +63,7 @@ Domain specialist for Azure compute resources — VMs, VMSS, AKS node-level issu
 - `advisor.list_recommendations`
 - `appservice.list_apps`
 - `appservice.get_app`
+- `retrieve_runbooks` — read-only, calls api-gateway /api/v1/runbooks/search
 
 ## Safety Constraints
 

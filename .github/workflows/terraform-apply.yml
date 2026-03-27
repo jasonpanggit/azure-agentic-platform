@@ -155,6 +155,31 @@ jobs:
             -d aap \
             -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
+      - name: Install Python and Seed Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r scripts/seed-runbooks/requirements.txt
+
+      - name: Create Runbooks Table and Seed Data
+        env:
+          POSTGRES_HOST: aap-postgres-staging.postgres.database.azure.com
+          POSTGRES_USER: aap_admin
+          POSTGRES_DB: aap
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        run: python3 scripts/seed-runbooks/seed.py
+
+      - name: Validate Runbook Embeddings
+        env:
+          POSTGRES_HOST: aap-postgres-staging.postgres.database.azure.com
+          POSTGRES_USER: aap_admin
+          POSTGRES_DB: aap
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        run: python3 scripts/seed-runbooks/validate.py
+
       - name: Remove Temporary PostgreSQL Firewall Rule
         if: always()
         run: |

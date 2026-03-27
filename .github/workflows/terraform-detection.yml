@@ -1,0 +1,81 @@
+name: Terraform Detection Plane
+
+on:
+  push:
+    paths:
+      - "terraform/modules/fabric/**"
+      - "terraform/modules/eventhub/**"
+      - "terraform/modules/activity-log/**"
+      - "terraform/modules/networking/**"
+      - "terraform/modules/databases/cosmos.tf"
+      - "terraform/modules/private-endpoints/**"
+      - "terraform/envs/*/main.tf"
+      - ".github/workflows/terraform-detection.yml"
+  pull_request:
+    paths:
+      - "terraform/modules/fabric/**"
+      - "terraform/modules/eventhub/**"
+      - "terraform/modules/activity-log/**"
+      - "terraform/modules/networking/**"
+      - "terraform/modules/databases/cosmos.tf"
+      - "terraform/modules/private-endpoints/**"
+      - "terraform/envs/*/main.tf"
+      - ".github/workflows/terraform-detection.yml"
+
+jobs:
+  validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module:
+          - terraform/modules/fabric
+          - terraform/modules/eventhub
+          - terraform/modules/activity-log
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform Init
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: ${{ matrix.module }}
+        run: terraform validate
+
+  plan-dev:
+    name: Terraform Plan (dev)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        working-directory: terraform/envs/dev
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/envs/dev
+        run: terraform plan -out=tfplan -var-file=dev.tfvars
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
