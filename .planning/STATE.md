@@ -3,29 +3,31 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T15:21:00.000Z"
+last_updated: "2026-03-27T07:29:08.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (3/5 plans) — 06-02: Bot Framework Integration — AapTeamsBot with message/invoke handling, GatewayClient with managed identity auth, conversation state tracker, proactive messaging via ConversationReference, CloudAdapter wired on /api/messages. 26 new tests, 84 total teams-bot tests at 80.12% coverage.
+> Last updated: 2026-03-27 — Phase 6 IN PROGRESS (4/5 plans) — 06-04: Escalation Scheduler + Proactive Card Posting — Background escalation scheduler with 2-minute polling, in-memory dedup, notify route pre-flight guard, 16 new tests, 100 total teams-bot tests at 92.34% coverage.
 
 ---
 
 ## Current Phase
 
-**Phase 6: Teams Integration — 🔄 IN PROGRESS (3/5 plans)**
+**Phase 6: Teams Integration — 🔄 IN PROGRESS (4/5 plans)**
 
 Plan 06-01 complete: `services/teams-bot/` scaffold with all card builders, notify endpoint, 58 unit tests at 93.31% coverage, and CI workflow.
 
 Plan 06-02 complete: Bot Framework Integration — AapTeamsBot extends TeamsActivityHandler with message handling (typing indicator, 30s interim, 120s timeout), Action.Execute invoke for approve/reject, GatewayClient HTTP client with managed identity auth, conversation state tracker for thread_id mapping, proactive messaging via ConversationReference + continueConversationAsync, CloudAdapter wired on /api/messages. 26 new tests, 84 total tests at 80.12% coverage.
 
 Plan 06-03 complete: API Gateway changes — ChatRequest thread_id/user_id, thread continuation, GET /api/v1/approvals, body thread_id for Action.Execute, teams_notifier refactored to bot internal endpoint. 22 new tests, 71 api-gateway tests passing.
+
+Plan 06-04 complete: Escalation Scheduler + Proactive Card Posting — Background escalation scheduler polling every 2 minutes with in-memory dedup, notify route pre-flight guard (503 if bot not installed), scheduler wired into index.ts with 30-second startup delay. 16 new tests, 100 total tests at 92.34% coverage.
 
 ---
 
@@ -50,7 +52,7 @@ Plan 06-03 complete: API Gateway changes — ChatRequest thread_id/user_id, thre
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
-| 6 | Teams Integration | 🔄 In progress (3/5 plans) |
+| 6 | Teams Integration | 🔄 In progress (4/5 plans) |
 | 7 | Quality & Hardening | Not started |
 
 ---
@@ -119,6 +121,9 @@ None.
 | handleMessage as public method for testability | 6-02 | Direct method call in tests avoids Bot Framework event pipeline; onAdaptiveCardInvoke remains protected override |
 | In-memory conversation state with 24h TTL | 6-02 | Map<teamsConversationId, {threadId, incidentId, lastUsed}> sufficient for MVP; upgrade to Cosmos DB if durability needed |
 | Dev-mode auth: isDevelopmentMode() returns dev-token | 6-02 | Matches api-gateway auth.py pattern — no AZURE_CLIENT_ID = dev mode; consistent across all platform services |
+| In-memory dedup Map for escalation reminders | 6-04 | Map<approvalId, lastReminderTimestamp> sufficient for single-instance MVP; upgrade to Cosmos DB if HA/multi-instance needed |
+| 503 pre-flight on notify route | 6-04 | hasConversationReference() check returns 503 Service Unavailable when bot not installed — prevents silent failures from api-gateway calls |
+| 30-second startup delay for escalation scheduler | 6-04 | Allows bot installation event to fire and ConversationReference to be captured before scheduler attempts proactive posting |
 
 ---
 
