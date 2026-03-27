@@ -4,9 +4,10 @@ import request from "supertest";
 import { createNotifyRouter } from "../../routes/notify";
 import type { AppConfig } from "../../config";
 
-// Mock sendProactiveCard to avoid real Teams API calls
+// Mock sendProactiveCard and hasConversationReference to avoid real Teams API calls
 vi.mock("../../services/proactive", () => ({
   sendProactiveCard: vi.fn().mockResolvedValue({ ok: true, messageId: "msg-001" }),
+  hasConversationReference: vi.fn().mockReturnValue(true),
 }));
 
 const mockConfig: AppConfig = {
