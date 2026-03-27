@@ -9,6 +9,7 @@ import { createNotifyRouter } from "./routes/notify";
 import { AapTeamsBot } from "./bot";
 import { GatewayClient } from "./services/gateway-client";
 import { initializeProactive } from "./services/proactive";
+import { startEscalationScheduler } from "./services/escalation";
 
 const config = loadConfig();
 const app = express();
@@ -56,6 +57,12 @@ app.post("/api/messages", async (req, res) => {
 
 app.listen(config.port, () => {
   console.log(`Teams bot listening on port ${config.port}`);
+
+  // Start escalation scheduler (TEAMS-005)
+  // Delay start by 30 seconds to allow ConversationReference to be captured on installation
+  setTimeout(() => {
+    startEscalationScheduler({ gateway, config });
+  }, 30_000);
 });
 
 export { app }; // For testing
