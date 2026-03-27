@@ -2,6 +2,7 @@ import {
   TeamsActivityHandler,
   TurnContext,
   type AdaptiveCardInvokeResponse,
+  type AdaptiveCardInvokeValue,
 } from "botbuilder";
 import type { GatewayClient } from "./services/gateway-client";
 import { getThreadId, setThreadId } from "./services/conversation-state";
@@ -18,6 +19,18 @@ import { getThreadId, setThreadId } from "./services/conversation-state";
 export class AapTeamsBot extends TeamsActivityHandler {
   constructor(private readonly gateway: GatewayClient) {
     super();
+
+    // Register message handler (TEAMS-001)
+    this.onMessage(async (context, next) => {
+      await this.handleMessage(context);
+      await next();
+    });
+
+    // Register installation handler for ConversationReference capture
+    this.onInstallationUpdate(async (context, next) => {
+      await this.handleInstallationUpdate(context);
+      await next();
+    });
   }
 
   /**
@@ -25,7 +38,7 @@ export class AapTeamsBot extends TeamsActivityHandler {
    *
    * Flow: typing indicator → call gateway.chat() → 30s interim → 120s timeout
    */
-  async onMessage(context: TurnContext): Promise<void> {
+  async handleMessage(context: TurnContext): Promise<void> {
     const text = context.activity.text?.trim();
     if (!text) return;
 
@@ -61,9 +74,7 @@ export class AapTeamsBot extends TeamsActivityHandler {
     const INTERIM_TIMEOUT_MS = 30_000;
     const MAX_TIMEOUT_MS = 120_000;
 
-    let interimSent = false;
     const interimTimer = setTimeout(async () => {
-      interimSent = true;
       await context.sendActivity(
         "Still working on this - complex investigation in progress...",
       );
@@ -93,7 +104,7 @@ export class AapTeamsBot extends TeamsActivityHandler {
           ? `Thread created: ${chatResponse.thread_id}. Investigation started.`
           : `Response from thread ${chatResponse.thread_id}`,
       );
-    } catch (error) {
+    } catch {
       clearTimeout(interimTimer);
       const webUiUrl = process.env.WEB_UI_PUBLIC_URL ?? "";
       const incidentUrl = incidentId
@@ -111,8 +122,9 @@ export class AapTeamsBot extends TeamsActivityHandler {
    * The approve/reject cards from 06-01 send { verb, data: { approval_id, thread_id } }.
    * This handler proxies the decision to the api-gateway and returns an updated card.
    */
-  async onAdaptiveCardInvoke(
+  protected async onAdaptiveCardInvoke(
     context: TurnContext,
+    _invokeValue?: AdaptiveCardInvokeValue,
   ): Promise<AdaptiveCardInvokeResponse> {
     const verb = context.activity.value?.action?.verb;
     const data = context.activity.value?.action?.data;
@@ -212,7 +224,7 @@ export class AapTeamsBot extends TeamsActivityHandler {
   /**
    * Capture ConversationReference on bot installation (proactive messaging bootstrap).
    */
-  async onInstallationUpdate(context: TurnContext): Promise<void> {
+  private async handleInstallationUpdate(context: TurnContext): Promise<void> {
     const ref = TurnContext.getConversationReference(context.activity);
     const { setConversationReference } = await import("./services/proactive");
     setConversationReference(ref);

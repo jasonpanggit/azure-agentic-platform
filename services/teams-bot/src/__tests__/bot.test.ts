@@ -57,11 +57,11 @@ describe("AapTeamsBot", () => {
     bot = new AapTeamsBot(gateway as any);
   });
 
-  describe("onMessage", () => {
+  describe("handleMessage", () => {
     it("sends typing indicator and calls gateway.chat()", async () => {
       const ctx = createMockContext({ text: "What's wrong with vm-prod-01?" });
 
-      await bot.onMessage(ctx as any);
+      await bot.handleMessage(ctx as any);
 
       // Typing indicator sent
       expect(ctx.sendActivity).toHaveBeenCalledWith({ type: "typing" });
@@ -77,7 +77,7 @@ describe("AapTeamsBot", () => {
     it("parses /investigate INC-123 and calls gateway.getIncident()", async () => {
       const ctx = createMockContext({ text: "/investigate INC-123" });
 
-      await bot.onMessage(ctx as any);
+      await bot.handleMessage(ctx as any);
 
       expect(gateway.getIncident).toHaveBeenCalledWith("INC-123");
       expect(gateway.chat).toHaveBeenCalledWith(
@@ -92,7 +92,7 @@ describe("AapTeamsBot", () => {
     it("does nothing for empty text", async () => {
       const ctx = createMockContext({ text: "   " });
 
-      await bot.onMessage(ctx as any);
+      await bot.handleMessage(ctx as any);
 
       expect(gateway.chat).not.toHaveBeenCalled();
     });
@@ -106,7 +106,7 @@ describe("AapTeamsBot", () => {
       vi.useFakeTimers();
       const ctx = createMockContext({ text: "slow query" });
 
-      const messagePromise = bot.onMessage(ctx as any);
+      const messagePromise = bot.handleMessage(ctx as any);
       // Advance past 120s timeout
       await vi.advanceTimersByTimeAsync(120_001);
       await messagePromise;
@@ -136,7 +136,8 @@ describe("AapTeamsBot", () => {
         },
       });
 
-      const result = await bot.onAdaptiveCardInvoke(ctx as any);
+      // Access protected method via type assertion
+      const result = await (bot as any).onAdaptiveCardInvoke(ctx as any);
 
       expect(gateway.approveProposal).toHaveBeenCalledWith(
         "appr-1",
@@ -158,7 +159,7 @@ describe("AapTeamsBot", () => {
         },
       });
 
-      const result = await bot.onAdaptiveCardInvoke(ctx as any);
+      const result = await (bot as any).onAdaptiveCardInvoke(ctx as any);
 
       expect(gateway.rejectProposal).toHaveBeenCalledWith(
         "appr-2",
@@ -176,7 +177,7 @@ describe("AapTeamsBot", () => {
         },
       });
 
-      const result = await bot.onAdaptiveCardInvoke(ctx as any);
+      const result = await (bot as any).onAdaptiveCardInvoke(ctx as any);
 
       expect(result.statusCode).toBe(400);
     });
@@ -192,7 +193,7 @@ describe("AapTeamsBot", () => {
         },
       });
 
-      const result = await bot.onAdaptiveCardInvoke(ctx as any);
+      const result = await (bot as any).onAdaptiveCardInvoke(ctx as any);
 
       expect(result.statusCode).toBe(400);
     });
@@ -209,13 +210,13 @@ describe("AapTeamsBot", () => {
         },
       });
 
-      const result = await bot.onAdaptiveCardInvoke(ctx as any);
+      const result = await (bot as any).onAdaptiveCardInvoke(ctx as any);
 
       expect(result.statusCode).toBe(500);
     });
   });
 
-  describe("onInstallationUpdate", () => {
+  describe("handleInstallationUpdate", () => {
     it("calls setConversationReference", async () => {
       const { setConversationReference } = await import(
         "../services/proactive"
@@ -228,7 +229,8 @@ describe("AapTeamsBot", () => {
         conversation: { id: "conv-123" },
       } as any);
 
-      await bot.onInstallationUpdate(ctx as any);
+      // Access private method via type assertion
+      await (bot as any).handleInstallationUpdate(ctx as any);
 
       expect(setConversationReference).toHaveBeenCalledWith(
         expect.objectContaining({
