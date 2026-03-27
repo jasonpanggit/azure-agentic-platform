@@ -8,6 +8,18 @@ variable "tenant_id" {
   type        = string
 }
 
+variable "client_id" {
+  description = "Service principal client ID (app ID)"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_secret" {
+  description = "Service principal client secret"
+  type        = string
+  sensitive   = true
+}
+
 variable "location" {
   description = "Azure region for all resources"
   type        = string
