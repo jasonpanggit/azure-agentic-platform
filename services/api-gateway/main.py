@@ -187,7 +187,7 @@ async def start_chat(
 
     Authentication: Entra ID Bearer token required.
     """
-    user_id = token.get("sub", "unknown")
+    user_id = payload.user_id or token.get("sub", "unknown")
     logger.info("Chat request from user %s: %s", user_id, payload.message[:100])
 
     try:

@@ -82,3 +82,113 @@ class TestChatEndpoint:
 
         req = ChatRequest(message="hello")
         assert req.user_id is None
+
+
+class TestChatThreadContinuation:
+    """Tests for thread continuation in chat.py (TEAMS-004)."""
+
+    def test_chat_with_thread_id_continues_existing_thread(self, client):
+        """POST /api/v1/chat with thread_id skips create_thread (TEAMS-004)."""
+        mock_foundry = MagicMock()
+        mock_run = MagicMock(id="run-test-001")
+        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.agents.create_run.return_value = mock_run
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            response = client.post(
+                "/api/v1/chat",
+                json={
+                    "message": "follow up question",
+                    "thread_id": "existing-thread-123",
+                },
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["thread_id"] == "existing-thread-123"
+        # create_thread should NOT have been called
+        mock_foundry.agents.create_thread.assert_not_called()
+        # create_message and create_run should use the existing thread_id
+        mock_foundry.agents.create_message.assert_called_once()
+        call_kwargs = mock_foundry.agents.create_message.call_args
+        assert call_kwargs.kwargs.get("thread_id") == "existing-thread-123"
+
+    def test_chat_with_incident_id_looks_up_thread(self, client):
+        """POST /api/v1/chat with incident_id looks up thread from Cosmos (TEAMS-004)."""
+        mock_foundry = MagicMock()
+        mock_run = MagicMock(id="run-test-001")
+        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.agents.create_run.return_value = mock_run
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}), patch(
+            "services.api_gateway.chat._lookup_thread_by_incident",
+            return_value="thread-from-cosmos",
+        ):
+            response = client.post(
+                "/api/v1/chat",
+                json={"message": "investigate this", "incident_id": "inc-999"},
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["thread_id"] == "thread-from-cosmos"
+        # Should not create a new thread since Cosmos returned one
+        mock_foundry.agents.create_thread.assert_not_called()
+
+    def test_chat_with_user_id_uses_request_user_id(self, client):
+        """POST /api/v1/chat with user_id uses it instead of token sub (D-07)."""
+        import json
+
+        mock_foundry = MagicMock()
+        mock_thread = MagicMock(id="thread-test-001")
+        mock_run = MagicMock(id="run-test-001")
+        mock_foundry.agents.create_thread.return_value = mock_thread
+        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.agents.create_run.return_value = mock_run
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            response = client.post(
+                "/api/v1/chat",
+                json={
+                    "message": "check vm",
+                    "user_id": "teams-user@example.com",
+                },
+            )
+
+        assert response.status_code == 202
+        # Verify the envelope message uses the Teams user_id
+        call_args = mock_foundry.agents.create_message.call_args
+        envelope = json.loads(call_args.kwargs["content"])
+        assert envelope["payload"]["initiated_by"] == "teams-user@example.com"
+
+    def test_chat_without_thread_id_creates_new_thread(self, client):
+        """POST /api/v1/chat without thread_id creates a new thread (default behavior)."""
+        mock_foundry = MagicMock()
+        mock_thread = MagicMock(id="thread-new-001")
+        mock_run = MagicMock(id="run-test-001")
+        mock_foundry.agents.create_thread.return_value = mock_thread
+        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.agents.create_run.return_value = mock_run
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            response = client.post(
+                "/api/v1/chat",
+                json={"message": "new conversation"},
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["thread_id"] == "thread-new-001"
+        mock_foundry.agents.create_thread.assert_called_once()
