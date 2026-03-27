@@ -5,7 +5,10 @@ import { buildAlertCard } from "../cards/alert-card";
 import { buildApprovalCard } from "../cards/approval-card";
 import { buildOutcomeCard } from "../cards/outcome-card";
 import { buildReminderCard } from "../cards/reminder-card";
-import { sendProactiveCard } from "../services/proactive";
+import {
+  sendProactiveCard,
+  hasConversationReference,
+} from "../services/proactive";
 
 const VALID_CARD_TYPES = ["alert", "approval", "outcome", "reminder"] as const;
 
@@ -15,6 +18,16 @@ export function createNotifyRouter(config: AppConfig): Router {
   router.post(
     "/teams/internal/notify",
     async (req: Request, res: Response): Promise<void> => {
+      // Pre-flight: check if bot is installed in any channel
+      if (!hasConversationReference()) {
+        const response: NotifyResponse = {
+          ok: false,
+          error: "Bot not installed in any channel yet",
+        };
+        res.status(503).json(response);
+        return;
+      }
+
       const body = req.body as Partial<NotifyRequest>;
 
       // Validate card_type
@@ -72,6 +85,14 @@ export function createNotifyRouter(config: AppConfig): Router {
             res.status(400).json({ ok: false, error: "Unknown card_type" });
             return;
         }
+
+        const cardIdentifier =
+          (body.payload as Record<string, unknown>)?.incident_id ??
+          (body.payload as Record<string, unknown>)?.approval_id ??
+          "unknown";
+        console.log(
+          `[notify] Sending ${body.card_type} card for ${cardIdentifier}`,
+        );
 
         const result = await sendProactiveCard(card);
         const response: NotifyResponse = {
