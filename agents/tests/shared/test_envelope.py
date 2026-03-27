@@ -53,8 +53,14 @@ class TestValidMessageTypes:
     def test_status_update_is_valid(self):
         assert "status_update" in VALID_MESSAGE_TYPES
 
-    def test_exactly_five_message_types(self):
-        assert len(VALID_MESSAGE_TYPES) == 5
+    def test_approval_request_is_valid(self):
+        assert "approval_request" in VALID_MESSAGE_TYPES
+
+    def test_approval_response_is_valid(self):
+        assert "approval_response" in VALID_MESSAGE_TYPES
+
+    def test_exactly_seven_message_types(self):
+        assert len(VALID_MESSAGE_TYPES) == 7
 
 
 class TestValidateEnvelope:
