@@ -42,6 +42,11 @@ const useStyles = makeStyles({
     height: '100%',
     overflow: 'hidden',
   },
+  tabBar: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    boxShadow: tokens.shadow2,
+  },
   tabContent: {
     flex: 1,
     overflow: 'auto',
@@ -87,13 +92,15 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
 
   return (
     <div className={styles.root}>
-      <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
-        <Tab value="alerts" icon={<AlertRegular />}>Alerts</Tab>
-        <Tab value="audit" icon={<ClipboardTaskRegular />}>Audit</Tab>
-        <Tab value="topology" icon={<OrganizationRegular />}>Topology</Tab>
-        <Tab value="resources" icon={<ServerRegular />}>Resources</Tab>
-        <Tab value="observability" icon={<PulseRegular />}>Observability</Tab>
-      </TabList>
+      <div className={styles.tabBar}>
+        <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+          <Tab value="alerts" icon={<AlertRegular />}>Alerts</Tab>
+          <Tab value="audit" icon={<ClipboardTaskRegular />}>Audit</Tab>
+          <Tab value="topology" icon={<OrganizationRegular />}>Topology</Tab>
+          <Tab value="resources" icon={<ServerRegular />}>Resources</Tab>
+          <Tab value="observability" icon={<PulseRegular />}>Observability</Tab>
+        </TabList>
+      </div>
 
       <div className={styles.tabContent}>
         {activeTab === 'alerts' && (
