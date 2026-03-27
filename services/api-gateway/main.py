@@ -17,16 +17,28 @@ from typing import Any, Optional
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from services.api_gateway.audit import query_audit_log
 from services.api_gateway.auth import verify_token
 from services.api_gateway.chat import create_chat_thread
 from services.api_gateway.foundry import create_foundry_thread
+from services.api_gateway.incidents_list import list_incidents
 from services.api_gateway.models import (
+    ApprovalAction,
+    ApprovalRecord,
+    ApprovalResponse,
+    AuditEntry,
     ChatRequest,
     ChatResponse,
     HealthResponse,
     IncidentPayload,
     IncidentResponse,
+    IncidentSummary,
     RunbookResult,
+)
+from services.api_gateway.approvals import (
+    get_approval,
+    list_approvals_for_thread,
+    process_approval_decision,
 )
 from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
 
@@ -187,3 +199,63 @@ async def start_chat(
         ) from exc
 
     return ChatResponse(thread_id=result["thread_id"], status="created")
+
+
+@app.post("/api/v1/approvals/{approval_id}/approve", response_model=ApprovalResponse)
+async def approve_proposal(
+    approval_id: str,
+    payload: ApprovalAction,
+    thread_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> ApprovalResponse:
+    """Approve a pending remediation proposal (REMEDI-005)."""
+    try:
+        await process_approval_decision(
+            approval_id=approval_id,
+            thread_id=thread_id,
+            decision="approved",
+            decided_by=payload.decided_by,
+            scope_confirmed=payload.scope_confirmed,
+        )
+        return ApprovalResponse(approval_id=approval_id, status="approved")
+    except ValueError as exc:
+        error_msg = str(exc)
+        if error_msg == "expired":
+            raise HTTPException(status_code=410, detail="Approval has expired")
+        if error_msg == "scope_confirmation_required":
+            raise HTTPException(status_code=403, detail="Production scope confirmation required")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+
+@app.post("/api/v1/approvals/{approval_id}/reject", response_model=ApprovalResponse)
+async def reject_proposal(
+    approval_id: str,
+    payload: ApprovalAction,
+    thread_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> ApprovalResponse:
+    """Reject a pending remediation proposal (REMEDI-005)."""
+    try:
+        await process_approval_decision(
+            approval_id=approval_id,
+            thread_id=thread_id,
+            decision="rejected",
+            decided_by=payload.decided_by,
+        )
+        return ApprovalResponse(approval_id=approval_id, status="rejected")
+    except ValueError as exc:
+        error_msg = str(exc)
+        if error_msg == "expired":
+            raise HTTPException(status_code=410, detail="Approval has expired")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+
+@app.get("/api/v1/approvals/{approval_id}", response_model=ApprovalRecord)
+async def get_approval_status(
+    approval_id: str,
+    thread_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> ApprovalRecord:
+    """Get the current status of an approval record."""
+    record = await get_approval(approval_id, thread_id)
+    return ApprovalRecord(**{k: v for k, v in record.items() if not k.startswith("_")})
