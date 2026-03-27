@@ -269,3 +269,93 @@ class TestApprovalLifecycle:
             f"Expected match_condition='IfMatch', got {captured_kwargs['match_condition']!r}"
         )
         assert captured_kwargs["etag"] == '"etag-test-001"'
+
+
+class TestListPendingApprovals:
+    """Tests for GET /api/v1/approvals?status=pending (TEAMS-005)."""
+
+    def test_list_pending_approvals_endpoint(self, client, mock_cosmos_approvals):
+        """GET /api/v1/approvals?status=pending returns list of ApprovalRecord."""
+        pending_records = [
+            {
+                "id": "appr_001",
+                "action_id": "act_001",
+                "thread_id": "thread-001",
+                "incident_id": "inc-001",
+                "agent_name": "compute",
+                "status": "pending",
+                "risk_level": "high",
+                "proposed_at": "2026-03-27T14:30:00Z",
+                "expires_at": "2026-03-27T15:00:00Z",
+                "decided_at": None,
+                "decided_by": None,
+                "executed_at": None,
+                "abort_reason": None,
+                "resource_snapshot": {"resource_id": "/sub/rg/vm-01"},
+                "proposal": {"description": "Restart VM"},
+            },
+            {
+                "id": "appr_002",
+                "action_id": "act_002",
+                "thread_id": "thread-002",
+                "incident_id": "inc-002",
+                "agent_name": "network",
+                "status": "pending",
+                "risk_level": "critical",
+                "proposed_at": "2026-03-27T14:35:00Z",
+                "expires_at": "2026-03-27T15:05:00Z",
+                "decided_at": None,
+                "decided_by": None,
+                "executed_at": None,
+                "abort_reason": None,
+                "resource_snapshot": None,
+                "proposal": {"description": "Update NSG rule"},
+            },
+        ]
+        mock_cosmos_approvals.query_items.return_value = iter(pending_records)
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ):
+            response = client.get("/api/v1/approvals?status=pending")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+        assert body[0]["id"] == "appr_001"
+        assert body[1]["id"] == "appr_002"
+        assert all(r["status"] == "pending" for r in body)
+
+    @pytest.mark.asyncio
+    async def test_list_approvals_by_status_queries_cosmos(self, mock_cosmos_approvals):
+        """list_approvals_by_status sends cross-partition query to Cosmos (TEAMS-005)."""
+        mock_cosmos_approvals.query_items.return_value = iter([])
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ):
+            from services.api_gateway.approvals import list_approvals_by_status
+
+            result = await list_approvals_by_status(status_filter="pending")
+
+        assert result == []
+        mock_cosmos_approvals.query_items.assert_called_once()
+        call_kwargs = mock_cosmos_approvals.query_items.call_args
+        assert call_kwargs.kwargs.get("enable_cross_partition_query") is True
+
+    def test_list_approvals_defaults_to_pending(self, client, mock_cosmos_approvals):
+        """GET /api/v1/approvals without status param defaults to pending."""
+        mock_cosmos_approvals.query_items.return_value = iter([])
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ):
+            response = client.get("/api/v1/approvals")
+
+        assert response.status_code == 200
+        call_kwargs = mock_cosmos_approvals.query_items.call_args
+        params = call_kwargs.kwargs.get("parameters", [])
+        assert any(p["value"] == "pending" for p in params)

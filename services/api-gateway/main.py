@@ -37,6 +37,7 @@ from services.api_gateway.models import (
 )
 from services.api_gateway.approvals import (
     get_approval,
+    list_approvals_by_status,
     list_approvals_for_thread,
     process_approval_decision,
 )
@@ -248,6 +249,25 @@ async def reject_proposal(
         if error_msg == "expired":
             raise HTTPException(status_code=410, detail="Approval has expired")
         raise HTTPException(status_code=400, detail=error_msg)
+
+
+@app.get("/api/v1/approvals", response_model=list[ApprovalRecord])
+async def list_approvals(
+    status: str = "pending",
+    token: dict[str, Any] = Depends(verify_token),
+) -> list[ApprovalRecord]:
+    """List approvals by status (TEAMS-005 escalation support).
+
+    Args:
+        status: Filter by approval status (default: pending).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    results = await list_approvals_by_status(status_filter=status)
+    return [
+        ApprovalRecord(**{k: v for k, v in r.items() if not k.startswith("_")})
+        for r in results
+    ]
 
 
 @app.get("/api/v1/approvals/{approval_id}", response_model=ApprovalRecord)

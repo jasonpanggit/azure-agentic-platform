@@ -55,6 +55,22 @@ async def list_approvals_for_thread(thread_id: str) -> list[dict]:
     return list(items)
 
 
+async def list_approvals_by_status(status_filter: str = "pending") -> list[dict]:
+    """List all approval records matching the given status (TEAMS-005).
+
+    Cross-partition query -- acceptable for small pending approval counts.
+    Used by the Teams bot escalation scheduler.
+    """
+    container = _get_approvals_container()
+    query = "SELECT * FROM c WHERE c.status = @status ORDER BY c.proposed_at ASC"
+    items = container.query_items(
+        query=query,
+        parameters=[{"name": "@status", "value": status_filter}],
+        enable_cross_partition_query=True,
+    )
+    return list(items)
+
+
 async def process_approval_decision(
     approval_id: str,
     thread_id: str,
