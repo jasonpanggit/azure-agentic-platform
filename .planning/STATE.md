@@ -8,12 +8,12 @@ progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 20
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 5: Plan 05-01 COMPLETE — Web UI Foundation: root layout, MSAL auth gates, split-pane AppLayout, ChatPanel/DashboardPanel shells, auth route pages (login/callback), Dockerfile, CI workflow
+> Last updated: 2026-03-27 — Phase 5: Plans 05-01 and 05-03 COMPLETE — 05-01: Web UI Foundation (root layout, MSAL auth gates, split-pane AppLayout, ChatPanel/DashboardPanel shells, auth pages, Dockerfile, CI); 05-03: Runbook RAG system (pgvector HNSW migration, 60-runbook seed, runbook_rag.py cosine similarity, GET /api/v1/runbooks/search, runbook_tool.py, all 6 agent specs updated with TRIAGE-005)
 
 ---
 
@@ -45,7 +45,7 @@ Current position: 05-01 complete — Web UI Foundation. Root layout (Segoe UI Va
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
-| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 2/7 plans (05-00, 05-01 complete) |
+| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 3/7 plans (05-00, 05-01, 05-03 complete) |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
 
