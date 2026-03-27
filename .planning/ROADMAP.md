@@ -224,6 +224,20 @@ Ph 7                                                                ████
 
 **UI:** Yes | **IaC:** No
 
+**Status:** 🔄 In Progress — Plan 05-00 complete (Wave 0 test infrastructure)
+
+### Plan Progress
+
+| Plan | Title | Status | Requirements |
+|---|---|---|---|
+| 05-00 | Wave 0 — Test Infrastructure & Stubs | ✅ Complete | UI-001, UI-002, TRIAGE-005, TRIAGE-007, UI-008, REMEDI-002–006, REMEDI-008, AUDIT-002, AUDIT-004 |
+| 05-01 | Web UI Shell | Not started | UI-001, UI-002, UI-007 |
+| 05-02 | SSE Streaming | Not started | UI-002, UI-003, UI-004, UI-008, TRIAGE-007 |
+| 05-03 | Runbook RAG | Not started | TRIAGE-005, REMEDI-008 |
+| 05-04 | HITL Approval Gate | Not started | REMEDI-002, REMEDI-003, REMEDI-004, REMEDI-005, REMEDI-006 |
+| 05-05 | Audit Trail + Remediation UI | Not started | AUDIT-002, AUDIT-004, UI-005, UI-006 |
+| 05-06 | Phase 5 Integration | Not started | Full integration + E2E |
+
 ### Success Criteria
 
 1. The Web UI loads, authenticates the operator via MSAL PKCE, and renders the split-pane layout (chat left, tabbed dashboard right) with a first meaningful paint under 2 seconds on a cold load — confirmed by Playwright timing assertions; the `event:token` SSE stream delivers the first token within 1 second of the agent starting its response.
