@@ -5,6 +5,7 @@ import {
   Text, Skeleton, SkeletonItem, MessageBar, MessageBarBody,
   makeStyles, tokens,
 } from '@fluentui/react-components';
+import { PulseRegular } from '@fluentui/react-icons';
 import { AgentLatencyCard } from './AgentLatencyCard';
 import { PipelineLagCard } from './PipelineLagCard';
 import { ApprovalQueueCard } from './ApprovalQueueCard';
@@ -50,6 +51,10 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     padding: tokens.spacingVerticalXXL,
     gap: tokens.spacingVerticalM,
+  },
+  emptyIcon: {
+    fontSize: '32px',
+    color: tokens.colorNeutralForeground3,
   },
 });
 
@@ -144,6 +149,7 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
 
       {data && data.agentLatency.length === 0 && data.activeErrors.length === 0 ? (
         <div className={styles.emptyState}>
+          <PulseRegular className={styles.emptyIcon} />
           <Text weight="semibold" size={400}>No observability data</Text>
           <Text align="center" size={300}>
             Metrics will appear here once agents process their first incidents.

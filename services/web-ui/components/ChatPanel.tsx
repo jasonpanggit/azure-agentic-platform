@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Text, makeStyles, tokens } from '@fluentui/react-components';
+import { ChatRegular } from '@fluentui/react-icons';
 import { ChatBubble } from './ChatBubble';
 import { UserBubble } from './UserBubble';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -30,6 +31,10 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     gap: tokens.spacingVerticalM,
+  },
+  emptyIcon: {
+    fontSize: '32px',
+    color: tokens.colorNeutralForeground3,
   },
 });
 
@@ -232,6 +237,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     return (
       <div className={styles.root}>
         <div className={styles.emptyState}>
+          <ChatRegular className={styles.emptyIcon} />
           <Text weight="semibold" size={400}>Start a conversation</Text>
           <Text align="center" size={300}>
             Ask about any Azure resource, investigate an incident, or check

@@ -66,6 +66,10 @@ const useStyles = makeStyles({
     padding: tokens.spacingVerticalXXL,
     gap: tokens.spacingVerticalM,
   },
+  emptyIcon: {
+    fontSize: '32px',
+    color: tokens.colorNeutralForeground3,
+  },
 });
 
 type DashboardTab = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability';
@@ -116,6 +120,7 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
 
         {activeTab === 'topology' && (
           <div className={styles.emptyState}>
+            <OrganizationRegular className={styles.emptyIcon} />
             <Text weight="semibold" size={400}>Topology view</Text>
             <Text align="center" size={300}>
               Resource topology visualization coming in Phase 6.
@@ -125,6 +130,7 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
 
         {activeTab === 'resources' && (
           <div className={styles.emptyState}>
+            <ServerRegular className={styles.emptyIcon} />
             <Text weight="semibold" size={400}>Resources</Text>
             <Text align="center" size={300}>
               Multi-subscription resource inventory coming in Phase 6.

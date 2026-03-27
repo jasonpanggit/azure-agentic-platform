@@ -17,6 +17,7 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
+import { InfoRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   root: {
@@ -36,6 +37,10 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     padding: tokens.spacingVerticalXXL,
     gap: tokens.spacingVerticalM,
+  },
+  emptyIcon: {
+    fontSize: '32px',
+    color: tokens.colorNeutralForeground3,
   },
 });
 
@@ -153,6 +158,7 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   if (incidents.length === 0) {
     return (
       <div className={styles.emptyState}>
+        <InfoRegular className={styles.emptyIcon} />
         <Text weight="semibold" size={400}>No alerts</Text>
         <Text align="center" size={300}>
           No alerts match your current filters. Adjust the filters above or check back later.
