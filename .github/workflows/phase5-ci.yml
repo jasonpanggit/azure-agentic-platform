@@ -1,0 +1,83 @@
+name: Phase 5 — Triage & Remediation + Web UI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/api-gateway/**'
+      - 'services/web-ui/**'
+      - 'agents/shared/**'
+      - 'e2e/**'
+  pull_request:
+    paths:
+      - 'services/api-gateway/**'
+      - 'services/web-ui/**'
+      - 'agents/shared/**'
+      - 'e2e/**'
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    name: Python Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/api-gateway/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest services/api-gateway/tests/ agents/shared/ \
+            --ignore=tests/integration \
+            -v --tb=short \
+            --cov=services/api-gateway --cov=agents/shared \
+            --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=80
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+
+  playwright-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: services/web-ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/web-ui
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: services/web-ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: services/web-ui
+        run: npx playwright test --project=chromium --reporter=github
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: services/web-ui/playwright-report/
