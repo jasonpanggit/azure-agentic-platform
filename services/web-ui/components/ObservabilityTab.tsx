@@ -41,6 +41,7 @@ const useStyles = makeStyles({
     padding: tokens.spacingHorizontalM,
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow2,
   },
   emptyState: {
     display: 'flex',
