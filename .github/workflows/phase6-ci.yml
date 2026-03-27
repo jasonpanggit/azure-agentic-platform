@@ -41,7 +41,7 @@ jobs:
 
       - name: Unit tests with coverage
         working-directory: services/teams-bot
-        run: npx vitest run --coverage --coverage.thresholds.lines=80
+        run: npx vitest run --coverage --coverage.thresholds.lines=80 --exclude='**/integration/**'
 
       - name: Upload coverage
         if: always()
