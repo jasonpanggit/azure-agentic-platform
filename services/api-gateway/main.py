@@ -2,6 +2,7 @@
 
 A minimal FastAPI service handling:
 - POST /api/v1/incidents — ingest incident, create Foundry thread, dispatch to Orchestrator
+- GET /api/v1/runbooks/search — semantic runbook search via pgvector (TRIAGE-005)
 - GET /health — health check
 
 No business logic; agents own the reasoning. The gateway is a thin
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +23,9 @@ from services.api_gateway.models import (
     HealthResponse,
     IncidentPayload,
     IncidentResponse,
+    RunbookResult,
 )
+from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
 
 logger = logging.getLogger(__name__)
 
@@ -127,3 +130,27 @@ async def ingest_incident(
         thread_id=result["thread_id"],
         status="dispatched",
     )
+
+
+@app.get(
+    "/api/v1/runbooks/search",
+    response_model=list[RunbookResult],
+)
+async def search_runbooks_endpoint(
+    query: str,
+    domain: Optional[str] = None,
+    limit: int = 3,
+    token: dict[str, Any] = Depends(verify_token),
+) -> list[RunbookResult]:
+    """Search runbooks by semantic similarity (TRIAGE-005).
+
+    Args:
+        query: Natural-language search query.
+        domain: Optional domain filter (compute, network, storage, security, arc, sre).
+        limit: Maximum results (default 3).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    embedding = await generate_query_embedding(query)
+    results = await search_runbooks(embedding, domain=domain, limit=limit)
+    return [RunbookResult(**r) for r in results]

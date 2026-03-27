@@ -81,3 +81,14 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     version: str = "1.0.0"
+
+
+class RunbookResult(BaseModel):
+    """Runbook search result from pgvector cosine similarity (TRIAGE-005)."""
+
+    id: str
+    title: str
+    domain: str
+    version: str
+    similarity: float
+    content_excerpt: str
