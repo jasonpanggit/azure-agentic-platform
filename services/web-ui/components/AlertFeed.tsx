@@ -25,6 +25,10 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
     height: '100%',
   },
+  gridWrapper: {
+    borderRadius: tokens.borderRadiusMedium,
+    overflow: 'hidden',
+  },
   emptyState: {
     display: 'flex',
     flexDirection: 'column',
@@ -158,24 +162,26 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   }
 
   return (
-    <DataGrid
-      items={incidents}
-      columns={columns}
-      getRowId={(item) => item.incident_id}
-      sortable
-    >
-      <DataGridHeader>
-        <DataGridRow>
-          {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-        </DataGridRow>
-      </DataGridHeader>
-      <DataGridBody<Incident>>
-        {({ item, rowId }) => (
-          <DataGridRow<Incident> key={rowId}>
-            {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+    <div className={styles.gridWrapper}>
+      <DataGrid
+        items={incidents}
+        columns={columns}
+        getRowId={(item) => item.incident_id}
+        sortable
+      >
+        <DataGridHeader>
+          <DataGridRow>
+            {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
           </DataGridRow>
-        )}
-      </DataGridBody>
-    </DataGrid>
+        </DataGridHeader>
+        <DataGridBody<Incident>>
+          {({ item, rowId }) => (
+            <DataGridRow<Incident> key={rowId}>
+              {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+            </DataGridRow>
+          )}
+        </DataGridBody>
+      </DataGrid>
+    </div>
   );
 }
