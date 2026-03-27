@@ -117,11 +117,14 @@ class ChatResponse(BaseModel):
 
 
 class ApprovalAction(BaseModel):
-    """Payload for approve/reject actions (D-09)."""
+    """Payload for approve/reject actions (D-09, TEAMS-003)."""
 
     decided_by: str = Field(..., description="UPN or object ID of the operator")
     scope_confirmed: Optional[bool] = Field(
         default=None, description="Required True for prod subscriptions (REMEDI-006)"
+    )
+    thread_id: Optional[str] = Field(
+        default=None, description="Thread ID from card data (TEAMS-003 Action.Execute)"
     )
 
 

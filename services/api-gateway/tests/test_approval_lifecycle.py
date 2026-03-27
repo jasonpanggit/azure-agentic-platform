@@ -359,3 +359,105 @@ class TestListPendingApprovals:
         call_kwargs = mock_cosmos_approvals.query_items.call_args
         params = call_kwargs.kwargs.get("parameters", [])
         assert any(p["value"] == "pending" for p in params)
+
+
+class TestApprovalThreadIdInBody:
+    """Tests for thread_id in approval request body (TEAMS-003 Action.Execute)."""
+
+    def test_approve_with_thread_id_in_body(self, client, mock_cosmos_approvals):
+        """POST /approve with thread_id in body works (TEAMS-003)."""
+        record = mock_cosmos_approvals.read_item.return_value
+        record["expires_at"] = _future_timestamp(30)
+        record["status"] = "pending"
+
+        mock_cosmos_approvals.replace_item.return_value = {
+            **record,
+            "status": "approved",
+        }
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ), patch(
+            "services.api_gateway.approvals._resume_foundry_thread",
+            new=AsyncMock(),
+        ):
+            response = client.post(
+                "/api/v1/approvals/appr_test-001/approve",
+                json={
+                    "decided_by": "operator@contoso.com",
+                    "thread_id": "thread-test-001",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "approved"
+
+    def test_approve_without_thread_id_returns_400(self, client, mock_cosmos_approvals):
+        """POST /approve without thread_id in either body or query returns 400."""
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ):
+            response = client.post(
+                "/api/v1/approvals/appr_test-001/approve",
+                json={
+                    "decided_by": "operator@contoso.com",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "thread_id" in response.json()["detail"].lower()
+
+    def test_reject_with_thread_id_in_body(self, client, mock_cosmos_approvals):
+        """POST /reject with thread_id in body works (TEAMS-003)."""
+        record = mock_cosmos_approvals.read_item.return_value
+        record["expires_at"] = _future_timestamp(30)
+        record["status"] = "pending"
+
+        mock_cosmos_approvals.replace_item.return_value = {
+            **record,
+            "status": "rejected",
+        }
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ):
+            response = client.post(
+                "/api/v1/approvals/appr_test-001/reject",
+                json={
+                    "decided_by": "operator@contoso.com",
+                    "thread_id": "thread-test-001",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "rejected"
+
+    def test_approve_query_param_still_works(self, client, mock_cosmos_approvals):
+        """POST /approve with thread_id as query param still works (backward compat)."""
+        record = mock_cosmos_approvals.read_item.return_value
+        record["expires_at"] = _future_timestamp(30)
+        record["status"] = "pending"
+
+        mock_cosmos_approvals.replace_item.return_value = {
+            **record,
+            "status": "approved",
+        }
+
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_approvals,
+        ), patch(
+            "services.api_gateway.approvals._resume_foundry_thread",
+            new=AsyncMock(),
+        ):
+            response = client.post(
+                "/api/v1/approvals/appr_test-001/approve?thread_id=thread-test-001",
+                json={"decided_by": "operator@contoso.com"},
+            )
+
+        assert response.status_code == 200

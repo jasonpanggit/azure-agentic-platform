@@ -206,14 +206,23 @@ async def start_chat(
 async def approve_proposal(
     approval_id: str,
     payload: ApprovalAction,
-    thread_id: str,
+    thread_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
 ) -> ApprovalResponse:
-    """Approve a pending remediation proposal (REMEDI-005)."""
+    """Approve a pending remediation proposal (REMEDI-005, TEAMS-003).
+
+    thread_id accepted from either query parameter (backward compat with Web UI)
+    or request body (TEAMS-003 Action.Execute sends card data in body).
+    """
+    effective_thread_id = payload.thread_id or thread_id
+    if not effective_thread_id:
+        raise HTTPException(
+            status_code=400, detail="thread_id required in query or body"
+        )
     try:
         await process_approval_decision(
             approval_id=approval_id,
-            thread_id=thread_id,
+            thread_id=effective_thread_id,
             decision="approved",
             decided_by=payload.decided_by,
             scope_confirmed=payload.scope_confirmed,
@@ -232,14 +241,23 @@ async def approve_proposal(
 async def reject_proposal(
     approval_id: str,
     payload: ApprovalAction,
-    thread_id: str,
+    thread_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
 ) -> ApprovalResponse:
-    """Reject a pending remediation proposal (REMEDI-005)."""
+    """Reject a pending remediation proposal (REMEDI-005, TEAMS-003).
+
+    thread_id accepted from either query parameter (backward compat with Web UI)
+    or request body (TEAMS-003 Action.Execute sends card data in body).
+    """
+    effective_thread_id = payload.thread_id or thread_id
+    if not effective_thread_id:
+        raise HTTPException(
+            status_code=400, detail="thread_id required in query or body"
+        )
     try:
         await process_approval_decision(
             approval_id=approval_id,
-            thread_id=thread_id,
+            thread_id=effective_thread_id,
             decision="rejected",
             decided_by=payload.decided_by,
         )
