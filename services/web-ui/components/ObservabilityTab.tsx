@@ -19,6 +19,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: tokens.spacingVerticalL,
     height: '100%',
+    containerType: 'inline-size',
   },
   toolbar: {
     display: 'flex',

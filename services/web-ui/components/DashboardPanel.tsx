@@ -22,6 +22,13 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
+import {
+  AlertRegular,
+  ClipboardTaskRegular,
+  OrganizationRegular,
+  ServerRegular,
+  PulseRegular,
+} from '@fluentui/react-icons';
 
 import { AlertFeed } from './AlertFeed';
 import { AlertFilters } from './AlertFilters';
@@ -81,11 +88,11 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
   return (
     <div className={styles.root}>
       <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
-        <Tab value="alerts">Alerts</Tab>
-        <Tab value="audit">Audit</Tab>
-        <Tab value="topology">Topology</Tab>
-        <Tab value="resources">Resources</Tab>
-        <Tab value="observability">Observability</Tab>
+        <Tab value="alerts" icon={<AlertRegular />}>Alerts</Tab>
+        <Tab value="audit" icon={<ClipboardTaskRegular />}>Audit</Tab>
+        <Tab value="topology" icon={<OrganizationRegular />}>Topology</Tab>
+        <Tab value="resources" icon={<ServerRegular />}>Resources</Tab>
+        <Tab value="observability" icon={<PulseRegular />}>Observability</Tab>
       </TabList>
 
       <div className={styles.tabContent}>
