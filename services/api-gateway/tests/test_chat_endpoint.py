@@ -54,3 +54,31 @@ class TestChatEndpoint:
 
         assert response.status_code == 202
         assert captured_args.get("incident_id") == "inc-001"
+
+    def test_chat_request_accepts_thread_id(self):
+        """ChatRequest model accepts optional thread_id field (TEAMS-004)."""
+        from services.api_gateway.models import ChatRequest
+
+        req = ChatRequest(message="hello", thread_id="test-thread")
+        assert req.thread_id == "test-thread"
+
+    def test_chat_request_accepts_user_id(self):
+        """ChatRequest model accepts optional user_id field (D-07)."""
+        from services.api_gateway.models import ChatRequest
+
+        req = ChatRequest(message="hello", user_id="user@example.com")
+        assert req.user_id == "user@example.com"
+
+    def test_chat_request_defaults_thread_id_to_none(self):
+        """ChatRequest thread_id defaults to None when not provided."""
+        from services.api_gateway.models import ChatRequest
+
+        req = ChatRequest(message="hello")
+        assert req.thread_id is None
+
+    def test_chat_request_defaults_user_id_to_none(self):
+        """ChatRequest user_id defaults to None when not provided."""
+        from services.api_gateway.models import ChatRequest
+
+        req = ChatRequest(message="hello")
+        assert req.user_id is None

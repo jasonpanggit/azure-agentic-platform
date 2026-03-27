@@ -95,11 +95,17 @@ class RunbookResult(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Operator-initiated chat message (D-06)."""
+    """Operator-initiated chat message (D-06, TEAMS-004)."""
 
     message: str = Field(..., description="Operator message text", min_length=1)
     incident_id: Optional[str] = Field(
         default=None, description="Optionally attach to existing incident"
+    )
+    thread_id: Optional[str] = Field(
+        default=None, description="Continue an existing Foundry thread (TEAMS-004)"
+    )
+    user_id: Optional[str] = Field(
+        default=None, description="Operator UPN from Teams activity (D-07)"
     )
 
 
