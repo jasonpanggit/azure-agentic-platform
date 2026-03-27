@@ -1,55 +1,121 @@
 'use client';
+/**
+ * DashboardPanel — right pane of the split-pane layout.
+ *
+ * Tabs: Alerts | Audit | Topology | Resources
+ *
+ * - alerts:    AlertFilters + AlertFeed (UI-006, UI-007)
+ * - audit:     AuditLogViewer (AUDIT-004)
+ * - topology:  placeholder (Phase 6)
+ * - resources: placeholder (Phase 6)
+ *
+ * Replaces the Plan 05-01 shell (Task 5-01-07).
+ */
 
-// PLACEHOLDER: replaced by Plan 05-05 Task 5-05-06 with AlertFeed, AuditLogViewer, etc.
-// This shell provides the structural component and props interface only.
+import React, { useState } from 'react';
+import {
+  Tab,
+  TabList,
+  SelectTabData,
+  SelectTabEvent,
+  Text,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components';
 
-import React from 'react';
-import { Text, makeStyles, tokens } from '@fluentui/react-components';
+import { AlertFeed } from './AlertFeed';
+import { AlertFilters } from './AlertFilters';
+import { AuditLogViewer } from './AuditLogViewer';
 
 const useStyles = makeStyles({
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    overflow: 'hidden',
+  },
+  tabContent: {
+    flex: 1,
+    overflow: 'auto',
+    padding: tokens.spacingVerticalM,
+  },
+  alertsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    height: '100%',
+  },
   emptyState: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '200px',
+    padding: tokens.spacingVerticalXXL,
     gap: tokens.spacingVerticalM,
   },
 });
 
-interface DashboardPanelProps {
-  activeTab: string;
-  subscriptions: string[];
+type DashboardTab = 'alerts' | 'audit' | 'topology' | 'resources';
+
+interface FilterState {
+  severity?: string;
+  domain?: string;
+  status?: string;
 }
 
-export function DashboardPanel({ activeTab, subscriptions }: DashboardPanelProps) {
-  const styles = useStyles();
+interface DashboardPanelProps {
+  subscriptions: string[];
+  selectedIncidentId?: string;
+}
 
-  const tabContent: Record<string, { heading: string; body: string }> = {
-    alerts: {
-      heading: 'No alerts',
-      body: 'No alerts match your current filters. Adjust the filters above or check back later.',
-    },
-    topology: {
-      heading: 'Topology',
-      body: 'Resource topology view will be available in a future update.',
-    },
-    resources: {
-      heading: 'Resources',
-      body: 'Resource inventory will load when subscriptions are selected.',
-    },
-    audit: {
-      heading: 'No actions recorded',
-      body: 'Agent actions for this time range will appear here once incidents are triaged.',
-    },
+export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardPanelProps) {
+  const styles = useStyles();
+  const [activeTab, setActiveTab] = useState<DashboardTab>('alerts');
+  const [filters, setFilters] = useState<FilterState>({});
+
+  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
+    setActiveTab(data.value as DashboardTab);
   };
 
-  const content = tabContent[activeTab] || tabContent.alerts;
-
   return (
-    <div className={styles.emptyState}>
-      <Text weight="semibold" size={400}>{content.heading}</Text>
-      <Text align="center" size={300}>{content.body}</Text>
+    <div className={styles.root}>
+      <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+        <Tab value="alerts">Alerts</Tab>
+        <Tab value="audit">Audit</Tab>
+        <Tab value="topology">Topology</Tab>
+        <Tab value="resources">Resources</Tab>
+      </TabList>
+
+      <div className={styles.tabContent}>
+        {activeTab === 'alerts' && (
+          <div className={styles.alertsContainer}>
+            <AlertFilters filters={filters} onChange={setFilters} />
+            <AlertFeed subscriptions={subscriptions} filters={filters} />
+          </div>
+        )}
+
+        {activeTab === 'audit' && (
+          <AuditLogViewer incidentId={selectedIncidentId} />
+        )}
+
+        {activeTab === 'topology' && (
+          <div className={styles.emptyState}>
+            <Text weight="semibold" size={400}>Topology view</Text>
+            <Text align="center" size={300}>
+              Resource topology visualization coming in Phase 6.
+            </Text>
+          </div>
+        )}
+
+        {activeTab === 'resources' && (
+          <div className={styles.emptyState}>
+            <Text weight="semibold" size={400}>Resources</Text>
+            <Text align="center" size={300}>
+              Multi-subscription resource inventory coming in Phase 6.
+            </Text>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

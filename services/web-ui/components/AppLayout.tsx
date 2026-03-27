@@ -4,16 +4,8 @@ import React, { useState } from 'react';
 import {
   makeStyles,
   tokens,
-  TabList,
-  Tab,
   Text,
 } from '@fluentui/react-components';
-import {
-  AlertRegular,
-  OrganizationRegular,
-  ServerRegular,
-  ClipboardTaskRegular,
-} from '@fluentui/react-icons';
 import {
   PanelGroup,
   Panel,
@@ -75,12 +67,10 @@ const useStyles = makeStyles({
   },
 });
 
-type DashboardTab = 'alerts' | 'topology' | 'resources' | 'audit';
-
 export function AppLayout() {
   const styles = useStyles();
-  const [activeTab, setActiveTab] = useState<DashboardTab>('alerts');
   const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
 
   return (
     <div className={styles.root}>
@@ -120,24 +110,10 @@ export function AppLayout() {
             minSize={40}
             className={styles.dashboardPanel}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <TabList
-                selectedValue={activeTab}
-                onTabSelect={(_, data) => setActiveTab(data.value as DashboardTab)}
-                style={{ paddingLeft: tokens.spacingHorizontalL }}
-              >
-                <Tab value="alerts" icon={<AlertRegular />}>Alerts</Tab>
-                <Tab value="topology" icon={<OrganizationRegular />}>Topology</Tab>
-                <Tab value="resources" icon={<ServerRegular />}>Resources</Tab>
-                <Tab value="audit" icon={<ClipboardTaskRegular />}>Audit Log</Tab>
-              </TabList>
-              <div style={{ flex: 1, overflow: 'auto', padding: tokens.spacingHorizontalL }}>
-                <DashboardPanel
-                  activeTab={activeTab}
-                  subscriptions={selectedSubscriptions}
-                />
-              </div>
-            </div>
+            <DashboardPanel
+              subscriptions={selectedSubscriptions}
+              selectedIncidentId={selectedIncidentId}
+            />
           </Panel>
         </PanelGroup>
       </div>
