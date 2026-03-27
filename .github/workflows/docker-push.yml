@@ -83,7 +83,7 @@ jobs:
             echo "::warning::Could not inspect manifest for $IMAGE — skipping size check"
             exit 0
           fi
-          SIZE=$(echo "$MANIFEST" | jq '[.layers[].size] | add // 0')
+          SIZE=$(echo "$MANIFEST" | jq '([.layers // .manifests // [] | .[].size // 0] | add) // 0')
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "Image size: ${SIZE_MB}MB"
           if [ "$SIZE_MB" -gt 1500 ]; then
