@@ -9,3 +9,9 @@ fastapi-azure-auth>=5.0.0
 
 # Azure AI Foundry SDK
 azure-ai-projects>=2.0.1
+
+# OpenTelemetry auto-instrumentation (D-05)
+azure-monitor-opentelemetry>=1.0.0
+
+# OneLake / Azure Data Lake Storage Gen2
+azure-storage-file-datalake>=12.0.0

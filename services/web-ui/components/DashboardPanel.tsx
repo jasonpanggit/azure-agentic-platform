@@ -26,6 +26,7 @@ import {
 import { AlertFeed } from './AlertFeed';
 import { AlertFilters } from './AlertFilters';
 import { AuditLogViewer } from './AuditLogViewer';
+import { ObservabilityTab } from './ObservabilityTab';
 
 const useStyles = makeStyles({
   root: {
@@ -55,7 +56,7 @@ const useStyles = makeStyles({
   },
 });
 
-type DashboardTab = 'alerts' | 'audit' | 'topology' | 'resources';
+type DashboardTab = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability';
 
 interface FilterState {
   severity?: string;
@@ -84,6 +85,7 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
         <Tab value="audit">Audit</Tab>
         <Tab value="topology">Topology</Tab>
         <Tab value="resources">Resources</Tab>
+        <Tab value="observability">Observability</Tab>
       </TabList>
 
       <div className={styles.tabContent}>
@@ -114,6 +116,10 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
               Multi-subscription resource inventory coming in Phase 6.
             </Text>
           </div>
+        )}
+
+        {activeTab === 'observability' && (
+          <ObservabilityTab subscriptions={subscriptions} />
         )}
       </div>
     </div>

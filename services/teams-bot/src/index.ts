@@ -1,3 +1,4 @@
+import "./instrumentation";
 import express from "express";
 import {
   CloudAdapter,
