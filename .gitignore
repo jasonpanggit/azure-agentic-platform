@@ -35,6 +35,7 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+_aap_bootstrap.py
 
 # Node
 node_modules/
