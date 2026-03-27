@@ -3,25 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-27T14:00:00.000Z"
+last_updated: "2026-03-27T15:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 5: Plans 05-01 and 05-03 COMPLETE — 05-01: Web UI Foundation (root layout, MSAL auth gates, split-pane AppLayout, ChatPanel/DashboardPanel shells, auth pages, Dockerfile, CI); 05-03: Runbook RAG system (pgvector HNSW migration, 60-runbook seed, runbook_rag.py cosine similarity, GET /api/v1/runbooks/search, runbook_tool.py, all 6 agent specs updated with TRIAGE-005)
+> Last updated: 2026-03-27 — Phase 5: Plans 05-01, 05-02 and 05-03 COMPLETE — 05-02: SSE streaming (ring buffer, route handler /api/stream, useSSE hook), POST /api/v1/chat endpoint, full ChatPanel with dual SSE connections + token accumulation + approval_gate handling, ChatBubble/UserBubble/ThinkingIndicator/ChatInput/ProposalCard stub/TraceTree components
 
 ---
 
 ## Current Phase
 
-**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (2/7 plans)**
+**Phase 5: Triage & Remediation + Web UI — 🔄 In Progress (4/7 plans)**
 
-Current position: 05-01 complete — Web UI Foundation. Root layout (Segoe UI Variable), MSAL PKCE auth gates (AuthenticatedApp, DesktopOnlyGate), react-resizable-panels split-pane AppLayout (35/65 chat/dashboard), 4-tab dashboard shell (Alerts/Topology/Resources/Audit Log), multiselect SubscriptionSelector, MSAL login/callback pages, multi-stage Dockerfile (node:20-slim standalone), CI workflow (web-ui-build.yml path-triggered).
+Current position: 05-02 complete — SSE Streaming + Chat Panel. POST /api/v1/chat endpoint (Foundry thread creation, AGENT-002 envelope), SSE ring buffer (1000 events, 30-min TTL), SSE type definitions (ApprovalGateTracePayload), GET /api/stream route handler (20s heartbeat, Last-Event-ID replay), useSSE hook (monotonic seq validation, auto-reconnect), ChatBubble/UserBubble/ThinkingIndicator/ChatInput/ProposalCard stub/TraceTree components, full ChatPanel with dual SSE connections.
 
 ---
 
@@ -45,7 +45,7 @@ Current position: 05-01 complete — Web UI Foundation. Root layout (Segoe UI Va
 | 2 | Agent Core | Complete (2026-03-26) |
 | 3 | Arc MCP Server | Complete (2026-03-26) |
 | 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
-| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 3/7 plans (05-00, 05-01, 05-03 complete) |
+| 5 | Triage & Remediation + Web UI | 🔄 In Progress — 4/7 plans (05-00, 05-01, 05-02, 05-03 complete) |
 | 6 | Teams Integration | Not started |
 | 7 | Quality & Hardening | Not started |
 
