@@ -29,7 +29,7 @@ resource "azurerm_container_registry" "main" {
   location                      = var.location
   sku                           = "Premium"
   admin_enabled                 = false
-  public_network_access_enabled = false
+  public_network_access_enabled = true  # Required for GitHub Actions runners to push images
   data_endpoint_enabled         = true
 
   identity {
