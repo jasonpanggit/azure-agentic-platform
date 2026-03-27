@@ -1,0 +1,267 @@
+name: Deploy All Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag (default: git SHA). Use "latest" for latest.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_USE_OIDC: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Phase 1: Build agent base image (all agent images depend on this)
+  # ---------------------------------------------------------------------------
+  build-agent-base:
+    name: Build Agent Base Image
+    runs-on: ubuntu-latest
+    outputs:
+      base_image: ${{ steps.meta.outputs.base_image }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.sha }}"
+          fi
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "base_image=${{ secrets.ACR_LOGIN_SERVER }}/agents/base:$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: agents/
+          file: agents/Dockerfile.base
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/agents/base:${{ steps.meta.outputs.image_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/agents/base:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Phase 2a: Agent images (depend on base image, build in parallel)
+  # ---------------------------------------------------------------------------
+  build-orchestrator:
+    name: Build Orchestrator
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/orchestrator
+      dockerfile_path: agents/orchestrator/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-compute:
+    name: Build Compute Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/compute
+      dockerfile_path: agents/compute/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-network:
+    name: Build Network Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/network
+      dockerfile_path: agents/network/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-storage:
+    name: Build Storage Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/storage
+      dockerfile_path: agents/storage/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-security:
+    name: Build Security Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/security
+      dockerfile_path: agents/security/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-sre:
+    name: Build SRE Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/sre
+      dockerfile_path: agents/sre/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  build-arc:
+    name: Build Arc Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/arc
+      dockerfile_path: agents/arc/Dockerfile
+      build_context: agents/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ needs.build-agent-base.outputs.base_image }}
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Phase 2b: Service images (independent, parallel with agent builds)
+  # ---------------------------------------------------------------------------
+  build-api-gateway:
+    name: Build API Gateway
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/api-gateway
+      dockerfile_path: services/api-gateway/Dockerfile
+      build_context: services/api-gateway/
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
+
+  build-arc-mcp-server:
+    name: Build Arc MCP Server
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/arc-mcp-server
+      dockerfile_path: services/arc-mcp-server/Dockerfile
+      build_context: services/arc-mcp-server/
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
+
+  build-teams-bot:
+    name: Build Teams Bot
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/teams-bot
+      dockerfile_path: services/teams-bot/Dockerfile
+      build_context: services/teams-bot/
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
+
+  build-web-ui:
+    name: Build Web UI
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/web-ui
+      dockerfile_path: services/web-ui/Dockerfile
+      build_context: services/web-ui/
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Summary: list all built images and their statuses
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - build-agent-base
+      - build-orchestrator
+      - build-compute
+      - build-network
+      - build-storage
+      - build-security
+      - build-sre
+      - build-arc
+      - build-api-gateway
+      - build-arc-mcp-server
+      - build-teams-bot
+      - build-web-ui
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Print summary
+        run: |
+          echo "## Deploy All Images — Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** \`${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Agent Images" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/base | ${{ needs.build-agent-base.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/orchestrator | ${{ needs.build-orchestrator.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/compute | ${{ needs.build-compute.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/network | ${{ needs.build-network.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/storage | ${{ needs.build-storage.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/security | ${{ needs.build-security.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/sre | ${{ needs.build-sre.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/arc | ${{ needs.build-arc.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Service Images" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/api-gateway | ${{ needs.build-api-gateway.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/arc-mcp-server | ${{ needs.build-arc-mcp-server.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/teams-bot | ${{ needs.build-teams-bot.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/web-ui | ${{ needs.build-web-ui.result }} |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if any image build failed
+        if: contains(needs.*.result, 'failure')
+        run: |
+          echo "::error::One or more image builds failed. See summary above."
+          exit 1
