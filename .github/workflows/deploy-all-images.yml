@@ -10,11 +10,10 @@ on:
         type: string
 
 permissions:
-  id-token: write
   contents: read
 
 env:
-  ARM_USE_OIDC: true
+  ARM_USE_OIDC: false
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -39,10 +38,11 @@ jobs:
           echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "base_image=${{ secrets.ACR_LOGIN_SERVER }}/agents/base:$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Azure Login (OIDC)
+      - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
