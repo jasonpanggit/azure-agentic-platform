@@ -14,6 +14,11 @@ from typing import Any, Optional
 from azure.cosmos import ContainerProxy, CosmosClient
 from azure.identity import DefaultAzureCredential
 
+from services.api_gateway.remediation_logger import (
+    build_remediation_event,
+    log_remediation_event,
+)
+
 logger = logging.getLogger(__name__)
 
 APPROVAL_TIMEOUT_MINUTES = int(os.environ.get("APPROVAL_TIMEOUT_MINUTES", "30"))
@@ -103,6 +108,15 @@ async def process_approval_decision(
             etag=etag,
             match_condition="IfMatch",
         )
+        # REMEDI-007: Log expired event to OneLake
+        try:
+            expired_event = build_remediation_event(
+                approval_record=expired_record,
+                outcome="expired",
+            )
+            await log_remediation_event(expired_event)
+        except Exception as exc:
+            logger.error("Expired event logging failed (non-blocking): %s", exc)
         raise ValueError("expired")
 
     # Only pending can be decided
@@ -133,6 +147,17 @@ async def process_approval_decision(
         etag=etag,
         match_condition="IfMatch",
     )
+
+    # REMEDI-007: Log remediation event to OneLake (fire-and-forget)
+    try:
+        remediation_event = build_remediation_event(
+            approval_record=updated_record,
+            outcome=decision,  # "approved" or "rejected"
+            correlation_id="",
+        )
+        await log_remediation_event(remediation_event)
+    except Exception as exc:
+        logger.error("Remediation event logging failed (non-blocking): %s", exc)
 
     # If approved, resume the Foundry thread
     if decision == "approved":

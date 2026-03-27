@@ -177,3 +177,10 @@ class AuditEntry(BaseModel):
     outcome: str
     duration_ms: float
     properties: Optional[str] = None
+
+
+class AuditExportResponse(BaseModel):
+    """Remediation activity report for SOC 2 audit (AUDIT-006)."""
+
+    report_metadata: dict
+    remediation_events: list[dict]

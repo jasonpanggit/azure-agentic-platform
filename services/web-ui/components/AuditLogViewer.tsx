@@ -16,9 +16,11 @@ import {
   Input,
   Text,
   Badge,
+  Button,
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
+import { DocumentTextRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   root: {
@@ -61,6 +63,7 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
   const [loading, setLoading] = useState(true);
   const [agentFilter, setAgentFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
 
   const fetchAuditLog = useCallback(async () => {
     try {
@@ -79,6 +82,34 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
       setLoading(false);
     }
   }, [incidentId, agentFilter, actionFilter]);
+
+  const handleExport = useCallback(async () => {
+    setExportLoading(true);
+    try {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const params = new URLSearchParams({
+        from_time: thirtyDaysAgo.toISOString(),
+        to_time: now.toISOString(),
+      });
+      const res = await fetch(`/api/proxy/audit/export?${params.toString()}`);
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `remediation-report-${thirtyDaysAgo.toISOString().slice(0, 10)}-${now.toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExportLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchAuditLog();
@@ -151,6 +182,14 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
           value={actionFilter}
           onChange={(_, data) => setActionFilter(data.value)}
         />
+        <Button
+          appearance="subtle"
+          icon={<DocumentTextRegular />}
+          onClick={handleExport}
+          disabled={exportLoading}
+        >
+          {exportLoading ? 'Exporting...' : 'Export Report'}
+        </Button>
       </Toolbar>
 
       <DataGrid items={entries} columns={columns} sortable>
