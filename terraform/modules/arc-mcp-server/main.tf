@@ -35,7 +35,7 @@ resource "azurerm_container_app" "arc_mcp_server" {
 
     container {
       name   = "arc-mcp-server"
-      image  = "${var.acr_login_server}/arc-mcp-server:${var.image_tag}"
+      image  = "${var.acr_login_server}/services/arc-mcp-server:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 

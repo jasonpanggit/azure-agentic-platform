@@ -108,7 +108,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/arc-mcp-server:${{ github.sha }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/arc-mcp-server:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/services/arc-mcp-server:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/services/arc-mcp-server:latest
           build-args: |
             IMAGE_TAG=${{ github.sha }}

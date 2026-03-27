@@ -1,0 +1,21 @@
+name: Build Teams Bot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/teams-bot/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-teams-bot:
+    name: Build & Push Teams Bot
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: services/teams-bot
+      dockerfile_path: services/teams-bot/Dockerfile
+      build_context: services/teams-bot/
+    secrets: inherit

@@ -15,7 +15,7 @@ progress:
 
 > Last updated: 2026-03-27 — Phase 7 COMPLETE (6/6 plans) — Quality & Hardening — Full Playwright E2E suite (E2E-001 through E2E-005), OTel auto-instrumentation on all services, Observability tab in Web UI, 60 runbooks seeded into pgvector with cosine validation, security CI (bandit + npm audit + secrets scan), Terraform prod complete with 12 modules. All 72 v1.0 requirements satisfied. Milestone v1.0 COMPLETE.
 >
-> Last activity: 2026-03-27 - Completed quick task 260328-1ca: Move run-mock.sh to scripts folder and update the script accordingly
+> Last activity: 2026-03-28 - Completed quick task 260328-2ir: Deploy Images to Container Registry — teams-bot build workflow, unified deploy-all-images workflow, arc-mcp-server naming fix
 
 ---
 
@@ -149,6 +149,7 @@ None. Milestone v1.0 complete.
 | 260326-x3n | Backfill VALIDATION.md for phases 1 and 3 | 2026-03-26 | b9a32d5 | [260326-x3n-backfill-validation-md-for-phases-1-and-](./quick/260326-x3n-backfill-validation-md-for-phases-1-and-/) |
 | 260327-x4g | Fix ObservabilityTab container-type bug, add tab icons, and modernise web-UI visual design | 2026-03-28 | 03994fb | [260327-x4g-fix-observabilitytab-container-type-bug-](./quick/260327-x4g-fix-observabilitytab-container-type-bug-/) |
 | 260328-1ca | Move run-mock.sh to scripts folder and update the script accordingly | 2026-03-27 | 4b26f66 | [260328-1ca-move-run-mock-sh-to-scripts-folder-and-u](./quick/260328-1ca-move-run-mock-sh-to-scripts-folder-and-u/) |
+| 260328-2ir | Deploy images to container registry — teams-bot build, deploy-all workflow, naming fix | 2026-03-28 | 94d0b8b | [260328-2ir-deploy-images-to-container-registry](./quick/260328-2ir-deploy-images-to-container-registry/) |
 
 ---
 
