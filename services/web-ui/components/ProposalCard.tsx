@@ -24,6 +24,8 @@ const useStyles = makeStyles({
     padding: tokens.spacingHorizontalM,
     marginBottom: tokens.spacingVerticalS,
     border: `1px solid ${tokens.colorPaletteRedBorderActive}`,
+    boxShadow: tokens.shadow8,
+    borderRadius: tokens.borderRadiusLarge,
   },
   header: {
     display: 'flex',
