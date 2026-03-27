@@ -1,7 +1,7 @@
 ---
 phase: 6
 slug: teams-integration
-status: draft
+status: approved
 shadcn_initialized: false
 preset: not-applicable
 created: 2026-03-27
@@ -411,9 +411,19 @@ The api-gateway calls `POST /teams/internal/notify` on the Teams bot Container A
 
 ```typescript
 interface NotifyRequest {
-  card_type: "alert" | "approval" | "outcome";
+  card_type: "alert" | "approval" | "outcome" | "reminder";
   channel_id: string;         // Teams channel ID to post to
-  payload: AlertPayload | ApprovalPayload | OutcomePayload;
+  payload: AlertPayload | ApprovalPayload | OutcomePayload | ReminderPayload;
+}
+
+interface ReminderPayload {
+  approval_id: string;
+  thread_id: string;
+  original_action_description: string;
+  target_resources: string[];
+  risk_level: "critical" | "high";
+  created_at: string;         // ISO 8601 — when approval was created
+  expires_at: string;         // ISO 8601 — used to compute remaining_minutes
 }
 
 interface AlertPayload {
@@ -583,11 +593,11 @@ Adapted for Adaptive Card context (no empty states, no traditional CTAs — card
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Card Schemas: PASS
-- [ ] Dimension 3 Color (semantic tokens only): PASS
-- [ ] Dimension 4 Typography (size/weight tokens): PASS
-- [ ] Dimension 5 Spacing (Adaptive Card enum): PASS
-- [ ] Dimension 6 Registry Safety: PASS (not applicable)
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Card Schemas: PASS (ReminderPayload interface added; card_type union updated to include "reminder")
+- [x] Dimension 3 Color (semantic tokens only): PASS
+- [x] Dimension 4 Typography (size/weight tokens): PASS
+- [x] Dimension 5 Spacing (Adaptive Card enum): PASS
+- [x] Dimension 6 Registry Safety: PASS (not applicable)
 
-**Approval:** pending
+**Approval:** approved — 2026-03-27
