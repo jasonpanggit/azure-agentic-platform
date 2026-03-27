@@ -22,9 +22,20 @@ const useStyles = makeStyles({
   },
 });
 
+const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
+
 export function AuthenticatedApp() {
   const { instance } = useMsal();
   const styles = useStyles();
+
+  // Dev mode: skip MSAL auth gate for local UAT (NEXT_PUBLIC_DEV_MODE=true)
+  if (DEV_MODE) {
+    return (
+      <DesktopOnlyGate minWidth={1200}>
+        <AppLayout />
+      </DesktopOnlyGate>
+    );
+  }
 
   const handleLogin = () => {
     instance.loginRedirect(loginRequest);
