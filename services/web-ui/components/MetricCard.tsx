@@ -10,6 +10,13 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderLeftWidth: '3px',
     borderLeftStyle: 'solid',
+    boxShadow: tokens.shadow4,
+    borderRadius: tokens.borderRadiusLarge,
+    transitionProperty: 'box-shadow',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      boxShadow: tokens.shadow8,
+    },
   },
   healthy: {
     borderLeftColor: tokens.colorPaletteGreenForeground1,
