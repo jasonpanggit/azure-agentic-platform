@@ -18,7 +18,7 @@ resource "azuread_application" "web_ui" {
   # SPA redirect URIs — MSAL browser (PublicClientApplication) uses SPA auth flow
   single_page_application {
     redirect_uris = compact(concat(
-      var.web_ui_public_url != "" ? ["${var.web_ui_public_url}/auth/callback"] : [],
+      var.web_ui_public_url != "" ? ["${var.web_ui_public_url}/callback"] : [],
       var.additional_redirect_uris,
     ))
   }

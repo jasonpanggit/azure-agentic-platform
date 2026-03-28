@@ -12,7 +12,7 @@ variable "web_ui_public_url" {
 variable "additional_redirect_uris" {
   description = "Additional SPA redirect URIs (e.g. localhost for development)"
   type        = list(string)
-  default     = ["http://localhost:3000/auth/callback"]
+  default     = ["http://localhost:3000/callback"]
 }
 
 variable "keyvault_id" {
