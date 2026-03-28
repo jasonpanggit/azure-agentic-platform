@@ -48,6 +48,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentAgent, setCurrentAgent] = useState('Orchestrator');
+  const [runKey, setRunKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -139,6 +140,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     threadId,
     streamType: 'token',
     onEvent: handleTokenEvent,
+    runKey,
   });
 
   // Trace SSE connection
@@ -146,6 +148,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     threadId,
     streamType: 'trace',
     onEvent: handleTraceEvent,
+    runKey,
   });
 
   // Submit a chat message
@@ -173,9 +176,12 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
 
       if (res.ok) {
         const data = await res.json();
-        // Start SSE connections if this is a new thread
         if (!threadId) {
+          // First message — set threadId (triggers SSE connection) and bump runKey
           setThreadId(data.thread_id);
+        } else {
+          // Subsequent messages on same thread — bump runKey to reopen SSE
+          setRunKey((k) => k + 1);
         }
       } else {
         const data = await res.json().catch(() => ({}));

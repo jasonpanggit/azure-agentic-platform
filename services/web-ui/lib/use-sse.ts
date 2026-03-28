@@ -14,6 +14,8 @@ interface UseSSEOptions {
   onEvent: (event: SSEEvent) => void;
   onError?: (error: Event) => void;
   onReconnect?: () => void;
+  /** Increment to force a new SSE connection for the same threadId (e.g. each new message). */
+  runKey?: number;
 }
 
 interface UseSSEResult {
@@ -28,6 +30,7 @@ export function useSSE({
   onEvent,
   onError,
   onReconnect,
+  runKey = 0,
 }: UseSSEOptions): UseSSEResult {
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -36,6 +39,10 @@ export function useSSE({
 
   const connect = useCallback(() => {
     if (!threadId) return;
+
+    // Close any existing connection before opening a new one
+    eventSourceRef.current?.close();
+    lastSeqRef.current = 0;
 
     const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}`;
     const es = new EventSource(url);
@@ -55,7 +62,6 @@ export function useSSE({
           lastSeqRef.current = parsed.seq;
           onEvent(parsed);
         }
-        // Ignore duplicate or out-of-order events
       } catch {
         // Malformed event data — skip
       }
@@ -70,9 +76,9 @@ export function useSSE({
       setConnected(false);
       setReconnecting(true);
       onError?.(err);
-      // EventSource auto-reconnects with Last-Event-ID
     };
-  }, [threadId, streamType, onEvent, onError, onReconnect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, streamType, runKey, onEvent, onError, onReconnect]);
 
   useEffect(() => {
     connect();
