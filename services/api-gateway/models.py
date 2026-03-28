@@ -116,6 +116,18 @@ class ChatResponse(BaseModel):
     status: str = "created"
 
 
+class ChatResultResponse(BaseModel):
+    """Response returned by GET /api/v1/chat/{thread_id}/result.
+
+    Indicates whether the Foundry run is still in progress or has
+    completed, and includes the assistant's reply when done.
+    """
+
+    thread_id: str
+    run_status: str  # queued | in_progress | completed | failed | cancelled | expired
+    reply: Optional[str] = None  # populated when run_status == "completed"
+
+
 class ApprovalAction(BaseModel):
     """Payload for approve/reject actions (D-09, TEAMS-003)."""
 

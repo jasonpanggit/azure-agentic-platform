@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.api_gateway.audit import query_audit_log
 from services.api_gateway.audit_export import generate_remediation_report
 from services.api_gateway.auth import verify_token
-from services.api_gateway.chat import create_chat_thread
+from services.api_gateway.chat import create_chat_thread, get_chat_result
 from services.api_gateway.foundry import create_foundry_thread
 from services.api_gateway.incidents_list import list_incidents
 from services.api_gateway.models import (
@@ -32,6 +32,7 @@ from services.api_gateway.models import (
     AuditExportResponse,
     ChatRequest,
     ChatResponse,
+    ChatResultResponse,
     HealthResponse,
     IncidentPayload,
     IncidentResponse,
@@ -215,6 +216,37 @@ async def start_chat(
         ) from exc
 
     return ChatResponse(thread_id=result["thread_id"], status="created")
+
+
+@app.get(
+    "/api/v1/chat/{thread_id}/result",
+    response_model=ChatResultResponse,
+)
+async def get_chat_result_endpoint(
+    thread_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> ChatResultResponse:
+    """Poll for the result of a Foundry chat run.
+
+    The web UI stream route calls this endpoint to check whether the
+    Orchestrator agent has completed its run on a given thread.
+
+    Returns run_status and the assistant reply once completed.
+    """
+    try:
+        result = await get_chat_result(thread_id)
+    except Exception as exc:
+        logger.error("Failed to fetch chat result for thread %s: %s", thread_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Foundry polling error: {exc}",
+        ) from exc
+
+    return ChatResultResponse(
+        thread_id=result["thread_id"],
+        run_status=result["run_status"],
+        reply=result.get("reply"),
+    )
 
 
 @app.post("/api/v1/approvals/{approval_id}/approve", response_model=ApprovalResponse)

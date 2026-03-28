@@ -33,6 +33,11 @@ variable "foundry_account_endpoint" {
   type        = string
 }
 
+variable "foundry_project_endpoint" {
+  description = "AI Foundry API project endpoint URL required by AgentsClient (from foundry module)"
+  type        = string
+}
+
 variable "foundry_project_id" {
   description = "Foundry project resource ID (from foundry module)"
   type        = string

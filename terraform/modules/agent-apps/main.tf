@@ -46,7 +46,7 @@ resource "azurerm_container_app" "agents" {
       }
       env {
         name  = "AZURE_PROJECT_ENDPOINT"
-        value = var.foundry_account_endpoint
+        value = var.foundry_project_endpoint
       }
       env {
         name  = "FOUNDRY_PROJECT_ID"
@@ -147,7 +147,7 @@ resource "azurerm_container_app" "teams_bot" {
       }
       env {
         name  = "AZURE_PROJECT_ENDPOINT"
-        value = var.foundry_account_endpoint
+        value = var.foundry_project_endpoint
       }
       env {
         name  = "FOUNDRY_PROJECT_ID"

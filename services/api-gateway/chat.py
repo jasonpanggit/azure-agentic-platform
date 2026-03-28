@@ -110,3 +110,46 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
     )
 
     return {"thread_id": thread_id, "run_id": run.id}
+
+
+async def get_chat_result(thread_id: str) -> dict[str, str]:
+    """Poll Foundry for the latest run status on a thread.
+
+    Returns the run status and, when completed, the assistant's reply text.
+    The caller (stream route) should poll until run_status is terminal
+    (completed | failed | cancelled | expired).
+
+    Args:
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with "thread_id", "run_status", and optionally "reply".
+    """
+    client = _get_foundry_client()
+
+    # Get the most recent run on this thread
+    runs = client.runs.list(thread_id=thread_id)
+    run_list = list(runs)
+    if not run_list:
+        return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+
+    latest_run = run_list[0]
+    run_status = latest_run.status
+
+    logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+
+    reply = None
+    if run_status == "completed":
+        # Fetch the last assistant message
+        messages = client.messages.list(thread_id=thread_id)
+        for msg in messages:
+            if msg.role == "assistant":
+                # Extract text from the first text content block
+                for block in msg.content:
+                    if hasattr(block, "text") and hasattr(block.text, "value"):
+                        reply = block.text.value
+                        break
+                if reply:
+                    break
+
+    return {"thread_id": thread_id, "run_status": run_status, "reply": reply}
