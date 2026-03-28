@@ -26,9 +26,10 @@ interface Subscription {
 interface SubscriptionSelectorProps {
   selected: string[];
   onChange: (ids: string[]) => void;
+  onLoad?: (ids: string[]) => void;
 }
 
-export function SubscriptionSelector({ selected, onChange }: SubscriptionSelectorProps) {
+export function SubscriptionSelector({ selected, onChange, onLoad }: SubscriptionSelectorProps) {
   const styles = useStyles();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,12 +40,18 @@ export function SubscriptionSelector({ selected, onChange }: SubscriptionSelecto
       .then((data: { subscriptions?: Subscription[]; error?: string }) => {
         if (data.subscriptions) {
           setSubscriptions(data.subscriptions);
+          // Auto-select all subscriptions on first load so the agent has context
+          if (onLoad && data.subscriptions.length > 0) {
+            onLoad(data.subscriptions.map((s) => s.id));
+          }
         }
       })
       .catch(() => {
         // Silently fail — selector stays empty
       })
       .finally(() => setLoading(false));
+  // onLoad intentionally excluded — only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelect = (_: unknown, data: { selectedOptions: string[] }) => {
