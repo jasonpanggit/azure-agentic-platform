@@ -10,7 +10,7 @@ import os
 from functools import lru_cache
 
 from azure.identity import DefaultAzureCredential
-from azure.ai.projects import AIProjectClient
+from azure.ai.agents import AgentsClient
 
 
 @lru_cache(maxsize=1)
@@ -27,15 +27,16 @@ def get_credential() -> DefaultAzureCredential:
     return DefaultAzureCredential()
 
 
-def get_foundry_client() -> AIProjectClient:
-    """Create an AIProjectClient connected to the Foundry project.
+def get_foundry_client() -> AgentsClient:
+    """Create an AgentsClient connected to the Foundry project.
 
-    Reads AZURE_PROJECT_ENDPOINT from environment. This is the
-    Foundry account endpoint provisioned in Phase 1 and passed
-    to each Container App via the agent-apps Terraform module.
+    Reads AZURE_PROJECT_ENDPOINT from environment, falling back to
+    FOUNDRY_ACCOUNT_ENDPOINT. Uses azure-ai-agents (AgentsClient) which
+    exposes .threads, .messages, and .runs sub-operation groups.
+    azure-ai-projects 2.x no longer provides these agent operations.
 
     Returns:
-        AIProjectClient configured for the platform's Foundry project.
+        AgentsClient configured for the platform's Foundry project.
 
     Raises:
         ValueError: If AZURE_PROJECT_ENDPOINT is not set.
@@ -50,7 +51,7 @@ def get_foundry_client() -> AIProjectClient:
             "This should be set by the agent-apps Terraform module."
         )
 
-    return AIProjectClient(
+    return AgentsClient(
         endpoint=endpoint,
         credential=get_credential(),
     )

@@ -11,7 +11,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from azure.ai.projects import AIProjectClient
+from azure.ai.agents import AgentsClient
 from azure.identity import DefaultAzureCredential
 
 from services.api_gateway.models import IncidentPayload
@@ -19,12 +19,16 @@ from services.api_gateway.models import IncidentPayload
 logger = logging.getLogger(__name__)
 
 
-def _get_foundry_client() -> AIProjectClient:
-    """Create an AIProjectClient using DefaultAzureCredential.
+def _get_foundry_client() -> AgentsClient:
+    """Create an AgentsClient using DefaultAzureCredential.
 
     Reads AZURE_PROJECT_ENDPOINT from environment, falling back to
     FOUNDRY_ACCOUNT_ENDPOINT for backward compatibility with the
     Terraform agent-apps module which uses the latter name.
+
+    Note: azure-ai-projects 2.x moved thread/run/message operations to
+    the azure-ai-agents package (AgentsClient). The client exposes
+    .threads, .messages, and .runs sub-operation groups.
     """
     endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
         "FOUNDRY_ACCOUNT_ENDPOINT"
@@ -35,7 +39,7 @@ def _get_foundry_client() -> AIProjectClient:
             "environment variable is required."
         )
 
-    return AIProjectClient(
+    return AgentsClient(
         endpoint=endpoint,
         credential=DefaultAzureCredential(),
     )
@@ -65,7 +69,7 @@ async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
         )
 
     # Create thread
-    thread = client.agents.create_thread()
+    thread = client.threads.create()
     logger.info(
         "Created Foundry thread %s for incident %s",
         thread.id,
@@ -85,16 +89,16 @@ async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
     }
 
     # Post incident as first message
-    client.agents.create_message(
+    client.messages.create(
         thread_id=thread.id,
         role="user",
         content=json.dumps(envelope),
     )
 
     # Dispatch to Orchestrator agent
-    run = client.agents.create_run(
+    run = client.runs.create(
         thread_id=thread.id,
-        assistant_id=orchestrator_agent_id,
+        agent_id=orchestrator_agent_id,
     )
 
     logger.info(
