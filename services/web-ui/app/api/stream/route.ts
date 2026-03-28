@@ -5,30 +5,32 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const HEARTBEAT_INTERVAL_MS = 20_000; // 20 seconds (UI-008)
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:8000';
+const POLL_INTERVAL_MS = 2_000;       // Poll Foundry run status every 2 seconds
+const POLL_TIMEOUT_MS = 120_000;      // Give up after 2 minutes
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired', 'not_found']);
+
+interface RunResultPayload {
+  thread_id: string;
+  run_status: string;
+  reply?: string | null;
+}
 
 /**
- * SSE Route Handler — proxies Foundry thread events to the browser.
+ * SSE Route Handler — polls Foundry for run completion and emits events.
  *
  * Query params:
  *   thread_id: Foundry thread ID
  *   type: 'token' | 'trace' (which event stream)
  *
- * Headers:
- *   Last-Event-ID: Sequence number for reconnection replay
- *   Authorization: Bearer token (proxied to api-gateway)
- *
  * Events emitted:
- *   event: token — data: {"delta":"...", "seq": N, "agent": "compute"}
- *   event: trace — data: {"type":"tool_call", "seq": N, ...}
- *                  data: {"type":"approval_gate", "approval_id": "...", "seq": N, ...}
+ *   event: token — data: {"delta":"...", "seq": N, "agent": "orchestrator"}
  *   event: done  — data: {"seq": N}
  *   : heartbeat (SSE comment, every 20s)
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get('thread_id');
-  const streamType = searchParams.get('type') || 'token'; // 'token' or 'trace'
+  const streamType = searchParams.get('type') || 'token';
 
   if (!threadId) {
     return new Response('Missing thread_id parameter', { status: 400 });
@@ -42,59 +44,112 @@ export async function GET(request: NextRequest) {
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let aborted = false;
 
+  const pushEvent = (
+    controller: ReadableStreamDefaultController,
+    eventName: string,
+    data: Record<string, unknown>
+  ) => {
+    seq++;
+    const payload = { ...data, seq };
+    const sseMessage = `id: ${seq}\nevent: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
+    controller.enqueue(encoder.encode(sseMessage));
+    globalEventBuffer.push(threadId, {
+      id: String(seq),
+      seq,
+      event: eventName,
+      data: JSON.stringify(payload),
+      timestamp: Date.now(),
+    });
+  };
+
   const stream = new ReadableStream({
     async start(controller) {
       // Replay missed events from ring buffer on reconnect
       if (startSeq > 0) {
         const missed = globalEventBuffer.getEventsSince(threadId, startSeq);
         for (const event of missed) {
-          const sseMessage = `id: ${event.id}\nevent: ${event.event}\ndata: ${event.data}\n\n`;
-          controller.enqueue(encoder.encode(sseMessage));
+          controller.enqueue(
+            encoder.encode(`id: ${event.id}\nevent: ${event.event}\ndata: ${event.data}\n\n`)
+          );
           seq = event.seq;
         }
       }
 
-      // Start heartbeat timer (UI-008)
+      // Heartbeat to keep the SSE connection alive through proxies (UI-008)
       heartbeatTimer = setInterval(() => {
         if (!aborted) {
           try {
             controller.enqueue(encoder.encode(': heartbeat\n\n'));
           } catch {
-            // Controller closed
+            // Controller already closed
           }
         }
       }, HEARTBEAT_INTERVAL_MS);
 
-      // Listen for client disconnect
       request.signal.addEventListener('abort', () => {
         aborted = true;
         if (heartbeatTimer) clearInterval(heartbeatTimer);
+        try { controller.close(); } catch { /* already closed */ }
+      });
+
+      // Only the token stream polls Foundry — trace stream stays open for future use
+      if (streamType !== 'token') {
+        return;
+      }
+
+      // Poll the API gateway for run completion
+      const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+      while (!aborted && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        if (aborted) break;
+
         try {
-          controller.close();
+          const res = await fetch(
+            `http://localhost:3000/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}`,
+            { signal: AbortSignal.timeout(8000) }
+          );
+
+          if (!res.ok) continue; // transient error — keep polling
+
+          const result = (await res.json()) as RunResultPayload;
+
+          if (!TERMINAL_STATUSES.has(result.run_status)) continue; // still running
+
+          if (result.run_status === 'completed' && result.reply) {
+            pushEvent(controller, 'token', {
+              type: 'token',
+              delta: result.reply,
+              agent: 'orchestrator',
+            });
+          } else if (result.run_status !== 'completed') {
+            pushEvent(controller, 'token', {
+              type: 'token',
+              delta: `Agent run ended with status: ${result.run_status}`,
+              agent: 'orchestrator',
+            });
+          }
+
+          // Emit done and close
+          pushEvent(controller, 'done', { type: 'done' });
+          break;
         } catch {
-          // Already closed
+          // Network error during poll — continue
         }
-      });
+      }
 
-      // TODO: Connect to Foundry thread streaming via api-gateway
-      // For now, emit a synthetic "connected" event
-      seq++;
-      const connectedEvent = {
-        type: 'connected',
-        seq,
-        thread_id: threadId,
-        stream_type: streamType,
-      };
-      const eventStr = `id: ${seq}\nevent: ${streamType}\ndata: ${JSON.stringify(connectedEvent)}\n\n`;
-      controller.enqueue(encoder.encode(eventStr));
+      // Timeout — emit a friendly done so the spinner clears
+      if (!aborted && Date.now() >= deadline) {
+        pushEvent(controller, 'token', {
+          type: 'token',
+          delta: 'Agent response timed out. Please try again.',
+          agent: 'orchestrator',
+        });
+        pushEvent(controller, 'done', { type: 'done' });
+      }
 
-      globalEventBuffer.push(threadId, {
-        id: String(seq),
-        seq,
-        event: streamType,
-        data: JSON.stringify(connectedEvent),
-        timestamp: Date.now(),
-      });
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      try { controller.close(); } catch { /* already closed */ }
     },
   });
 
@@ -107,3 +162,4 @@ export async function GET(request: NextRequest) {
     },
   });
 }
+
