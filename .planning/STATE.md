@@ -15,7 +15,7 @@ progress:
 
 > Last updated: 2026-03-27 — Phase 7 COMPLETE (6/6 plans) — Quality & Hardening — Full Playwright E2E suite (E2E-001 through E2E-005), OTel auto-instrumentation on all services, Observability tab in Web UI, 60 runbooks seeded into pgvector with cosine validation, security CI (bandit + npm audit + secrets scan), Terraform prod complete with 12 modules. All 72 v1.0 requirements satisfied. Milestone v1.0 COMPLETE.
 >
-> Last activity: 2026-03-28 - Completed quick task 260328-va0: Validate MANUAL-SETUP.md provisioning state — 3 DONE, 3 PARTIAL, 1 PENDING (Foundry RBAC), 1 SKIPPED, 1 CANNOT_VERIFY
+> Last activity: 2026-03-29 - Completed quick task 260329-315: Review and clean up 65 uncommitted changes — added gitignore rules for coverage/build artifacts, committed real files
 
 ---
 
@@ -151,6 +151,7 @@ None. Milestone v1.0 complete.
 | 260328-1ca | Move run-mock.sh to scripts folder and update the script accordingly | 2026-03-27 | 4b26f66 | [260328-1ca-move-run-mock-sh-to-scripts-folder-and-u](./quick/260328-1ca-move-run-mock-sh-to-scripts-folder-and-u/) |
 | 260328-2ir | Deploy images to container registry — teams-bot build, deploy-all workflow, naming fix | 2026-03-28 | 94d0b8b | [260328-2ir-deploy-images-to-container-registry](./quick/260328-2ir-deploy-images-to-container-registry/) |
 | 260328-va0 | Validate MANUAL-SETUP.md provisioning state — 3 DONE, 3 PARTIAL, 1 PENDING, 1 SKIPPED, 1 CANNOT_VERIFY | 2026-03-28 | fcca5fc | [260328-va0-validate-manual-setup-md-provisioning-st](./quick/260328-va0-validate-manual-setup-md-provisioning-st/) |
+| 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
 
 ---
 
