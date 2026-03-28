@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 export interface SSEEvent {
   type: string;
   seq: number;
+  /** The full flat payload from the SSE data field (contains delta, agent, etc.) */
   data: Record<string, unknown>;
 }
 
@@ -56,11 +57,13 @@ export function useSSE({
 
     es.addEventListener(streamType, (event: MessageEvent) => {
       try {
-        const parsed = JSON.parse(event.data) as SSEEvent;
-        // Validate monotonic sequence
-        if (parsed.seq > lastSeqRef.current) {
-          lastSeqRef.current = parsed.seq;
-          onEvent(parsed);
+        // The SSE payload is a flat object: {type, seq, delta?, agent?, ...}
+        // We wrap it as SSEEvent with data = the full flat payload
+        const flat = JSON.parse(event.data) as Record<string, unknown>;
+        const seq = typeof flat.seq === 'number' ? flat.seq : 0;
+        if (seq > lastSeqRef.current) {
+          lastSeqRef.current = seq;
+          onEvent({ type: String(flat.type ?? ''), seq, data: flat });
         }
       } catch {
         // Malformed event data — skip
@@ -68,14 +71,13 @@ export function useSSE({
     });
 
     es.addEventListener('done', (event: MessageEvent) => {
-      // Parse seq from done payload if available, otherwise use lastSeq + 1
       let seq = lastSeqRef.current + 1;
       try {
-        const parsed = JSON.parse(event.data) as { seq?: number };
-        if (parsed.seq) seq = parsed.seq;
+        const flat = JSON.parse(event.data) as Record<string, unknown>;
+        if (typeof flat.seq === 'number') seq = flat.seq;
       } catch { /* ignore */ }
 
-      // Notify the component so it can clear isStreaming / finalize messages
+      // Notify component so it can clear isStreaming / finalize messages
       onEvent({ type: 'done', seq, data: { type: 'done' } });
 
       es.close();
