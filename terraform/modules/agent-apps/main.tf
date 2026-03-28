@@ -30,6 +30,15 @@ resource "azurerm_container_app" "agents" {
     type = "SystemAssigned"
   }
 
+  # ACR registry configuration — uses managed identity for image pull (no admin credentials)
+  dynamic "registry" {
+    for_each = var.use_placeholder_image ? [] : [1]
+    content {
+      server   = var.acr_login_server
+      identity = "system"
+    }
+  }
+
   template {
     min_replicas = each.value.min_replicas
     max_replicas = each.value.max_replicas
@@ -129,6 +138,15 @@ resource "azurerm_container_app" "teams_bot" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  # ACR registry configuration — uses managed identity for image pull (no admin credentials)
+  dynamic "registry" {
+    for_each = var.use_placeholder_image ? [] : [1]
+    content {
+      server   = var.acr_login_server
+      identity = "system"
+    }
   }
 
   template {
