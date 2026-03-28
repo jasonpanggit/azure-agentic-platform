@@ -43,9 +43,10 @@ export function useSSE({
 
     // Close any existing connection before opening a new one
     eventSourceRef.current?.close();
-    lastSeqRef.current = 0;
+    // Do NOT reset lastSeqRef — preserve last seq so server can skip replaying
+    // already-seen events and the dedup guard remains effective.
 
-    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}`;
+    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}&last_seq=${lastSeqRef.current}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
