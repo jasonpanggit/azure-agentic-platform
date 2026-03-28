@@ -6,19 +6,29 @@
 
 output "agent_principal_ids" {
   description = "Map of agent/service name to system-assigned managed identity principal ID"
-  value = {
-    for name, app in azurerm_container_app.agents :
-    name => app.identity[0].principal_id
-  }
+  value = merge(
+    {
+      for name, app in azurerm_container_app.agents :
+      name => app.identity[0].principal_id
+    },
+    {
+      "teams-bot" = azurerm_container_app.teams_bot.identity[0].principal_id
+    }
+  )
 }
 
 output "agent_entra_ids" {
   description = "Map of agent name to Entra object ID (principal_id) for Agent 365 auto-discovery — excludes api-gateway"
-  value = {
-    for name, app in azurerm_container_app.agents :
-    name => app.identity[0].principal_id
-    if name != "api-gateway"
-  }
+  value = merge(
+    {
+      for name, app in azurerm_container_app.agents :
+      name => app.identity[0].principal_id
+      if name != "api-gateway"
+    },
+    {
+      "teams-bot" = azurerm_container_app.teams_bot.identity[0].principal_id
+    }
+  )
 }
 
 output "api_gateway_fqdn" {
@@ -31,10 +41,20 @@ output "api_gateway_url" {
   value       = "https://${azurerm_container_app.agents["api-gateway"].ingress[0].fqdn}"
 }
 
+output "teams_bot_fqdn" {
+  description = "FQDN of the Teams Bot Container App"
+  value       = azurerm_container_app.teams_bot.ingress[0].fqdn
+}
+
 output "container_app_ids" {
   description = "Map of app name to Container App resource ID"
-  value = {
-    for name, app in azurerm_container_app.agents :
-    name => app.id
-  }
+  value = merge(
+    {
+      for name, app in azurerm_container_app.agents :
+      name => app.id
+    },
+    {
+      "teams-bot" = azurerm_container_app.teams_bot.id
+    }
+  )
 }

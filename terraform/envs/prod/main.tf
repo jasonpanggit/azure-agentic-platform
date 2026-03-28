@@ -159,6 +159,13 @@ module "agent_apps" {
   cosmos_endpoint                = module.databases.cosmos_endpoint
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
+
+  # Teams Bot specific configuration
+  teams_bot_id             = var.teams_bot_id
+  teams_bot_password       = var.teams_bot_password
+  api_gateway_internal_url = "https://${module.compute_env.acr_login_server != "" ? "ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io" : ""}"
+  web_ui_public_url        = var.web_ui_public_url
+  teams_channel_id         = var.teams_channel_id
 }
 
 # --- RBAC (depends on: agent-apps) ---

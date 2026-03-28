@@ -84,3 +84,29 @@ variable "cors_allowed_origins" {
   type        = string
   default     = "*"
 }
+
+# Teams Bot configuration
+variable "teams_bot_id" {
+  description = "Azure AD app registration client ID for the Teams bot (BOT_ID). Set after bot registration is created."
+  type        = string
+  default     = ""
+}
+
+variable "teams_bot_password" {
+  description = "Azure AD app registration client secret for the Teams bot (BOT_PASSWORD)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "web_ui_public_url" {
+  description = "Public URL of the web UI for deep links in Teams Adaptive Cards"
+  type        = string
+  default     = ""
+}
+
+variable "teams_channel_id" {
+  description = "Default Teams channel ID for proactive card posting"
+  type        = string
+  default     = ""
+}

@@ -65,8 +65,46 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "use_placeholder_image" {
+  description = "Use a public placeholder image instead of ACR images. Set true for initial infra provisioning before any images are built; CI/CD sets this to false once images exist."
+  type        = bool
+  default     = true
+}
+
 variable "cors_allowed_origins" {
   description = "Comma-separated CORS allowed origins for the api-gateway (D-15)"
   type        = string
   default     = "*"
+}
+
+# Teams Bot specific variables
+variable "teams_bot_id" {
+  description = "Azure AD app registration client ID for the Teams bot (BOT_ID)"
+  type        = string
+  default     = ""
+}
+
+variable "teams_bot_password" {
+  description = "Azure AD app registration client secret for the Teams bot (BOT_PASSWORD)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "api_gateway_internal_url" {
+  description = "Internal URL for the api-gateway service used by the teams-bot (API_GATEWAY_INTERNAL_URL)"
+  type        = string
+  default     = ""
+}
+
+variable "web_ui_public_url" {
+  description = "Public URL of the web UI for deep links in Adaptive Cards (WEB_UI_PUBLIC_URL)"
+  type        = string
+  default     = ""
+}
+
+variable "teams_channel_id" {
+  description = "Default Teams channel ID for proactive card posting (TEAMS_CHANNEL_ID)"
+  type        = string
+  default     = ""
 }

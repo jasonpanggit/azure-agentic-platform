@@ -10,6 +10,9 @@ fastapi-azure-auth>=5.0.0
 # Azure AI Foundry SDK
 azure-ai-projects>=2.0.1
 
+# Azure Cosmos DB SDK
+azure-cosmos>=4.0.0
+
 # OpenTelemetry auto-instrumentation (D-05)
 azure-monitor-opentelemetry>=1.0.0
 
