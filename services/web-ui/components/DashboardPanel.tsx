@@ -34,6 +34,7 @@ import { AlertFilters } from './AlertFilters';
 import { AuditLogViewer } from './AuditLogViewer';
 import { ObservabilityTab } from './ObservabilityTab';
 import { ResourcesTab } from './ResourcesTab';
+import { TopologyTab } from './TopologyTab';
 
 const useStyles = makeStyles({
   root: {
@@ -119,13 +120,7 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
         )}
 
         {activeTab === 'topology' && (
-          <div className={styles.emptyState}>
-            <OrganizationRegular className={styles.emptyIcon} />
-            <Text weight="semibold" size={400}>Topology view</Text>
-            <Text align="center" size={300}>
-              Arc-enabled resource network graph coming in Phase 8.
-            </Text>
-          </div>
+          <TopologyTab subscriptions={subscriptions} />
         )}
 
         {activeTab === 'resources' && (
