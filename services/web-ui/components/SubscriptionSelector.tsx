@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Combobox,
   Option,
+  Spinner,
   makeStyles,
   tokens,
   Text,
@@ -17,20 +18,34 @@ const useStyles = makeStyles({
   },
 });
 
+interface Subscription {
+  id: string;
+  name: string;
+}
+
 interface SubscriptionSelectorProps {
   selected: string[];
   onChange: (ids: string[]) => void;
 }
 
-// Placeholder subscriptions — replaced by real data from Azure in integration
-const PLACEHOLDER_SUBSCRIPTIONS = [
-  { id: 'sub-platform-001', name: 'Platform (dev)' },
-  { id: 'sub-compute-001', name: 'Compute (dev)' },
-  { id: 'sub-network-001', name: 'Network (dev)' },
-];
-
 export function SubscriptionSelector({ selected, onChange }: SubscriptionSelectorProps) {
   const styles = useStyles();
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/subscriptions')
+      .then((res) => res.json())
+      .then((data: { subscriptions?: Subscription[]; error?: string }) => {
+        if (data.subscriptions) {
+          setSubscriptions(data.subscriptions);
+        }
+      })
+      .catch(() => {
+        // Silently fail — selector stays empty
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleSelect = (_: unknown, data: { selectedOptions: string[] }) => {
     onChange(data.selectedOptions);
@@ -39,20 +54,24 @@ export function SubscriptionSelector({ selected, onChange }: SubscriptionSelecto
   return (
     <div className={styles.root}>
       <Text size={200}>
-        Showing results for {selected.length || 'all'} subscription(s)
+        Showing results for {selected.length > 0 ? selected.length : 'all'} subscription(s)
       </Text>
-      <Combobox
-        multiselect
-        placeholder="Filter subscriptions..."
-        selectedOptions={selected}
-        onOptionSelect={handleSelect}
-      >
-        {PLACEHOLDER_SUBSCRIPTIONS.map((sub) => (
-          <Option key={sub.id} value={sub.id}>
-            {sub.name}
-          </Option>
-        ))}
-      </Combobox>
+      {loading ? (
+        <Spinner size="tiny" label="Loading subscriptions..." labelPosition="after" />
+      ) : (
+        <Combobox
+          multiselect
+          placeholder="Filter subscriptions..."
+          selectedOptions={selected}
+          onOptionSelect={handleSelect}
+        >
+          {subscriptions.map((sub) => (
+            <Option key={sub.id} value={sub.id}>
+              {sub.name}
+            </Option>
+          ))}
+        </Combobox>
+      )}
     </div>
   );
 }

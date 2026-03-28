@@ -2,14 +2,13 @@
 /**
  * DashboardPanel — right pane of the split-pane layout.
  *
- * Tabs: Alerts | Audit | Topology | Resources
+ * Tabs: Alerts | Audit | Topology | Resources | Observability
  *
- * - alerts:    AlertFilters + AlertFeed (UI-006, UI-007)
- * - audit:     AuditLogViewer (AUDIT-004)
- * - topology:  placeholder (Phase 6)
- * - resources: placeholder (Phase 6)
- *
- * Replaces the Plan 05-01 shell (Task 5-01-07).
+ * - alerts:       AlertFilters + AlertFeed (UI-006, UI-007)
+ * - audit:        AuditLogViewer (AUDIT-004)
+ * - topology:     Arc network graph (Phase 8)
+ * - resources:    Multi-subscription resource inventory via ARM API
+ * - observability: Agent latency, pipeline lag, approval queue, errors
  */
 
 import React, { useState } from 'react';
@@ -34,6 +33,7 @@ import { AlertFeed } from './AlertFeed';
 import { AlertFilters } from './AlertFilters';
 import { AuditLogViewer } from './AuditLogViewer';
 import { ObservabilityTab } from './ObservabilityTab';
+import { ResourcesTab } from './ResourcesTab';
 
 const useStyles = makeStyles({
   root: {
@@ -123,19 +123,13 @@ export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardP
             <OrganizationRegular className={styles.emptyIcon} />
             <Text weight="semibold" size={400}>Topology view</Text>
             <Text align="center" size={300}>
-              Resource topology visualization coming in Phase 6.
+              Arc-enabled resource network graph coming in Phase 8.
             </Text>
           </div>
         )}
 
         {activeTab === 'resources' && (
-          <div className={styles.emptyState}>
-            <ServerRegular className={styles.emptyIcon} />
-            <Text weight="semibold" size={400}>Resources</Text>
-            <Text align="center" size={300}>
-              Multi-subscription resource inventory coming in Phase 6.
-            </Text>
-          </div>
+          <ResourcesTab subscriptions={subscriptions} />
         )}
 
         {activeTab === 'observability' && (
