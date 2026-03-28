@@ -40,10 +40,13 @@ def get_foundry_client() -> AIProjectClient:
     Raises:
         ValueError: If AZURE_PROJECT_ENDPOINT is not set.
     """
-    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT")
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+        "FOUNDRY_ACCOUNT_ENDPOINT"
+    )
     if not endpoint:
         raise ValueError(
-            "AZURE_PROJECT_ENDPOINT environment variable is required. "
+            "AZURE_PROJECT_ENDPOINT (or FOUNDRY_ACCOUNT_ENDPOINT) "
+            "environment variable is required. "
             "This should be set by the agent-apps Terraform module."
         )
 

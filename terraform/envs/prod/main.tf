@@ -159,6 +159,7 @@ module "agent_apps" {
   cosmos_endpoint                = module.databases.cosmos_endpoint
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
+  orchestrator_agent_id          = var.orchestrator_agent_id
 
   # Teams Bot specific configuration
   teams_bot_id             = var.teams_bot_id

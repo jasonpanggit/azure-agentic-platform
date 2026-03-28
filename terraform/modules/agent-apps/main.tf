@@ -45,6 +45,10 @@ resource "azurerm_container_app" "agents" {
         value = var.foundry_account_endpoint
       }
       env {
+        name  = "AZURE_PROJECT_ENDPOINT"
+        value = var.foundry_account_endpoint
+      }
+      env {
         name  = "FOUNDRY_PROJECT_ID"
         value = var.foundry_project_id
       }
@@ -75,6 +79,14 @@ resource "azurerm_container_app" "agents" {
       env {
         name  = "CORS_ALLOWED_ORIGINS"
         value = var.cors_allowed_origins
+      }
+      # Orchestrator Agent ID — required by api-gateway and orchestrator for Foundry dispatch
+      dynamic "env" {
+        for_each = var.orchestrator_agent_id != "" ? [1] : []
+        content {
+          name  = "ORCHESTRATOR_AGENT_ID"
+          value = var.orchestrator_agent_id
+        }
       }
       # Web UI specific: Log Analytics workspace for Observability tab
       dynamic "env" {
@@ -131,6 +143,10 @@ resource "azurerm_container_app" "teams_bot" {
 
       env {
         name  = "FOUNDRY_ACCOUNT_ENDPOINT"
+        value = var.foundry_account_endpoint
+      }
+      env {
+        name  = "AZURE_PROJECT_ENDPOINT"
         value = var.foundry_account_endpoint
       }
       env {
