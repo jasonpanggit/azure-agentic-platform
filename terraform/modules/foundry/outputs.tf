@@ -18,6 +18,11 @@ output "foundry_project_id" {
   value       = azurerm_cognitive_account_project.main.id
 }
 
+output "foundry_project_endpoint" {
+  description = "AI Foundry API endpoint for the project (required by AgentsClient)"
+  value       = "https://${azurerm_cognitive_account.foundry.custom_subdomain_name}.services.ai.azure.com/api/projects/${azurerm_cognitive_account_project.main.name}"
+}
+
 output "foundry_model_deployment_name" {
   description = "Name of the gpt-4o model deployment"
   value       = azurerm_cognitive_deployment.gpt4o.name
