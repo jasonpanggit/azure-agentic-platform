@@ -81,10 +81,20 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             "Created chat thread %s for user %s", thread_id, effective_user_id
         )
 
+    # Build message content — prepend subscription context if provided so the
+    # agent can call Azure MCP tools without asking for clarification.
+    message_content = request.message
+    if request.subscription_ids:
+        subs_csv = ", ".join(request.subscription_ids)
+        message_content = (
+            f"[Context: Azure subscription IDs in scope: {subs_csv}]\n\n"
+            f"{request.message}"
+        )
+
     client.messages.create(
         thread_id=thread_id,
         role="user",
-        content=request.message,
+        content=message_content,
     )
 
     run = client.runs.create(
