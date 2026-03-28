@@ -38,7 +38,10 @@ export async function GET(request: NextRequest) {
 
   let seq = 0;
   const lastEventId = request.headers.get('Last-Event-ID');
-  const startSeq = lastEventId ? parseInt(lastEventId, 10) : 0;
+  const lastSeqParam = searchParams.get('last_seq');
+  const startSeq = lastEventId
+    ? parseInt(lastEventId, 10)
+    : lastSeqParam ? parseInt(lastSeqParam, 10) : 0;
 
   const encoder = new TextEncoder();
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Replay missed events from ring buffer on reconnect
+      // Replay missed events from ring buffer on reconnect (only if client has seen prior events)
       if (startSeq > 0) {
         const missed = globalEventBuffer.getEventsSince(threadId, startSeq);
         for (const event of missed) {
