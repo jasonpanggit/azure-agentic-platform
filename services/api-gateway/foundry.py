@@ -22,12 +22,17 @@ logger = logging.getLogger(__name__)
 def _get_foundry_client() -> AIProjectClient:
     """Create an AIProjectClient using DefaultAzureCredential.
 
-    Reads AZURE_PROJECT_ENDPOINT from environment.
+    Reads AZURE_PROJECT_ENDPOINT from environment, falling back to
+    FOUNDRY_ACCOUNT_ENDPOINT for backward compatibility with the
+    Terraform agent-apps module which uses the latter name.
     """
-    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT")
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+        "FOUNDRY_ACCOUNT_ENDPOINT"
+    )
     if not endpoint:
         raise ValueError(
-            "AZURE_PROJECT_ENDPOINT environment variable is required."
+            "AZURE_PROJECT_ENDPOINT (or FOUNDRY_ACCOUNT_ENDPOINT) "
+            "environment variable is required."
         )
 
     return AIProjectClient(

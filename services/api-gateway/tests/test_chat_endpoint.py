@@ -3,6 +3,62 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+class TestFoundryClientEndpointResolution:
+    """Tests for _get_foundry_client env var resolution."""
+
+    def test_azure_project_endpoint_takes_precedence(self):
+        """AZURE_PROJECT_ENDPOINT is preferred over FOUNDRY_ACCOUNT_ENDPOINT."""
+        with patch.dict(
+            "os.environ",
+            {
+                "AZURE_PROJECT_ENDPOINT": "https://primary.cognitiveservices.azure.com/",
+                "FOUNDRY_ACCOUNT_ENDPOINT": "https://fallback.cognitiveservices.azure.com/",
+            },
+        ), patch(
+            "services.api_gateway.foundry.AIProjectClient"
+        ) as mock_client_cls, patch(
+            "services.api_gateway.foundry.DefaultAzureCredential"
+        ):
+            from services.api_gateway.foundry import _get_foundry_client
+
+            _get_foundry_client()
+            call_kwargs = mock_client_cls.call_args
+            assert call_kwargs.kwargs["endpoint"] == "https://primary.cognitiveservices.azure.com/"
+
+    def test_fallback_to_foundry_account_endpoint(self):
+        """Falls back to FOUNDRY_ACCOUNT_ENDPOINT when AZURE_PROJECT_ENDPOINT is not set."""
+        env = {"FOUNDRY_ACCOUNT_ENDPOINT": "https://fallback.cognitiveservices.azure.com/"}
+        with patch.dict(
+            "os.environ", env, clear=False
+        ), patch.dict(
+            "os.environ", {"AZURE_PROJECT_ENDPOINT": ""}, clear=False
+        ), patch(
+            "services.api_gateway.foundry.AIProjectClient"
+        ) as mock_client_cls, patch(
+            "services.api_gateway.foundry.DefaultAzureCredential"
+        ):
+            # Ensure AZURE_PROJECT_ENDPOINT is not set
+            import os
+            os.environ.pop("AZURE_PROJECT_ENDPOINT", None)
+            os.environ["FOUNDRY_ACCOUNT_ENDPOINT"] = "https://fallback.cognitiveservices.azure.com/"
+
+            from services.api_gateway.foundry import _get_foundry_client
+
+            _get_foundry_client()
+            call_kwargs = mock_client_cls.call_args
+            assert call_kwargs.kwargs["endpoint"] == "https://fallback.cognitiveservices.azure.com/"
+
+    def test_raises_when_no_endpoint_set(self):
+        """Raises ValueError when neither endpoint env var is set."""
+        with patch.dict(
+            "os.environ", {}, clear=True
+        ):
+            from services.api_gateway.foundry import _get_foundry_client
+
+            with pytest.raises(ValueError, match="AZURE_PROJECT_ENDPOINT"):
+                _get_foundry_client()
+
+
 class TestChatEndpoint:
     """Tests for POST /api/v1/chat endpoint."""
 

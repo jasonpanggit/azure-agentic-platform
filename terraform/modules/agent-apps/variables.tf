@@ -77,6 +77,12 @@ variable "cors_allowed_origins" {
   default     = "*"
 }
 
+variable "orchestrator_agent_id" {
+  description = "Foundry Agent ID for the Orchestrator agent (created in Azure AI Foundry portal, format: asst_xxx). Required for chat and incident dispatch."
+  type        = string
+  default     = ""
+}
+
 # Teams Bot specific variables
 variable "teams_bot_id" {
   description = "Azure AD app registration client ID for the Teams bot (BOT_ID)"
