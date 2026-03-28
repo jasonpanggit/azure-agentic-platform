@@ -193,9 +193,9 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
     setTypeFilter(data.optionValue ?? ALL_TYPES);
   };
 
-  // Display value for the dropdown: show short label for known types
+  // Display value for the dropdown: show short label only
   const dropdownDisplay =
-    typeFilter === ALL_TYPES ? ALL_TYPES : `${shortType(typeFilter)} (${typeFilter.split('/').pop()})`;
+    typeFilter === ALL_TYPES ? ALL_TYPES : shortType(typeFilter);
 
   return (
     <div className={styles.root}>
@@ -214,8 +214,8 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
         >
           <Option text={ALL_TYPES} key={ALL_TYPES} value={ALL_TYPES}>All types</Option>
           {availableTypes.map((t) => (
-            <Option text={`${shortType(t)} — ${t}`} key={t} value={t}>
-              {shortType(t)} — {t}
+            <Option text={shortType(t)} key={t} value={t}>
+              {shortType(t)}
             </Option>
           ))}
         </Dropdown>

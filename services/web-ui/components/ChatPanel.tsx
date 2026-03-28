@@ -178,6 +178,8 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
           setThreadId(data.thread_id);
         }
       } else {
+        const data = await res.json().catch(() => ({}));
+        const errorMsg = (data as { error?: string }).error ?? `Request failed (${res.status})`;
         setIsStreaming(false);
         setMessages((prev) => [
           ...prev,
@@ -185,7 +187,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
             id: `error-${Date.now()}`,
             role: 'assistant',
             agentName: 'System',
-            content: 'Failed to send message. Please try again.',
+            content: errorMsg,
             isStreaming: false,
             timestamp: new Date().toLocaleTimeString(),
           },
