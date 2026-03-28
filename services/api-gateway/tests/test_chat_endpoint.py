@@ -15,7 +15,7 @@ class TestFoundryClientEndpointResolution:
                 "FOUNDRY_ACCOUNT_ENDPOINT": "https://fallback.cognitiveservices.azure.com/",
             },
         ), patch(
-            "services.api_gateway.foundry.AIProjectClient"
+            "services.api_gateway.foundry.AgentsClient"
         ) as mock_client_cls, patch(
             "services.api_gateway.foundry.DefaultAzureCredential"
         ):
@@ -33,7 +33,7 @@ class TestFoundryClientEndpointResolution:
         ), patch.dict(
             "os.environ", {"AZURE_PROJECT_ENDPOINT": ""}, clear=False
         ), patch(
-            "services.api_gateway.foundry.AIProjectClient"
+            "services.api_gateway.foundry.AgentsClient"
         ) as mock_client_cls, patch(
             "services.api_gateway.foundry.DefaultAzureCredential"
         ):
@@ -68,9 +68,9 @@ class TestChatEndpoint:
         mock_run = MagicMock(id="run-test-001")
 
         mock_foundry = MagicMock()
-        mock_foundry.agents.create_thread.return_value = mock_thread
-        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.agents.create_run.return_value = mock_run
+        mock_foundry.threads.create.return_value = mock_thread
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.runs.create.return_value = mock_run
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
@@ -147,8 +147,8 @@ class TestChatThreadContinuation:
         """POST /api/v1/chat with thread_id skips create_thread (TEAMS-004)."""
         mock_foundry = MagicMock()
         mock_run = MagicMock(id="run-test-001")
-        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.agents.create_run.return_value = mock_run
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.runs.create.return_value = mock_run
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
@@ -166,18 +166,18 @@ class TestChatThreadContinuation:
         body = response.json()
         assert body["thread_id"] == "existing-thread-123"
         # create_thread should NOT have been called
-        mock_foundry.agents.create_thread.assert_not_called()
+        mock_foundry.threads.create.assert_not_called()
         # create_message and create_run should use the existing thread_id
-        mock_foundry.agents.create_message.assert_called_once()
-        call_kwargs = mock_foundry.agents.create_message.call_args
+        mock_foundry.messages.create.assert_called_once()
+        call_kwargs = mock_foundry.messages.create.call_args
         assert call_kwargs.kwargs.get("thread_id") == "existing-thread-123"
 
     def test_chat_with_incident_id_looks_up_thread(self, client):
         """POST /api/v1/chat with incident_id looks up thread from Cosmos (TEAMS-004)."""
         mock_foundry = MagicMock()
         mock_run = MagicMock(id="run-test-001")
-        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.agents.create_run.return_value = mock_run
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.runs.create.return_value = mock_run
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
@@ -195,7 +195,7 @@ class TestChatThreadContinuation:
         body = response.json()
         assert body["thread_id"] == "thread-from-cosmos"
         # Should not create a new thread since Cosmos returned one
-        mock_foundry.agents.create_thread.assert_not_called()
+        mock_foundry.threads.create.assert_not_called()
 
     def test_chat_with_user_id_uses_request_user_id(self, client):
         """POST /api/v1/chat with user_id uses it instead of token sub (D-07)."""
@@ -204,9 +204,9 @@ class TestChatThreadContinuation:
         mock_foundry = MagicMock()
         mock_thread = MagicMock(id="thread-test-001")
         mock_run = MagicMock(id="run-test-001")
-        mock_foundry.agents.create_thread.return_value = mock_thread
-        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.agents.create_run.return_value = mock_run
+        mock_foundry.threads.create.return_value = mock_thread
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.runs.create.return_value = mock_run
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
@@ -222,7 +222,7 @@ class TestChatThreadContinuation:
 
         assert response.status_code == 202
         # Verify the envelope message uses the Teams user_id
-        call_args = mock_foundry.agents.create_message.call_args
+        call_args = mock_foundry.messages.create.call_args
         envelope = json.loads(call_args.kwargs["content"])
         assert envelope["payload"]["initiated_by"] == "teams-user@example.com"
 
@@ -231,9 +231,9 @@ class TestChatThreadContinuation:
         mock_foundry = MagicMock()
         mock_thread = MagicMock(id="thread-new-001")
         mock_run = MagicMock(id="run-test-001")
-        mock_foundry.agents.create_thread.return_value = mock_thread
-        mock_foundry.agents.create_message.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.agents.create_run.return_value = mock_run
+        mock_foundry.threads.create.return_value = mock_thread
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
+        mock_foundry.runs.create.return_value = mock_run
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
@@ -247,4 +247,4 @@ class TestChatThreadContinuation:
         assert response.status_code == 202
         body = response.json()
         assert body["thread_id"] == "thread-new-001"
-        mock_foundry.agents.create_thread.assert_called_once()
+        mock_foundry.threads.create.assert_called_once()

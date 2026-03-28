@@ -77,7 +77,7 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
         logger.info("Continuing thread %s for user %s", thread_id, effective_user_id)
     else:
         # Create new thread
-        thread = client.agents.create_thread()
+        thread = client.threads.create()
         thread_id = thread.id
         logger.info(
             "Created chat thread %s for user %s", thread_id, effective_user_id
@@ -98,15 +98,15 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
         "timestamp": now,
     }
 
-    client.agents.create_message(
+    client.messages.create(
         thread_id=thread_id,
         role="user",
         content=json.dumps(envelope),
     )
 
-    run = client.agents.create_run(
+    run = client.runs.create(
         thread_id=thread_id,
-        assistant_id=orchestrator_agent_id,
+        agent_id=orchestrator_agent_id,
     )
 
     return {"thread_id": thread_id, "run_id": run.id}

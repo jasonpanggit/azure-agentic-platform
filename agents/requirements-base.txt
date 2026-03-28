@@ -5,7 +5,9 @@
 agent-framework==1.0.0rc5
 
 # Azure AI Foundry SDK (GA)
+# azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents
 azure-ai-projects>=2.0.1
+azure-ai-agents>=1.0.0
 
 # Foundry Hosted Agent adapters
 azure-ai-agentserver-core

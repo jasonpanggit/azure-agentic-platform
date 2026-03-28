@@ -8,7 +8,8 @@ azure-identity>=1.17.0
 fastapi-azure-auth>=5.0.0
 
 # Azure AI Foundry SDK
-azure-ai-projects>=2.0.1
+# azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents instead
+azure-ai-agents>=1.0.0
 
 # Azure Cosmos DB SDK
 azure-cosmos>=4.0.0
