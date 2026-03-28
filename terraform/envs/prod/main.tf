@@ -212,6 +212,19 @@ module "fabric" {
   fabric_admin_email  = var.fabric_admin_email
 }
 
+# --- Entra App Registrations (depends on: keyvault) ---
+# Web UI app registration for MSAL browser auth (SPA flow).
+# The client_id output is also stored in Key Vault and referenced by CI/CD
+# as a GitHub Actions variable (NEXT_PUBLIC_AZURE_CLIENT_ID) for the web-ui image build.
+
+module "entra_apps" {
+  source = "../../modules/entra-apps"
+
+  environment      = var.environment
+  web_ui_public_url = var.web_ui_public_url
+  keyvault_id      = module.keyvault.keyvault_id
+}
+
 # --- Activity Log Export (depends on: monitoring) ---
 # AUDIT-003: Export Activity Log from all subscriptions to Log Analytics.
 

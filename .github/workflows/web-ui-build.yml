@@ -18,4 +18,8 @@ jobs:
       image_name: services/web-ui
       dockerfile_path: services/web-ui/Dockerfile
       build_context: services/web-ui/
+      build_args: |
+        NEXT_PUBLIC_AZURE_CLIENT_ID=${{ vars.NEXT_PUBLIC_AZURE_CLIENT_ID }}
+        NEXT_PUBLIC_TENANT_ID=${{ vars.NEXT_PUBLIC_TENANT_ID }}
+        NEXT_PUBLIC_REDIRECT_URI=${{ vars.NEXT_PUBLIC_REDIRECT_URI }}
     secrets: inherit

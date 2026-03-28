@@ -5,6 +5,15 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
+# Build-time env vars for NEXT_PUBLIC_* (baked in at build time by Next.js)
+ARG NEXT_PUBLIC_AZURE_CLIENT_ID
+ARG NEXT_PUBLIC_TENANT_ID
+ARG NEXT_PUBLIC_REDIRECT_URI=https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io/auth/callback
+
+ENV NEXT_PUBLIC_AZURE_CLIENT_ID=$NEXT_PUBLIC_AZURE_CLIENT_ID
+ENV NEXT_PUBLIC_TENANT_ID=$NEXT_PUBLIC_TENANT_ID
+ENV NEXT_PUBLIC_REDIRECT_URI=$NEXT_PUBLIC_REDIRECT_URI
+
 # Install dependencies
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
