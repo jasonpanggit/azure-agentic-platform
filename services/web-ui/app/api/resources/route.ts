@@ -82,7 +82,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     );
 
-    return NextResponse.json({ resources, total: resources.length });
+    // Collect distinct resource types sorted alphabetically
+    const resourceTypes = [...new Set(resources.map((r) => r.type))].sort();
+
+    return NextResponse.json({ resources, total: resources.length, resourceTypes });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json(

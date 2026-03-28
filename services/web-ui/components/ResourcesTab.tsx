@@ -56,11 +56,6 @@ const useStyles = makeStyles({
   icon: {
     fontSize: '32px',
   },
-  typeCell: {
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    color: tokens.colorNeutralForeground2,
-  },
   errorText: {
     color: tokens.colorPaletteRedForeground1,
   },
@@ -77,14 +72,18 @@ interface ResourcesTabProps {
   subscriptions: string[];
 }
 
-// Derive a short resource type label: Microsoft.Compute/virtualMachines → VM
+// Short label for well-known types; falls back to the last path segment
 const SHORT_TYPE: Record<string, string> = {
   'microsoft.compute/virtualmachines': 'VM',
   'microsoft.compute/disks': 'Disk',
+  'microsoft.compute/snapshots': 'Snapshot',
+  'microsoft.compute/images': 'Image',
   'microsoft.network/virtualnetworks': 'VNet',
   'microsoft.network/networksecuritygroups': 'NSG',
   'microsoft.network/publicipaddresses': 'Public IP',
   'microsoft.network/networkinterfaces': 'NIC',
+  'microsoft.network/loadbalancers': 'Load Balancer',
+  'microsoft.network/applicationgateways': 'App Gateway',
   'microsoft.storage/storageaccounts': 'Storage',
   'microsoft.keyvault/vaults': 'Key Vault',
   'microsoft.containerservice/managedclusters': 'AKS',
@@ -95,32 +94,28 @@ const SHORT_TYPE: Record<string, string> = {
   'microsoft.cognitiveservices/accounts': 'AI/Foundry',
   'microsoft.operationalinsights/workspaces': 'Log Analytics',
   'microsoft.insights/components': 'App Insights',
+  'microsoft.insights/smartdetectoralertrules': 'Smart Detector',
   'microsoft.eventhub/namespaces': 'Event Hub',
   'microsoft.containerregistry/registries': 'ACR',
+  'microsoft.web/sites': 'App Service',
+  'microsoft.web/serverfarms': 'App Service Plan',
+  'microsoft.sql/servers': 'SQL Server',
+  'microsoft.sql/servers/databases': 'SQL Database',
+  'microsoft.cache/redis': 'Redis',
+  'microsoft.servicebus/namespaces': 'Service Bus',
+  'microsoft.eventgrid/topics': 'Event Grid',
+  'microsoft.fabric/capacities': 'Fabric Capacity',
 };
 
 function shortType(type: string): string {
   return SHORT_TYPE[type.toLowerCase()] ?? type.split('/').pop() ?? type;
 }
 
-const RESOURCE_TYPES = [
-  'All types',
-  'Microsoft.Compute/virtualMachines',
-  'Microsoft.Network/virtualNetworks',
-  'Microsoft.Storage/storageAccounts',
-  'Microsoft.App/containerApps',
-  'Microsoft.ContainerService/managedClusters',
-  'Microsoft.KeyVault/vaults',
-  'Microsoft.DocumentDB/databaseAccounts',
-];
-
 const columns: TableColumnDefinition<Resource>[] = [
   createTableColumn<Resource>({
     columnId: 'name',
     renderHeaderCell: () => 'Name',
-    renderCell: (item) => (
-      <TableCellLayout>{item.name}</TableCellLayout>
-    ),
+    renderCell: (item) => <TableCellLayout>{item.name}</TableCellLayout>,
   }),
   createTableColumn<Resource>({
     columnId: 'type',
@@ -136,59 +131,71 @@ const columns: TableColumnDefinition<Resource>[] = [
   createTableColumn<Resource>({
     columnId: 'location',
     renderHeaderCell: () => 'Location',
-    renderCell: (item) => (
-      <TableCellLayout>{item.location}</TableCellLayout>
-    ),
+    renderCell: (item) => <TableCellLayout>{item.location}</TableCellLayout>,
   }),
 ];
 
+const ALL_TYPES = 'All types';
+
 export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
   const styles = useStyles();
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All types');
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
 
+  // Load all resources once — type filtering is done client-side
   const loadResources = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setTypeFilter(ALL_TYPES); // reset filter when subscriptions change
     try {
       const params = new URLSearchParams();
       if (subscriptions.length > 0) {
         params.set('subscriptions', subscriptions.join(','));
       }
-      if (typeFilter && typeFilter !== 'All types') {
-        params.set('type', typeFilter);
-      }
       const res = await fetch(`/api/resources?${params.toString()}`);
-      const data: { resources?: Resource[]; error?: string } = await res.json();
+      const data: { resources?: Resource[]; resourceTypes?: string[]; error?: string } =
+        await res.json();
       if (data.error) {
         setError(data.error);
       } else {
-        setResources(data.resources ?? []);
+        setAllResources(data.resources ?? []);
+        setAvailableTypes(data.resourceTypes ?? []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load resources');
     } finally {
       setLoading(false);
     }
-  }, [subscriptions, typeFilter]);
+  }, [subscriptions]);
 
   useEffect(() => {
     loadResources();
   }, [loadResources]);
 
-  const filtered = resources.filter((r) =>
-    search === '' ||
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.type.toLowerCase().includes(search.toLowerCase()) ||
-    r.location.toLowerCase().includes(search.toLowerCase())
-  );
+  // Client-side filtering — no re-fetch on type/search change
+  const filtered = allResources.filter((r) => {
+    const matchesType =
+      typeFilter === ALL_TYPES || r.type.toLowerCase() === typeFilter.toLowerCase();
+    const q = search.toLowerCase();
+    const matchesSearch =
+      q === '' ||
+      r.name.toLowerCase().includes(q) ||
+      r.type.toLowerCase().includes(q) ||
+      r.location.toLowerCase().includes(q);
+    return matchesType && matchesSearch;
+  });
 
   const handleTypeSelect = (_: SelectionEvents, data: OptionOnSelectData) => {
-    setTypeFilter(data.optionValue ?? 'All types');
+    setTypeFilter(data.optionValue ?? ALL_TYPES);
   };
+
+  // Display value for the dropdown: show short label for known types
+  const dropdownDisplay =
+    typeFilter === ALL_TYPES ? ALL_TYPES : `${shortType(typeFilter)} (${typeFilter.split('/').pop()})`;
 
   return (
     <div className={styles.root}>
@@ -202,23 +209,24 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
         />
         <Dropdown
           placeholder="All types"
-          value={typeFilter}
+          value={dropdownDisplay}
           onOptionSelect={handleTypeSelect}
         >
-          {RESOURCE_TYPES.map((t) => (
-            <Option key={t} value={t}>{t === 'All types' ? 'All types' : shortType(t)}</Option>
+          <Option text={ALL_TYPES} key={ALL_TYPES} value={ALL_TYPES}>All types</Option>
+          {availableTypes.map((t) => (
+            <Option text={`${shortType(t)} — ${t}`} key={t} value={t}>
+              {shortType(t)} — {t}
+            </Option>
           ))}
         </Dropdown>
         {!loading && (
           <Text size={200} className={styles.summary}>
-            {filtered.length} of {resources.length} resource{resources.length !== 1 ? 's' : ''}
+            {filtered.length} of {allResources.length} resource{allResources.length !== 1 ? 's' : ''}
           </Text>
         )}
       </div>
 
-      {loading && (
-        <Spinner label="Loading resources..." />
-      )}
+      {loading && <Spinner label="Loading resources..." />}
 
       {error && !loading && (
         <Text className={styles.errorText}>{error}</Text>
@@ -228,7 +236,7 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
         <div className={styles.emptyState}>
           <ServerRegular className={styles.icon} />
           <Text weight="semibold">No resources found</Text>
-          <Text size={200}>Try adjusting the subscription filter or search query.</Text>
+          <Text size={200}>Try adjusting the subscription filter, type, or search query.</Text>
         </div>
       )}
 
