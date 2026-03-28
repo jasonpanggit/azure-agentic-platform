@@ -41,3 +41,15 @@ _aap_bootstrap.py
 node_modules/
 .next/
 dist/
+
+# Test coverage
+coverage/
+.coverage
+*.lcov
+
+# TypeScript build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Claude Code runtime
+.claude/checkpoints.log
