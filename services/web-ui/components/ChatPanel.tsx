@@ -59,6 +59,20 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   // Handle token events — accumulate delta into streaming assistant message
   const handleTokenEvent = useCallback((event: SSEEvent) => {
     const data = event.data as Record<string, unknown>;
+
+    // Done event — finalize streaming message and clear spinner
+    if (data.type === 'done') {
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.isStreaming) {
+          return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false }];
+        }
+        return prev;
+      });
+      setIsStreaming(false);
+      return;
+    }
+
     const delta = (data.delta as string) || '';
     const agent = (data.agent as string) || currentAgent;
 

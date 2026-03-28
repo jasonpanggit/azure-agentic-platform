@@ -67,7 +67,17 @@ export function useSSE({
       }
     });
 
-    es.addEventListener('done', () => {
+    es.addEventListener('done', (event: MessageEvent) => {
+      // Parse seq from done payload if available, otherwise use lastSeq + 1
+      let seq = lastSeqRef.current + 1;
+      try {
+        const parsed = JSON.parse(event.data) as { seq?: number };
+        if (parsed.seq) seq = parsed.seq;
+      } catch { /* ignore */ }
+
+      // Notify the component so it can clear isStreaming / finalize messages
+      onEvent({ type: 'done', seq, data: { type: 'done' } });
+
       es.close();
       setConnected(false);
     });
