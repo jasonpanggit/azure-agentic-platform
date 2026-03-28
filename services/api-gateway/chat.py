@@ -6,10 +6,8 @@ Supports thread continuation for cross-surface thread sharing (TEAMS-004).
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
-from datetime import datetime, timezone
 from typing import Optional
 
 from services.api_gateway.foundry import _get_foundry_client
@@ -83,25 +81,10 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             "Created chat thread %s for user %s", thread_id, effective_user_id
         )
 
-    now = datetime.now(timezone.utc).isoformat()
-    envelope = {
-        "correlation_id": f"chat-{thread_id}",
-        "thread_id": thread_id,
-        "source_agent": "operator",
-        "target_agent": "orchestrator",
-        "message_type": "incident_handoff",
-        "payload": {
-            "message": request.message,
-            "incident_id": request.incident_id,
-            "initiated_by": effective_user_id,
-        },
-        "timestamp": now,
-    }
-
     client.messages.create(
         thread_id=thread_id,
         role="user",
-        content=json.dumps(envelope),
+        content=request.message,
     )
 
     run = client.runs.create(
