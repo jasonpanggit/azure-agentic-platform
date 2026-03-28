@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: ''
+      no_cache:
+        description: 'Disable Docker build cache (force full rebuild)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -72,8 +77,9 @@ jobs:
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:latest
           build-args: ${{ inputs.build_args }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: ${{ inputs.no_cache }}
+          cache-from: ${{ inputs.no_cache && '' || 'type=gha' }}
+          cache-to: ${{ inputs.no_cache && '' || 'type=gha,mode=max' }}
 
       - name: Image Size Check
         run: |
