@@ -166,6 +166,9 @@ module "agent_apps" {
   api_gateway_internal_url = "https://${module.compute_env.acr_login_server != "" ? "ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io" : ""}"
   web_ui_public_url        = var.web_ui_public_url
   teams_channel_id         = var.teams_channel_id
+
+  # Web UI Observability tab
+  log_analytics_workspace_customer_id = module.monitoring.log_analytics_workspace_customer_id
 }
 
 # --- RBAC (depends on: agent-apps) ---

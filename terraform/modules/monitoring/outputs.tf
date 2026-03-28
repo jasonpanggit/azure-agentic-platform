@@ -3,6 +3,11 @@ output "log_analytics_workspace_id" {
   value       = azurerm_log_analytics_workspace.main.id
 }
 
+output "log_analytics_workspace_customer_id" {
+  description = "Customer ID (GUID) of the Log Analytics workspace — used as LOG_ANALYTICS_WORKSPACE_ID for API queries"
+  value       = azurerm_log_analytics_workspace.main.workspace_id
+}
+
 output "log_analytics_workspace_name" {
   description = "Name of the Log Analytics workspace"
   value       = azurerm_log_analytics_workspace.main.name

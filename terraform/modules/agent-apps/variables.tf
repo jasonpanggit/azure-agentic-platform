@@ -108,3 +108,9 @@ variable "teams_channel_id" {
   type        = string
   default     = ""
 }
+
+variable "log_analytics_workspace_customer_id" {
+  description = "Log Analytics workspace customer ID (GUID) for the web-ui Observability tab"
+  type        = string
+  default     = ""
+}

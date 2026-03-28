@@ -76,6 +76,14 @@ resource "azurerm_container_app" "agents" {
         name  = "CORS_ALLOWED_ORIGINS"
         value = var.cors_allowed_origins
       }
+      # Web UI specific: Log Analytics workspace for Observability tab
+      dynamic "env" {
+        for_each = each.key == "web-ui" && var.log_analytics_workspace_customer_id != "" ? [1] : []
+        content {
+          name  = "LOG_ANALYTICS_WORKSPACE_ID"
+          value = var.log_analytics_workspace_customer_id
+        }
+      }
     }
   }
 
