@@ -23,11 +23,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (saved === 'dark' || saved === 'light') {
       setThemeMode(saved);
     }
-    // Initialize MSAL
+
+    // Initialize MSAL then handle any pending redirect promise.
+    // Use a timeout fallback so a stalled handleRedirectPromise never
+    // blocks the app from rendering indefinitely.
     msalInstance.initialize().then(() => {
-      msalInstance.handleRedirectPromise().then(() => {
+      const redirectPromise = msalInstance.handleRedirectPromise();
+      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000));
+      Promise.race([redirectPromise, timeout]).then(() => {
+        setMsalReady(true);
+      }).catch(() => {
         setMsalReady(true);
       });
+    }).catch(() => {
+      setMsalReady(true);
     });
   }, [msalInstance]);
 

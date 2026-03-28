@@ -6,6 +6,7 @@ export const msalConfig: Configuration = {
     authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_TENANT_ID || 'common'}`,
     redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI || 'http://localhost:3000/callback',
     postLogoutRedirectUri: '/',
+    navigateToLoginRequestUrl: true,
   },
   cache: {
     cacheLocation: 'localStorage',
@@ -23,10 +24,9 @@ export const msalConfig: Configuration = {
   },
 };
 
+// Standard OIDC scopes — no custom api:// scopes required for login.
+// To call the API gateway with a token, acquire a token silently with
+// api://<gateway-client-id>/incidents.read after login.
 export const loginRequest = {
-  scopes: [
-    `api://${process.env.NEXT_PUBLIC_AZURE_CLIENT_ID}/incidents.read`,
-    `api://${process.env.NEXT_PUBLIC_AZURE_CLIENT_ID}/approvals.write`,
-    `api://${process.env.NEXT_PUBLIC_AZURE_CLIENT_ID}/chat.write`,
-  ],
+  scopes: ['openid', 'profile', 'email'],
 };
