@@ -108,6 +108,11 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
 async def get_chat_result(thread_id: str) -> dict[str, str]:
     """Poll Foundry for the latest run status on a thread.
 
+    Handles the `requires_action / submit_tool_approval` flow for MCP tools:
+    when the Foundry agent needs to execute an MCP tool call, Foundry pauses
+    the run and requires the client to approve the tool execution. We
+    auto-approve all MCP tool calls for operator chat sessions.
+
     Returns the run status and, when completed, the assistant's reply text.
     The caller (stream route) should poll until run_status is terminal
     (completed | failed | cancelled | expired).
@@ -130,6 +135,34 @@ async def get_chat_result(thread_id: str) -> dict[str, str]:
     run_status = latest_run.status
 
     logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+
+    # Auto-approve MCP tool calls — required for Foundry MCP tool execution
+    if run_status == "requires_action":
+        required_action = latest_run.required_action
+        if (
+            required_action is not None
+            and hasattr(required_action, "type")
+            and required_action.type == "submit_tool_approval"
+        ):
+            tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore[attr-defined]
+            approval_ids = [tc.id for tc in tool_calls]
+            logger.info(
+                "Auto-approving %d MCP tool call(s) for thread %s: %s",
+                len(approval_ids),
+                thread_id,
+                approval_ids,
+            )
+            try:
+                client.runs.submit_tool_approval(
+                    thread_id=thread_id,
+                    run_id=latest_run.id,
+                    tool_calls=approval_ids,
+                )
+                # Return in_progress so the caller keeps polling
+                return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
+            except Exception as exc:
+                logger.warning("Failed to submit tool approval: %s", exc)
+                # Fall through — return requires_action so caller retries
 
     reply = None
     if run_status == "completed":
