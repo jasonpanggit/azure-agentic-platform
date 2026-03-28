@@ -107,6 +107,10 @@ class ChatRequest(BaseModel):
     user_id: Optional[str] = Field(
         default=None, description="Operator UPN from Teams activity (D-07)"
     )
+    subscription_ids: Optional[list[str]] = Field(
+        default=None,
+        description="Azure subscription IDs selected in the UI (injected as context)",
+    )
 
 
 class ChatResponse(BaseModel):

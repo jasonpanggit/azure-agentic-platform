@@ -36,3 +36,9 @@ variable "all_subscription_ids" {
   description = "List of all in-scope subscription IDs for cross-subscription reader roles (storage, security, SRE)"
   type        = list(string)
 }
+
+variable "acr_id" {
+  description = "Resource ID of the Azure Container Registry for AcrPull role assignments"
+  type        = string
+  default     = ""
+}

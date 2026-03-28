@@ -162,6 +162,10 @@ module "agent_apps" {
   cors_allowed_origins           = var.cors_allowed_origins
   orchestrator_agent_id          = var.orchestrator_agent_id
 
+  # Deploy real agent images from ACR (not placeholder)
+  use_placeholder_image = false
+  image_tag             = "latest"
+
   # Teams Bot specific configuration
   teams_bot_id             = var.teams_bot_id
   teams_bot_password       = var.teams_bot_password
@@ -181,6 +185,7 @@ module "rbac" {
   agent_principal_ids      = module.agent_apps.agent_principal_ids
   platform_subscription_id = var.subscription_id
   all_subscription_ids     = var.all_subscription_ids
+  acr_id                   = module.compute_env.acr_id
 
   # Prod: separate subscription IDs per domain for true isolation
   compute_subscription_id = var.compute_subscription_id

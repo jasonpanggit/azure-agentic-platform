@@ -126,3 +126,12 @@ resource "azurerm_role_assignment" "agent_rbac" {
   role_definition_name = each.value.role_definition_name
   scope                = each.value.scope
 }
+
+# AcrPull role for all agent and service managed identities to pull images from ACR
+resource "azurerm_role_assignment" "acr_pull" {
+  for_each = var.acr_id != "" ? var.agent_principal_ids : {}
+
+  principal_id         = each.value
+  role_definition_name = "AcrPull"
+  scope                = var.acr_id
+}
