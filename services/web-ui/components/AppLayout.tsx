@@ -87,6 +87,7 @@ export function AppLayout() {
           <SubscriptionSelector
             selected={selectedSubscriptions}
             onChange={setSelectedSubscriptions}
+            onLoad={setSelectedSubscriptions}
           />
         </div>
       </div>
