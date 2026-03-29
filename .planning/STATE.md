@@ -3,27 +3,37 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-29T14:20:00.000Z"
+last_updated: "2026-03-29T22:00:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 30
-  completed_plans: 22
+  total_plans: 41
+  completed_plans: 34
 current_phase: 08-azure-validation-incident-simulation
-current_plan: 08-04
+current_plan: 08-05
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-29 — Plan 08-04 COMPLETE. Manual OTel spans added to api-gateway (instrumentation.py with foundry_span/mcp_span/agent_span context managers; foundry.py, chat.py, approvals.py instrumented). Teams bot E2E round-trip spec created (e2e-teams-roundtrip.spec.ts, 3 tests). Task 08-04-06 (Container App rebuild) is operator-only — requires Azure CLI.
+> Last updated: 2026-03-29 — Plan 08-05 COMPLETE. VALIDATION-REPORT.md finalized with OTel Verification section, final counts (E2E 22/30, Smoke 6/7, Simulations 8/8, OTel CANNOT_VERIFY), Conclusion, and Backlog Items. BACKLOG.md created with 11 items. Phase 8 validation status: FAIL — 2 BLOCKING findings (F-01 Foundry RBAC, F-02 runbook search 500) remain OPEN pending operator action. completed_phases stays at 7 until BLOCKING resolved.
 >
-> Phase 8 next: Plan 08-05 (Full E2E run). BLOCKING items F-01/F-02 must be confirmed before phase close. 08-04-06 Container App redeploy needed before OTel spans visible in App Insights.
+> Phase 8 plans all complete (5/5). Operator must resolve F-01 and F-02 before phase can be marked complete.
 
 ---
 
 ## Current Phase
 
-**Phase 7: Quality & Hardening — ✅ COMPLETE (6/6 plans)**
+**Phase 8: Azure Validation & Incident Simulation — ⚠️ PLANS COMPLETE (5/5 plans), VALIDATION FAIL (2 BLOCKING open)**
+
+Plan 08-01 complete: Fix Provisioning Gaps — Foundry Orchestrator Agent created, ORCHESTRATOR_AGENT_ID set on ca-api-gateway-prod, Azure Bot Service registered, 3 GitHub secrets added.
+
+Plan 08-02 complete: Critical-Path Validation — test.skip() removed from E2E tests, E2E suite run against prod (22/30 pass), 7 smoke tests executed, VALIDATION-REPORT.md initialized with 2 BLOCKING + 6 DEGRADED findings.
+
+Plan 08-03 complete: Incident Simulation — 7 scenario scripts + common utilities + run-all.sh orchestrator, simulation CI gate wired into phase7-e2e.yml, all 8 scenarios/injections executed against prod (7/7 scenarios PASS), 3 additional DEGRADED findings (F-09/F-10/F-11 MCP tool groups).
+
+Plan 08-04 complete: Deferred Phase 7 Work — instrumentation.py with foundry_span/mcp_span/agent_span (span pattern: agent.{agent_name}), manual OTel spans added to foundry.py/chat.py/approvals.py, e2e-teams-roundtrip.spec.ts created (3 tests). Container App rebuild (08-04-06) is operator-only.
+
+Plan 08-05 complete: Validation Closeout — VALIDATION-REPORT.md finalized (OTel section, final summary, conclusion, backlog items), BACKLOG.md created with 11 items. Phase 8 overall status FAIL — F-01 (Foundry RBAC) and F-02 (runbook search 500) remain OPEN pending operator action.
 
 Plan 07-01 complete: OTel auto-instrumentation on api-gateway (Python, `azure-monitor-opentelemetry`) and teams-bot (TypeScript, `@azure/monitor-opentelemetry`). Observability tab added to Web UI DashboardPanel as 5th tab — polling API route queries Application Insights KQL (agent latency P50/P95, pipeline lag, active errors) and Cosmos DB (approval queue depth). 9 new components (ObservabilityTab, MetricCard, AgentLatencyCard, PipelineLagCard, ApprovalQueueCard, ActiveErrorsCard, TimeRangeSelector).
 
@@ -62,20 +72,21 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
-| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (4/5 plans) — Plan 08-01: provisioning fixes; Plan 08-02: E2E strict mode, 22/30 tests pass, VALIDATION-REPORT.md (2 BLOCKING); Plan 08-03: simulation suite 7/7 PASS, CI gate wired; Plan 08-04: OTel spans (instrumentation.py + foundry/chat/approvals), Teams E2E spec (3 tests) |
+| 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
 
 ---
 
 ## Blockers/Concerns
 
-**Phase 8 BLOCKING findings (from VALIDATION-REPORT.md — must resolve before phase close):**
-- **F-01**: `Azure AI Developer` RBAC missing on Foundry for gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` — blocks Foundry dispatch, agent triage
+**Phase 8 BLOCKING findings (from VALIDATION-REPORT.md — must resolve before phase closes):**
+- **F-01**: `Azure AI Developer` RBAC missing on Foundry for gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` — blocks Foundry dispatch, agent triage (E2E-002 triage polling timed out), SSE event generation
 - **F-02**: `GET /api/v1/runbooks/search` returns 500 — pgvector/PostgreSQL connection or seed issue on prod
 
-**Operator actions still needed:**
-- Complete P-03 RBAC assignment (resolves F-01)
-- Verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod` (resolves F-02)
-- See `.planning/phases/08-azure-validation-incident-simulation/08-01-USER-SETUP.md` for exact commands
+**Operator actions still needed (from .planning/BACKLOG.md):**
+- Complete F-01 RBAC assignment: `az role assignment create --assignee 69e05934-... --role "Azure AI Developer" --scope /subscriptions/4c727b88-.../resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/foundry-aap-prod`
+- Verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod` and seed prod runbooks (resolves F-02)
+- Complete 08-04-06 Container App rebuild to activate OTel spans in App Insights
+- See `.planning/BACKLOG.md` for full 11-item backlog (2 BLOCKING + 9 DEGRADED)
 
 ---
 
@@ -160,6 +171,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | OTel span name agent.{agent_name} (not agent.invoke) | 8-04 | Each domain agent gets a distinct span name for per-agent filtering in App Insights; fixed name would prevent distinguishing orchestrator vs compute vs network spans |
 | mcp.outcome placement in try/except | 8-04 | success set in try block, error set in except block within mcp_span — ensures outcome always recorded even when finally runs after exception |
 | 08-04-06 Container App rebuild is operator-only | 8-04 | Requires live Azure CLI + ACR push access; automation would need managed identity with Container Registry Contributor role; documented for operator with exact commands |
+| Phase 8 validation FAIL — BLOCKING findings require operator action | 8-05 | F-01 (Foundry RBAC) and F-02 (runbook search 500) require Azure CLI/Portal access not available to autonomous executor; completed_phases stays at 7 until operator resolves both; all 5 plans complete |
 
 ---
 
