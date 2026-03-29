@@ -153,6 +153,7 @@ module "agent_apps" {
   app_insights_connection_string = module.monitoring.app_insights_connection_string
   cosmos_endpoint                = module.databases.cosmos_endpoint
   cosmos_database_name           = module.databases.cosmos_database_name
+  arc_mcp_server_url             = module.arc_mcp_server.arc_mcp_server_url
 }
 
 # --- RBAC (depends on: agent-apps) ---

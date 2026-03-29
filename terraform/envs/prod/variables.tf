@@ -116,3 +116,33 @@ variable "orchestrator_agent_id" {
   type        = string
   default     = ""
 }
+
+variable "compute_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "network_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "storage_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "security_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "sre_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "arc_agent_id" {
+  type    = string
+  default = ""
+}

@@ -141,6 +141,29 @@ module "private_endpoints" {
   private_dns_zone_servicebus_id = module.networking.private_dns_zone_servicebus_id
 }
 
+# --- Arc MCP Server (depends on: compute-env, monitoring) ---
+# Phase 3: Internal-only Container App exposing Arc resource tools.
+# Arc Agent calls it at http://{arc_mcp_server_fqdn}/mcp (ARC_MCP_SERVER_URL).
+
+module "arc_mcp_server" {
+  source = "../../modules/arc-mcp-server"
+
+  resource_group_name            = azurerm_resource_group.main.name
+  location                       = var.location
+  environment                    = var.environment
+  required_tags                  = local.required_tags
+  container_apps_environment_id  = module.compute_env.container_apps_environment_id
+  container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
+  acr_login_server               = module.compute_env.acr_login_server
+  app_insights_connection_string = module.monitoring.app_insights_connection_string
+
+  # Prod: Arc resources may span multiple subscriptions.
+  # Override arc_subscription_ids via all_subscription_ids or a dedicated variable.
+  arc_subscription_ids = var.all_subscription_ids != [] ? var.all_subscription_ids : [var.subscription_id]
+
+  arc_disconnect_alert_hours = 1
+}
+
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
 
 module "agent_apps" {
@@ -161,6 +184,13 @@ module "agent_apps" {
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
   orchestrator_agent_id          = var.orchestrator_agent_id
+  arc_mcp_server_url             = module.arc_mcp_server.arc_mcp_server_url
+  compute_agent_id               = var.compute_agent_id
+  network_agent_id               = var.network_agent_id
+  storage_agent_id               = var.storage_agent_id
+  security_agent_id              = var.security_agent_id
+  sre_agent_id                   = var.sre_agent_id
+  arc_agent_id                   = var.arc_agent_id
 
   # Deploy real agent images from ACR (not placeholder)
   use_placeholder_image = false

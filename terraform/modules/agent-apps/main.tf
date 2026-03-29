@@ -97,6 +97,57 @@ resource "azurerm_container_app" "agents" {
           value = var.orchestrator_agent_id
         }
       }
+      # Inject domain agent IDs into the orchestrator
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.compute_agent_id != "" ? [1] : []
+        content {
+          name  = "COMPUTE_AGENT_ID"
+          value = var.compute_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.network_agent_id != "" ? [1] : []
+        content {
+          name  = "NETWORK_AGENT_ID"
+          value = var.network_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.storage_agent_id != "" ? [1] : []
+        content {
+          name  = "STORAGE_AGENT_ID"
+          value = var.storage_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.security_agent_id != "" ? [1] : []
+        content {
+          name  = "SECURITY_AGENT_ID"
+          value = var.security_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.sre_agent_id != "" ? [1] : []
+        content {
+          name  = "SRE_AGENT_ID"
+          value = var.sre_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.arc_agent_id != "" ? [1] : []
+        content {
+          name  = "ARC_AGENT_ID"
+          value = var.arc_agent_id
+        }
+      }
+      # Inject Arc MCP Server URL into the arc agent
+      dynamic "env" {
+        for_each = each.key == "arc" && var.arc_mcp_server_url != "" ? [1] : []
+        content {
+          name  = "ARC_MCP_SERVER_URL"
+          value = var.arc_mcp_server_url
+        }
+      }
       # Web UI specific: Log Analytics workspace for Observability tab
       dynamic "env" {
         for_each = each.key == "web-ui" && var.log_analytics_workspace_customer_id != "" ? [1] : []

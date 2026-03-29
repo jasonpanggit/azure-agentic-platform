@@ -88,6 +88,48 @@ variable "orchestrator_agent_id" {
   default     = ""
 }
 
+variable "compute_agent_id" {
+  description = "Foundry Agent ID for the Compute domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "network_agent_id" {
+  description = "Foundry Agent ID for the Network domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "storage_agent_id" {
+  description = "Foundry Agent ID for the Storage domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "security_agent_id" {
+  description = "Foundry Agent ID for the Security domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "sre_agent_id" {
+  description = "Foundry Agent ID for the SRE domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "arc_agent_id" {
+  description = "Foundry Agent ID for the Arc domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "arc_mcp_server_url" {
+  description = "Internal URL of the Arc MCP Server Container App (e.g. http://ca-arc-mcp-server-prod.internal/mcp)"
+  type        = string
+  default     = ""
+}
+
 # Teams Bot specific variables
 variable "teams_bot_id" {
   description = "Azure AD app registration client ID for the Teams bot (BOT_ID)"

@@ -42,3 +42,33 @@ variable "fabric_admin_email" {
   description = "Email address of the Fabric capacity administrator"
   type        = string
 }
+
+variable "compute_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "network_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "storage_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "security_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "sre_agent_id" {
+  type    = string
+  default = ""
+}
+
+variable "arc_agent_id" {
+  type    = string
+  default = ""
+}
