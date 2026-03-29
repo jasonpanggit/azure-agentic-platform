@@ -14,6 +14,7 @@ from typing import Optional
 
 from services.api_gateway.azure_tools import AzureToolRequest, call_azure_tool
 from services.api_gateway.foundry import _get_foundry_client
+from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,10 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
         logger.info("Continuing thread %s for user %s", thread_id, effective_user_id)
     else:
         # Create new thread
-        thread = client.threads.create()
-        thread_id = thread.id
+        with foundry_span("create_thread") as span:
+            thread = client.threads.create()
+            thread_id = thread.id
+            span.set_attribute("foundry.thread_id", thread_id)
         logger.info(
             "Created chat thread %s for user %s", thread_id, effective_user_id
         )
@@ -94,16 +97,20 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             f"{request.message}"
         )
 
-    client.messages.create(
-        thread_id=thread_id,
-        role="user",
-        content=message_content,
-    )
+    with foundry_span("post_message", thread_id=thread_id) as span:
+        client.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=message_content,
+        )
 
-    run = client.runs.create(
-        thread_id=thread_id,
-        agent_id=orchestrator_agent_id,
-    )
+    with agent_span("orchestrator", correlation_id=request.incident_id or ""):
+        with foundry_span("create_run", thread_id=thread_id) as span:
+            run = client.runs.create(
+                thread_id=thread_id,
+                agent_id=orchestrator_agent_id,
+            )
+            span.set_attribute("foundry.run_id", run.id)
 
     return {"thread_id": thread_id, "run_id": run.id}
 
@@ -202,11 +209,13 @@ async def get_chat_result(
                 latest_run.id,
             )
             try:
-                client.runs.submit_tool_outputs(
-                    thread_id=thread_id,
-                    run_id=latest_run.id,
-                    tool_outputs=tool_outputs,
-                )
+                with mcp_span("tool_approval", thread_id=thread_id) as mspan:
+                    mspan.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
+                    client.runs.submit_tool_outputs(
+                        thread_id=thread_id,
+                        run_id=latest_run.id,
+                        tool_outputs=tool_outputs,
+                    )
                 return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
             except Exception as exc:
                 logger.warning("Failed to submit tool outputs: %s", exc)
@@ -214,7 +223,8 @@ async def get_chat_result(
     reply = None
     if run_status == "completed":
         # Fetch the last assistant message
-        messages = client.messages.list(thread_id=thread_id)
+        with foundry_span("list_messages", thread_id=thread_id):
+            messages = client.messages.list(thread_id=thread_id)
         for msg in messages:
             if msg.role == "assistant":
                 # Extract text from the first text content block
