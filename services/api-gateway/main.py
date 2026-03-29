@@ -216,7 +216,11 @@ async def start_chat(
             detail=f"Foundry dispatch unavailable: {exc}",
         ) from exc
 
-    return ChatResponse(thread_id=result["thread_id"], status="created")
+    return ChatResponse(
+        thread_id=result["thread_id"],
+        run_id=result["run_id"],
+        status="created",
+    )
 
 
 @app.get(
@@ -225,6 +229,7 @@ async def start_chat(
 )
 async def get_chat_result_endpoint(
     thread_id: str,
+    run_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
 ) -> ChatResultResponse:
     """Poll for the result of a Foundry chat run.
@@ -232,10 +237,14 @@ async def get_chat_result_endpoint(
     The web UI stream route calls this endpoint to check whether the
     Orchestrator agent has completed its run on a given thread.
 
+    Args:
+        thread_id: Foundry thread ID (path parameter).
+        run_id: Optional run ID to poll a specific run (query parameter).
+
     Returns run_status and the assistant reply once completed.
     """
     try:
-        result = await get_chat_result(thread_id)
+        result = await get_chat_result(thread_id, run_id=run_id)
     except Exception as exc:
         logger.error("Failed to fetch chat result for thread %s: %s", thread_id, exc)
         raise HTTPException(

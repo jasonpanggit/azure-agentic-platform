@@ -22,3 +22,14 @@ When Terraform sets `FOUNDRY_ACCOUNT_ENDPOINT` but Python code reads `AZURE_PROJ
 
 ### 2026-03-28: Health checks that don't exercise critical dependencies mask failures
 `GET /health` returning 200 doesn't mean the service is functional. If the health check doesn't verify Foundry connectivity, missing env vars, or RBAC, the service appears healthy while all business endpoints fail. Consider adding a `/health/ready` endpoint that validates all required dependencies.
+
+## Chat / SSE / Foundry
+
+### 2026-03-29: Foundry runs.list() returns chronological order (oldest first)
+`client.runs.list(thread_id=...)` returns runs oldest-first. Using `run_list[0]` to get the "latest" run is WRONG — it gets the oldest. Use `run_list[-1]` or (better) pass a specific `run_id` directly and use `client.runs.retrieve()`. Always verify list API ordering assumptions with multi-item tests.
+
+### 2026-03-29: SSE dedup guards must reset between logical streams
+When reusing an SSE hook across multiple runs (same thread, different runKey), the server starts seq at 0 for each new SSE connection. If the client retains lastSeqRef from the previous run, the dedup guard (`seq > lastSeqRef`) silently drops ALL events from the new stream. Reset sequence tracking when opening a new connection for a new run.
+
+### 2026-03-29: Silent failures in event pipelines need defense-in-depth
+Two independent bugs (wrong run selection + stale dedup guard) combined to produce complete silence with zero errors visible anywhere. When building event pipelines, add targeted polling (pass run_id through the full chain) rather than relying on "get latest" heuristics. Each layer should be independently correct.

@@ -107,7 +107,9 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
     return {"thread_id": thread_id, "run_id": run.id}
 
 
-async def get_chat_result(thread_id: str) -> dict[str, str]:
+async def get_chat_result(
+    thread_id: str, run_id: Optional[str] = None
+) -> dict[str, str]:
     """Poll Foundry for the latest run status on a thread.
 
     Handles the `requires_action / submit_tool_outputs` flow for the
@@ -121,19 +123,32 @@ async def get_chat_result(thread_id: str) -> dict[str, str]:
 
     Args:
         thread_id: Foundry thread ID.
+        run_id: Optional specific run ID to poll. When provided, targets
+            exactly this run instead of guessing which is latest.
 
     Returns:
         Dict with "thread_id", "run_status", and optionally "reply".
     """
     client = _get_foundry_client()
 
-    # Get the most recent run on this thread
-    runs = client.runs.list(thread_id=thread_id)
-    run_list = list(runs)
-    if not run_list:
-        return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+    # If a specific run_id was provided, retrieve it directly
+    if run_id:
+        try:
+            latest_run = client.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        except Exception as exc:
+            logger.warning("Failed to retrieve run %s: %s", run_id, exc)
+            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+    else:
+        # Fallback: list runs and pick the most recent one.
+        # Foundry runs.list() returns chronological order (oldest first),
+        # so the LAST element is the most recent run.
+        runs = client.runs.list(thread_id=thread_id)
+        run_list = list(runs)
+        if not run_list:
+            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
 
-    latest_run = run_list[0]
+        latest_run = run_list[-1]
+
     run_status = latest_run.status
 
     logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)

@@ -84,6 +84,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   const styles = useStyles();
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [runKey, setRunKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -198,6 +199,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   // Token SSE connection
   useSSE({
     threadId,
+    runId,
     streamType: 'token',
     onEvent: handleTokenEvent,
     runKey,
@@ -206,6 +208,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   // Trace SSE connection
   useSSE({
     threadId,
+    runId,
     streamType: 'trace',
     onEvent: handleTraceEvent,
     runKey,
@@ -236,6 +239,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
 
       if (res.ok) {
         const data = await res.json();
+        setRunId(data.run_id ?? null);
         if (!threadId) {
           // First message — set threadId (triggers SSE connection)
           setThreadId(data.thread_id);
