@@ -140,6 +140,32 @@ The following DEGRADED findings were observed from simulation reply content. All
 
 ---
 
+## OTel Manual Span Verification
+
+> **Note:** Azure Portal access is not available in the automated executor context. Spans are marked CANNOT_VERIFY. To verify manually: Azure Portal → Application Insights (`appi-aap-prod`) → Transaction Search → filter by Operation Name starting with `foundry.`, `mcp.`, or `agent.orchestrator`.
+>
+> Prerequisite: Task 08-04-06 (Container App rebuild with `instrumentation.py`) must be completed by the operator before spans appear in App Insights.
+
+| Span Type | Expected | Verified? | Notes |
+|-----------|----------|-----------|-------|
+| `foundry.create_thread` | App Insights Transaction Search | CANNOT_VERIFY | Requires 08-04-06 operator redeploy + portal access |
+| `foundry.post_message` | App Insights Transaction Search | CANNOT_VERIFY | Requires 08-04-06 operator redeploy + portal access |
+| `foundry.create_run` | App Insights Transaction Search | CANNOT_VERIFY | Requires 08-04-06 operator redeploy + portal access |
+| `foundry.list_messages` | App Insights Transaction Search | CANNOT_VERIFY | Requires 08-04-06 operator redeploy + portal access |
+| `mcp.tool_approval` | App Insights Transaction Search | CANNOT_VERIFY | Requires 08-04-06 operator redeploy + portal access |
+| `agent.orchestrator` | App Insights Transaction Search | CANNOT_VERIFY | Query `agent.orchestrator` span name (NOT `agent.invoke`); requires 08-04-06 + portal access |
+
+**Operator verification command (after 08-04-06 redeploy):**
+```bash
+# Azure CLI — query App Insights for foundry spans (last 1 hour)
+az monitor app-insights query \
+  --app appi-aap-prod \
+  --resource-group rg-aap-prod \
+  --analytics-query "requests | where timestamp > ago(1h) | where operation_Name startswith 'foundry.' or operation_Name startswith 'agent.' | project timestamp, operation_Name, duration, success | order by timestamp desc | take 50"
+```
+
+---
+
 ## Findings
 
 | ID | Service | Description | Severity | Fix | Status |
@@ -160,10 +186,14 @@ The following DEGRADED findings were observed from simulation reply content. All
 
 ## Summary
 
-- **BLOCKING:** 2 findings (F-01 Foundry RBAC, F-02 Runbook search 500)
-- **DEGRADED:** 9 findings (F-03 CORS, F-04 Teams bot, F-05 CI secrets, F-06 Arc MCP E2E URL, F-07 approval 404, F-08 SSE E2E, F-09 Network MCP tools, F-10 Security MCP tools, F-11 Arc/SRE MCP tools)
+- **BLOCKING:** 2 findings (F-01 Foundry RBAC, F-02 Runbook search 500) — both OPEN
+- **DEGRADED:** 9 findings (F-03 CORS, F-04 Teams bot, F-05 CI secrets, F-06 Arc MCP E2E URL, F-07 approval 404, F-08 SSE E2E, F-09 Network MCP tools, F-10 Security MCP tools, F-11 Arc/SRE MCP tools) — all logged as backlog
 - **COSMETIC:** 0 findings
-- **Overall:** **FAIL** (PASS requires 0 BLOCKING findings)
+- **E2E Tests:** 22/30 passed (8 failed: 5 arc-mcp localhost, 1 triage timeout, 1 SSE sequence, 1 approval 500)
+- **Smoke Tests:** 6/7 passed (S-04 runbook search 500 — F-02)
+- **Simulations:** 8/8 passed (7 scenarios, cross-domain counts as 2)
+- **OTel Spans:** 0/6 verified in App Insights (CANNOT_VERIFY — 08-04-06 operator redeploy pending)
+- **Overall:** **FAIL** (PASS requires 0 BLOCKING findings open; F-01 and F-02 remain OPEN)
 
 ### Simulation Summary
 
@@ -194,3 +224,37 @@ The following DEGRADED findings were observed from simulation reply content. All
 2. **F-02**: Fix runbook search — verify PGVECTOR_CONNECTION_STRING + seed prod runbooks
 
 All DEGRADED findings (F-03 through F-11) logged as backlog todos and do not block Phase 8 completion.
+
+---
+
+## Conclusion
+
+Phase 8 validation **FAILED** — 2 BLOCKING findings (F-01, F-02) remain OPEN and require operator action before the phase can be marked complete.
+
+### What Was Proven
+
+- Core platform critical path is functional: web UI loads, chat returns 202, incident POST triggers Foundry agent dispatch, all 7 simulation scenarios completed end-to-end with Foundry `run_status=completed`.
+- Incident simulation suite (7 scenarios, 8 injections) passed 100% — Foundry orchestrator routes and completes all domain simulations.
+- HITL approval infrastructure responds correctly (list/approve/reject endpoints functional).
+- Audit export endpoint operational and authentication-gated.
+- OTel instrumentation code committed (instrumentation.py, foundry.py, chat.py, approvals.py) — pending 08-04-06 Container App rebuild for spans to appear in App Insights.
+
+### What Remains Blocked
+
+- **F-01** (BLOCKING): `Azure AI Developer` RBAC missing for gateway MI — Foundry dispatch via managed identity unconfirmed; E2E-002 triage polling cannot complete; SSE event stream cannot generate events.
+- **F-02** (BLOCKING): Runbook RAG returns 500 — `PGVECTOR_CONNECTION_STRING` env var likely missing or prod runbooks unseeded.
+
+### Backlog Items Created
+
+- [ ] [Phase 8 Finding F-01] Foundry / API Gateway: Grant `Azure AI Developer` RBAC to gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` on Foundry account scope — BLOCKING
+- [ ] [Phase 8 Finding F-02] API Gateway / Runbook RAG: Fix `GET /api/v1/runbooks/search` 500 — verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod` and seed prod runbooks — BLOCKING
+- [ ] [Phase 8 Finding F-03] API Gateway: Lock CORS from wildcard `*` to explicit prod origin via `CORS_ALLOWED_ORIGINS` env var — DEGRADED
+- [ ] [Phase 8 Finding F-04] Teams Bot: Register Azure Bot Service — create bot channel registration, set messaging endpoint, configure credentials — DEGRADED
+- [ ] [Phase 8 Finding F-05] CI / E2E: Add GitHub secrets `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_API_AUDIENCE` to `staging` environment for Entra-authenticated E2E runs — DEGRADED
+- [ ] [Phase 8 Finding F-06] Arc MCP Server / E2E: Update `arc-mcp-server.spec.ts` to read `E2E_ARC_MCP_URL` env var instead of hardcoded `localhost:8080` — DEGRADED
+- [ ] [Phase 8 Finding F-07] API Gateway: Add 404 handler in `approvals.py` for missing approval records — returns 500 instead of 404/410 — DEGRADED
+- [ ] [Phase 8 Finding F-08] SSE Reconnect E2E: Fix `e2e-sse-reconnect.spec.ts` sequence-ID test — depends on F-01 RBAC fix for real SSE events — DEGRADED
+- [ ] [Phase 8 Finding F-09] Azure MCP / Network Agent: Add `Microsoft.Network` tool group to Azure MCP Server MCP connection on Foundry project — DEGRADED
+- [ ] [Phase 8 Finding F-10] Azure MCP / Security Agent: Add `Microsoft.Security` tool group to Azure MCP Server MCP connection on Foundry project — DEGRADED
+- [ ] [Phase 8 Finding F-11] Arc MCP / SRE Agent: Register Arc MCP server as MCP connection on Foundry project; add SRE-specific tool groups (monitor, Log Analytics) — DEGRADED
+- [ ] [Phase 8 OTel] Operator: Complete 08-04-06 Container App rebuild to activate manual OTel spans in App Insights; then verify 6 span types (foundry.*, mcp.*, agent.orchestrator) in Transaction Search — CANNOT_VERIFY until redeploy
