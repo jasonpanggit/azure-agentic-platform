@@ -17,7 +17,7 @@ current_plan: 08-01
 
 > Last updated: 2026-03-29 — Phase 8 started. Plan 08-01 PARTIAL — Task 08-01-01 complete (--create flag added to configure-orchestrator.py); tasks 08-01-02 through 08-01-06 require operator execution (see 08-01-USER-SETUP.md).
 >
-> Last activity: 2026-03-29 - Plan 08-01 task 08-01-01: Added --create flag to configure-orchestrator.py for Foundry agent creation
+> Last activity: 2026-03-29 - Quick task 260329-qro: Validated 08-01 provisioning gaps — 2/5 complete; ORCHESTRATOR_AGENT_ID ✅ set (asst_NeBVjCA5isNrIERoGYzRpBTu), CORS ⚠️ still `*`, RBAC ❌ missing, Bot Service ❌ missing, GitHub secrets ❌ missing
 
 ---
 
@@ -160,6 +160,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260328-2ir | Deploy images to container registry — teams-bot build, deploy-all workflow, naming fix | 2026-03-28 | 94d0b8b | [260328-2ir-deploy-images-to-container-registry](./quick/260328-2ir-deploy-images-to-container-registry/) |
 | 260328-va0 | Validate MANUAL-SETUP.md provisioning state — 3 DONE, 3 PARTIAL, 1 PENDING, 1 SKIPPED, 1 CANNOT_VERIFY | 2026-03-28 | fcca5fc | [260328-va0-validate-manual-setup-md-provisioning-st](./quick/260328-va0-validate-manual-setup-md-provisioning-st/) |
 | 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
+| 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
 
 ---
 
