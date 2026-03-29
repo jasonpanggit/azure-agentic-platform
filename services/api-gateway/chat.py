@@ -6,6 +6,7 @@ Supports thread continuation for cross-surface thread sharing (TEAMS-004).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -131,12 +132,22 @@ async def get_chat_result(
     """
     client = _get_foundry_client()
 
-    # If a specific run_id was provided, retrieve it directly
+    # If a specific run_id was provided, retrieve it directly.
+    # Retry up to 3 times with a short delay — Foundry may not expose the run
+    # immediately after creation (propagation delay of ~1-2 seconds).
     if run_id:
-        try:
-            latest_run = client.runs.retrieve(thread_id=thread_id, run_id=run_id)
-        except Exception as exc:
-            logger.warning("Failed to retrieve run %s: %s", run_id, exc)
+        latest_run = None
+        for attempt in range(3):
+            try:
+                latest_run = client.runs.retrieve(thread_id=thread_id, run_id=run_id)
+                break
+            except Exception as exc:
+                if attempt < 2:
+                    await asyncio.sleep(1)
+                else:
+                    logger.warning("Failed to retrieve run %s after 3 attempts: %s", run_id, exc)
+                    return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+        if latest_run is None:
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
     else:
         # Fallback: list runs and pick the most recent one.
