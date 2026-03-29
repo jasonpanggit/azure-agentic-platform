@@ -1,0 +1,176 @@
+E2E global setup: Missing E2E_CLIENT_ID/SECRET/TENANT — using dev-mode auth
+
+Running 30 tests using 1 worker
+
+  ✘   1 [e2e-chromium] › arc-mcp-server.spec.ts:45:7 › E2E-006: Arc MCP Server Pagination › arc_servers_list exhausts pagination and returns total_count >= 100 (315ms)
+  ✘   2 [e2e-chromium] › arc-mcp-server.spec.ts:100:7 › E2E-006: Arc MCP Server Pagination › arc_k8s_list exhausts pagination and returns correct total_count (312ms)
+  ✘   3 [e2e-chromium] › arc-mcp-server.spec.ts:140:7 › E2E-006: Arc MCP Server Pagination › Arc Agent triage produces diagnosis with connectivity findings (312ms)
+  ✘   4 [e2e-chromium] › arc-mcp-server.spec.ts:219:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server health check — /mcp endpoint is reachable (314ms)
+  ✘   5 [e2e-chromium] › arc-mcp-server.spec.ts:248:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server exposes all required tools (311ms)
+  ✓   6 [e2e-chromium] › e2e-audit-export.spec.ts:11:7 › AUDIT-006: Audit Report Export › Export endpoint returns structured report (858ms)
+  ✓   7 [e2e-chromium] › e2e-audit-export.spec.ts:49:7 › AUDIT-006: Audit Report Export › Export requires authentication (370ms)
+  ✓   8 [e2e-chromium] › e2e-hitl-approval.spec.ts:25:7 › E2E-003: HITL Approval Flow › List pending approvals returns valid response (462ms)
+No pending approvals — approve sub-test passes vacuously
+  ✓   9 [e2e-chromium] › e2e-hitl-approval.spec.ts:41:7 › E2E-003: HITL Approval Flow › Approve endpoint accepts valid approval and returns 200 (346ms)
+No pending approvals — reject sub-test passes vacuously
+  ✓  10 [e2e-chromium] › e2e-hitl-approval.spec.ts:75:7 › E2E-003: HITL Approval Flow › Reject endpoint returns valid response (335ms)
+Graph API credentials not configured — Teams card verification deferred
+  ✓  11 [e2e-chromium] › e2e-hitl-approval.spec.ts:101:7 › E2E-003: HITL Approval Flow › Teams card verification via Graph API (0ms)
+  ✘  12 [e2e-chromium] › e2e-incident-flow.spec.ts:20:7 › E2E-002: Full Incident Flow › Synthetic incident creates thread and dispatches to agent (1.4m)
+  ✓  13 [e2e-chromium] › e2e-incident-flow.spec.ts:85:7 › E2E-002: Full Incident Flow › Incidents list returns recently created incident (2.1s)
+  ✓  14 [e2e-chromium] › e2e-incident-flow.spec.ts:118:7 › E2E-002: Full Incident Flow › SSE stream delivers events for active thread (1.4s)
+  ✓  15 [e2e-chromium] › e2e-rbac.spec.ts:15:7 › E2E-004: Cross-Subscription RBAC › Incident endpoint accepts each domain and routes correctly (8.3s)
+  ✓  16 [e2e-chromium] › e2e-rbac.spec.ts:47:7 › E2E-004: Cross-Subscription RBAC › Domain validation rejects invalid domain (239ms)
+  ✓  17 [e2e-chromium] › e2e-rbac.spec.ts:69:7 › E2E-004: Cross-Subscription RBAC › Health endpoint accessible with E2E service principal (329ms)
+  ✓  18 [e2e-chromium] › e2e-rbac.spec.ts:78:7 › E2E-004: Cross-Subscription RBAC › Authenticated endpoints reject unauthenticated requests (380ms)
+  ✘  19 [e2e-chromium] › e2e-sse-reconnect.spec.ts:18:7 › E2E-005: SSE Reconnect › SSE stream delivers events with sequence IDs (2.3s)
+  ✓  20 [e2e-chromium] › e2e-sse-reconnect.spec.ts:122:7 › E2E-005: SSE Reconnect › Heartbeat keeps SSE connection alive (2.0s)
+  ✓  21 [e2e-chromium] › sc1.spec.ts:11:7 › @sc1 Web UI Load + First Token (E2E) › FMP under 2 seconds on cold load (2.1s)
+  ✓  22 [e2e-chromium] › sc1.spec.ts:25:7 › @sc1 Web UI Load + First Token (E2E) › Health endpoint returns ok (348ms)
+  ✓  23 [e2e-chromium] › sc1.spec.ts:34:7 › @sc1 Web UI Load + First Token (E2E) › Chat endpoint accepts message and returns thread_id (1.0s)
+  ✓  24 [e2e-chromium] › sc2.spec.ts:11:7 › @sc2 Dual SSE Stream (E2E) › SSE stream endpoint returns event-stream content type (340ms)
+  ✓  25 [e2e-chromium] › sc2.spec.ts:24:7 › @sc2 Dual SSE Stream (E2E) › Heartbeat events prevent connection timeout (1.3s)
+  ✘  26 [e2e-chromium] › sc5.spec.ts:11:7 › @sc5 Approval Lifecycle (E2E) › Expired approval returns 410 Gone (410ms)
+  ✓  27 [e2e-chromium] › sc5.spec.ts:24:7 › @sc5 Approval Lifecycle (E2E) › List pending approvals returns array (850ms)
+  ✓  28 [e2e-chromium] › sc6.spec.ts:12:7 › @sc6 GitOps vs Direct-Apply Path (E2E) › @sc6-gitops GitOps detection endpoint returns expected fields (1.4s)
+  ✓  29 [e2e-chromium] › sc6.spec.ts:31:7 › @sc6 GitOps vs Direct-Apply Path (E2E) › @sc6-direct Arc K8s list endpoint is reachable (244ms)
+  ✓  30 [e2e-chromium] › sc6.spec.ts:48:7 › @sc6 GitOps vs Direct-Apply Path (E2E) › @sc6-path Flux gitops_status tool endpoint responds (237ms)
+E2E global teardown: No COSMOS_ENDPOINT — skipping cleanup
+
+
+  1) [e2e-chromium] › arc-mcp-server.spec.ts:45:7 › E2E-006: Arc MCP Server Pagination › arc_servers_list exhausts pagination and returns total_count >= 100 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8080
+    Call log:
+    [2m  - → POST http://localhost:8080/mcp[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer dev-token[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 134[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8080
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/arc-mcp-server.spec.ts:60:36
+
+  2) [e2e-chromium] › arc-mcp-server.spec.ts:100:7 › E2E-006: Arc MCP Server Pagination › arc_k8s_list exhausts pagination and returns correct total_count 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8080
+    Call log:
+    [2m  - → POST http://localhost:8080/mcp[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer dev-token[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 151[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8080
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/arc-mcp-server.spec.ts:114:36
+
+  3) [e2e-chromium] › arc-mcp-server.spec.ts:140:7 › E2E-006: Arc MCP Server Pagination › Arc Agent triage produces diagnosis with connectivity findings 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+    Call log:
+    [2m  - → POST http://localhost:8000/api/v1/incidents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer test-token[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 429[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8000
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/arc-mcp-server.spec.ts:157:44
+
+  4) [e2e-chromium] › arc-mcp-server.spec.ts:219:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server health check — /mcp endpoint is reachable 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8080
+    Call log:
+    [2m  - → POST http://localhost:8080/mcp[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer dev-token[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 157[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8080
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/arc-mcp-server.spec.ts:232:36
+
+  5) [e2e-chromium] › arc-mcp-server.spec.ts:248:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server exposes all required tools 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8080
+    Call log:
+    [2m  - → POST http://localhost:8080/mcp[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - Authorization: Bearer dev-token[22m
+    [2m    - Content-Type: application/json[22m
+    [2m    - content-length: 59[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8080
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/arc-mcp-server.spec.ts:256:36
+
+  6) [e2e-chromium] › e2e-incident-flow.spec.ts:20:7 › E2E-002: Full Incident Flow › Synthetic incident creates thread and dispatches to agent 
+
+    Error: Incident triage for e2e-002-1774790394525 did not complete within 90000ms
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mfalse[39m
+
+    Call Log:
+    - Timeout 90000ms exceeded while waiting on the predicate
+
+      53 |       let triageCompleted = false;
+      54 |
+    > 55 |       await expect.poll(
+         |       ^
+      56 |         async () => {
+      57 |           try {
+      58 |             const statusResponse = await apiRequest.get(
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/e2e-incident-flow.spec.ts:55:7
+
+  7) [e2e-chromium] › e2e-sse-reconnect.spec.ts:18:7 › E2E-005: SSE Reconnect › SSE stream delivers events with sequence IDs 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mfalse[39m
+
+      38 |     });
+      39 |
+    > 40 |     expect(response.ok).toBeTruthy();
+         |                         ^
+      41 |     expect(response.body).toBeTruthy();
+      42 |
+      43 |     const reader = response.body.getReader();
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/e2e-sse-reconnect.spec.ts:40:25
+
+  8) [e2e-chromium] › sc5.spec.ts:11:7 › @sc5 Approval Lifecycle (E2E) › Expired approval returns 410 Gone 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
+
+    Expected value: [32m500[39m
+    Received array: [31m[400, 404, 410][39m
+
+      19 |
+      20 |     // Should return 400 (not found) or 410 (expired)
+    > 21 |     expect([400, 404, 410]).toContain(response.status());
+         |                             ^
+      22 |   });
+      23 |
+      24 |   test('List pending approvals returns array', async ({ apiRequest }) => {
+        at /Users/jasonmba/workspace/azure-agentic-platform/e2e/sc5.spec.ts:21:29
+
+  8 failed
+    [e2e-chromium] › arc-mcp-server.spec.ts:45:7 › E2E-006: Arc MCP Server Pagination › arc_servers_list exhausts pagination and returns total_count >= 100 
+    [e2e-chromium] › arc-mcp-server.spec.ts:100:7 › E2E-006: Arc MCP Server Pagination › arc_k8s_list exhausts pagination and returns correct total_count 
+    [e2e-chromium] › arc-mcp-server.spec.ts:140:7 › E2E-006: Arc MCP Server Pagination › Arc Agent triage produces diagnosis with connectivity findings 
+    [e2e-chromium] › arc-mcp-server.spec.ts:219:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server health check — /mcp endpoint is reachable 
+    [e2e-chromium] › arc-mcp-server.spec.ts:248:7 › E2E-006: Arc MCP Server Pagination › Arc MCP Server exposes all required tools 
+    [e2e-chromium] › e2e-incident-flow.spec.ts:20:7 › E2E-002: Full Incident Flow › Synthetic incident creates thread and dispatches to agent 
+    [e2e-chromium] › e2e-sse-reconnect.spec.ts:18:7 › E2E-005: SSE Reconnect › SSE stream delivers events with sequence IDs 
+    [e2e-chromium] › sc5.spec.ts:11:7 › @sc5 Approval Lifecycle (E2E) › Expired approval returns 410 Gone 
+  22 passed (1.9m)
