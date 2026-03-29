@@ -79,19 +79,19 @@ async def search_runbooks(
     await register_vector(conn)
 
     try:
-        embedding_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
-
+        # After register_vector, asyncpg handles vector encoding natively.
+        # Pass query_embedding as a list directly — do NOT stringify or cast with ::vector.
         if domain:
             rows = await conn.fetch(
                 """
                 SELECT id, title, domain, version, content,
-                       1 - (embedding <=> $1::vector) AS similarity
+                       1 - (embedding <=> $1) AS similarity
                 FROM runbooks
                 WHERE domain = $2
-                ORDER BY embedding <=> $1::vector
+                ORDER BY embedding <=> $1
                 LIMIT $3
                 """,
-                embedding_str,
+                query_embedding,
                 domain,
                 limit,
             )
@@ -99,12 +99,12 @@ async def search_runbooks(
             rows = await conn.fetch(
                 """
                 SELECT id, title, domain, version, content,
-                       1 - (embedding <=> $1::vector) AS similarity
+                       1 - (embedding <=> $1) AS similarity
                 FROM runbooks
-                ORDER BY embedding <=> $1::vector
+                ORDER BY embedding <=> $1
                 LIMIT $2
                 """,
-                embedding_str,
+                query_embedding,
                 limit,
             )
 
