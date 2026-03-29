@@ -6,10 +6,12 @@ Supports thread continuation for cross-surface thread sharing (TEAMS-004).
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Optional
 
+from services.api_gateway.azure_tools import AzureToolRequest, call_azure_tool
 from services.api_gateway.foundry import _get_foundry_client
 from services.api_gateway.models import ChatRequest
 
@@ -108,10 +110,10 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
 async def get_chat_result(thread_id: str) -> dict[str, str]:
     """Poll Foundry for the latest run status on a thread.
 
-    Handles the `requires_action / submit_tool_approval` flow for MCP tools:
-    when the Foundry agent needs to execute an MCP tool call, Foundry pauses
-    the run and requires the client to approve the tool execution. We
-    auto-approve all MCP tool calls for operator chat sessions.
+    Handles the `requires_action / submit_tool_outputs` flow for the
+    azure_tools function: when the orchestrator calls azure_tools, Foundry
+    pauses the run. We execute the tool locally via stdio MCP and submit
+    the output back to Foundry.
 
     Returns the run status and, when completed, the assistant's reply text.
     The caller (stream route) should poll until run_status is terminal
@@ -136,33 +138,52 @@ async def get_chat_result(thread_id: str) -> dict[str, str]:
 
     logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
-    # Auto-approve MCP tool calls — required for Foundry MCP tool execution
     if run_status == "requires_action":
         required_action = latest_run.required_action
         if (
             required_action is not None
             and hasattr(required_action, "type")
-            and required_action.type == "submit_tool_approval"
+            and required_action.type == "submit_tool_outputs"
         ):
-            tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore[attr-defined]
-            approval_ids = [tc.id for tc in tool_calls]
+            tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore[attr-defined]
+            tool_outputs = []
+            for tc in tool_calls:
+                fn_name = getattr(tc.function, "name", "") if hasattr(tc, "function") else ""
+                fn_args_raw = getattr(tc.function, "arguments", "{}") if hasattr(tc, "function") else "{}"
+                logger.info("Executing function tool call: %s (id=%s)", fn_name, tc.id)
+
+                if fn_name == "azure_tools":
+                    try:
+                        fn_args = json.loads(fn_args_raw)
+                        tool_req = AzureToolRequest(
+                            tool_name=fn_args.get("tool_name", "compute"),
+                            arguments=fn_args.get("arguments", {}),
+                        )
+                        result = await call_azure_tool(tool_req)
+                        output = result.content
+                    except Exception as exc:
+                        logger.error("azure_tools execution failed: %s", exc)
+                        output = f"Error calling azure_tools: {exc}"
+                else:
+                    output = f"Unknown function: {fn_name}"
+
+                tool_outputs.append({"tool_call_id": tc.id, "output": output})
+
             logger.info(
-                "Auto-approving %d MCP tool call(s) for thread %s: %s",
-                len(approval_ids),
+                "Submitting %d tool output(s) for thread %s run %s",
+                len(tool_outputs),
                 thread_id,
-                approval_ids,
+                latest_run.id,
             )
             try:
-                client.runs.submit_tool_approval(
+                client.runs.submit_tool_outputs(
                     thread_id=thread_id,
                     run_id=latest_run.id,
-                    tool_calls=approval_ids,
+                    tool_outputs=tool_outputs,
                 )
-                # Return in_progress so the caller keeps polling
                 return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
             except Exception as exc:
-                logger.warning("Failed to submit tool approval: %s", exc)
-                # Fall through — return requires_action so caller retries
+                logger.warning("Failed to submit tool outputs: %s", exc)
 
     reply = None
     if run_status == "completed":

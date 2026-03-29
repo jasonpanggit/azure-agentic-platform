@@ -46,6 +46,7 @@ from services.api_gateway.approvals import (
     process_approval_decision,
 )
 from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
+from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse, call_azure_tool
 
 logger = logging.getLogger(__name__)
 
@@ -438,3 +439,23 @@ async def export_audit_report(
     """
     report = await generate_remediation_report(from_time=from_time, to_time=to_time)
     return AuditExportResponse(**report)
+
+
+@app.post("/api/v1/azure-tools", response_model=AzureToolResponse)
+async def azure_tools(
+    request: AzureToolRequest,
+    token: dict[str, Any] = Depends(verify_token),
+) -> AzureToolResponse:
+    """Call an Azure MCP tool via stdio subprocess.
+
+    Provides the Foundry orchestrator with a regular OpenAI function tool
+    that calls @azure/mcp via stdio — bypassing Foundry's HTTP MCP client
+    which has an AssertionError protocol incompatibility with @azure/mcp.
+
+    Args:
+        request: tool_name and arguments.
+
+    Returns:
+        AzureToolResponse with success, content, is_error fields.
+    """
+    return await call_azure_tool(request)
