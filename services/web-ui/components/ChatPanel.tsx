@@ -31,8 +31,6 @@ const useStyles = makeStyles({
   messages: {
     flex: 1,
     minHeight: 0,
-    overflowY: 'auto',
-    overflowX: 'hidden',
     padding: tokens.spacingHorizontalL,
     paddingBottom: tokens.spacingVerticalL,
     display: 'flex',
@@ -363,7 +361,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
 
   return (
     <div className={styles.root}>
-      <div className={styles.messages} role="log" aria-live="polite">
+      <div className={styles.messages} style={{ overflowY: 'auto', overflowX: 'hidden' }} role="log" aria-live="polite">
         {messages.map((msg) => (
           <React.Fragment key={msg.id}>
             {msg.role === 'user' ? (
