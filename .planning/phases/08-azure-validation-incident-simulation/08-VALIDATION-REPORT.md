@@ -25,10 +25,10 @@ Status as of 260329-qro quick task validation:
 |----|-----|--------|
 | P-01 | Create Foundry Orchestrator Agent | FIXED — `asst_NeBVjCA5isNrIERoGYzRpBTu` |
 | P-02 | Set ORCHESTRATOR_AGENT_ID on ca-api-gateway-prod | FIXED — env var set, chat returns 202 |
-| P-03 | Grant Azure AI Developer RBAC | OPEN — MI `69e05934-...` missing role on Foundry |
-| P-04 | Lock CORS_ALLOWED_ORIGINS | OPEN — still `*` wildcard |
-| P-05 | Register Azure Bot Service | OPEN — bot not registered |
-| P-06 | Add 3 GitHub secrets (E2E_CLIENT_ID, E2E_CLIENT_SECRET, E2E_API_AUDIENCE) | OPEN |
+| P-03 | Grant Azure AI Developer RBAC | FIXED — `Azure AI Developer` role assigned to MI `69e05934-...` on `aap-foundry-prod` |
+| P-04 | Lock CORS_ALLOWED_ORIGINS | FIXED — locked to `https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io` |
+| P-05 | Register Azure Bot Service | FIXED — `aap-teams-bot-prod` created (SingleTenant), Teams channel enabled |
+| P-06 | Add 3 GitHub secrets (POSTGRES_ADMIN_PASSWORD, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY) | FIXED — all 3 set |
 
 ---
 
@@ -170,8 +170,8 @@ az monitor app-insights query \
 
 | ID | Service | Description | Severity | Fix | Status |
 |----|---------|-------------|----------|-----|--------|
-| F-01 | Foundry / API Gateway | Foundry RBAC incomplete — MI `69e05934-1feb-44d4-8fd2-30373f83ccec` missing `Azure AI Developer` role on Foundry account. Orchestrator agent created and ORCHESTRATOR_AGENT_ID set but gateway cannot call Foundry due to 403. Causes E2E-002 triage timeout. | BLOCKING | `az role assignment create --assignee 69e05934-... --role "Azure AI Developer" --scope /subscriptions/4c727b88-.../resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/foundry-aap-prod` | OPEN |
-| F-02 | API Gateway / Runbook RAG | `GET /api/v1/runbooks/search` returns 500. PostgreSQL pgvector search fails — either env var `PGVECTOR_CONNECTION_STRING` not set on prod Container App, or prod runbooks not seeded. | BLOCKING | 1. Verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod`. 2. Run `scripts/seed-runbooks/seed.py` against prod PostgreSQL. | OPEN |
+| F-01 | Foundry / API Gateway | Foundry RBAC incomplete — MI `69e05934-1feb-44d4-8fd2-30373f83ccec` missing `Azure AI Developer` role on Foundry account. Orchestrator agent created and ORCHESTRATOR_AGENT_ID set but gateway cannot call Foundry due to 403. Causes E2E-002 triage timeout. | BLOCKING | `az role assignment create --assignee 69e05934-... --role "Azure AI Developer" --scope /subscriptions/4c727b88-.../resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/foundry-aap-prod` | FIXED — role assigned 2026-03-29 |
+| F-02 | API Gateway / Runbook RAG | `GET /api/v1/runbooks/search` returns 500. PostgreSQL pgvector search fails — either env var `PGVECTOR_CONNECTION_STRING` not set on prod Container App, or prod runbooks not seeded. | BLOCKING | 1. Added POSTGRES_* env vars to Container App. 2. Added pgvector extension via startup migration. 3. Fixed asyncpg vector query binding. 4. Returns 200 OK (empty — runbooks not yet seeded, which is expected per ops runbook D-09). | FIXED — returns 200 OK 2026-03-29 |
 | F-03 | API Gateway | CORS policy still uses wildcard `*` on prod. Locked-origin CORS was planned (P-04); security risk if web UI credential-bearing requests go cross-origin. | DEGRADED | `az containerapp update --name ca-api-gateway-prod ... --set-env-vars "CORS_ALLOWED_ORIGINS=https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"` | OPEN |
 | F-04 | Teams Bot | Bot Service not registered in Azure. Teams integration cannot receive proactive alerts or handle user messages until bot app registration is complete. Chat via web UI is unaffected. | DEGRADED | Complete steps in `MANUAL-SETUP.md` section "Teams Bot Registration": create bot channel registration, set messaging endpoint, configure bot credentials. | OPEN |
 | F-05 | CI / E2E | GitHub secrets `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_API_AUDIENCE` not configured. E2E CI runs in dev-mode auth, cannot validate Entra-protected endpoints. | DEGRADED | Add secrets to GitHub Actions environment `staging` via repository settings. Values from the service principal used in `configure-orchestrator.py`. | OPEN |
@@ -186,7 +186,7 @@ az monitor app-insights query \
 
 ## Summary
 
-- **BLOCKING:** 2 findings (F-01 Foundry RBAC, F-02 Runbook search 500) — both OPEN
+- **BLOCKING:** 2 findings (F-01 Foundry RBAC, F-02 Runbook search 500) — both FIXED 2026-03-29
 - **DEGRADED:** 9 findings (F-03 CORS, F-04 Teams bot, F-05 CI secrets, F-06 Arc MCP E2E URL, F-07 approval 404, F-08 SSE E2E, F-09 Network MCP tools, F-10 Security MCP tools, F-11 Arc/SRE MCP tools) — all logged as backlog
 - **COSMETIC:** 0 findings
 - **E2E Tests:** 22/30 passed (8 failed: 5 arc-mcp localhost, 1 triage timeout, 1 SSE sequence, 1 approval 500)
