@@ -11,6 +11,9 @@ fastapi-azure-auth>=5.0.0
 # azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents instead
 azure-ai-agents>=1.0.0
 
+# MCP client — stdio transport to @azure/mcp subprocess (gcc-demo pattern)
+mcp[cli]>=1.26.0
+
 # Azure Cosmos DB SDK
 azure-cosmos>=4.0.0
 
