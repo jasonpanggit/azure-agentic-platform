@@ -47,6 +47,7 @@ const useStyles = makeStyles({
   },
   mainContent: {
     flex: 1,
+    minHeight: 0,
     overflow: 'hidden',
   },
   resizeHandle: {
@@ -56,19 +57,18 @@ const useStyles = makeStyles({
     cursor: 'col-resize',
   },
   chatPanel: {
-    overflowX: 'hidden',
-    overflowY: 'hidden',
+    overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: tokens.colorNeutralBackground1,
-    minHeight: 0,
+    height: '100%',
   },
   dashboardPanel: {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: tokens.colorNeutralBackground3,
-    minHeight: 0,
+    height: '100%',
   },
 });
 
@@ -100,6 +100,7 @@ export function AppLayout() {
         <PanelGroup
           direction="horizontal"
           autoSaveId="aap-main-layout"
+          style={{ height: '100%' }}
         >
           <Panel
             defaultSize={35}
