@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MessageBar, MessageBarBody, MessageBarTitle } from '@fluentui/react-components';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Monitor } from 'lucide-react';
 
 interface DesktopOnlyGateProps {
   minWidth: number;
@@ -20,13 +21,14 @@ export function DesktopOnlyGate({ minWidth, children }: DesktopOnlyGateProps) {
 
   if (!isDesktop) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '2rem' }}>
-        <MessageBar intent="warning">
-          <MessageBarBody>
-            <MessageBarTitle>Desktop Required</MessageBarTitle>
+      <div className="flex items-center justify-center h-screen p-8 text-center">
+        <Alert>
+          <Monitor className="h-4 w-4" />
+          <AlertTitle className="text-xl font-semibold mb-2">Desktop Required</AlertTitle>
+          <AlertDescription className="text-sm text-muted-foreground">
             This application requires a desktop browser (minimum 1200px width).
-          </MessageBarBody>
-        </MessageBar>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }

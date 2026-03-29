@@ -2,11 +2,6 @@
 
 import React, { useState } from 'react';
 import {
-  makeStyles,
-  tokens,
-  Text,
-} from '@fluentui/react-components';
-import {
   PanelGroup,
   Panel,
   PanelResizeHandle,
@@ -15,77 +10,18 @@ import { SubscriptionSelector } from './SubscriptionSelector';
 import { ChatPanel } from './ChatPanel';
 import { DashboardPanel } from './DashboardPanel';
 
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    overflow: 'hidden',
-  },
-  topBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: tokens.spacingHorizontalXXL,
-    paddingRight: tokens.spacingHorizontalXXL,
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow4,
-    zIndex: 1,
-  },
-  title: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalM,
-  },
-  topBarRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalL,
-  },
-  mainContent: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  resizeHandle: {
-    width: '8px',
-    backgroundColor: 'transparent',
-    borderLeft: `1px solid ${tokens.colorNeutralStroke1}`,
-    cursor: 'col-resize',
-  },
-  chatPanel: {
-    position: 'relative',
-    overflow: 'hidden',
-    height: '100%',
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  dashboardPanel: {
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: tokens.colorNeutralBackground3,
-    height: '100%',
-  },
-});
-
 export function AppLayout() {
-  const styles = useStyles();
   const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
 
   return (
-    <div className={styles.root}>
+    <div className="flex flex-col h-screen overflow-hidden">
       {/* Top Bar */}
-      <div className={styles.topBar}>
-        <div className={styles.title}>
-          <Text as="h1" weight="semibold" size={500}>
-            Azure AIOps
-          </Text>
+      <div className="flex items-center justify-between px-6 py-2 border-b bg-background shadow-sm z-10">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold">Azure AIOps</h1>
         </div>
-        <div className={styles.topBarRight}>
+        <div className="flex items-center gap-6">
           <SubscriptionSelector
             selected={selectedSubscriptions}
             onChange={setSelectedSubscriptions}
@@ -95,26 +31,26 @@ export function AppLayout() {
       </div>
 
       {/* Split-Pane Content */}
-      <div className={styles.mainContent}>
+      <div className="flex-1 min-h-0 overflow-hidden">
         <PanelGroup
           direction="horizontal"
           autoSaveId="aap-main-layout"
-          style={{ height: '100%' }}
+          className="h-full"
         >
           <Panel
             defaultSize={35}
             minSize={25}
-            className={styles.chatPanel}
+            className="relative overflow-hidden h-full bg-background"
           >
             <ChatPanel subscriptions={selectedSubscriptions} />
           </Panel>
 
-          <PanelResizeHandle className={styles.resizeHandle} />
+          <PanelResizeHandle className="w-2 bg-transparent border-l border-border cursor-col-resize hover:border-primary transition-colors" />
 
           <Panel
             defaultSize={65}
             minSize={40}
-            className={styles.dashboardPanel}
+            className="overflow-hidden flex flex-col bg-muted h-full"
           >
             <DashboardPanel
               subscriptions={selectedSubscriptions}

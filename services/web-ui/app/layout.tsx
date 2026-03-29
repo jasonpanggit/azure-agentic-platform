@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import { Providers } from './providers';
+import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'Azure AIOps',
@@ -12,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, fontFamily: "'Segoe UI Variable', system-ui, -apple-system, sans-serif" }}>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen font-sans antialiased">
         <Providers>
           {children}
         </Providers>
