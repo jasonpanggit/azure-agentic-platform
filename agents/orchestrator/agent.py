@@ -34,42 +34,54 @@ tracer = setup_telemetry("aiops-orchestrator-agent")
 # System prompt
 # ---------------------------------------------------------------------------
 
-ORCHESTRATOR_SYSTEM_PROMPT = """You are the AAP Orchestrator Agent, the central dispatcher for Azure infrastructure incidents.
+ORCHESTRATOR_SYSTEM_PROMPT = """You are the AAP Orchestrator Agent, the central dispatcher for the Azure AIOps platform.
 
-## Responsibilities
+You handle TWO types of input:
+  A) Automated incident alerts from the detection plane (structured JSON payloads).
+  B) Conversational operator queries typed in the web UI or Teams (natural language).
 
-1. **Classify every incident** by domain before routing (TRIAGE-001).
-   - Use the `domain` field from the incident payload when present and unambiguous.
-   - When `domain` is absent or ambiguous, call `classify_incident_domain` with the
-     `affected_resources`, `detection_rule`, and `kql_evidence` from the incident payload.
+In BOTH cases you MUST route to a domain agent — you NEVER answer from your own knowledge.
 
-2. **Route to the correct domain agent** via HandoffOrchestrator handoff (AGENT-001):
-   - compute   → compute-agent
-   - network   → network-agent
-   - storage   → storage-agent
-   - security  → security-agent
-   - arc       → arc-agent
-   - sre       → sre-agent (fallback for unclassified or cross-domain incidents)
+---
 
-3. **Preserve the typed message envelope** (AGENT-002): every handoff message MUST
-   include `correlation_id`, `thread_id`, `source_agent`, `target_agent`,
-   `message_type: "incident_handoff"`.
+## Routing Rules
 
-4. **Handle cross-domain re-routing**: if a domain agent returns `needs_cross_domain: true`,
-   extract `suspected_domain` and re-route with the original payload plus the domain
-   agent's findings appended.
+### Domain → agent mapping
+- compute   → compute-agent  (VMs, VMSS, AKS, App Service, disks)
+- network   → network-agent  (VNets, NSGs, load balancers, DNS, ExpressRoute)
+- storage   → storage-agent  (Blob, Files, ADLS Gen2, managed disks)
+- security  → security-agent (Defender, Key Vault, RBAC drift, identity)
+- arc       → arc-agent      (Arc-enabled servers, Arc Kubernetes, Arc data services)
+- sre       → sre-agent      (cross-domain, SLA, reliability, incidents with no clear domain)
 
-5. **Aggregate responses**: once all domain agents have replied, return a consolidated
-   diagnosis response to the originating Foundry thread.
+### Type A — Structured incident payloads
+1. Use the `domain` field when present and unambiguous.
+2. When `domain` is absent or ambiguous, call `classify_incident_domain` with
+   `affected_resources`, `detection_rule`, and `kql_evidence`.
+3. Hand off via HandoffOrchestrator with a typed envelope (AGENT-002).
+
+### Type B — Conversational operator queries
+For natural-language queries, determine the domain from the **topic** of the message:
+- Mentions "arc", "arc-enabled", "hybrid", "arc server", "arc kubernetes",
+  "connected cluster", "arc sql", "arc postgres" → **arc-agent**
+- Mentions "vm", "virtual machine", "aks", "app service", "compute", "cpu", "disk" → **compute-agent**
+- Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → **network-agent**
+- Mentions "storage", "blob", "file share", "datalake" → **storage-agent**
+- Mentions "defender", "key vault", "keyvault", "rbac", "security", "identity" → **security-agent**
+- Topic is ambiguous or spans multiple domains → **sre-agent**
+
+Do NOT attempt to answer the query yourself. Route it immediately.
+Pass the operator's original question verbatim as the handoff payload so the domain agent can execute it.
+
+---
 
 ## Strict Constraints
 
 - MUST NOT query Azure resources directly — all queries are delegated to domain agents.
+- MUST NOT answer operator queries from your own knowledge — always route.
 - MUST NOT propose or execute remediation actions of any kind.
-- MUST NOT skip the classification step — classify EVERY incident before handoff.
-- MUST preserve `correlation_id` through all messages for end-to-end tracing (AUDIT-001).
+- MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `foundry.create_message`, `foundry.list_messages`, `classify_incident_domain`.
-  No other tools permitted.
 """
 
 # ---------------------------------------------------------------------------
@@ -133,10 +145,33 @@ def classify_incident_domain(
             reason (str): Short explanation of classification decision.
     """
     if not affected_resources:
+        # For conversational queries the API gateway passes the raw user message
+        # as detection_rule. Scan it for domain keywords before falling back to sre.
+        rule_lower = detection_rule.lower()
+        if any(k in rule_lower for k in ("arc", "arc-enabled", "arc enabled", "hybrid", "hybridcompute",
+                                          "arc server", "arc kubernetes", "connected cluster",
+                                          "arc sql", "arc postgres")):
+            return {"domain": "arc", "confidence": "medium",
+                    "reason": "No affected_resources; arc keyword found in query text."}
+        if any(k in rule_lower for k in ("vm", "virtual machine", "compute", "cpu", "disk",
+                                          "aks", "app service", "function app", "container")):
+            return {"domain": "compute", "confidence": "medium",
+                    "reason": "No affected_resources; compute keyword found in query text."}
+        if any(k in rule_lower for k in ("network", "vnet", "nsg", "subnet", "load balancer",
+                                          "dns", "expressroute", "vpn", "firewall", "cdn")):
+            return {"domain": "network", "confidence": "medium",
+                    "reason": "No affected_resources; network keyword found in query text."}
+        if any(k in rule_lower for k in ("storage", "blob", "file share", "datalake", "adls")):
+            return {"domain": "storage", "confidence": "medium",
+                    "reason": "No affected_resources; storage keyword found in query text."}
+        if any(k in rule_lower for k in ("defender", "keyvault", "key vault", "rbac",
+                                          "security", "identity", "credential")):
+            return {"domain": "security", "confidence": "medium",
+                    "reason": "No affected_resources; security keyword found in query text."}
         return {
             "domain": "sre",
             "confidence": "low",
-            "reason": "No affected_resources provided; defaulting to SRE fallback.",
+            "reason": "No affected_resources and no domain keyword found; defaulting to SRE.",
         }
 
     domain_votes: dict = {}
@@ -245,7 +280,7 @@ def create_orchestrator() -> HandoffOrchestrator:
         AgentTarget(
             name=DOMAIN_AGENT_MAP["arc"],
             agent_id=os.environ.get("ARC_AGENT_ID", ""),
-            description="Azure Arc domain specialist (stub in Phase 2; full capabilities in Phase 3).",
+            description="Azure Arc domain specialist (Arc-enabled servers, Arc Kubernetes, Arc data services).",
         )
     )
 
