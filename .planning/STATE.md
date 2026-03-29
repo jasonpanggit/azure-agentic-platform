@@ -3,21 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-29T14:00:00.000Z"
+last_updated: "2026-03-29T14:20:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 30
-  completed_plans: 21
+  completed_plans: 22
 current_phase: 08-azure-validation-incident-simulation
-current_plan: 08-03
+current_plan: 08-04
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-29 — Plan 08-03 COMPLETE. Incident simulation suite created and run against prod: 7/7 scenarios PASS, 8/8 Foundry runs completed end-to-end. New DEGRADED findings F-09/F-10/F-11 (MCP tool groups not configured for network, security, arc/sre agents). Simulation CI gate wired into phase7-e2e.yml.
+> Last updated: 2026-03-29 — Plan 08-04 COMPLETE. Manual OTel spans added to api-gateway (instrumentation.py with foundry_span/mcp_span/agent_span context managers; foundry.py, chat.py, approvals.py instrumented). Teams bot E2E round-trip spec created (e2e-teams-roundtrip.spec.ts, 3 tests). Task 08-04-06 (Container App rebuild) is operator-only — requires Azure CLI.
 >
-> Phase 8 next: Plans 08-04 (Teams Validation) and 08-05 (Full E2E run). BLOCKING items F-01 (Foundry RBAC — may be resolved per simulation evidence) and F-02 (runbook search 500) must be confirmed before phase close.
+> Phase 8 next: Plan 08-05 (Full E2E run). BLOCKING items F-01/F-02 must be confirmed before phase close. 08-04-06 Container App redeploy needed before OTel spans visible in App Insights.
 
 ---
 
@@ -62,7 +62,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
-| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (3/5 plans) — Plan 08-01: provisioning fixes; Plan 08-02: E2E strict mode, 22/30 tests pass, VALIDATION-REPORT.md (2 BLOCKING); Plan 08-03: simulation suite 7/7 PASS, CI gate wired |
+| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (4/5 plans) — Plan 08-01: provisioning fixes; Plan 08-02: E2E strict mode, 22/30 tests pass, VALIDATION-REPORT.md (2 BLOCKING); Plan 08-03: simulation suite 7/7 PASS, CI gate wired; Plan 08-04: OTel spans (instrumentation.py + foundry/chat/approvals), Teams E2E spec (3 tests) |
 
 ---
 
@@ -157,6 +157,9 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | Cosmos cleanup non-fatal by design | 8-03 | cleanup_incident() catches all exceptions and logs WARNING — simulation records expire via TTL; local IP blocked by prod Cosmos firewall should not fail the simulation |
 | bash 3.2 compatibility in run-all.sh | 8-03 | ${SCENARIOS[-1]} negative array indexing requires bash 4+; replaced with ${SCENARIOS[$((TOTAL-1))]} for macOS compatibility (macOS ships bash 3.2) |
 | CI simulation job needs: [e2e] | 8-03 | Simulation job runs after E2E job to ensure basic platform health before executing synthetic incident injections against prod |
+| OTel span name agent.{agent_name} (not agent.invoke) | 8-04 | Each domain agent gets a distinct span name for per-agent filtering in App Insights; fixed name would prevent distinguishing orchestrator vs compute vs network spans |
+| mcp.outcome placement in try/except | 8-04 | success set in try block, error set in except block within mcp_span — ensures outcome always recorded even when finally runs after exception |
+| 08-04-06 Container App rebuild is operator-only | 8-04 | Requires live Azure CLI + ACR push access; automation would need managed identity with Container Registry Contributor role; documented for operator with exact commands |
 
 ---
 
