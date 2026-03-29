@@ -2,15 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-03-29T22:00:00.000Z"
+status: unknown
+last_updated: "2026-03-29T14:33:55.905Z"
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 41
-  completed_plans: 34
-current_phase: 08-azure-validation-incident-simulation
-current_plan: 08-05
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 30
+  completed_plans: 23
 ---
 
 # Azure Agentic Platform (AAP) — Project State
@@ -79,10 +77,12 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 ## Blockers/Concerns
 
 **Phase 8 BLOCKING findings (from VALIDATION-REPORT.md — must resolve before phase closes):**
+
 - **F-01**: `Azure AI Developer` RBAC missing on Foundry for gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` — blocks Foundry dispatch, agent triage (E2E-002 triage polling timed out), SSE event generation
 - **F-02**: `GET /api/v1/runbooks/search` returns 500 — pgvector/PostgreSQL connection or seed issue on prod
 
 **Operator actions still needed (from .planning/BACKLOG.md):**
+
 - Complete F-01 RBAC assignment: `az role assignment create --assignee 69e05934-... --role "Azure AI Developer" --scope /subscriptions/4c727b88-.../resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/foundry-aap-prod`
 - Verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod` and seed prod runbooks (resolves F-02)
 - Complete 08-04-06 Container App rebuild to activate OTel spans in App Insights
