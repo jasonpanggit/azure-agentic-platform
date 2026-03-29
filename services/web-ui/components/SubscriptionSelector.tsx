@@ -2,21 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Combobox,
-  Option,
-  Spinner,
-  makeStyles,
-  tokens,
-  Text,
-} from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-  },
-});
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { ChevronsUpDown, Loader2 } from 'lucide-react';
 
 interface Subscription {
   id: string;
@@ -30,9 +30,9 @@ interface SubscriptionSelectorProps {
 }
 
 export function SubscriptionSelector({ selected, onChange, onLoad }: SubscriptionSelectorProps) {
-  const styles = useStyles();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/subscriptions')
@@ -54,30 +54,57 @@ export function SubscriptionSelector({ selected, onChange, onLoad }: Subscriptio
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelect = (_: unknown, data: { selectedOptions: string[] }) => {
-    onChange(data.selectedOptions);
+  const handleToggle = (id: string) => {
+    const next = selected.includes(id)
+      ? selected.filter((s) => s !== id)
+      : [...selected, id];
+    onChange(next);
   };
 
   return (
-    <div className={styles.root}>
-      <Text size={200}>
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">
         Showing results for {selected.length > 0 ? selected.length : 'all'} subscription(s)
-      </Text>
+      </span>
+
       {loading ? (
-        <Spinner size="tiny" label="Loading subscriptions..." labelPosition="after" />
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading subscriptions...
+        </div>
       ) : (
-        <Combobox
-          multiselect
-          placeholder="Filter subscriptions..."
-          selectedOptions={selected}
-          onOptionSelect={handleSelect}
-        >
-          {subscriptions.map((sub) => (
-            <Option key={sub.id} value={sub.id}>
-              {sub.name}
-            </Option>
-          ))}
-        </Combobox>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button className="flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm bg-background hover:bg-accent">
+              Filter subscriptions...
+              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[280px] p-0">
+            <Command>
+              <CommandInput placeholder="Search subscriptions..." />
+              <CommandList>
+                <CommandEmpty>No subscriptions found.</CommandEmpty>
+                <CommandGroup>
+                  {subscriptions.map((sub) => (
+                    <CommandItem
+                      key={sub.id}
+                      value={sub.name}
+                      onSelect={() => handleToggle(sub.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Checkbox
+                        checked={selected.includes(sub.id)}
+                        onCheckedChange={() => handleToggle(sub.id)}
+                      />
+                      {sub.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );

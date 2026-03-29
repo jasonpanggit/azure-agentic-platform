@@ -2,47 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  DataGrid,
-  DataGridHeader,
-  DataGridRow,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridCell,
-  TableColumnDefinition,
-  createTableColumn,
-  Badge,
-  Text,
-  Skeleton,
-  SkeletonItem,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    height: '100%',
-  },
-  gridWrapper: {
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: 'hidden',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-  },
-  emptyIcon: {
-    fontSize: '32px',
-    color: tokens.colorNeutralForeground3,
-  },
-});
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Bell } from 'lucide-react';
 
 interface Incident {
   incident_id: string;
@@ -63,17 +32,18 @@ interface AlertFeedProps {
   };
 }
 
-const severityColors: Record<string, 'danger' | 'warning' | 'informative'> = {
-  Sev0: 'danger',
-  Sev1: 'danger',
-  Sev2: 'warning',
-  Sev3: 'warning',
-};
-
 const POLL_INTERVAL_MS = 5000;
 
+function SeverityBadge({ severity }: { severity: string }) {
+  const isCritical = severity === 'Sev0' || severity === 'Sev1';
+  return (
+    <Badge variant={isCritical ? 'destructive' : 'outline'}>
+      {severity}
+    </Badge>
+  );
+}
+
 export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
-  const styles = useStyles();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,51 +75,11 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
     return () => clearInterval(interval);
   }, [fetchIncidents]);
 
-  const columns: TableColumnDefinition<Incident>[] = [
-    createTableColumn<Incident>({
-      columnId: 'severity',
-      renderHeaderCell: () => 'Severity',
-      renderCell: (item) => (
-        <Badge color={severityColors[item.severity] || 'informative'} appearance="filled">
-          {item.severity}
-        </Badge>
-      ),
-    }),
-    createTableColumn<Incident>({
-      columnId: 'domain',
-      renderHeaderCell: () => 'Domain',
-      renderCell: (item) => <Text>{item.domain}</Text>,
-    }),
-    createTableColumn<Incident>({
-      columnId: 'resource',
-      renderHeaderCell: () => 'Resource',
-      renderCell: (item) => (
-        <Text size={200} truncate>
-          {item.title || item.resource_id || item.incident_id}
-        </Text>
-      ),
-    }),
-    createTableColumn<Incident>({
-      columnId: 'status',
-      renderHeaderCell: () => 'Status',
-      renderCell: (item) => <Badge appearance="outline">{item.status}</Badge>,
-    }),
-    createTableColumn<Incident>({
-      columnId: 'time',
-      renderHeaderCell: () => 'Time',
-      renderCell: (item) => (
-        <Text size={200}>{new Date(item.created_at).toLocaleTimeString()}</Text>
-      ),
-    }),
-  ];
-
   if (loading) {
     return (
-      <div>
+      <div className="flex flex-col gap-1">
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i}>
-            <SkeletonItem style={{ height: '40px', marginBottom: '4px' }} />
-          </Skeleton>
+          <Skeleton key={i} className="h-10 w-full" />
         ))}
       </div>
     );
@@ -157,37 +87,48 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
 
   if (incidents.length === 0) {
     return (
-      <div className={styles.emptyState}>
-        <InfoRegular className={styles.emptyIcon} />
-        <Text weight="semibold" size={400}>No alerts</Text>
-        <Text align="center" size={300}>
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Bell className="h-8 w-8 text-muted-foreground" />
+        <p className="font-semibold text-base">No alerts</p>
+        <p className="text-sm text-muted-foreground text-center">
           No alerts match your current filters. Adjust the filters above or check back later.
-        </Text>
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={styles.gridWrapper}>
-      <DataGrid
-        items={incidents}
-        columns={columns}
-        getRowId={(item) => item.incident_id}
-        sortable
-      >
-        <DataGridHeader>
-          <DataGridRow>
-            {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-          </DataGridRow>
-        </DataGridHeader>
-        <DataGridBody<Incident>>
-          {({ item, rowId }) => (
-            <DataGridRow<Incident> key={rowId}>
-              {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-            </DataGridRow>
-          )}
-        </DataGridBody>
-      </DataGrid>
+    <div className="rounded-md border overflow-hidden">
+      <Table className="w-full text-sm">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Severity</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Domain</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Resource</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Status</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {incidents.map((item) => (
+            <TableRow key={item.incident_id} className="border-b hover:bg-muted/30 transition-colors">
+              <TableCell className="h-10 px-3 align-middle">
+                <SeverityBadge severity={item.severity} />
+              </TableCell>
+              <TableCell className="h-10 px-3 align-middle">{item.domain}</TableCell>
+              <TableCell className="h-10 px-3 align-middle truncate max-w-[200px]">
+                {item.title || item.resource_id || item.incident_id}
+              </TableCell>
+              <TableCell className="h-10 px-3 align-middle">
+                <Badge variant="outline">{item.status}</Badge>
+              </TableCell>
+              <TableCell className="h-10 px-3 align-middle">
+                {new Date(item.created_at).toLocaleTimeString()}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

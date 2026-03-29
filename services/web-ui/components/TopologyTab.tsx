@@ -1,75 +1,26 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Spinner,
-  Text,
-  Badge,
-  Input,
-  makeStyles,
-  tokens,
-  Tree,
-  TreeItem,
-  TreeItemLayout,
-  TreeOpenChangeData,
-  TreeOpenChangeEvent,
-} from '@fluentui/react-components';
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
-  SearchRegular,
-  BuildingMultipleFilled,
-  FolderRegular,
-  ServerRegular,
-  DatabaseRegular,
-  NetworkCheckRegular,
-  ShieldKeyholeRegular,
-  CloudRegular,
-  OrganizationRegular,
-} from '@fluentui/react-icons';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalM,
-    height: '100%',
-  },
-  toolbar: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-  },
-  searchInput: {
-    maxWidth: '320px',
-    flex: 1,
-  },
-  summary: {
-    color: tokens.colorNeutralForeground3,
-  },
-  treeContainer: {
-    flex: 1,
-    overflow: 'auto',
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    padding: tokens.spacingVerticalS,
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-    color: tokens.colorNeutralForeground3,
-  },
-  errorText: {
-    color: tokens.colorPaletteRedForeground1,
-  },
-  badgeWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalXS,
-  },
-});
+  Search,
+  Building2,
+  Folder,
+  Server,
+  Database,
+  Network,
+  ShieldCheck,
+  Cloud,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
 
 interface TopologyNode {
   id: string;
@@ -96,15 +47,14 @@ interface TopologyTabProps {
   subscriptions: string[];
 }
 
-// Map resource type to an icon
-function resourceIcon(type?: string) {
+// Map resource type to a lucide icon
+function ResourceIcon({ type }: { type?: string }) {
   const t = (type ?? '').toLowerCase();
-  if (t.includes('virtualmachine') || t.includes('compute')) return <ServerRegular />;
-  if (t.includes('sql') || t.includes('cosmos') || t.includes('postgres') || t.includes('database')) return <DatabaseRegular />;
-  if (t.includes('network') || t.includes('vnet') || t.includes('nsg')) return <NetworkCheckRegular />;
-  if (t.includes('keyvault') || t.includes('vault')) return <ShieldKeyholeRegular />;
-  if (t.includes('containerapp') || t.includes('aks') || t.includes('kubernetes')) return <CloudRegular />;
-  return <CloudRegular />;
+  if (t.includes('virtualmachine') || t.includes('compute')) return <Server className="h-3.5 w-3.5" />;
+  if (t.includes('sql') || t.includes('cosmos') || t.includes('postgres') || t.includes('database')) return <Database className="h-3.5 w-3.5" />;
+  if (t.includes('network') || t.includes('vnet') || t.includes('nsg')) return <Network className="h-3.5 w-3.5" />;
+  if (t.includes('keyvault') || t.includes('vault')) return <ShieldCheck className="h-3.5 w-3.5" />;
+  return <Cloud className="h-3.5 w-3.5" />;
 }
 
 // Short display name for resource type
@@ -114,8 +64,108 @@ function shortType(type?: string): string {
   return parts[parts.length - 1] ?? type;
 }
 
+function ResourceGroupNode({
+  rg,
+  resources,
+  openItems,
+  onToggle,
+}: {
+  rg: TopologyNode;
+  resources: TopologyNode[];
+  openItems: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const count = rg.resourceCount ?? resources.length;
+  const isOpen = openItems.has(rg.id);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={() => onToggle(rg.id)}>
+      <CollapsibleTrigger className="flex items-center gap-2 py-1 px-2 w-full text-sm rounded-sm hover:bg-muted text-left">
+        {resources.length > 0 ? (
+          isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <span className="w-3.5" />
+        )}
+        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="flex-1 truncate">{rg.label}</span>
+        <span className="flex items-center gap-1 shrink-0">
+          <Badge variant="secondary" className="text-xs px-1.5 py-0">{count} resources</Badge>
+          {rg.location && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0">{rg.location}</Badge>
+          )}
+        </span>
+      </CollapsibleTrigger>
+      {resources.length > 0 && (
+        <CollapsibleContent>
+          <div className="ml-6 border-l border-border pl-2">
+            {resources.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 py-1 px-2 text-sm rounded-sm hover:bg-muted">
+                <ResourceIcon type={r.type} />
+                <span className="flex-1 truncate">{r.label}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0">{shortType(r.type)}</Badge>
+                  {r.location && (
+                    <Badge variant="outline" className="text-xs px-1.5 py-0">{r.location}</Badge>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      )}
+    </Collapsible>
+  );
+}
+
+function SubscriptionNode({
+  sub,
+  resourceGroups,
+  nodes,
+  openItems,
+  onToggle,
+  childrenOf,
+}: {
+  sub: TopologyNode;
+  resourceGroups: TopologyNode[];
+  nodes: TopologyNode[];
+  openItems: Set<string>;
+  onToggle: (id: string) => void;
+  childrenOf: (parentId: string | null) => TopologyNode[];
+}) {
+  const isOpen = openItems.has(sub.id);
+  const totalResources = nodes.filter(
+    (n) => n.kind === 'resource' && nodes.find((rg) => rg.id === n.parentId && rg.parentId === sub.id)
+  ).length;
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={() => onToggle(sub.id)}>
+      <CollapsibleTrigger className="flex items-center gap-2 py-1.5 px-2 w-full text-sm rounded-sm hover:bg-muted text-left font-semibold">
+        {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <span className="flex-1 truncate">{sub.label}</span>
+        <span className="flex items-center gap-1 shrink-0">
+          <Badge className="text-xs px-1.5 py-0">{resourceGroups.length} RGs</Badge>
+          <Badge variant="secondary" className="text-xs px-1.5 py-0">{totalResources} resources</Badge>
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="ml-4 border-l border-border pl-2">
+          {resourceGroups.map((rg) => (
+            <ResourceGroupNode
+              key={rg.id}
+              rg={rg}
+              resources={childrenOf(rg.id)}
+              openItems={openItems}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function TopologyTab({ subscriptions }: TopologyTabProps) {
-  const styles = useStyles();
   const [nodes, setNodes] = useState<TopologyNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,11 +205,19 @@ export function TopologyTab({ subscriptions }: TopologyTabProps) {
     loadTopology();
   }, [loadTopology]);
 
-  const handleOpenChange = (_: TreeOpenChangeEvent, data: TreeOpenChangeData) => {
-    setOpenItems(data.openItems as Set<string>);
+  const handleToggle = (id: string) => {
+    setOpenItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
-  // Build child lookup map
+  // Build child lookup with optional search filtering
   const childrenOf = (parentId: string | null): TopologyNode[] => {
     const q = search.toLowerCase();
     return nodes.filter((n) => {
@@ -174,114 +232,61 @@ export function TopologyTab({ subscriptions }: TopologyTabProps) {
   };
 
   const subscriptionNodes = childrenOf(null);
-
-  const renderResourceGroup = (rg: TopologyNode) => {
-    const resources = childrenOf(rg.id);
-    const count = rg.resourceCount ?? resources.length;
-    return (
-      <TreeItem key={rg.id} itemType={resources.length > 0 ? 'branch' : 'leaf'} value={rg.id}>
-        <TreeItemLayout
-          iconBefore={<FolderRegular />}
-          aside={
-            <span className={styles.badgeWrap}>
-              <Badge appearance="tint" color="subtle" size="small">{count} resources</Badge>
-              {rg.location && <Badge appearance="outline" size="small">{rg.location}</Badge>}
-            </span>
-          }
-        >
-          {rg.label}
-        </TreeItemLayout>
-        {resources.length > 0 && (
-          <Tree>
-            {resources.map((r) => (
-              <TreeItem key={r.id} itemType="leaf" value={r.id}>
-                <TreeItemLayout
-                  iconBefore={resourceIcon(r.type)}
-                  aside={
-                    <span className={styles.badgeWrap}>
-                      <Badge appearance="tint" color="informative" size="small">
-                        {shortType(r.type)}
-                      </Badge>
-                      {r.location && <Badge appearance="outline" size="small">{r.location}</Badge>}
-                    </span>
-                  }
-                >
-                  {r.label}
-                </TreeItemLayout>
-              </TreeItem>
-            ))}
-          </Tree>
-        )}
-      </TreeItem>
-    );
-  };
-
-  const renderSubscription = (sub: TopologyNode) => {
-    const resourceGroups = childrenOf(sub.id);
-    const totalResources = nodes.filter((n) => n.kind === 'resource' && nodes.find((rg) => rg.id === n.parentId && rg.parentId === sub.id)).length;
-    return (
-      <TreeItem key={sub.id} itemType="branch" value={sub.id}>
-        <TreeItemLayout
-          iconBefore={<BuildingMultipleFilled color={tokens.colorBrandForeground1} />}
-          aside={
-            <span className={styles.badgeWrap}>
-              <Badge appearance="tint" color="brand" size="small">{resourceGroups.length} RGs</Badge>
-              <Badge appearance="tint" color="subtle" size="small">{totalResources} resources</Badge>
-            </span>
-          }
-        >
-          <Text weight="semibold">{sub.label}</Text>
-        </TreeItemLayout>
-        <Tree>
-          {resourceGroups.map(renderResourceGroup)}
-        </Tree>
-      </TreeItem>
-    );
-  };
-
   const rgCount = nodes.filter((n) => n.kind === 'resourceGroup').length;
   const resourceCount = nodes.filter((n) => n.kind === 'resource').length;
 
   return (
-    <div className={styles.root}>
-      <div className={styles.toolbar}>
-        <Input
-          className={styles.searchInput}
-          placeholder="Search resources, groups, types..."
-          contentBefore={<SearchRegular />}
-          value={search}
-          onChange={(_, d) => setSearch(d.value)}
-        />
+    <div className="flex flex-col gap-4 h-full">
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Search resources, groups, types..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         {!loading && (
-          <Text size={200} className={styles.summary}>
+          <p className="text-sm text-muted-foreground">
             {subscriptionNodes.length} subscription{subscriptionNodes.length !== 1 ? 's' : ''} · {rgCount} resource group{rgCount !== 1 ? 's' : ''} · {resourceCount} resources
-          </Text>
+          </p>
         )}
       </div>
 
-      {loading && <Spinner label="Building topology..." />}
+      {loading && (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      )}
 
       {error && !loading && (
-        <Text className={styles.errorText}>{error}</Text>
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
       {!loading && !error && subscriptionNodes.length === 0 && (
-        <div className={styles.emptyState}>
-          <OrganizationRegular style={{ fontSize: '32px' }} />
-          <Text weight="semibold">No resources found</Text>
-          <Text size={200}>Check subscription filter or permissions.</Text>
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <Network className="h-8 w-8" />
+          <p className="font-semibold text-foreground">No resources found</p>
+          <p className="text-sm">Check subscription filter or permissions.</p>
         </div>
       )}
 
       {!loading && !error && subscriptionNodes.length > 0 && (
-        <div className={styles.treeContainer}>
-          <Tree
-            openItems={openItems}
-            onOpenChange={handleOpenChange}
-            aria-label="Azure resource topology"
-          >
-            {subscriptionNodes.map(renderSubscription)}
-          </Tree>
+        <div className="flex-1 overflow-auto border border-border rounded-md p-2">
+          {subscriptionNodes.map((sub) => (
+            <SubscriptionNode
+              key={sub.id}
+              sub={sub}
+              resourceGroups={childrenOf(sub.id)}
+              nodes={nodes}
+              openItems={openItems}
+              onToggle={handleToggle}
+              childrenOf={childrenOf}
+            />
+          ))}
         </div>
       )}
     </div>

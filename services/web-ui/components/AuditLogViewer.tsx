@@ -2,47 +2,25 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  DataGrid,
-  DataGridHeader,
-  DataGridRow,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridCell,
-  TableColumnDefinition,
-  createTableColumn,
-  Toolbar,
-  Dropdown,
-  Option,
-  Input,
-  Text,
-  Badge,
-  Button,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
-import { DocumentTextRegular } from '@fluentui/react-icons';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    height: '100%',
-  },
-  filters: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    flexWrap: 'wrap',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-  },
-});
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { FileText } from 'lucide-react';
 
 interface AuditEntry {
   timestamp: string;
@@ -58,7 +36,6 @@ interface AuditLogViewerProps {
 }
 
 export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
-  const styles = useStyles();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [agentFilter, setAgentFilter] = useState('');
@@ -115,97 +92,100 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
     fetchAuditLog();
   }, [fetchAuditLog]);
 
-  const columns: TableColumnDefinition<AuditEntry>[] = [
-    createTableColumn<AuditEntry>({
-      columnId: 'timestamp',
-      renderHeaderCell: () => 'Timestamp',
-      renderCell: (item) => <Text size={200}>{new Date(item.timestamp).toLocaleString()}</Text>,
-    }),
-    createTableColumn<AuditEntry>({
-      columnId: 'agent',
-      renderHeaderCell: () => 'Agent',
-      renderCell: (item) => <Text>{item.agent}</Text>,
-    }),
-    createTableColumn<AuditEntry>({
-      columnId: 'tool',
-      renderHeaderCell: () => 'Tool',
-      renderCell: (item) => <Text size={200}>{item.tool}</Text>,
-    }),
-    createTableColumn<AuditEntry>({
-      columnId: 'outcome',
-      renderHeaderCell: () => 'Outcome',
-      renderCell: (item) => (
-        <Badge
-          color={item.outcome === '200' || item.outcome === 'success' ? 'success' : 'danger'}
-          appearance="outline"
-        >
-          {item.outcome}
-        </Badge>
-      ),
-    }),
-    createTableColumn<AuditEntry>({
-      columnId: 'duration',
-      renderHeaderCell: () => 'Duration',
-      renderCell: (item) => <Text size={200}>{item.duration_ms}ms</Text>,
-    }),
-  ];
-
   if (entries.length === 0 && !loading) {
     return (
-      <div className={styles.emptyState}>
-        <Text weight="semibold" size={400}>No actions recorded</Text>
-        <Text align="center" size={300}>
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <p className="font-semibold text-base">No actions recorded</p>
+        <p className="text-sm text-muted-foreground text-center">
           Agent actions for this time range will appear here once incidents are triaged.
-        </Text>
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={styles.root}>
-      <Toolbar className={styles.filters}>
-        <Dropdown
-          placeholder="Agent"
+    <div className="flex flex-col gap-2 h-full">
+      <div className="flex gap-2 flex-wrap items-center">
+        <Select
           value={agentFilter}
-          onOptionSelect={(_, data) => setAgentFilter(data.optionValue as string)}
+          onValueChange={(value) => setAgentFilter(value)}
         >
-          <Option value="">All Agents</Option>
-          <Option value="compute">Compute</Option>
-          <Option value="network">Network</Option>
-          <Option value="storage">Storage</Option>
-          <Option value="security">Security</Option>
-          <Option value="arc">Arc</Option>
-          <Option value="sre">SRE</Option>
-        </Dropdown>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="All Agents" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Agents</SelectItem>
+            <SelectItem value="compute">Compute</SelectItem>
+            <SelectItem value="network">Network</SelectItem>
+            <SelectItem value="storage">Storage</SelectItem>
+            <SelectItem value="security">Security</SelectItem>
+            <SelectItem value="arc">Arc</SelectItem>
+            <SelectItem value="sre">SRE</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Input
+          className="w-[200px]"
           placeholder="Filter by action..."
           value={actionFilter}
-          onChange={(_, data) => setActionFilter(data.value)}
+          onChange={(e) => setActionFilter(e.target.value)}
         />
+
         <Button
-          appearance="subtle"
-          icon={<DocumentTextRegular />}
+          variant="outline"
+          size="sm"
           onClick={handleExport}
           disabled={exportLoading}
         >
+          <FileText className="h-4 w-4 mr-1.5" />
           {exportLoading ? 'Exporting...' : 'Export Report'}
         </Button>
-      </Toolbar>
+      </div>
 
-      <DataGrid items={entries} columns={columns} sortable>
-        <DataGridHeader>
-          <DataGridRow>
-            {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-          </DataGridRow>
-        </DataGridHeader>
-        <DataGridBody<AuditEntry>>
-          {({ item, rowId }) => (
-            <DataGridRow<AuditEntry> key={rowId}>
-              {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-            </DataGridRow>
-          )}
-        </DataGridBody>
-      </DataGrid>
+      {loading ? (
+        <div className="flex flex-col gap-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <Table className="w-full text-sm">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Timestamp</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Agent</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Tool</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Outcome</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Duration</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map((item, idx) => (
+                <TableRow key={idx} className="border-b hover:bg-muted/30 transition-colors">
+                  <TableCell className="h-10 px-3 align-middle">
+                    {new Date(item.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="h-10 px-3 align-middle">{item.agent}</TableCell>
+                  <TableCell className="h-10 px-3 align-middle">{item.tool}</TableCell>
+                  <TableCell className="h-10 px-3 align-middle">
+                    <Badge
+                      variant={
+                        item.outcome === '200' || item.outcome === 'success'
+                          ? 'default'
+                          : 'destructive'
+                      }
+                    >
+                      {item.outcome}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="h-10 px-3 align-middle">{item.duration_ms}ms</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

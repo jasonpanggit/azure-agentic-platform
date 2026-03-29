@@ -2,64 +2,24 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  DataGrid,
-  DataGridHeader,
-  DataGridRow,
-  DataGridHeaderCell,
-  DataGridBody,
-  DataGridCell,
-  TableColumnDefinition,
-  createTableColumn,
-  TableCellLayout,
-  Spinner,
-  Text,
-  Badge,
-  Input,
-  makeStyles,
-  tokens,
-  Dropdown,
-  Option,
-  SelectionEvents,
-  OptionOnSelectData,
-} from '@fluentui/react-components';
-import { SearchRegular, ServerRegular } from '@fluentui/react-icons';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalM,
-    height: '100%',
-  },
-  toolbar: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  searchInput: {
-    maxWidth: '280px',
-    flex: 1,
-  },
-  summary: {
-    color: tokens.colorNeutralForeground3,
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-    color: tokens.colorNeutralForeground3,
-  },
-  icon: {
-    fontSize: '32px',
-  },
-  errorText: {
-    color: tokens.colorPaletteRedForeground1,
-  },
-});
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Search, Server } from 'lucide-react';
 
 interface Resource {
   id: string;
@@ -111,34 +71,9 @@ function shortType(type: string): string {
   return SHORT_TYPE[type.toLowerCase()] ?? type.split('/').pop() ?? type;
 }
 
-const columns: TableColumnDefinition<Resource>[] = [
-  createTableColumn<Resource>({
-    columnId: 'name',
-    renderHeaderCell: () => 'Name',
-    renderCell: (item) => <TableCellLayout>{item.name}</TableCellLayout>,
-  }),
-  createTableColumn<Resource>({
-    columnId: 'type',
-    renderHeaderCell: () => 'Type',
-    renderCell: (item) => (
-      <TableCellLayout>
-        <Badge appearance="tint" color="informative" size="small">
-          {shortType(item.type)}
-        </Badge>
-      </TableCellLayout>
-    ),
-  }),
-  createTableColumn<Resource>({
-    columnId: 'location',
-    renderHeaderCell: () => 'Location',
-    renderCell: (item) => <TableCellLayout>{item.location}</TableCellLayout>,
-  }),
-];
-
 const ALL_TYPES = 'All types';
 
 export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
-  const styles = useStyles();
   const [allResources, setAllResources] = useState<Resource[]>([]);
   const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,81 +124,85 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
     return matchesType && matchesSearch;
   });
 
-  const handleTypeSelect = (_: SelectionEvents, data: OptionOnSelectData) => {
-    setTypeFilter(data.optionValue ?? ALL_TYPES);
-  };
-
-  // Display value for the dropdown: show short label only
-  const dropdownDisplay =
-    typeFilter === ALL_TYPES ? ALL_TYPES : shortType(typeFilter);
-
   return (
-    <div className={styles.root}>
-      <div className={styles.toolbar}>
-        <Input
-          className={styles.searchInput}
-          placeholder="Search resources..."
-          contentBefore={<SearchRegular />}
-          value={search}
-          onChange={(_, d) => setSearch(d.value)}
-        />
-        <Dropdown
-          placeholder="All types"
-          value={dropdownDisplay}
-          onOptionSelect={handleTypeSelect}
-        >
-          <Option text={ALL_TYPES} key={ALL_TYPES} value={ALL_TYPES}>All types</Option>
-          {availableTypes.map((t) => (
-            <Option text={shortType(t)} key={t} value={t}>
-              {shortType(t)}
-            </Option>
-          ))}
-        </Dropdown>
+    <div className="flex flex-col gap-4 h-full">
+      <div className="flex gap-2 items-center flex-wrap">
+        <div className="relative flex-1 max-w-[280px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Search resources..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_TYPES}>All types</SelectItem>
+            {availableTypes.map((t) => (
+              <SelectItem key={t} value={t}>
+                {shortType(t)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {!loading && (
-          <Text size={200} className={styles.summary}>
+          <p className="text-sm text-muted-foreground">
             {filtered.length} of {allResources.length} resource{allResources.length !== 1 ? 's' : ''}
-          </Text>
+          </p>
         )}
       </div>
 
-      {loading && <Spinner label="Loading resources..." />}
+      {loading && (
+        <div className="flex flex-col gap-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      )}
 
       {error && !loading && (
-        <Text className={styles.errorText}>{error}</Text>
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
       {!loading && !error && filtered.length === 0 && (
-        <div className={styles.emptyState}>
-          <ServerRegular className={styles.icon} />
-          <Text weight="semibold">No resources found</Text>
-          <Text size={200}>Try adjusting the subscription filter, type, or search query.</Text>
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <Server className="h-8 w-8" />
+          <p className="font-semibold text-foreground">No resources found</p>
+          <p className="text-sm">Try adjusting the subscription filter, type, or search query.</p>
         </div>
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <DataGrid
-          items={filtered}
-          columns={columns}
-          getRowId={(item) => item.id}
-          sortable
-        >
-          <DataGridHeader>
-            <DataGridRow>
-              {({ renderHeaderCell }) => (
-                <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-              )}
-            </DataGridRow>
-          </DataGridHeader>
-          <DataGridBody<Resource>>
-            {({ item, rowId }) => (
-              <DataGridRow<Resource> key={rowId}>
-                {({ renderCell }) => (
-                  <DataGridCell>{renderCell(item)}</DataGridCell>
-                )}
-              </DataGridRow>
-            )}
-          </DataGridBody>
-        </DataGrid>
+        <div className="rounded-md border overflow-hidden">
+          <Table className="w-full text-sm">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Name</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Type</TableHead>
+                <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Location</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((item) => (
+                <TableRow key={item.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <TableCell className="h-10 px-3 align-middle">{item.name}</TableCell>
+                  <TableCell className="h-10 px-3 align-middle">
+                    <Badge variant="secondary" className="text-xs">
+                      {shortType(item.type)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="h-10 px-3 align-middle">{item.location}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );

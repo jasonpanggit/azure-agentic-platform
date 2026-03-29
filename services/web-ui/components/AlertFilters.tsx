@@ -2,21 +2,12 @@
 
 import React from 'react';
 import {
-  Toolbar,
-  Dropdown,
-  Option,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-});
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface FilterState {
   severity?: string;
@@ -30,46 +21,56 @@ interface AlertFiltersProps {
 }
 
 export function AlertFilters({ filters, onChange }: AlertFiltersProps) {
-  const styles = useStyles();
-
   return (
-    <Toolbar className={styles.root}>
-      <Dropdown
-        placeholder="Severity"
+    <div className="flex gap-2 items-center flex-wrap">
+      <Select
         value={filters.severity || ''}
-        onOptionSelect={(_, data) => onChange({ ...filters, severity: data.optionValue as string })}
+        onValueChange={(value) => onChange({ ...filters, severity: value })}
       >
-        <Option value="">All</Option>
-        <Option value="Sev0">Sev0</Option>
-        <Option value="Sev1">Sev1</Option>
-        <Option value="Sev2">Sev2</Option>
-        <Option value="Sev3">Sev3</Option>
-      </Dropdown>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Severity" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          <SelectItem value="Sev0">Sev0</SelectItem>
+          <SelectItem value="Sev1">Sev1</SelectItem>
+          <SelectItem value="Sev2">Sev2</SelectItem>
+          <SelectItem value="Sev3">Sev3</SelectItem>
+        </SelectContent>
+      </Select>
 
-      <Dropdown
-        placeholder="Domain"
+      <Select
         value={filters.domain || ''}
-        onOptionSelect={(_, data) => onChange({ ...filters, domain: data.optionValue as string })}
+        onValueChange={(value) => onChange({ ...filters, domain: value })}
       >
-        <Option value="">All</Option>
-        <Option value="compute">Compute</Option>
-        <Option value="network">Network</Option>
-        <Option value="storage">Storage</Option>
-        <Option value="security">Security</Option>
-        <Option value="arc">Arc</Option>
-        <Option value="sre">SRE</Option>
-      </Dropdown>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Domain" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          <SelectItem value="compute">Compute</SelectItem>
+          <SelectItem value="network">Network</SelectItem>
+          <SelectItem value="storage">Storage</SelectItem>
+          <SelectItem value="security">Security</SelectItem>
+          <SelectItem value="arc">Arc</SelectItem>
+          <SelectItem value="sre">SRE</SelectItem>
+        </SelectContent>
+      </Select>
 
-      <Dropdown
-        placeholder="Status"
+      <Select
         value={filters.status || ''}
-        onOptionSelect={(_, data) => onChange({ ...filters, status: data.optionValue as string })}
+        onValueChange={(value) => onChange({ ...filters, status: value })}
       >
-        <Option value="">All</Option>
-        <Option value="new">New</Option>
-        <Option value="acknowledged">Acknowledged</Option>
-        <Option value="closed">Closed</Option>
-      </Dropdown>
-    </Toolbar>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All</SelectItem>
+          <SelectItem value="new">New</SelectItem>
+          <SelectItem value="acknowledged">Acknowledged</SelectItem>
+          <SelectItem value="closed">Closed</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

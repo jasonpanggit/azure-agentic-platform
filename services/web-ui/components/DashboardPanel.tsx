@@ -1,79 +1,14 @@
 'use client';
-/**
- * DashboardPanel — right pane of the split-pane layout.
- *
- * Tabs: Alerts | Audit | Topology | Resources | Observability
- *
- * - alerts:       AlertFilters + AlertFeed (UI-006, UI-007)
- * - audit:        AuditLogViewer (AUDIT-004)
- * - topology:     Arc network graph (Phase 8)
- * - resources:    Multi-subscription resource inventory via ARM API
- * - observability: Agent latency, pipeline lag, approval queue, errors
- */
 
 import React, { useState } from 'react';
-import {
-  Tab,
-  TabList,
-  SelectTabData,
-  SelectTabEvent,
-  Text,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
-import {
-  AlertRegular,
-  ClipboardTaskRegular,
-  OrganizationRegular,
-  ServerRegular,
-  PulseRegular,
-} from '@fluentui/react-icons';
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Bell, ClipboardList, Network, Server, Activity } from 'lucide-react';
 import { AlertFeed } from './AlertFeed';
 import { AlertFilters } from './AlertFilters';
 import { AuditLogViewer } from './AuditLogViewer';
 import { ObservabilityTab } from './ObservabilityTab';
 import { ResourcesTab } from './ResourcesTab';
 import { TopologyTab } from './TopologyTab';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    overflow: 'hidden',
-  },
-  tabBar: {
-    paddingLeft: tokens.spacingHorizontalM,
-    paddingRight: tokens.spacingHorizontalM,
-    boxShadow: tokens.shadow2,
-  },
-  tabContent: {
-    flex: 1,
-    overflow: 'auto',
-    padding: tokens.spacingVerticalM,
-  },
-  alertsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    height: '100%',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-  },
-  emptyIcon: {
-    fontSize: '32px',
-    color: tokens.colorNeutralForeground3,
-  },
-});
-
-type DashboardTab = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability';
 
 interface FilterState {
   severity?: string;
@@ -87,50 +22,59 @@ interface DashboardPanelProps {
 }
 
 export function DashboardPanel({ subscriptions, selectedIncidentId }: DashboardPanelProps) {
-  const styles = useStyles();
-  const [activeTab, setActiveTab] = useState<DashboardTab>('alerts');
   const [filters, setFilters] = useState<FilterState>({});
 
-  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-    setActiveTab(data.value as DashboardTab);
-  };
-
   return (
-    <div className={styles.root}>
-      <div className={styles.tabBar}>
-        <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
-          <Tab value="alerts" icon={<AlertRegular />}>Alerts</Tab>
-          <Tab value="audit" icon={<ClipboardTaskRegular />}>Audit</Tab>
-          <Tab value="topology" icon={<OrganizationRegular />}>Topology</Tab>
-          <Tab value="resources" icon={<ServerRegular />}>Resources</Tab>
-          <Tab value="observability" icon={<PulseRegular />}>Observability</Tab>
-        </TabList>
-      </div>
+    <div className="flex flex-col h-full overflow-hidden bg-muted">
+      <Tabs defaultValue="alerts" className="flex flex-col h-full">
+        <div className="px-4 shadow-sm bg-background border-b border-border">
+          <TabsList>
+            <TabsTrigger value="alerts" className="gap-1.5">
+              <Bell className="h-4 w-4" />
+              Alerts
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-1.5">
+              <ClipboardList className="h-4 w-4" />
+              Audit
+            </TabsTrigger>
+            <TabsTrigger value="topology" className="gap-1.5">
+              <Network className="h-4 w-4" />
+              Topology
+            </TabsTrigger>
+            <TabsTrigger value="resources" className="gap-1.5">
+              <Server className="h-4 w-4" />
+              Resources
+            </TabsTrigger>
+            <TabsTrigger value="observability" className="gap-1.5">
+              <Activity className="h-4 w-4" />
+              Observability
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className={styles.tabContent}>
-        {activeTab === 'alerts' && (
-          <div className={styles.alertsContainer}>
+        <TabsContent value="alerts" className="flex-1 overflow-auto p-4 mt-0">
+          <div className="flex flex-col gap-2 h-full">
             <AlertFilters filters={filters} onChange={setFilters} />
             <AlertFeed subscriptions={subscriptions} filters={filters} />
           </div>
-        )}
+        </TabsContent>
 
-        {activeTab === 'audit' && (
+        <TabsContent value="audit" className="flex-1 overflow-auto p-4 mt-0">
           <AuditLogViewer incidentId={selectedIncidentId} />
-        )}
+        </TabsContent>
 
-        {activeTab === 'topology' && (
+        <TabsContent value="topology" className="flex-1 overflow-auto p-4 mt-0">
           <TopologyTab subscriptions={subscriptions} />
-        )}
+        </TabsContent>
 
-        {activeTab === 'resources' && (
+        <TabsContent value="resources" className="flex-1 overflow-auto p-4 mt-0">
           <ResourcesTab subscriptions={subscriptions} />
-        )}
+        </TabsContent>
 
-        {activeTab === 'observability' && (
+        <TabsContent value="observability" className="flex-1 overflow-auto p-4 mt-0">
           <ObservabilityTab subscriptions={subscriptions} />
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
