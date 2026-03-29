@@ -106,6 +106,10 @@ export async function GET(request: NextRequest) {
       // Poll the API gateway for run completion
       const deadline = Date.now() + POLL_TIMEOUT_MS;
       const runIdParam = runId ? `&run_id=${encodeURIComponent(runId)}` : '';
+      // Allow up to 5 consecutive not_found responses (~10s) before treating as terminal.
+      // This absorbs Foundry's ~1-2s propagation delay without polling forever on genuinely missing runs.
+      const NOT_FOUND_LIMIT = 5;
+      let notFoundCount = 0;
 
       while (!aborted && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -121,7 +125,15 @@ export async function GET(request: NextRequest) {
 
           const result = (await res.json()) as RunResultPayload;
 
-          if (!TERMINAL_STATUSES.has(result.run_status)) continue; // still running
+          if (result.run_status === 'not_found') {
+            notFoundCount++;
+            if (notFoundCount < NOT_FOUND_LIMIT) continue; // transient — keep polling
+            // Exceeded limit: treat as terminal
+          } else {
+            notFoundCount = 0; // reset on any other status
+          }
+
+          if (!TERMINAL_STATUSES.has(result.run_status) && result.run_status !== 'not_found') continue; // still running
 
           if (result.run_status === 'completed' && result.reply) {
             pushEvent(controller, 'token', {

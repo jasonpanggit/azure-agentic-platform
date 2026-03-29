@@ -139,7 +139,7 @@ async def get_chat_result(
         latest_run = None
         for attempt in range(3):
             try:
-                latest_run = client.runs.retrieve(thread_id=thread_id, run_id=run_id)
+                latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
                 break
             except Exception as exc:
                 if attempt < 2:
