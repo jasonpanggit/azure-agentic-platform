@@ -54,13 +54,18 @@ class AzureMCPClient:
         self._ready = False
 
     def _get_mcp_env(self) -> dict[str, str]:
-        """Build env vars for the MCP subprocess."""
+        """Build env vars for the MCP subprocess.
+
+        Reads Azure credentials from MCP_AZURE_* prefixed env vars to avoid
+        conflicting with the API gateway's own AZURE_CLIENT_ID / AZURE_TENANT_ID
+        vars (which trigger fastapi-azure-auth Entra validation).
+        """
         env = dict(os.environ)
-        # Service principal credentials
-        for key in ("AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"):
-            val = os.environ.get(key)
+        # Map MCP_AZURE_* → AZURE_* for the subprocess
+        for short_key in ("CLIENT_ID", "CLIENT_SECRET", "TENANT_ID"):
+            val = os.environ.get(f"MCP_AZURE_{short_key}")
             if val:
-                env[key] = val
+                env[f"AZURE_{short_key}"] = val
         return env
 
     async def initialize(self) -> None:
