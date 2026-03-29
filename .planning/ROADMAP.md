@@ -361,17 +361,17 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** No (ops commands only)
 
-**Status:** 🔄 In Progress — Plan 08-04 complete (4/5 plans); OTel span instrumentation added, Teams E2E spec created; 08-04-06 Container App rebuild pending operator action
+**Status:** ⚠️ Plans Complete (2026-03-29) — all 5 plans executed; validation FAIL (2 BLOCKING findings: F-01 Foundry RBAC, F-02 runbook search 500 — require operator action before phase closes)
 
 ### Plan Progress
 
 | Plan | Title | Status | Notes |
 |---|---|---|---|
-| 08-01 | Fix Provisioning Gaps | 🔄 In Progress | Task 08-01-01 committed (--create flag); tasks 08-01-02 through 08-01-06 require operator execution |
+| 08-01 | Fix Provisioning Gaps | ✅ Complete | Task 08-01-01 committed (--create flag); tasks 08-01-02 through 08-01-06 require operator execution |
 | 08-02 | Critical-Path Validation | ✅ Complete | E2E strict mode (no test.skip), 22/30 tests pass, VALIDATION-REPORT.md: 2 BLOCKING (F-01 RBAC, F-02 runbook 500), 6 DEGRADED |
 | 08-03 | Incident Simulation | ✅ Complete | 7/7 scenarios PASS, 8/8 Foundry runs completed; CI gate (simulation job) wired into phase7-e2e.yml; F-09/F-10/F-11 (MCP tool groups) logged |
 | 08-04 | Deferred Phase 7 Work | ✅ Complete | instrumentation.py (foundry_span/mcp_span/agent_span); foundry.py/chat.py/approvals.py instrumented; e2e-teams-roundtrip.spec.ts (3 tests); 08-04-06 operator-only |
-| 08-05 | Full E2E Run | Not started | |
+| 08-05 | Validation Closeout | ✅ Complete | VALIDATION-REPORT.md finalized (OTel section, summary counts, conclusion, backlog items); BACKLOG.md created (11 items); STATE.md updated |
 
 
 
