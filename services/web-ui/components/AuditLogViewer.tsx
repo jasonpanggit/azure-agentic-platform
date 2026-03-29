@@ -38,7 +38,8 @@ interface AuditLogViewerProps {
 export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [agentFilter, setAgentFilter] = useState('');
+  // Radix Select forbids empty-string values — use 'all' as the "no filter" sentinel.
+  const [agentFilter, setAgentFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -46,7 +47,7 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
     try {
       const params = new URLSearchParams();
       if (incidentId) params.set('incident_id', incidentId);
-      if (agentFilter) params.set('agent', agentFilter);
+      if (agentFilter && agentFilter !== 'all') params.set('agent', agentFilter);
       if (actionFilter) params.set('action', actionFilter);
 
       const res = await fetch(`/api/proxy/audit?${params.toString()}`);
@@ -114,7 +115,7 @@ export function AuditLogViewer({ incidentId }: AuditLogViewerProps) {
             <SelectValue placeholder="All Agents" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Agents</SelectItem>
+            <SelectItem value="all">All Agents</SelectItem>
             <SelectItem value="compute">Compute</SelectItem>
             <SelectItem value="network">Network</SelectItem>
             <SelectItem value="storage">Storage</SelectItem>
