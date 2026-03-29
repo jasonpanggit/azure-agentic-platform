@@ -1,21 +1,9 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Textarea, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { SendRegular } from '@fluentui/react-icons';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: tokens.spacingHorizontalS,
-    padding: tokens.spacingHorizontalL,
-    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-  },
-  textarea: {
-    flex: 1,
-  },
-});
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Send } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -23,7 +11,6 @@ interface ChatInputProps {
 }
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
-  const styles = useStyles();
   const [value, setValue] = useState('');
 
   const handleSend = useCallback(() => {
@@ -34,31 +21,33 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     }
   }, [value, onSend]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
 
   return (
-    <div className={styles.root}>
+    <div className="flex items-end gap-2 px-4 py-3 border-t border-border">
       <Textarea
-        className={styles.textarea}
-        placeholder="Type a message..."
         value={value}
-        onChange={(_, data) => setValue(data.value)}
+        onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
+        placeholder="Ask about any Azure resource..."
         disabled={disabled}
-        resize="vertical"
+        className="flex-1 min-h-[40px] max-h-[120px] resize-none"
         rows={1}
       />
       <Button
-        appearance="primary"
-        icon={<SendRegular />}
         onClick={handleSend}
         disabled={disabled || !value.trim()}
+        className="h-10 px-4"
       >
+        <Send className="h-4 w-4 mr-2" />
         Send Message
       </Button>
     </div>

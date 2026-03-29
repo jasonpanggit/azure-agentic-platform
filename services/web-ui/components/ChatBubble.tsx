@@ -1,67 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Card, Text, makeStyles, tokens } from '@fluentui/react-components';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-const useStyles = makeStyles({
-  root: {
-    maxWidth: '95%',
-    alignSelf: 'flex-start',
-    padding: tokens.spacingHorizontalS,
-    backgroundColor: tokens.colorNeutralBackground3,
-    marginBottom: tokens.spacingVerticalS,
-    boxShadow: tokens.shadow2,
-    borderRadius: tokens.borderRadiusLarge,
-    overflow: 'hidden',
-    boxSizing: 'border-box',
-  },
-  agentName: {
-    marginBottom: tokens.spacingVerticalXS,
-  },
-  cursor: {
-    display: 'inline-block',
-    width: '2px',
-    height: '14px',
-    backgroundColor: tokens.colorNeutralForeground1,
-    marginLeft: '1px',
-    animationName: {
-      '50%': { opacity: 0 },
-    },
-    animationDuration: '1060ms',
-    animationIterationCount: 'infinite',
-    animationTimingFunction: 'step-end',
-  },
-  tableWrapper: {
-    overflowX: 'auto',
-    marginTop: tokens.spacingVerticalS,
-    marginBottom: tokens.spacingVerticalS,
-  },
-});
-
-// Inline styles for markdown table elements (Griffel doesn't support descendant selectors)
-const tableStyle: React.CSSProperties = {
-  borderCollapse: 'collapse',
-  width: '100%',
-  fontSize: '13px',
-  lineHeight: '1.4',
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '6px 12px',
-  textAlign: 'left',
-  fontWeight: 600,
-  borderBottom: `2px solid`,
-  whiteSpace: 'nowrap',
-  color: 'inherit',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '5px 12px',
-  borderBottom: `1px solid`,
-  whiteSpace: 'nowrap',
-};
 
 interface ChatBubbleProps {
   agentName: string;
@@ -71,38 +12,20 @@ interface ChatBubbleProps {
 }
 
 export function ChatBubble({ agentName, content, isStreaming, timestamp }: ChatBubbleProps) {
-  const styles = useStyles();
-
   return (
-    <Card className={styles.root} size="small">
-      <Text className={styles.agentName} size={200} weight="semibold">
+    <div className="max-w-[95%] self-start rounded-lg border bg-card p-3 mb-2 shadow-sm">
+      <div className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary mb-1.5">
         {agentName} Agent
-      </Text>
-      <div>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            table: ({ children }) => (
-              <div className={styles.tableWrapper}>
-                <table style={tableStyle}>{children}</table>
-              </div>
-            ),
-            th: ({ children }) => (
-              <th style={thStyle}>{children}</th>
-            ),
-            td: ({ children }) => (
-              <td style={tdStyle}>{children}</td>
-            ),
-            tr: ({ children }) => (
-              <tr>{children}</tr>
-            ),
-          }}
-        >
+      </div>
+      <div className="prose prose-sm prose-zinc max-w-none">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {content}
         </ReactMarkdown>
-        {isStreaming && <span className={styles.cursor} />}
+        {isStreaming && (
+          <span className="inline-block w-0.5 h-3.5 bg-foreground ml-0.5 animate-blink-cursor" />
+        )}
       </div>
-      <Text size={100}>{timestamp}</Text>
-    </Card>
+      <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
+    </div>
   );
 }

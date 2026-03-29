@@ -1,56 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
-  Card,
-  Text,
-  Button,
-  Badge,
-  makeStyles,
-  tokens,
   Dialog,
-  DialogTrigger,
-  DialogSurface,
-  DialogTitle,
-  DialogBody,
-  DialogActions,
   DialogContent,
-} from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  root: {
-    maxWidth: '90%',
-    alignSelf: 'flex-start',
-    padding: tokens.spacingHorizontalM,
-    marginBottom: tokens.spacingVerticalS,
-    border: `1px solid ${tokens.colorPaletteRedBorderActive}`,
-    boxShadow: tokens.shadow8,
-    borderRadius: tokens.borderRadiusLarge,
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    marginBottom: tokens.spacingVerticalS,
-  },
-  details: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXS,
-    marginBottom: tokens.spacingVerticalM,
-  },
-  actions: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-  },
-  timer: {
-    marginTop: tokens.spacingVerticalS,
-  },
-  monospace: {
-    fontFamily: tokens.fontFamilyMonospace,
-    fontSize: '12px',
-  },
-});
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface ProposalCardProps {
   approval: {
@@ -73,153 +35,93 @@ interface ProposalCardProps {
 }
 
 export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProps) {
-  const styles = useStyles();
   const [timeRemaining, setTimeRemaining] = useState('');
   const isPending = approval.status === 'pending';
 
   useEffect(() => {
     if (!isPending) return;
-
     const updateTimer = () => {
       const expires = new Date(approval.expires_at).getTime();
       const now = Date.now();
       const diff = expires - now;
-
-      if (diff <= 0) {
-        setTimeRemaining('Expired');
-        return;
-      }
+      if (diff <= 0) { setTimeRemaining('Expired'); return; }
       const minutes = Math.floor(diff / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
       setTimeRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
     };
-
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [isPending, approval.expires_at]);
 
-  const riskBadgeColor = approval.risk_level === 'critical' ? 'danger' : 'important';
-
-  const statusBadges: Record<string, { color: 'success' | 'danger' | 'warning' | 'important'; label: string }> = {
-    approved: { color: 'success', label: 'Approved' },
-    rejected: { color: 'danger', label: 'Rejected' },
-    expired: { color: 'warning', label: 'Expired' },
-    aborted: { color: 'danger', label: `Aborted — ${approval.abort_reason || 'stale_approval'}` },
-    executed: { color: 'success', label: 'Executed' },
-  };
+  const borderClass = approval.risk_level === 'critical' ? 'border-l-destructive' : 'border-l-orange-500';
 
   return (
-    <Card className={styles.root} size="small">
-      <div className={styles.header}>
-        <Badge color={riskBadgeColor} appearance="filled">
-          {approval.risk_level.toUpperCase()}
-        </Badge>
-        <Text weight="semibold">{approval.proposal.description}</Text>
-        {!isPending && statusBadges[approval.status] && (
-          <Badge color={statusBadges[approval.status].color} appearance="filled">
-            {statusBadges[approval.status].label}
+    <Card className={`max-w-[90%] self-start rounded-lg border-l-4 ${borderClass} p-4 mb-2 shadow-md bg-card`}>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-2 mb-2">
+          <Badge variant={approval.risk_level === 'critical' ? 'destructive' : 'outline'}>
+            {approval.risk_level.toUpperCase()}
           </Badge>
+          <span className="font-semibold text-sm">{approval.proposal.description}</span>
+          {!isPending && (
+            <Badge variant={approval.status === 'approved' || approval.status === 'executed' ? 'default' : 'destructive'}>
+              {approval.status === 'aborted' ? `Aborted — ${approval.abort_reason || 'stale_approval'}` : approval.status.charAt(0).toUpperCase() + approval.status.slice(1)}
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-col gap-1 mb-3">
+          <p className="text-sm"><strong>Target:</strong> <span className="font-mono text-[13px] text-muted-foreground">{approval.proposal.target_resources.join(', ')}</span></p>
+          <p className="text-sm"><strong>Impact:</strong> {approval.proposal.estimated_impact}</p>
+          <p className="text-sm"><strong>Reversibility:</strong> {approval.proposal.reversibility}</p>
+        </div>
+        {isPending && (
+          <>
+            <p className={`text-sm mt-2 ${timeRemaining === 'Expired' ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {timeRemaining === 'Expired' ? 'Expired' : `This approval expires in ${timeRemaining}`}
+            </p>
+            <div className="flex gap-2 mt-2">
+              <Dialog>
+                <DialogTrigger asChild><Button>Approve Action</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Approve Action</DialogTitle>
+                    <DialogDescription>
+                      This action is rated <strong>{approval.risk_level}</strong>. It will {approval.proposal.description.toLowerCase()} on {approval.proposal.target_resources[0]}. Estimated impact: {approval.proposal.estimated_impact}. Proceed?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogTrigger asChild><Button variant="secondary">Cancel</Button></DialogTrigger>
+                    <Button onClick={onApprove}>Confirm Approval</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Dialog>
+                <DialogTrigger asChild><Button variant="destructive">Reject Action</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Reject Action</DialogTitle>
+                    <DialogDescription>Are you sure you want to reject this remediation? The agent will not proceed with this action.</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogTrigger asChild><Button variant="secondary">Cancel</Button></DialogTrigger>
+                    <Button variant="destructive" onClick={onReject}>Confirm Rejection</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </>
         )}
-      </div>
-
-      <div className={styles.details}>
-        <Text size={200}>
-          <strong>Target:</strong>{' '}
-          <span className={styles.monospace}>
-            {approval.proposal.target_resources.join(', ')}
-          </span>
-        </Text>
-        <Text size={200}>
-          <strong>Impact:</strong> {approval.proposal.estimated_impact}
-        </Text>
-        <Text size={200}>
-          <strong>Reversibility:</strong> {approval.proposal.reversibility}
-        </Text>
-      </div>
-
-      {isPending && (
-        <>
-          <div className={styles.timer}>
-            <Text size={200}>
-              This approval expires in {timeRemaining}
-            </Text>
-          </div>
-          <div className={styles.actions}>
-            <Dialog>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="primary">Approve Action</Button>
-              </DialogTrigger>
-              <DialogSurface>
-                <DialogBody>
-                  <DialogTitle>Approve Action</DialogTitle>
-                  <DialogContent>
-                    This action is rated <strong>{approval.risk_level}</strong>. It will{' '}
-                    {approval.proposal.description.toLowerCase()} on{' '}
-                    {approval.proposal.target_resources[0]}. Estimated impact:{' '}
-                    {approval.proposal.estimated_impact}. Proceed?
-                  </DialogContent>
-                  <DialogActions>
-                    <DialogTrigger disableButtonEnhancement>
-                      <Button appearance="secondary">Cancel</Button>
-                    </DialogTrigger>
-                    <Button appearance="primary" onClick={onApprove}>
-                      Confirm Approval
-                    </Button>
-                  </DialogActions>
-                </DialogBody>
-              </DialogSurface>
-            </Dialog>
-
-            <Dialog>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary" style={{ color: tokens.colorPaletteRedForeground1 }}>
-                  Reject Action
-                </Button>
-              </DialogTrigger>
-              <DialogSurface>
-                <DialogBody>
-                  <DialogTitle>Reject Action</DialogTitle>
-                  <DialogContent>
-                    Are you sure you want to reject this remediation? The agent will not proceed with this action.
-                  </DialogContent>
-                  <DialogActions>
-                    <DialogTrigger disableButtonEnhancement>
-                      <Button appearance="secondary">Cancel</Button>
-                    </DialogTrigger>
-                    <Button
-                      appearance="primary"
-                      onClick={onReject}
-                      style={{ backgroundColor: tokens.colorPaletteRedBackground3 }}
-                    >
-                      Confirm Rejection
-                    </Button>
-                  </DialogActions>
-                </DialogBody>
-              </DialogSurface>
-            </Dialog>
-          </div>
-        </>
-      )}
-
-      {!isPending && approval.decided_by && (
-        <Text size={200}>
-          {approval.status === 'approved' ? 'Approved' : 'Rejected'} by {approval.decided_by} at{' '}
-          {approval.decided_at}
-        </Text>
-      )}
-
-      {approval.status === 'expired' && (
-        <Text size={200}>
-          This approval has expired and can no longer be acted upon.
-        </Text>
-      )}
-
-      {approval.status === 'aborted' && (
-        <Text size={200}>
-          Action aborted: the target resource changed since this action was proposed. A new assessment is needed.
-        </Text>
-      )}
+        {!isPending && approval.decided_by && (
+          <p className="text-sm text-muted-foreground">{approval.status === 'approved' ? 'Approved' : 'Rejected'} by {approval.decided_by} at {approval.decided_at}</p>
+        )}
+        {approval.status === 'expired' && (
+          <p className="text-sm text-muted-foreground">This approval has expired and can no longer be acted upon.</p>
+        )}
+        {approval.status === 'aborted' && (
+          <p className="text-sm text-muted-foreground">Action aborted: the target resource changed since this action was proposed. A new assessment is needed.</p>
+        )}
+      </CardContent>
     </Card>
   );
 }

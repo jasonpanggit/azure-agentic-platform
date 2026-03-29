@@ -1,28 +1,28 @@
 'use client';
 
 import React from 'react';
-import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    padding: tokens.spacingVerticalS,
-  },
-});
 
 interface ThinkingIndicatorProps {
   agentName: string;
 }
 
 export function ThinkingIndicator({ agentName }: ThinkingIndicatorProps) {
-  const styles = useStyles();
-
   return (
-    <div className={styles.root}>
-      <Spinner size="tiny" />
-      <Text size={200}>{agentName} Agent is analyzing...</Text>
+    <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse-dot" />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse-dot"
+          style={{ animationDelay: '0.2s' }}
+        />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse-dot"
+          style={{ animationDelay: '0.4s' }}
+        />
+      </div>
+      <span className="text-sm text-muted-foreground">
+        {agentName} Agent is analyzing...
+      </span>
     </div>
   );
 }

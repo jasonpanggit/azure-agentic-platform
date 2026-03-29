@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Text, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { ChatRegular } from '@fluentui/react-icons';
+import { MessageSquare } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { ChatBubble } from './ChatBubble';
 import { UserBubble } from './UserBubble';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -11,7 +12,6 @@ import { ProposalCard } from './ProposalCard';
 import { useSSE, SSEEvent } from '@/lib/use-sse';
 import type { Message, ApprovalGateTracePayload } from '@/types/sse';
 
-/** Example prompts shown above the input field to guide operators. */
 const QUICK_EXAMPLES = [
   'Show my virtual machines',
   'List VMs with high CPU usage',
@@ -22,93 +22,25 @@ const QUICK_EXAMPLES = [
   'Summarize recent incidents',
 ];
 
-const useStyles = makeStyles({
-  root: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  messages: {
-    padding: tokens.spacingHorizontalL,
-    paddingBottom: tokens.spacingVerticalL,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  emptyState: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalL,
-  },
-  emptyIcon: {
-    fontSize: '32px',
-    color: tokens.colorNeutralForeground3,
-  },
-  // Quick example chips row
-  examplesRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: tokens.spacingHorizontalS,
-    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalS}`,
-  },
-  exampleChip: {
-    borderRadius: tokens.borderRadiusMedium,
-    fontSize: tokens.fontSizeBase200,
-    height: '28px',
-    whiteSpace: 'nowrap',
-  },
-  // Compact chips shown in the empty-state hero
-  emptyExamplesRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: tokens.spacingHorizontalS,
-    justifyContent: 'center',
-    maxWidth: '480px',
-    marginTop: tokens.spacingVerticalS,
-  },
-  inputArea: {
-    flexShrink: 0,
-    flexGrow: 0,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-});
-
 interface ChatPanelProps {
   subscriptions: string[];
 }
 
 export function ChatPanel({ subscriptions }: ChatPanelProps) {
-  const styles = useStyles();
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [runKey, setRunKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Use a ref for currentAgent so that updating it does NOT recreate handleTokenEvent
-  // (avoids the SSE reconnect-mid-stream bug that caused duplicate responses).
   const currentAgentRef = useRef('Orchestrator');
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle token events — accumulate delta into streaming assistant message.
-  // IMPORTANT: no state variables in deps — only stable refs and setters.
   const handleTokenEvent = useCallback((event: SSEEvent) => {
     const data = event.data as Record<string, unknown>;
-
-    // Done event — finalize streaming message and clear spinner
     if (data.type === 'done') {
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
@@ -120,23 +52,17 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
       setIsStreaming(false);
       return;
     }
-
     const delta = (data.delta as string) || '';
     const agent = (data.agent as string) || currentAgentRef.current;
-
-    // Update ref (no re-render, no dep-change, no reconnect)
     currentAgentRef.current = agent;
-
     setMessages((prev) => {
       const lastMsg = prev[prev.length - 1];
       if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-        // Append delta to existing streaming message (immutable update)
         return [
           ...prev.slice(0, -1),
           { ...lastMsg, content: lastMsg.content + delta, agentName: agent },
         ];
       }
-      // Start a new streaming assistant message
       return [
         ...prev,
         {
@@ -149,17 +75,12 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         },
       ];
     });
-  // No state deps — currentAgentRef is a ref (stable), setMessages/setIsStreaming are stable setters
   }, []);
 
-  // Handle trace events — check for approval_gate type.
-  // Same pattern: use currentAgentRef instead of state to avoid spurious reconnects.
   const handleTraceEvent = useCallback((event: SSEEvent) => {
     const data = event.data as Record<string, unknown>;
-
     if (data.type === 'approval_gate') {
       const approvalGate = data as unknown as ApprovalGateTracePayload;
-      // Set approvalGate field on the last assistant message
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg && lastMsg.role === 'assistant') {
@@ -168,7 +89,6 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
             { ...lastMsg, approvalGate, isStreaming: false },
           ];
         }
-        // If no assistant message exists, create one with the approval gate
         return [
           ...prev,
           {
@@ -184,9 +104,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
       });
       setIsStreaming(false);
     }
-
     if (data.type === 'done') {
-      // Mark last streaming message as complete
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg && lastMsg.isStreaming) {
@@ -201,27 +119,10 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     }
   }, []);
 
-  // Token SSE connection
-  useSSE({
-    threadId,
-    runId,
-    streamType: 'token',
-    onEvent: handleTokenEvent,
-    runKey,
-  });
+  useSSE({ threadId, runId, streamType: 'token', onEvent: handleTokenEvent, runKey });
+  useSSE({ threadId, runId, streamType: 'trace', onEvent: handleTraceEvent, runKey });
 
-  // Trace SSE connection
-  useSSE({
-    threadId,
-    runId,
-    streamType: 'trace',
-    onEvent: handleTraceEvent,
-    runKey,
-  });
-
-  // Submit a chat message
   const handleSubmit = useCallback(async (message: string) => {
-    // Add user message to conversation
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -230,7 +131,6 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsStreaming(true);
-
     try {
       const res = await fetch('/api/proxy/chat', {
         method: 'POST',
@@ -241,15 +141,12 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
           subscription_ids: subscriptions,
         }),
       });
-
       if (res.ok) {
         const data = await res.json();
         setRunId(data.run_id ?? null);
         if (!threadId) {
-          // First message — set threadId (triggers SSE connection)
           setThreadId(data.thread_id);
         } else {
-          // Subsequent messages on same thread — bump runKey to reopen SSE
           setRunKey((k) => k + 1);
         }
       } else {
@@ -284,7 +181,6 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     }
   }, [threadId, subscriptions]);
 
-  // Handle approval actions
   const handleApprove = useCallback(async (approvalId: string) => {
     try {
       await fetch(`/api/proxy/approvals/${approvalId}/approve`, {
@@ -292,9 +188,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decided_by: 'current_user' }),
       });
-    } catch {
-      // Error handled by ProposalCard state
-    }
+    } catch { /* Error handled by ProposalCard state */ }
   }, []);
 
   const handleReject = useCallback(async (approvalId: string) => {
@@ -304,23 +198,19 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decided_by: 'current_user' }),
       });
-    } catch {
-      // Error handled by ProposalCard state
-    }
+    } catch { /* Error handled by ProposalCard state */ }
   }, []);
 
-  /** Quick example chip row — reused in both empty state and active chat. */
   const ExampleChips = (
-    <div className={styles.examplesRow}>
+    <div className="flex flex-wrap gap-2 px-4 py-1">
       {QUICK_EXAMPLES.map((example) => (
         <Button
           key={example}
-          size="small"
-          shape="rounded"
-          appearance="outline"
-          className={styles.exampleChip}
+          variant="outline"
+          size="sm"
           disabled={isStreaming}
           onClick={() => handleSubmit(example)}
+          className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors cursor-pointer whitespace-nowrap h-auto"
         >
           {example}
         </Button>
@@ -328,34 +218,31 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     </div>
   );
 
-  // Empty state when no messages
   if (messages.length === 0) {
     return (
-      <div className={styles.root} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className={styles.emptyState} style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
-          <ChatRegular className={styles.emptyIcon} />
-          <Text weight="semibold" size={400}>Start a conversation</Text>
-          <Text align="center" size={300}>
-            Ask about any Azure resource, investigate an incident, or check
-            the status of your infrastructure.
-          </Text>
-          <div className={styles.emptyExamplesRow}>
+      <div className="absolute inset-0 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-4 px-4">
+          <MessageSquare className="h-8 w-8 text-muted-foreground" />
+          <h2 className="font-semibold text-lg">Start a conversation</h2>
+          <p className="text-sm text-muted-foreground text-center max-w-md">
+            Ask about any Azure resource, investigate an incident, or check the status of your infrastructure.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center max-w-[480px] mt-2">
             {QUICK_EXAMPLES.map((example) => (
               <Button
                 key={example}
-                size="small"
-                shape="rounded"
-                appearance="outline"
-                className={styles.exampleChip}
+                variant="outline"
+                size="sm"
                 disabled={isStreaming}
                 onClick={() => handleSubmit(example)}
+                className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors cursor-pointer whitespace-nowrap h-auto"
               >
                 {example}
               </Button>
             ))}
           </div>
         </div>
-        <div className={styles.inputArea} style={{ flexShrink: 0, flexGrow: 0 }}>
+        <div className="shrink-0 grow-0">
           {ExampleChips}
           <ChatInput onSend={handleSubmit} disabled={isStreaming} />
         </div>
@@ -364,53 +251,50 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   }
 
   return (
-    <div className={styles.root} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div
-        className={styles.messages}
-        role="log"
-        aria-live="polite"
-        style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}
-      >
-        {messages.map((msg) => (
-          <React.Fragment key={msg.id}>
-            {msg.role === 'user' ? (
-              <UserBubble content={msg.content} timestamp={msg.timestamp} />
-            ) : (
-              <>
-                <ChatBubble
-                  agentName={msg.agentName || 'Agent'}
-                  content={msg.content}
-                  isStreaming={msg.isStreaming || false}
-                  timestamp={msg.timestamp}
-                />
-                {msg.approvalGate && (
-                  <ProposalCard
-                    approval={{
-                      id: msg.approvalGate.approval_id,
-                      status: 'pending',
-                      risk_level: msg.approvalGate.proposal.risk_level,
-                      expires_at: msg.approvalGate.expires_at,
-                      proposal: {
-                        description: msg.approvalGate.proposal.description,
-                        target_resources: msg.approvalGate.proposal.target_resources,
-                        estimated_impact: msg.approvalGate.proposal.estimated_impact,
-                        reversibility: 'unknown',
-                      },
-                    }}
-                    onApprove={() => handleApprove(msg.approvalGate!.approval_id)}
-                    onReject={() => handleReject(msg.approvalGate!.approval_id)}
+    <div className="absolute inset-0 flex flex-col overflow-hidden">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="flex flex-col px-4 py-4" role="log" aria-live="polite">
+          {messages.map((msg) => (
+            <React.Fragment key={msg.id}>
+              {msg.role === 'user' ? (
+                <UserBubble content={msg.content} timestamp={msg.timestamp} />
+              ) : (
+                <>
+                  <ChatBubble
+                    agentName={msg.agentName || 'Agent'}
+                    content={msg.content}
+                    isStreaming={msg.isStreaming || false}
+                    timestamp={msg.timestamp}
                   />
-                )}
-              </>
-            )}
-          </React.Fragment>
-        ))}
-        {isStreaming && !messages[messages.length - 1]?.isStreaming && (
-          <ThinkingIndicator agentName={currentAgentRef.current} />
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-      <div className={styles.inputArea} style={{ flexShrink: 0, flexGrow: 0 }}>
+                  {msg.approvalGate && (
+                    <ProposalCard
+                      approval={{
+                        id: msg.approvalGate.approval_id,
+                        status: 'pending',
+                        risk_level: msg.approvalGate.proposal.risk_level,
+                        expires_at: msg.approvalGate.expires_at,
+                        proposal: {
+                          description: msg.approvalGate.proposal.description,
+                          target_resources: msg.approvalGate.proposal.target_resources,
+                          estimated_impact: msg.approvalGate.proposal.estimated_impact,
+                          reversibility: 'unknown',
+                        },
+                      }}
+                      onApprove={() => handleApprove(msg.approvalGate!.approval_id)}
+                      onReject={() => handleReject(msg.approvalGate!.approval_id)}
+                    />
+                  )}
+                </>
+              )}
+            </React.Fragment>
+          ))}
+          {isStreaming && !messages[messages.length - 1]?.isStreaming && (
+            <ThinkingIndicator agentName={currentAgentRef.current} />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
+      <div className="shrink-0 grow-0">
         {ExampleChips}
         <ChatInput onSend={handleSubmit} disabled={isStreaming} />
       </div>
