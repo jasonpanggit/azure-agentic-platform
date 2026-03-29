@@ -22,6 +22,9 @@ MAX_EXCERPT_LENGTH = 300
 async def generate_query_embedding(query: str) -> list[float]:
     """Generate an embedding vector for the search query using Azure OpenAI.
 
+    Uses DefaultAzureCredential when AZURE_OPENAI_API_KEY is absent (local auth
+    disabled on the Foundry account — Entra-only mode).
+
     Args:
         query: Natural-language search query.
 
@@ -30,9 +33,20 @@ async def generate_query_embedding(query: str) -> list[float]:
     """
     from openai import AzureOpenAI
 
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+    azure_ad_token_provider = None
+    if not api_key or api_key == "DISABLED_LOCAL_AUTH_USE_MI":
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        credential = DefaultAzureCredential()
+        azure_ad_token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
+        api_key = None
+
     client = AzureOpenAI(
         azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
-        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+        api_key=api_key,
+        azure_ad_token_provider=azure_ad_token_provider,
         api_version="2024-06-01",
     )
     response = client.embeddings.create(
