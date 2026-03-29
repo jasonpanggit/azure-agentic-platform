@@ -1,0 +1,77 @@
+name: Prod DB Setup (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-pgvector:
+    name: Enable pgvector + Run Migrations on Prod
+    runs-on: ubuntu-latest
+    environment: prod
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Runner Egress IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Add Temporary PostgreSQL Firewall Rule
+        run: |
+          az postgres flexible-server update \
+            --resource-group rg-aap-prod \
+            --name aap-postgres-prod \
+            --public-access Enabled
+          sleep 10
+          az postgres flexible-server firewall-rule create \
+            --resource-group "rg-aap-prod" \
+            --name "aap-postgres-prod" \
+            --rule-name "gh-runner-temp-$$" \
+            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Enable pgvector and Run Migration 001
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          psql \
+            -h "aap-postgres-prod.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -f services/api-gateway/migrations/001_create_runbooks_table.sql
+          psql \
+            -h "aap-postgres-prod.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -f services/api-gateway/migrations/003_create_gitops_config_table.sql
+
+      - name: Remove Temporary PostgreSQL Firewall Rule
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "rg-aap-prod" \
+            --name "aap-postgres-prod" \
+            --rule-name "gh-runner-temp-$$" \
+            --yes || true
+          az postgres flexible-server update \
+            --resource-group rg-aap-prod \
+            --name aap-postgres-prod \
+            --public-access Disabled || true
