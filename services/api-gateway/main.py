@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -50,6 +51,53 @@ from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse
 
 logger = logging.getLogger(__name__)
 
+
+async def _run_startup_migrations() -> None:
+    """Run database migrations on startup if postgres is configured.
+
+    Enables pgvector extension and creates the runbooks table if they don't
+    exist. Runs silently if postgres env vars are not set (dev/test mode).
+    """
+    postgres_host = os.environ.get("POSTGRES_HOST", "")
+    if not postgres_host:
+        logger.info("POSTGRES_HOST not set — skipping startup migrations")
+        return
+    try:
+        import asyncpg
+        from services.api_gateway.runbook_rag import _build_dsn
+        dsn = os.environ.get("POSTGRES_DSN", "") or _build_dsn()
+        conn = await asyncpg.connect(dsn)
+        try:
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS runbooks (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    title TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    embedding vector(1536),
+                    version INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS runbooks_embedding_idx "
+                "ON runbooks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);"
+            )
+            logger.info("Startup migrations complete (pgvector + runbooks table)")
+        finally:
+            await conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Startup migrations skipped: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: ARG001
+    """FastAPI lifespan: run startup migrations, then yield for request handling."""
+    await _run_startup_migrations()
+    yield
+
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
 if _appinsights_conn:
@@ -63,6 +111,7 @@ app = FastAPI(
     title="AAP API Gateway",
     description="Azure Agentic Platform — Incident ingestion and agent dispatch",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
