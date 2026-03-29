@@ -1,16 +1,7 @@
 'use client';
 
 import React from 'react';
-import {
-  Accordion, AccordionItem, AccordionHeader, AccordionPanel,
-  Text, makeStyles, tokens,
-} from '@fluentui/react-components';
 import { MetricCard } from './MetricCard';
-
-const useStyles = makeStyles({
-  detail: { fontFamily: tokens.fontFamilyMonospace, fontSize: '12px' },
-  empty: { padding: tokens.spacingVerticalM, textAlign: 'center' },
-});
 
 interface ActiveError {
   timestamp: string;
@@ -24,30 +15,28 @@ interface ActiveErrorsCardProps {
 }
 
 export function ActiveErrorsCard({ data }: ActiveErrorsCardProps) {
-  const styles = useStyles();
   const health = data.length > 0 ? 'critical' as const : 'healthy' as const;
 
   return (
     <MetricCard title="Active Errors" health={health}>
       {data.length === 0 ? (
-        <div className={styles.empty}>
-          <Text>No active errors</Text>
+        <div className="py-4 text-center">
+          <span className="text-sm text-muted-foreground">No active errors</span>
         </div>
       ) : (
-        <Accordion collapsible>
+        <div className="flex flex-col gap-1">
           {data.map((err, idx) => (
-            <AccordionItem key={idx} value={String(idx)}>
-              <AccordionHeader>
-                <Text size={200}>
-                  {new Date(err.timestamp).toLocaleTimeString()} {err.agent} — {err.error}
-                </Text>
-              </AccordionHeader>
-              <AccordionPanel>
-                <pre className={styles.detail}>{err.detail}</pre>
-              </AccordionPanel>
-            </AccordionItem>
+            <div key={idx} className="flex flex-col gap-0.5 py-1 border-b last:border-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[13px]">{err.agent}</span>
+                <span className="text-sm">{err.error}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {new Date(err.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
           ))}
-        </Accordion>
+        </div>
       )}
     </MetricCard>
   );

@@ -1,19 +1,7 @@
 'use client';
 
 import React from 'react';
-import {
-  DataGrid, DataGridHeader, DataGridRow, DataGridHeaderCell,
-  DataGridBody, DataGridCell, TableColumnDefinition,
-  createTableColumn, Text, makeStyles, tokens,
-} from '@fluentui/react-components';
 import { MetricCard, HealthStatus } from './MetricCard';
-
-const useStyles = makeStyles({
-  mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: '12px' },
-  healthy: { color: tokens.colorPaletteGreenForeground1 },
-  warning: { color: tokens.colorPaletteYellowForeground1 },
-  critical: { color: tokens.colorPaletteRedForeground1 },
-});
 
 interface AgentLatencyRow {
   agent: string;
@@ -32,7 +20,6 @@ interface AgentLatencyCardProps {
 }
 
 export function AgentLatencyCard({ data }: AgentLatencyCardProps) {
-  const styles = useStyles();
   const worstHealth = data.reduce<HealthStatus>(
     (worst, row) => {
       const h = getP95Health(row.p95);
@@ -43,43 +30,25 @@ export function AgentLatencyCard({ data }: AgentLatencyCardProps) {
     'healthy'
   );
 
-  const columns: TableColumnDefinition<AgentLatencyRow>[] = [
-    createTableColumn<AgentLatencyRow>({
-      columnId: 'agent',
-      renderHeaderCell: () => 'Agent',
-      renderCell: (item) => <Text>{item.agent}</Text>,
-    }),
-    createTableColumn<AgentLatencyRow>({
-      columnId: 'p50',
-      renderHeaderCell: () => 'P50',
-      renderCell: (item) => <span className={styles.mono}>{item.p50}ms</span>,
-    }),
-    createTableColumn<AgentLatencyRow>({
-      columnId: 'p95',
-      renderHeaderCell: () => 'P95',
-      renderCell: (item) => {
-        const h = getP95Health(item.p95);
-        return <span className={`${styles.mono} ${styles[h]}`}>{item.p95}ms</span>;
-      },
-    }),
-  ];
-
   return (
     <MetricCard title="Agent Latency" health={worstHealth}>
-      <DataGrid items={data} columns={columns}>
-        <DataGridHeader>
-          <DataGridRow>
-            {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
-          </DataGridRow>
-        </DataGridHeader>
-        <DataGridBody<AgentLatencyRow>>
-          {({ item, rowId }) => (
-            <DataGridRow<AgentLatencyRow> key={rowId}>
-              {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-            </DataGridRow>
-          )}
-        </DataGridBody>
-      </DataGrid>
+      <div className="flex flex-col gap-1">
+        {data.map((row) => (
+          <div key={row.agent} className="flex justify-between items-center py-1">
+            <span className="text-sm">{row.agent}</span>
+            <div className="flex gap-4">
+              <div className="flex flex-col items-end">
+                <span className="text-xs text-muted-foreground">P50</span>
+                <span className="font-mono text-[13px]">{row.p50}ms</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-xs text-muted-foreground">P95</span>
+                <span className="font-mono text-[13px]">{row.p95}ms</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </MetricCard>
   );
 }

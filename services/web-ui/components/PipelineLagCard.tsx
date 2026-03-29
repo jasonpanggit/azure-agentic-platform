@@ -1,19 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Text, makeStyles, tokens } from '@fluentui/react-components';
 import { MetricCard, HealthStatus } from './MetricCard';
-
-const useStyles = makeStyles({
-  row: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: tokens.spacingVerticalXS,
-    paddingBottom: tokens.spacingVerticalXS,
-  },
-  mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: '12px' },
-});
 
 interface PipelineLagData {
   alertToIncidentMs: number;
@@ -37,7 +25,6 @@ interface PipelineLagCardProps {
 }
 
 export function PipelineLagCard({ data }: PipelineLagCardProps) {
-  const styles = useStyles();
   const health = getLagHealth(data.totalE2EMs);
 
   const rows = [
@@ -48,12 +35,14 @@ export function PipelineLagCard({ data }: PipelineLagCardProps) {
 
   return (
     <MetricCard title="Pipeline Lag" health={health}>
-      {rows.map((row) => (
-        <div key={row.label} className={styles.row}>
-          <Text>{row.label}</Text>
-          <span className={styles.mono}>{formatDuration(row.value)}</span>
-        </div>
-      ))}
+      <div className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <div key={row.label} className="flex justify-between items-center py-1">
+            <span className="text-sm text-muted-foreground">{row.label}</span>
+            <span className="font-mono text-[13px]">{formatDuration(row.value)}</span>
+          </div>
+        ))}
+      </div>
     </MetricCard>
   );
 }

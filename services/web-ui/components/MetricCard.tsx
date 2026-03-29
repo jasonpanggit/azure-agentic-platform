@@ -1,54 +1,10 @@
 'use client';
 
 import React from 'react';
-import { Card, Text, Badge, makeStyles, tokens } from '@fluentui/react-components';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 type HealthStatus = 'healthy' | 'warning' | 'critical';
-
-const useStyles = makeStyles({
-  card: {
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderLeftWidth: '3px',
-    borderLeftStyle: 'solid',
-    boxShadow: tokens.shadow4,
-    borderRadius: tokens.borderRadiusLarge,
-    transitionProperty: 'box-shadow',
-    transitionDuration: tokens.durationNormal,
-    ':hover': {
-      boxShadow: tokens.shadow8,
-    },
-  },
-  healthy: {
-    borderLeftColor: tokens.colorPaletteGreenForeground1,
-  },
-  warning: {
-    borderLeftColor: tokens.colorPaletteYellowForeground1,
-  },
-  critical: {
-    borderLeftColor: tokens.colorPaletteRedForeground1,
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: tokens.spacingVerticalS,
-  },
-  content: {
-    padding: tokens.spacingHorizontalM,
-  },
-});
-
-const BADGE_COLOR_MAP: Record<HealthStatus, 'success' | 'warning' | 'danger'> = {
-  healthy: 'success',
-  warning: 'warning',
-  critical: 'danger',
-};
-
-const BADGE_LABEL_MAP: Record<HealthStatus, string> = {
-  healthy: 'Healthy',
-  warning: 'Degraded',
-  critical: 'Critical',
-};
 
 interface MetricCardProps {
   title: string;
@@ -56,30 +12,32 @@ interface MetricCardProps {
   children: React.ReactNode;
 }
 
-export function MetricCard({ title, health, children }: MetricCardProps) {
-  const styles = useStyles();
+const borderColorMap: Record<HealthStatus, string> = {
+  healthy: 'border-l-green-500',
+  warning: 'border-l-yellow-500',
+  critical: 'border-l-red-500',
+};
 
+const badgeLabelMap: Record<HealthStatus, string> = {
+  healthy: 'Healthy',
+  warning: 'Warning',
+  critical: 'Critical',
+};
+
+export function MetricCard({ title, health, children }: MetricCardProps) {
   return (
-    <Card
-      className={`${styles.card} ${styles[health]}`}
-      role="region"
-      aria-label={title}
-    >
-      <div className={styles.content}>
-        <div className={styles.header}>
-          <Text weight="semibold" size={400}>
-            {title}
-          </Text>
+    <Card className={`rounded-lg border-l-[3px] shadow-sm bg-card p-4 hover:shadow-md transition-shadow ${borderColorMap[health]}`}>
+      <CardContent className="p-0">
+        <div className="flex justify-between items-center mb-2">
+          <span className="font-semibold text-base">{title}</span>
           <Badge
-            color={BADGE_COLOR_MAP[health]}
-            appearance="filled"
-            aria-label={`Health status: ${BADGE_LABEL_MAP[health]}`}
+            variant={health === 'critical' ? 'destructive' : health === 'warning' ? 'outline' : 'default'}
           >
-            {BADGE_LABEL_MAP[health]}
+            {badgeLabelMap[health]}
           </Badge>
         </div>
         {children}
-      </div>
+      </CardContent>
     </Card>
   );
 }

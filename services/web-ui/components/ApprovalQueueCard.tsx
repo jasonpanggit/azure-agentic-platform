@@ -1,19 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Text, makeStyles, tokens } from '@fluentui/react-components';
 import { MetricCard, HealthStatus } from './MetricCard';
-
-const useStyles = makeStyles({
-  row: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: tokens.spacingVerticalXS,
-    paddingBottom: tokens.spacingVerticalXS,
-  },
-  mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: '12px' },
-});
 
 interface ApprovalQueueData {
   pending: number;
@@ -31,20 +19,21 @@ interface ApprovalQueueCardProps {
 }
 
 export function ApprovalQueueCard({ data }: ApprovalQueueCardProps) {
-  const styles = useStyles();
   const health = getQueueHealth(data.pending);
 
   return (
     <MetricCard title="Approval Queue" health={health}>
-      <div className={styles.row}>
-        <Text>Pending</Text>
-        <span className={styles.mono}>{data.pending}</span>
-      </div>
-      <div className={styles.row}>
-        <Text>Oldest pending</Text>
-        <span className={styles.mono}>
-          {data.oldestPendingMinutes !== null ? `${data.oldestPendingMinutes}m ago` : 'n/a'}
-        </span>
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-between items-center py-1">
+          <span className="text-sm text-muted-foreground">Pending</span>
+          <span className="text-2xl font-semibold">{data.pending}</span>
+        </div>
+        <div className="flex justify-between items-center py-1">
+          <span className="text-sm text-muted-foreground">Oldest pending</span>
+          <span className="font-mono text-[13px]">
+            {data.oldestPendingMinutes !== null ? `${data.oldestPendingMinutes}m ago` : 'n/a'}
+          </span>
+        </div>
       </div>
     </MetricCard>
   );

@@ -1,46 +1,31 @@
 'use client';
 
 import React from 'react';
-import { Dropdown, Option, makeStyles } from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  root: {
-    width: '160px',
-  },
-});
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface TimeRangeSelectorProps {
   value: string;
   onChange: (value: string) => void;
 }
 
-const OPTIONS = [
-  { value: '1h', label: 'Last 1 hour' },
-  { value: '6h', label: 'Last 6 hours' },
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-];
-
 export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
-  const styles = useStyles();
-
   return (
-    <Dropdown
-      className={styles.root}
-      value={OPTIONS.find((o) => o.value === value)?.label || 'Last 1 hour'}
-      selectedOptions={[value]}
-      onOptionSelect={(_, data) => {
-        if (data.optionValue) {
-          onChange(data.optionValue);
-        }
-      }}
-      aria-label="Time range"
-    >
-      {OPTIONS.map((opt) => (
-        <Option key={opt.value} value={opt.value}>
-          {opt.label}
-        </Option>
-      ))}
-    </Dropdown>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-[120px]">
+        <SelectValue placeholder="Time range" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="1h">Last 1 hour</SelectItem>
+        <SelectItem value="6h">Last 6 hours</SelectItem>
+        <SelectItem value="24h">Last 24 hours</SelectItem>
+        <SelectItem value="7d">Last 7 days</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }

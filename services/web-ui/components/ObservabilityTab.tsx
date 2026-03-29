@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Text, Skeleton, SkeletonItem, MessageBar, MessageBarBody,
-  makeStyles, tokens,
-} from '@fluentui/react-components';
-import { PulseRegular } from '@fluentui/react-icons';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Activity } from 'lucide-react';
 import { AgentLatencyCard } from './AgentLatencyCard';
 import { PipelineLagCard } from './PipelineLagCard';
 import { ApprovalQueueCard } from './ApprovalQueueCard';
@@ -13,50 +11,6 @@ import { ActiveErrorsCard } from './ActiveErrorsCard';
 import { TimeRangeSelector } from './TimeRangeSelector';
 
 const POLL_INTERVAL_MS = 30_000;
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalL,
-    height: '100%',
-    containerType: 'inline-size',
-  },
-  toolbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: tokens.spacingHorizontalL,
-    '@container (max-width: 600px)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-  skeletonCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    padding: tokens.spacingHorizontalM,
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderRadius: tokens.borderRadiusMedium,
-    boxShadow: tokens.shadow2,
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: tokens.spacingVerticalXXL,
-    gap: tokens.spacingVerticalM,
-  },
-  emptyIcon: {
-    fontSize: '32px',
-    color: tokens.colorNeutralForeground3,
-  },
-});
 
 interface ObservabilityData {
   agentLatency: { agent: string; p50: number; p95: number }[];
@@ -71,7 +25,6 @@ interface ObservabilityTabProps {
 }
 
 export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
-  const styles = useStyles();
   const [timeRange, setTimeRange] = useState('1h');
   const [data, setData] = useState<ObservabilityData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,17 +67,17 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
 
   if (loading && !data) {
     return (
-      <div className={styles.root}>
-        <div className={styles.toolbar}>
-          <Text size={200}>Loading...</Text>
+      <div className="flex flex-col gap-6 h-full">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Loading...</span>
           <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
         </div>
-        <div className={styles.grid}>
+        <div className="grid grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className={styles.skeletonCard}>
-              <Skeleton><SkeletonItem /></Skeleton>
-              <Skeleton><SkeletonItem /></Skeleton>
-              <Skeleton><SkeletonItem /></Skeleton>
+            <div key={i} className="flex flex-col gap-2 p-4 bg-card rounded-md shadow-sm">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
             </div>
           ))}
         </div>
@@ -133,31 +86,31 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
   }
 
   return (
-    <div className={styles.root}>
-      <div className={styles.toolbar}>
-        <Text size={200} aria-live="polite">
+    <div className="flex flex-col gap-6 h-full">
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-muted-foreground" aria-live="polite">
           Last updated: {data ? new Date(data.lastUpdated).toLocaleString() : 'n/a'}
-        </Text>
+        </span>
         <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
       </div>
 
       {error && (
-        <MessageBar intent="error">
-          <MessageBarBody>{error}</MessageBarBody>
-        </MessageBar>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {data && data.agentLatency.length === 0 && data.activeErrors.length === 0 ? (
-        <div className={styles.emptyState}>
-          <PulseRegular className={styles.emptyIcon} />
-          <Text weight="semibold" size={400}>No observability data</Text>
-          <Text align="center" size={300}>
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <Activity className="h-8 w-8 text-muted-foreground" />
+          <span className="font-semibold text-base">No observability data</span>
+          <span className="text-sm text-muted-foreground text-center">
             Metrics will appear here once agents process their first incidents.
-            Ensure Application Insights is configured and agents are running.
-          </Text>
+            Ensure Application Insights is configured.
+          </span>
         </div>
       ) : data ? (
-        <div className={styles.grid}>
+        <div className="grid grid-cols-2 gap-4">
           <AgentLatencyCard data={data.agentLatency} />
           <PipelineLagCard data={data.pipelineLag} />
           <ActiveErrorsCard data={data.activeErrors} />
