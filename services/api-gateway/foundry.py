@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from azure.ai.agents import AgentsClient
 from azure.identity import DefaultAzureCredential
 
+from services.api_gateway.instrumentation import agent_span, foundry_span
 from services.api_gateway.models import IncidentPayload
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,9 @@ async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
         )
 
     # Create thread
-    thread = client.threads.create()
+    with foundry_span("create_thread") as span:
+        thread = client.threads.create()
+        span.set_attribute("foundry.thread_id", thread.id)
     logger.info(
         "Created Foundry thread %s for incident %s",
         thread.id,
@@ -89,17 +92,21 @@ async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
     }
 
     # Post incident as first message
-    client.messages.create(
-        thread_id=thread.id,
-        role="user",
-        content=json.dumps(envelope),
-    )
+    with foundry_span("post_message", thread_id=thread.id) as span:
+        client.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=json.dumps(envelope),
+        )
 
     # Dispatch to Orchestrator agent
-    run = client.runs.create(
-        thread_id=thread.id,
-        agent_id=orchestrator_agent_id,
-    )
+    with agent_span("orchestrator", domain=payload.domain, correlation_id=payload.incident_id):
+        with foundry_span("create_run", thread_id=thread.id, agent_id=orchestrator_agent_id) as span:
+            run = client.runs.create(
+                thread_id=thread.id,
+                agent_id=orchestrator_agent_id,
+            )
+            span.set_attribute("foundry.run_id", run.id)
 
     logger.info(
         "Dispatched incident %s to Orchestrator (run %s)",
