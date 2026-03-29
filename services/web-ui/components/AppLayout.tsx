@@ -57,11 +57,9 @@ const useStyles = makeStyles({
     cursor: 'col-resize',
   },
   chatPanel: {
+    position: 'relative',
     overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
     backgroundColor: tokens.colorNeutralBackground1,
-    minHeight: 0,
   },
   dashboardPanel: {
     overflow: 'hidden',
