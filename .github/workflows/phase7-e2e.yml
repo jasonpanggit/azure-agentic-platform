@@ -8,6 +8,7 @@ on:
       - 'services/**'
       - 'e2e/**'
       - 'agents/**'
+      - 'scripts/simulate-incidents/**'
 
 permissions:
   id-token: write
@@ -74,3 +75,45 @@ jobs:
           name: playwright-e2e-results
           path: e2e/test-results/
           retention-days: 7
+
+  simulation:
+    name: Incident Simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [e2e]
+    environment: staging
+
+    env:
+      API_GATEWAY_URL: ${{ vars.E2E_API_URL }}
+      COSMOS_ENDPOINT: ${{ secrets.E2E_COSMOS_ENDPOINT }}
+      COSMOS_DATABASE_NAME: ${{ vars.E2E_COSMOS_DB || 'aap' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install simulation dependencies
+        run: pip install -r scripts/simulate-incidents/requirements.txt
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run Simulation Suite
+        run: bash scripts/simulate-incidents/run-all.sh
+
+      - name: Upload Simulation Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-results
+          path: scripts/simulate-incidents/simulation-results.log
+          retention-days: 14
