@@ -331,8 +331,8 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   // Empty state when no messages
   if (messages.length === 0) {
     return (
-      <div className={styles.root}>
-        <div className={styles.emptyState}>
+      <div className={styles.root} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className={styles.emptyState} style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
           <ChatRegular className={styles.emptyIcon} />
           <Text weight="semibold" size={400}>Start a conversation</Text>
           <Text align="center" size={300}>
@@ -355,7 +355,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
             ))}
           </div>
         </div>
-        <div className={styles.inputArea}>
+        <div className={styles.inputArea} style={{ flexShrink: 0, flexGrow: 0 }}>
           {ExampleChips}
           <ChatInput onSend={handleSubmit} disabled={isStreaming} />
         </div>
@@ -364,7 +364,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   }
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div
         className={styles.messages}
         role="log"
@@ -410,7 +410,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className={styles.inputArea}>
+      <div className={styles.inputArea} style={{ flexShrink: 0, flexGrow: 0 }}>
         {ExampleChips}
         <ChatInput onSend={handleSubmit} disabled={isStreaming} />
       </div>
