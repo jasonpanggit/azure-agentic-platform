@@ -7,13 +7,15 @@ import remarkGfm from 'remark-gfm';
 
 const useStyles = makeStyles({
   root: {
-    maxWidth: '85%',
+    maxWidth: '95%',
     alignSelf: 'flex-start',
     padding: tokens.spacingHorizontalS,
     backgroundColor: tokens.colorNeutralBackground3,
     marginBottom: tokens.spacingVerticalS,
     boxShadow: tokens.shadow2,
     borderRadius: tokens.borderRadiusLarge,
+    overflow: 'hidden',
+    boxSizing: 'border-box',
   },
   agentName: {
     marginBottom: tokens.spacingVerticalXS,

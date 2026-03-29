@@ -30,8 +30,11 @@ const useStyles = makeStyles({
   },
   messages: {
     flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
+    overflowX: 'hidden',
     padding: tokens.spacingHorizontalL,
+    paddingBottom: tokens.spacingVerticalL,
     display: 'flex',
     flexDirection: 'column',
   },
