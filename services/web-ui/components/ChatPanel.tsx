@@ -253,7 +253,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
       <ScrollArea className="flex-1 min-h-0">
-        <div className="flex flex-col px-4 py-4" role="log" aria-live="polite">
+        <div className="flex flex-col w-full px-4 py-4" role="log" aria-live="polite">
           {messages.map((msg) => (
             <React.Fragment key={msg.id}>
               {msg.role === 'user' ? (
