@@ -33,3 +33,37 @@ jobs:
         NEXT_PUBLIC_REDIRECT_URI=${{ vars.NEXT_PUBLIC_REDIRECT_URI }}
         NEXT_PUBLIC_DEV_MODE=${{ vars.NEXT_PUBLIC_DEV_MODE }}
     secrets: inherit
+
+  deploy-web-ui:
+    name: Deploy Web UI to Container Apps
+    needs: build-web-ui
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}"}'
+
+      - name: Deploy new revision
+        run: |
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/services/web-ui:${{ github.sha }}"
+          az containerapp update \
+            --name ${{ vars.WEB_UI_CONTAINER_APP }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --image "$IMAGE"
+          echo "✅ Deployed $IMAGE to ${{ vars.WEB_UI_CONTAINER_APP }}"
+
+      - name: Verify revision is active
+        run: |
+          ACTIVE=$(az containerapp revision list \
+            --name ${{ vars.WEB_UI_CONTAINER_APP }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --query "[?properties.trafficWeight==\`100\`].name" \
+            -o tsv)
+          echo "Active revision: $ACTIVE"
+          if [ -z "$ACTIVE" ]; then
+            echo "::error::No active revision with 100% traffic found"
+            exit 1
+          fi
