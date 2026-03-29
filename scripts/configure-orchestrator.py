@@ -157,6 +157,11 @@ def show_current_state(client: AgentsClient, agent_id: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Configure the Foundry Orchestrator assistant")
     parser.add_argument(
+        "--create",
+        action="store_true",
+        help="Create a new Foundry agent (instead of updating an existing one)",
+    )
+    parser.add_argument(
         "--instructions-only",
         action="store_true",
         help="Only update system instructions, skip MCP tools",
@@ -180,12 +185,35 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    agent_id = args.agent_id or os.environ.get("ORCHESTRATOR_AGENT_ID", "")
-    if not agent_id:
-        print("ERROR: Set --agent-id or ORCHESTRATOR_AGENT_ID", file=sys.stderr)
-        sys.exit(1)
+    if not args.create:
+        agent_id = args.agent_id or os.environ.get("ORCHESTRATOR_AGENT_ID", "")
+        if not agent_id:
+            print("ERROR: Set --agent-id or ORCHESTRATOR_AGENT_ID", file=sys.stderr)
+            sys.exit(1)
+    else:
+        agent_id = args.agent_id or os.environ.get("ORCHESTRATOR_AGENT_ID", "")
 
     client = get_client()
+
+    if args.create:
+        if agent_id:
+            print("ERROR: --create cannot be used with an existing agent ID", file=sys.stderr)
+            sys.exit(1)
+        agent = client.create_agent(
+            model="gpt-4o",
+            name="AAP Orchestrator",
+            instructions=ORCHESTRATOR_INSTRUCTIONS,
+            description="Azure Agentic Platform central orchestrator — routes queries to domain agents and MCP tools.",
+        )
+        agent_id = agent.id
+        print(f"AGENT_ID={agent_id}")
+        # After creation, update instructions (ensures latest version) and show state
+        update_assistant_instructions(client, agent_id)
+        if args.mcp_connection:
+            add_mcp_tools(client, agent_id, args.mcp_connection)
+        show_current_state(client, agent_id)
+        print("Configuration complete.")
+        return
 
     if args.show:
         show_current_state(client, agent_id)
