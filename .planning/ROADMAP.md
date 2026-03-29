@@ -361,7 +361,7 @@ Ph 7                                                                ████
 
 **UI:** No | **IaC:** No (ops commands only)
 
-**Status:** 🔄 In Progress — Plan 08-02 complete (2/5 plans); E2E strict mode applied, VALIDATION-REPORT.md created (2 BLOCKING findings)
+**Status:** 🔄 In Progress — Plan 08-03 complete (3/5 plans); simulation suite 7/7 PASS, CI gate wired, VALIDATION-REPORT.md updated (2 BLOCKING + 9 DEGRADED findings)
 
 ### Plan Progress
 
@@ -369,7 +369,7 @@ Ph 7                                                                ████
 |---|---|---|---|
 | 08-01 | Fix Provisioning Gaps | 🔄 In Progress | Task 08-01-01 committed (--create flag); tasks 08-01-02 through 08-01-06 require operator execution |
 | 08-02 | Critical-Path Validation | ✅ Complete | E2E strict mode (no test.skip), 22/30 tests pass, VALIDATION-REPORT.md: 2 BLOCKING (F-01 RBAC, F-02 runbook 500), 6 DEGRADED |
-| 08-03 | Incident Simulation | Not started | |
+| 08-03 | Incident Simulation | ✅ Complete | 7/7 scenarios PASS, 8/8 Foundry runs completed; CI gate (simulation job) wired into phase7-e2e.yml; F-09/F-10/F-11 (MCP tool groups) logged |
 | 08-04 | Teams Validation | Not started | |
 | 08-05 | Full E2E Run | Not started | |
 

@@ -8,16 +8,16 @@ progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 30
-  completed_plans: 20
+  completed_plans: 21
 current_phase: 08-azure-validation-incident-simulation
-current_plan: 08-02
+current_plan: 08-03
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-29 — Plan 08-02 COMPLETE. Phase 8 strict mode E2E changes applied to all three Phase 7 test files. E2E suite run against prod: 22/30 pass. 7 smoke tests run: 6/7 pass. VALIDATION-REPORT.md created with 2 BLOCKING + 6 DEGRADED findings.
+> Last updated: 2026-03-29 — Plan 08-03 COMPLETE. Incident simulation suite created and run against prod: 7/7 scenarios PASS, 8/8 Foundry runs completed end-to-end. New DEGRADED findings F-09/F-10/F-11 (MCP tool groups not configured for network, security, arc/sre agents). Simulation CI gate wired into phase7-e2e.yml.
 >
-> Phase 8 next: Plans 08-03 through 08-05 (incident simulation, Teams E2E, OTel manual spans). BLOCKING items F-01 (Foundry RBAC) and F-02 (runbook search 500) must be resolved before phase close.
+> Phase 8 next: Plans 08-04 (Teams Validation) and 08-05 (Full E2E run). BLOCKING items F-01 (Foundry RBAC — may be resolved per simulation evidence) and F-02 (runbook search 500) must be confirmed before phase close.
 
 ---
 
@@ -62,7 +62,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
-| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (2/5 plans) — Plan 08-01: provisioning fixes; Plan 08-02: E2E strict mode, 22/30 tests pass, VALIDATION-REPORT.md (2 BLOCKING) |
+| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (3/5 plans) — Plan 08-01: provisioning fixes; Plan 08-02: E2E strict mode, 22/30 tests pass, VALIDATION-REPORT.md (2 BLOCKING); Plan 08-03: simulation suite 7/7 PASS, CI gate wired |
 
 ---
 
@@ -153,6 +153,10 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | Phase 8 strict mode removes test.skip() from E2E specs | 8-02 | Phase 7 used graceful skip for infra unavailability; Phase 8 validates prod — all skips replaced with hard assertions or vacuous-pass early returns |
 | Vacuous-pass pattern for conditional E2E steps | 8-02 | When a sub-step requires state that may not exist (e.g., no pending approvals), use early return + console.log rather than test.skip() — test still runs and records a result |
 | e2e package.json committed to repo | 8-02 | E2E tests require @playwright/test, @azure/msal-node, etc. — committing package.json makes local runs reproducible without the CI `npm init -y` pattern |
+| scenario_cross.py injects two incidents | 8-03 | API only accepts one domain per payload; cross-domain (Compute + Storage) disk-full scenario requires two separate incident injections with correlated context |
+| Cosmos cleanup non-fatal by design | 8-03 | cleanup_incident() catches all exceptions and logs WARNING — simulation records expire via TTL; local IP blocked by prod Cosmos firewall should not fail the simulation |
+| bash 3.2 compatibility in run-all.sh | 8-03 | ${SCENARIOS[-1]} negative array indexing requires bash 4+; replaced with ${SCENARIOS[$((TOTAL-1))]} for macOS compatibility (macOS ships bash 3.2) |
+| CI simulation job needs: [e2e] | 8-03 | Simulation job runs after E2E job to ensure basic platform health before executing synthetic incident injections against prod |
 
 ---
 
