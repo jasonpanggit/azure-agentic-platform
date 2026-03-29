@@ -1,4 +1,6 @@
 /**
+ * Phase 8: Strict validation mode — no test.skip(), all tests must pass against prod.
+ *
  * E2E-005: SSE Reconnect
  *
  * Verifies:
@@ -20,10 +22,7 @@ test.describe('E2E-005: SSE Reconnect', () => {
       timeout: 10_000,
     });
 
-    if (chatResponse.status() !== 202) {
-      test.skip(true, 'Foundry not available — cannot generate SSE events');
-      return;
-    }
+    expect(chatResponse.status()).toBe(202);
 
     const { thread_id } = await chatResponse.json();
     const streamUrl = `${apiUrl}/api/stream?thread_id=${thread_id}`;
@@ -38,10 +37,8 @@ test.describe('E2E-005: SSE Reconnect', () => {
       },
     });
 
-    if (!response.ok || !response.body) {
-      test.skip(true, 'SSE stream not available');
-      return;
-    }
+    expect(response.ok).toBeTruthy();
+    expect(response.body).toBeTruthy();
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -129,10 +126,7 @@ test.describe('E2E-005: SSE Reconnect', () => {
       timeout: 10_000,
     });
 
-    if (chatResponse.status() !== 202) {
-      test.skip(true, 'Foundry not available');
-      return;
-    }
+    expect(chatResponse.status()).toBe(202);
 
     const { thread_id } = await chatResponse.json();
 
