@@ -2,20 +2,22 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: complete
-last_updated: "2026-03-27T00:00:00.000Z"
+status: in_progress
+last_updated: "2026-03-29T00:15:00.000Z"
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 7
-  total_plans: 31
-  completed_plans: 31
+  total_plans: 30
+  completed_plans: 19
+current_phase: 08-azure-validation-incident-simulation
+current_plan: 08-01
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-27 — Phase 7 COMPLETE (6/6 plans) — Quality & Hardening — Full Playwright E2E suite (E2E-001 through E2E-005), OTel auto-instrumentation on all services, Observability tab in Web UI, 60 runbooks seeded into pgvector with cosine validation, security CI (bandit + npm audit + secrets scan), Terraform prod complete with 12 modules. All 72 v1.0 requirements satisfied. Milestone v1.0 COMPLETE.
+> Last updated: 2026-03-29 — Phase 8 started. Plan 08-01 PARTIAL — Task 08-01-01 complete (--create flag added to configure-orchestrator.py); tasks 08-01-02 through 08-01-06 require operator execution (see 08-01-USER-SETUP.md).
 >
-> Last activity: 2026-03-29 - Completed quick task 260329-315: Review and clean up 65 uncommitted changes — added gitignore rules for coverage/build artifacts, committed real files
+> Last activity: 2026-03-29 - Plan 08-01 task 08-01-01: Added --create flag to configure-orchestrator.py for Foundry agent creation
 
 ---
 
@@ -60,12 +62,16 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
+| 8 | Azure Validation & Incident Simulation | 🔄 In Progress (1/5 plans) — Plan 08-01: --create flag added; operator steps pending |
 
 ---
 
 ## Blockers/Concerns
 
-None. Milestone v1.0 complete.
+**Phase 8 blocking items (operator must complete before chat validation):**
+- `ORCHESTRATOR_AGENT_ID` must be created in Foundry and set on `ca-api-gateway-prod` (task 08-01-02 + 08-01-03)
+- `Azure AI Developer` RBAC must be assigned to gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` (task 08-01-04)
+- See `.planning/phases/08-azure-validation-incident-simulation/08-01-USER-SETUP.md` for exact commands
 
 ---
 
@@ -138,6 +144,8 @@ None. Milestone v1.0 complete.
 | E2E tests gracefully skip when infra unavailable | 7-06 | test.skip() on non-202/503 responses prevents CI failures in environments without full Azure infra while still verifying API contract |
 | Prod seed is manual operational step | 7-03 | Never run seed script against prod automatically; seed/validate only in staging CI; prod seed documented in ops runbook per D-09 |
 | CORS locked via env var, not hardcoded | 7-04 | CORS_ALLOWED_ORIGINS env var replaces hardcoded wildcard; prod Container App sets explicit origin; default `*` maintained for dev/staging convenience |
+| Tasks 08-01-02 through 08-01-06 are operator-only steps | 8-01 | These steps require live Azure credentials, Entra admin permissions, or secret values not available to autonomous agent; documented in 08-01-USER-SETUP.md |
+| --create guard against existing ORCHESTRATOR_AGENT_ID | 8-01 | Mutual exclusion prevents accidental double-create; check runs before client.create_agent() API call to fail fast |
 
 ---
 
