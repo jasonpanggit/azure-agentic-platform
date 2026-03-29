@@ -1,4 +1,6 @@
 /**
+ * Phase 8: Strict validation mode — no test.skip(), all tests must pass against prod.
+ *
  * E2E-002: Full Incident Flow
  *
  * Verifies the complete path:
@@ -102,7 +104,7 @@ test.describe('E2E-002: Full Incident Flow', () => {
       timeout: 10_000,
     });
 
-    expect([202, 503]).toContain(createResponse.status());
+    expect(createResponse.status()).toBe(202);
 
     // List incidents and verify the new one appears
     const listResponse = await apiRequest.get('/api/v1/incidents?limit=10');
@@ -120,10 +122,7 @@ test.describe('E2E-002: Full Incident Flow', () => {
       timeout: 10_000,
     });
 
-    if (chatResponse.status() !== 202) {
-      test.skip(true, 'Foundry not available in E2E environment');
-      return;
-    }
+    expect(chatResponse.status()).toBe(202);
 
     const { thread_id } = await chatResponse.json();
 
