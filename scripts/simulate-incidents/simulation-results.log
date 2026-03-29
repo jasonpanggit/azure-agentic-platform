@@ -1,0 +1,1114 @@
+============================================
+ Phase 8: Incident Simulation Suite
+ Scenarios: 7
+ API Gateway: https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io
+============================================
+
+--- Running: scenario_compute.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:31:27 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:31:27 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:31:27 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:31:28 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:31:30 [INFO] common: [compute] Injected: incident_id=sim-compute-001 thread_id=thread_fH8JOkHSEV3IIUGGCRjd2v88 status=dispatched
+2026-03-29 21:31:39 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:31:39 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:31:39 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:31:41 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:31:41 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:31:39 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'f848a747-4c1d-4876-9907-c97b39a3a4cb'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:31:42 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:31:41 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:31:42 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:31:39 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'f848a747-4c1d-4876-9907-c97b39a3a4cb'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:31:42 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:31:42 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:31:43 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:31:39 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'f848a747-4c1d-4876-9907-c97b39a3a4cb'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:31:43 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:31:43 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:31:44 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:31:39 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'f848a747-4c1d-4876-9907-c97b39a3a4cb'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:31:44 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:31:43 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '5df66e35-1cdc-4062-8699-72906262376c'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:31:44 [WARNING] common: Cleanup for incident sim-compute-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 5df66e35-1cdc-4062-8699-72906262376c, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 5df66e35-1cdc-4062-8699-72906262376c, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:31:44 [INFO] common: [compute] PASS — status=completed duration=12.4s thread=thread_fH8JOkHSEV3IIUGGCRjd2v88
+2026-03-29 21:31:44 [INFO] common: [compute] Reply preview: The following virtual machines exist in the specified subscription:
+
+| Name          | Location       | VM Size                | Status       | OS Type |
+|---------------|----------------|------------
+  PASS: scenario_compute.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_network.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:31:49 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:31:49 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:31:49 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:31:51 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:31:53 [INFO] common: [network] Injected: incident_id=sim-network-001 thread_id=thread_BuSoab0mexbaOJJiOc4lRcCd status=dispatched
+2026-03-29 21:32:06 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:06 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:06 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:07 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:07 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:06 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '1e2c3f7c-0ad5-4e71-a3e2-d9e220414603'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:08 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:07 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:09 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:06 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '1e2c3f7c-0ad5-4e71-a3e2-d9e220414603'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:09 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:08 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:09 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:06 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '1e2c3f7c-0ad5-4e71-a3e2-d9e220414603'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:10 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:09 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:10 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:06 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '1e2c3f7c-0ad5-4e71-a3e2-d9e220414603'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:11 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:10 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': 'f226e87c-dbc4-44ab-82e6-7838f896445a'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:11 [WARNING] common: Cleanup for incident sim-network-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: f226e87c-dbc4-44ab-82e6-7838f896445a, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: f226e87c-dbc4-44ab-82e6-7838f896445a, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:32:11 [INFO] common: [network] PASS — status=completed duration=16.8s thread=thread_BuSoab0mexbaOJJiOc4lRcCd
+2026-03-29 21:32:11 [INFO] common: [network] Reply preview: I received an error: "The tool group was not found". Unable to retrieve data regarding the specified resource group. Please verify if there are additional Azure tools required for Network Security Gro
+  PASS: scenario_network.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_storage.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:32:16 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:16 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:16 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:17 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:19 [INFO] common: [storage] Injected: incident_id=sim-storage-001 thread_id=thread_UOcrrsUWbX3vPARNxruuqcdD status=dispatched
+2026-03-29 21:32:27 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:27 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:27 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:27 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:27 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:27 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'c4870486-28f4-4b7f-8759-ed25c4024ff9'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:28 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:27 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:28 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:27 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'c4870486-28f4-4b7f-8759-ed25c4024ff9'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:28 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:27 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'c4870486-28f4-4b7f-8759-ed25c4024ff9'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:29 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:30 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:27 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'c4870486-28f4-4b7f-8759-ed25c4024ff9'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:30 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:30 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2e9cffbc-7d88-4993-bfcf-f0ed263682e2'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:30 [WARNING] common: Cleanup for incident sim-storage-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 2e9cffbc-7d88-4993-bfcf-f0ed263682e2, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 2e9cffbc-7d88-4993-bfcf-f0ed263682e2, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:32:30 [INFO] common: [storage] PASS — status=completed duration=10.8s thread=thread_UOcrrsUWbX3vPARNxruuqcdD
+2026-03-29 21:32:30 [INFO] common: [storage] Reply preview: ### Virtual Machines in Subscription ID: 4c727b88-12f4-4c91-9c2b-372aab3bbae9
+
+| Name              | Location      | VM Size               | Status     | OS Type |
+|-------------------|---------------
+  PASS: scenario_storage.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_security.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:32:36 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:36 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:36 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:36 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:38 [INFO] common: [security] Injected: incident_id=sim-security-001 thread_id=thread_0JlwcBmvUmFLzfM9nTGTXjuC status=dispatched
+2026-03-29 21:32:45 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:45 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:45 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:46 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:46 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:45 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '279a2fa5-78a1-4754-83d2-9038900538e2'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:47 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:46 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:47 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:45 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '279a2fa5-78a1-4754-83d2-9038900538e2'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:47 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:46 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:48 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:45 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '279a2fa5-78a1-4754-83d2-9038900538e2'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:48 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:47 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:49 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:32:45 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '279a2fa5-78a1-4754-83d2-9038900538e2'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:32:49 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:32:48 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '6bd1e75a-d5e6-434f-bb2e-237382fa7bf1'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:32:49 [WARNING] common: Cleanup for incident sim-security-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 6bd1e75a-d5e6-434f-bb2e-237382fa7bf1, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 6bd1e75a-d5e6-434f-bb2e-237382fa7bf1, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:32:49 [INFO] common: [security] PASS — status=completed duration=9.7s thread=thread_0JlwcBmvUmFLzfM9nTGTXjuC
+2026-03-29 21:32:49 [INFO] common: [security] Reply preview: It seems the operation tools are not available or there's an issue with the group tool. Please check the tool availability or let me know if there's anything specific you'd like me to confirm about th
+  PASS: scenario_security.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_arc.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:32:54 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:32:54 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:32:54 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:32:56 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:32:58 [INFO] common: [arc] Injected: incident_id=sim-arc-001 thread_id=thread_0VmXdfuY6OfPHRtpX2LqpWwu status=dispatched
+2026-03-29 21:33:05 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:33:05 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:33:05 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:33:07 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:33:07 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:05 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'b0dcc78d-6895-43c1-8715-deb456508963'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:07 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:07 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:08 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:05 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'b0dcc78d-6895-43c1-8715-deb456508963'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:08 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:08 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:09 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:05 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'b0dcc78d-6895-43c1-8715-deb456508963'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:09 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:09 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:10 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:05 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': 'b0dcc78d-6895-43c1-8715-deb456508963'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:10 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:09 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '3b83eb2e-326a-4057-83ed-262f4fec9df3'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:10 [WARNING] common: Cleanup for incident sim-arc-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 3b83eb2e-326a-4057-83ed-262f4fec9df3, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 3b83eb2e-326a-4057-83ed-262f4fec9df3, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:33:10 [INFO] common: [arc] PASS — status=completed duration=11.0s thread=thread_0VmXdfuY6OfPHRtpX2LqpWwu
+2026-03-29 21:33:10 [INFO] common: [arc] Reply preview: The virtual machines in subscription **4c727b88-12f4-4c91-9c2b-372aab3bbae9** are as follows:
+
+| Name             | Location       | VM Size                | Status     | OS Type |
+|------------------
+  PASS: scenario_arc.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_sre.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:33:15 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:33:15 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:33:15 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:33:16 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:33:18 [INFO] common: [sre] Injected: incident_id=sim-sre-001 thread_id=thread_97NjgA0RuO93SkSDkLIMww25 status=dispatched
+2026-03-29 21:33:26 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:33:26 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:33:26 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:33:27 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:33:27 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:26 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '547166d4-9b02-4033-acdc-afcdbab8f951'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:28 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:27 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:26 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '547166d4-9b02-4033-acdc-afcdbab8f951'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:28 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:29 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:26 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '547166d4-9b02-4033-acdc-afcdbab8f951'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:30 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:29 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:30 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:26 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '547166d4-9b02-4033-acdc-afcdbab8f951'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:30 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:29 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '7349a93e-c9c8-4611-9760-3e24faf7c9b4'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:30 [WARNING] common: Cleanup for incident sim-sre-001 failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 7349a93e-c9c8-4611-9760-3e24faf7c9b4, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 7349a93e-c9c8-4611-9760-3e24faf7c9b4, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:33:30 [INFO] common: [sre] PASS — status=completed duration=10.6s thread=thread_97NjgA0RuO93SkSDkLIMww25
+2026-03-29 21:33:30 [INFO] common: [sre] Reply preview: The tool for querying resource groups is currently unavailable. Please check back later, or provide further instructions if alternative action is needed.
+  PASS: scenario_sre.py
+
+  (waiting 5s before next scenario...)
+--- Running: scenario_cross.py ---
+/Users/jasonmba/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-03-29 21:33:36 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:33:36 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:33:36 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:33:37 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:33:39 [INFO] common: [cross-compute] Injected: incident_id=sim-cross-001a thread_id=thread_OI8aDVwtkpRh1qsQSvZHwFag status=dispatched
+2026-03-29 21:33:47 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:33:47 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:33:47 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:33:47 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:33:47 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:47 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '9b90c87b-1e0a-4a39-b85a-37a2a3008183'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:48 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:47 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:48 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:47 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '9b90c87b-1e0a-4a39-b85a-37a2a3008183'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:49 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:48 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:49 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:47 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '9b90c87b-1e0a-4a39-b85a-37a2a3008183'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:49 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:49 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:50 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:33:47 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '9b90c87b-1e0a-4a39-b85a-37a2a3008183'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:33:50 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:33:50 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '2caab296-0c27-412b-9251-b151df6cdd24'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:33:50 [WARNING] common: Cleanup for incident sim-cross-001a failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 2caab296-0c27-412b-9251-b151df6cdd24, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 2caab296-0c27-412b-9251-b151df6cdd24, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:33:50 [INFO] common: [cross-compute] PASS — status=completed duration=11.0s thread=thread_OI8aDVwtkpRh1qsQSvZHwFag
+2026-03-29 21:33:50 [INFO] common: [cross-compute] Reply preview: ### Incident Details
+**Title:** VM disk full: vm-prod-02 OS disk at 98% capacity  
+**Severity:** Sev1  
+**Description:** OS disk utilization at 98% on **vm-prod-02**. Immediate risk of service disrupt
+2026-03-29 21:33:53 [INFO] common: [cross-storage] Injected: incident_id=sim-cross-001b thread_id=thread_7LsFA2YKPYbmNuCnxoFWa9jz status=dispatched
+2026-03-29 21:34:02 [INFO] azure.identity._credentials.environment: No environment configuration found.
+2026-03-29 21:34:02 [INFO] azure.identity._credentials.managed_identity: ManagedIdentityCredential will use IMDS
+2026-03-29 21:34:02 [INFO] azure.core.pipeline.policies.http_logging_policy: Request URL: 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=REDACTED&resource=REDACTED'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.2 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+No body was attached to the request
+2026-03-29 21:34:02 [INFO] azure.identity._credentials.chained: DefaultAzureCredential acquired a token from AzureCliCredential
+2026-03-29 21:34:02 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:34:02 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '8f33061d-933f-457b-a6b9-605c62ab99d0'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:34:03 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:34:03 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:34:03 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:34:02 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '8f33061d-933f-457b-a6b9-605c62ab99d0'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:34:04 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:34:03 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:34:04 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:34:02 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '8f33061d-933f-457b-a6b9-605c62ab99d0'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:34:05 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:34:04 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:34:05 [INFO] azure.cosmos._cosmos_http_logging_policy: Request URL: 'https://aap-cosmos-prod.documents.azure.com:443/'
+Request method: 'GET'
+Request headers:
+    'Cache-Control': 'no-cache'
+    'x-ms-version': '2020-07-15'
+    'x-ms-documentdb-query-iscontinuationexpected': 'False'
+    'x-ms-cosmos-sdk-supportedcapabilities': '1'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'x-ms-date': 'Sun, 29 Mar 2026 13:34:02 GMT'
+    'Accept': 'application/json'
+    'x-ms-client-id': '8f33061d-933f-457b-a6b9-605c62ab99d0'
+    'x-ms-thinclient-proxy-resource-type': 'databaseaccount'
+    'x-ms-thinclient-proxy-operation-type': 'Read'
+    'Content-Length': '0'
+    'User-Agent': 'azsdk-python-cosmos/4.15.0 Python/3.9.6 (macOS-26.4-arm64-arm-64bit)'
+    'authorization': 'REDACTED'
+No body was attached to the request
+2026-03-29 21:34:05 [INFO] azure.cosmos._cosmos_http_logging_policy: Response status: 403
+Response headers:
+    'ActivityId': 'REDACTED'
+    'Date': 'Sun, 29 Mar 2026 13:34:05 GMT'
+    'Transfer-Encoding': 'REDACTED'
+    'Content-Type': 'application/json'
+    'x-ms-activity-id': '60764397-e687-4453-bc11-563d9b3b7010'
+    'Server': 'Compute'
+    'x-ms-gatewayversion': '2.0.0'
+    'x-ms-substatus': '0'
+2026-03-29 21:34:05 [WARNING] common: Cleanup for incident sim-cross-001b failed (non-fatal): (Forbidden) Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 60764397-e687-4453-bc11-563d9b3b7010, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+Code: Forbidden
+Message: Request originated from IP 58.182.218.157 through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden
+ActivityId: 60764397-e687-4453-bc11-563d9b3b7010, documentdb-dotnet-sdk/2.14.0 Host/64-bit MicrosoftWindowsNT/10.0.20348.0
+2026-03-29 21:34:05 [INFO] common: [cross-storage] PASS — status=completed duration=11.3s thread=thread_7LsFA2YKPYbmNuCnxoFWa9jz
+2026-03-29 21:34:05 [INFO] common: [cross-storage] Reply preview: ### Incident Details:
+**Title:** Managed disk critical: vm-prod-02-osdisk at 98% capacity  
+**Description:** Managed disk `vm-prod-02-osdisk` is at 98% capacity. Correlated with VM disk full alert.  
+
+  PASS: scenario_cross.py
+
+============================================
+ Results: 7/7 passed, 0 failed
+============================================
+SIMULATION SUITE: PASS

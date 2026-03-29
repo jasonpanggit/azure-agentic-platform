@@ -40,7 +40,8 @@ for scenario in "${SCENARIOS[@]}"; do
     echo ""
 
     # Backoff between scenarios to avoid Foundry rate limits
-    if [ "$scenario" != "${SCENARIOS[-1]}" ]; then
+    # Note: using index arithmetic for bash 3.2 compatibility (macOS ships bash 3.2)
+    if [ "$scenario" != "${SCENARIOS[$((TOTAL-1))]}" ]; then
         echo "  (waiting 5s before next scenario...)"
         sleep 5
     fi
