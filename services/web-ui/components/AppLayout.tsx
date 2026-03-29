@@ -59,6 +59,7 @@ const useStyles = makeStyles({
   chatPanel: {
     position: 'relative',
     overflow: 'hidden',
+    height: '100%',
     backgroundColor: tokens.colorNeutralBackground1,
   },
   dashboardPanel: {

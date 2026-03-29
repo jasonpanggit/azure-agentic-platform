@@ -76,6 +76,8 @@ const useStyles = makeStyles({
     marginTop: tokens.spacingVerticalS,
   },
   inputArea: {
+    flexShrink: 0,
+    flexGrow: 0,
     display: 'flex',
     flexDirection: 'column',
   },
