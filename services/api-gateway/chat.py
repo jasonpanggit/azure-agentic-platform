@@ -12,7 +12,6 @@ import logging
 import os
 from typing import Optional
 
-from services.api_gateway.azure_tools import AzureToolRequest, call_azure_tool
 from services.api_gateway.foundry import _get_foundry_client
 from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
@@ -186,17 +185,29 @@ async def get_chat_result(
                 logger.info("Executing function tool call: %s (id=%s)", fn_name, tc.id)
 
                 if fn_name == "azure_tools":
+                    # The orchestrator MUST NOT execute Azure tools directly.
+                    # It is only allowed to classify incidents and route to domain
+                    # agents via HandoffOrchestrator. Returning an error here
+                    # forces the LLM to route to the correct domain agent instead
+                    # of answering from raw Azure data.
+                    fn_args = {}
                     try:
                         fn_args = json.loads(fn_args_raw)
-                        tool_req = AzureToolRequest(
-                            tool_name=fn_args.get("tool_name", "compute"),
-                            arguments=fn_args.get("arguments", {}),
-                        )
-                        result = await call_azure_tool(tool_req)
-                        output = result.content
-                    except Exception as exc:
-                        logger.error("azure_tools execution failed: %s", exc)
-                        output = f"Error calling azure_tools: {exc}"
+                    except Exception:
+                        pass
+                    tool_name = fn_args.get("tool_name", "unknown")
+                    logger.warning(
+                        "Orchestrator attempted to call azure_tools(%s) directly — blocked. "
+                        "Route to the appropriate domain agent instead.",
+                        tool_name,
+                    )
+                    output = (
+                        "ERROR: The orchestrator is not permitted to call Azure tools directly. "
+                        "You MUST route this request to the appropriate domain agent "
+                        "(compute-agent, network-agent, storage-agent, security-agent, "
+                        "arc-agent, or sre-agent) via HandoffOrchestrator. "
+                        "Do NOT answer from your own knowledge or tool calls."
+                    )
                 else:
                     output = f"Unknown function: {fn_name}"
 
