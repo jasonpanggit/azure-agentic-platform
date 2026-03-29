@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-03-29 — Phase 9 added: Web UI Revamp — tear down Fluent UI / Griffel, rebuild with Tailwind CSS + shadcn/ui, redesign full portal with frontend specialist.
+
 > Last updated: 2026-03-29 — Plan 08-05 COMPLETE. VALIDATION-REPORT.md finalized with OTel Verification section, final counts (E2E 22/30, Smoke 6/7, Simulations 8/8, OTel CANNOT_VERIFY), Conclusion, and Backlog Items. BACKLOG.md created with 11 items. Phase 8 validation status: FAIL — 2 BLOCKING findings (F-01 Foundry RBAC, F-02 runbook search 500) remain OPEN pending operator action. completed_phases stays at 7 until BLOCKING resolved.
 >
 > Phase 8 plans all complete (5/5). Operator must resolve F-01 and F-02 before phase can be marked complete.

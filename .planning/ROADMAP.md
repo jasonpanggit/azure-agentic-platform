@@ -413,6 +413,16 @@ Phase 1 (Foundation)
 | Phase 6 | Phase 5 complete | Teams shares Foundry threads with Web UI; REMEDI-002 HITL gate must be live |
 | Phase 7 | Phases 5 + 6 complete | E2E suite covers the full stack end-to-end |
 
+### Phase 9: Web UI Revamp — Modern Portal with Tailwind + shadcn/ui
+
+**Goal:** Tear down and rebuild the web UI from scratch. Replace Fluent UI / Griffel with Tailwind CSS + shadcn/ui. Redesign the full portal: scrollable chat panel with fixed input, dashboard, and layout — using a frontend specialist for visual design quality.
+**Requirements**: UI-001 through UI-008 (re-addressed)
+**Depends on:** Phase 8
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 9 to break down)
+
 ---
 
 ## Requirement Coverage Matrix

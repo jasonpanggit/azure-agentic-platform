@@ -54,13 +54,15 @@ Exceptions: Touch targets for interactive elements (buttons, chips) use minimum 
 |------|------|--------|-------------|------------------|
 | Caption | 12px | 400 (regular) | 1.33 | `text-xs font-normal` |
 | Body | 14px | 400 (regular) | 1.5 | `text-sm font-normal` |
-| Label | 14px | 500 (medium) | 1.5 | `text-sm font-medium` |
+| Label | 14px | 600 (semibold) | 1.5 | `text-sm font-semibold` |
 | Heading | 20px | 600 (semibold) | 1.2 | `text-xl font-semibold` |
 | Display | 28px | 600 (semibold) | 1.2 | `text-2xl font-semibold` (unused unless marketing page added) |
 
+**Weight scale: 2 weights only — `font-normal` (400) for Caption/Body, `font-semibold` (600) for Label/Heading/Display. `font-medium` (500) is NOT used.**
+
 Font stack: `Inter, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
-Monospace (code blocks, resource IDs): `"JetBrains Mono", ui-monospace, monospace` at 13px (`text-[13px] font-mono`)
+Monospace (code blocks, resource IDs): `"JetBrains Mono", ui-monospace, monospace` at 13px (`text-[13px] font-mono`) — code exception, not part of the UI type scale.
 
 ---
 
@@ -394,7 +396,7 @@ interface ChatBubbleProps {
 Container:   max-w-[95%] self-start rounded-lg border bg-card p-3 mb-2
              shadow-sm
 Agent badge: inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5
-             text-xs font-medium text-primary mb-1.5
+             text-xs font-semibold text-primary mb-1.5
 Content:     prose prose-sm prose-zinc max-w-none
              [react-markdown renders here]
 Cursor:      inline-block w-0.5 h-3.5 bg-foreground ml-0.5
@@ -481,7 +483,7 @@ Textarea:    flex-1 min-h-[40px] max-h-[120px] resize-none rounded-md border
              placeholder:text-muted-foreground focus-visible:outline-none
              focus-visible:ring-2 focus-visible:ring-ring
 Send button: h-10 px-4 rounded-md bg-primary text-primary-foreground
-             font-medium text-sm hover:bg-primary/90
+             font-semibold text-sm hover:bg-primary/90
              disabled:opacity-50 disabled:pointer-events-none
              flex items-center gap-2
 ```
@@ -504,7 +506,7 @@ interface ExampleChipProps {
 **Tailwind classes:**
 ```
 Chip:        inline-flex items-center rounded-md border border-border px-2.5 py-1
-             text-xs font-medium text-muted-foreground bg-background
+             text-xs font-semibold text-muted-foreground bg-background
              hover:bg-accent hover:text-accent-foreground
              disabled:opacity-50 disabled:pointer-events-none
              transition-colors cursor-pointer whitespace-nowrap
@@ -634,7 +636,7 @@ interface AlertFeedProps {
 ```
 Table:       w-full text-sm
 Header row:  border-b bg-muted/50
-Header cell: h-10 px-3 text-left font-medium text-muted-foreground
+Header cell: h-10 px-3 text-left font-semibold text-muted-foreground
 Body row:    border-b hover:bg-muted/30 transition-colors
 Body cell:   h-10 px-3 align-middle
 ```
@@ -932,7 +934,7 @@ No gratuitous animations. No page transitions. No skeleton shimmer beyond shadcn
 ### Agent Name Badge
 
 ```
-Inline badge: bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-md
+Inline badge: bg-primary/10 text-primary text-xs font-semibold px-2 py-0.5 rounded-md
 Display: "{agentName} Agent"
 ```
 
