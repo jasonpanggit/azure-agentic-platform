@@ -117,6 +117,7 @@ class ChatResponse(BaseModel):
     """Response returned after chat thread creation."""
 
     thread_id: str
+    run_id: Optional[str] = None
     status: str = "created"
 
 

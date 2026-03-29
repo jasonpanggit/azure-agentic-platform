@@ -355,7 +355,25 @@ Ph 7                                                                ████
 
 ---
 
-## Dependencies Graph
+## Phase 8: Azure Validation & Incident Simulation
+
+**Goal:** Validate the production environment end-to-end — close provisioning gaps, run live incident simulations, and confirm the platform works against real Azure infrastructure.
+
+**UI:** No | **IaC:** No (ops commands only)
+
+**Status:** 🔄 In Progress — Plan 08-01 in progress (1/5 autonomous tasks complete; 5 operator steps pending)
+
+### Plan Progress
+
+| Plan | Title | Status | Notes |
+|---|---|---|---|
+| 08-01 | Fix Provisioning Gaps | 🔄 In Progress | Task 08-01-01 committed (--create flag); tasks 08-01-02 through 08-01-06 require operator execution |
+| 08-02 | Chat Validation | Not started | Blocked until 08-01 operator steps complete |
+| 08-03 | Incident Simulation | Not started | |
+| 08-04 | Teams Validation | Not started | |
+| 08-05 | Full E2E Run | Not started | |
+
+
 
 ```
 Phase 1 (Foundation)

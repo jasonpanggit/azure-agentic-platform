@@ -16,14 +16,16 @@ const API_GATEWAY_URL =
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get('thread_id');
+  const runId = searchParams.get('run_id');
 
   if (!threadId) {
     return NextResponse.json({ error: 'Missing thread_id parameter' }, { status: 400 });
   }
 
   try {
+    const runIdParam = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
     const res = await fetch(
-      `${API_GATEWAY_URL}/api/v1/chat/${encodeURIComponent(threadId)}/result`,
+      `${API_GATEWAY_URL}/api/v1/chat/${encodeURIComponent(threadId)}/result${runIdParam}`,
       {
         headers: {
           'Content-Type': 'application/json',

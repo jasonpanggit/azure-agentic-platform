@@ -11,6 +11,7 @@ export interface SSEEvent {
 
 interface UseSSEOptions {
   threadId: string | null;
+  runId?: string | null;
   streamType: 'token' | 'trace';
   onEvent: (event: SSEEvent) => void;
   onError?: (error: Event) => void;
@@ -27,6 +28,7 @@ interface UseSSEResult {
 
 export function useSSE({
   threadId,
+  runId,
   streamType,
   onEvent,
   onError,
@@ -43,10 +45,13 @@ export function useSSE({
 
     // Close any existing connection before opening a new one
     eventSourceRef.current?.close();
-    // Do NOT reset lastSeqRef — preserve last seq so server can skip replaying
-    // already-seen events and the dedup guard remains effective.
+    // Reset lastSeqRef for new runs — the server starts seq at 0 for each
+    // new SSE connection, so retaining the old value would cause the dedup
+    // guard (seq > lastSeqRef) to drop all events from the new run.
+    lastSeqRef.current = 0;
 
-    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}&last_seq=${lastSeqRef.current}`;
+    const runIdParam = runId ? `&run_id=${encodeURIComponent(runId)}` : '';
+    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}&last_seq=${lastSeqRef.current}${runIdParam}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
@@ -91,7 +96,7 @@ export function useSSE({
       onError?.(err);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, streamType, runKey, onEvent, onError, onReconnect]);
+  }, [threadId, runId, streamType, runKey, onEvent, onError, onReconnect]);
 
   useEffect(() => {
     connect();

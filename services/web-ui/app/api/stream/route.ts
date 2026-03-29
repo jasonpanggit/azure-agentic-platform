@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get('thread_id');
   const streamType = searchParams.get('type') || 'token';
+  const runId = searchParams.get('run_id');
 
   if (!threadId) {
     return new Response('Missing thread_id parameter', { status: 400 });
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
 
       // Poll the API gateway for run completion
       const deadline = Date.now() + POLL_TIMEOUT_MS;
+      const runIdParam = runId ? `&run_id=${encodeURIComponent(runId)}` : '';
 
       while (!aborted && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
 
         try {
           const res = await fetch(
-            `http://localhost:3000/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}`,
+            `http://localhost:3000/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}${runIdParam}`,
             { signal: AbortSignal.timeout(8000) }
           );
 
