@@ -50,7 +50,7 @@
 │                                                                                 │
 │  ┌───────────────────────────────────┐   ┌──────────────────────────────────┐  │
 │  │   Next.js App Router (Container   │   │   Teams Bot                      │  │
-│  │   App) + Fluent UI 2              │   │   (@microsoft/teams.js)          │  │
+│  │   App) + Tailwind CSS + shadcn/ui │   │   (@microsoft/teams.js)          │  │
 │  │                                   │   │   Adaptive Card approvals        │  │
 │  │   Dual SSE: token + trace events  │   │   Shared Foundry thread ID       │  │
 │  └───────────────────────────────────┘   └──────────────────────────────────┘  │
@@ -358,7 +358,7 @@ export async function GET(req: NextRequest) {
 }
 ```
 
-### 3.3 Fluent UI 2 Rendering
+### 3.3 Tailwind CSS + shadcn/ui Rendering
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
