@@ -62,6 +62,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     backgroundColor: tokens.colorNeutralBackground1,
     height: '100%',
+    minHeight: 0,
   },
   dashboardPanel: {
     overflow: 'hidden',

@@ -27,6 +27,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+    minHeight: 0,
+    flex: '1 1 0',
+    overflow: 'hidden',
   },
   messages: {
     flex: 1,
