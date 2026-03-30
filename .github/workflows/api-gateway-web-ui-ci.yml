@@ -56,6 +56,9 @@ jobs:
   playwright-tests:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
+    # E2E tests require a live deployed environment (E2E_BASE_URL, E2E_API_URL, etc.)
+    # Skip on PRs and pushes without deployed env vars — run manually or on staging deploys
+    if: ${{ vars.E2E_BASE_URL != '' }}
     steps:
       - uses: actions/checkout@v4
 
