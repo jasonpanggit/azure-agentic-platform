@@ -439,6 +439,19 @@ Plans:
 - [x] 10-01 API Gateway Auth & Audit Hardening
 - [x] 10-02 Runbook Search Availability Hardening
 
+### Phase 11: Patch Domain Agent
+
+**Goal:** Build a Patch domain agent that uses Azure Resource Graph (ARG) to query Update Manager tables (`PatchAssessmentResources`, `PatchInstallationResources`, etc.) and expose patch status, compliance, and history to the orchestrator. Wire the agent into the orchestrator's routing table so patch-related incidents and queries are dispatched to the Patch domain agent.
+**Requirements**: TRIAGE-002, TRIAGE-003, TRIAGE-004, TRIAGE-005, REMEDI-001, AGENT-001, AGENT-002, AGENT-008, AGENT-009, AUDIT-001, AUDIT-005
+**Depends on:** Phase 10
+**Reference:** https://learn.microsoft.com/en-us/azure/update-manager/query-logs
+**Plans:** 3 plans (1 complete)
+
+Plans:
+- [x] 11-01 Patch Agent Spec + Implementation + Unit Tests
+- [ ] 11-02 Orchestrator Routing + Integration
+- [ ] 11-03 Terraform + CI/CD
+
 ---
 
 ## Requirement Coverage Matrix

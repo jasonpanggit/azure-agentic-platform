@@ -3,15 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-30T00:00:00Z"
+last_updated: "2026-03-30T18:00:00.000Z"
 progress:
-  total_phases: 11
-  completed_phases: 8
-  total_plans: 49
-  completed_plans: 42
+  total_phases: 9
+  completed_phases: 6
+  total_plans: 41
+  completed_plans: 26
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-30 — Plan 11-01 COMPLETE: Patch Agent spec + implementation + 49 unit tests. Spec at docs/agents/patch-agent.spec.md, agent at agents/patch/ (5 files), tests at agents/tests/patch/ (3 files). 7 @ai_function tools: ARG PatchAssessmentResources/PatchInstallationResources with skip_token pagination, ConfigurationData stub, KB-to-CVE via MSRC CVRF API with lru_cache, Activity Log, Resource Health, sync search_runbooks wrapper for TRIAGE-005.
 
 > Last updated: 2026-03-30 — Completed quick task 260330-p8d: Fix critical bugs in GitHub Actions workflows (deploy-all-images missing secret + image tag, terraform-apply SSL/error-stop, staging-e2e deterministic npm ci).
 
@@ -34,6 +36,7 @@ Plan 10-01 complete: API gateway auth now fails closed by default; explicit loca
 Plan 10-02 complete: runbook search now resolves `PGVECTOR_CONNECTION_STRING`, `POSTGRES_DSN`, or explicit `POSTGRES_*` settings, startup migrations reuse the same resolver, and `/api/v1/runbooks/search` returns HTTP 503 instead of HTTP 500 when the runbook DB is unavailable. Combined gateway regression run passed (`19 passed`).
 
 Parallel status:
+
 - Phase 8 remains blocked on operator-only findings F-01 (Foundry RBAC) and F-02 (prod runbook search 500).
 - Phase 9 has six authored plans and remains pending implementation.
 
@@ -89,7 +92,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
 | 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
-| 11 | Patch Domain Agent | Not planned yet |
+| 11 | Patch Domain Agent | In Progress (1/3 plans) |
 
 ---
 
