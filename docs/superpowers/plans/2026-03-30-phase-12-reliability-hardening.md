@@ -370,6 +370,21 @@ class TestApprovals404:
                     )
                     assert resp.status_code == 200
                     assert resp.json()["status"] == "approved"
+
+    def test_get_approval_status_nonexistent_returns_404(self, client, mock_cosmos_not_found):
+        """GET /api/v1/approvals/{id} must also return 404, not 500, when record not found."""
+        with patch(
+            "services.api_gateway.approvals._get_approvals_container",
+            return_value=mock_cosmos_not_found,
+        ):
+            resp = client.get(
+                "/api/v1/approvals/nonexistent-id",
+                params={"thread_id": "th_123"},
+                headers={"Authorization": "Bearer test"},
+            )
+            assert resp.status_code == 404
+            body = resp.json()
+            assert "not found" in body["detail"].lower()
 ```
 
 - [ ] **Step 2: Run tests to confirm they fail**
@@ -623,15 +638,26 @@ class TestDependencies:
         assert result is mock_client
 
     def test_credential_initialized_once_in_lifespan(self):
-        """DefaultAzureCredential.__init__ called exactly once during app startup."""
-        with patch("services.api_gateway.main.DefaultAzureCredential") as mock_cred_cls:
-            with patch("services.api_gateway.main.CosmosClient") as mock_cosmos_cls:
-                with patch("services.api_gateway.main._run_startup_migrations", new_callable=AsyncMock):
+        """DefaultAzureCredential.__init__ called exactly once during app startup.
+
+        NOTE: This test uses importlib.reload to ensure a fresh module state
+        regardless of test execution order. Without reload, a previously-imported
+        app module may skip lifespan on re-entry, making the call count unreliable.
+        """
+        import importlib
+        import services.api_gateway.main as main_module
+
+        with patch.object(main_module, "DefaultAzureCredential") as mock_cred_cls:
+            with patch.object(main_module, "CosmosClient") as mock_cosmos_cls:
+                with patch.object(main_module, "_run_startup_migrations", new_callable=AsyncMock):
                     mock_cred_cls.return_value = MagicMock()
                     mock_cosmos_cls.return_value = MagicMock()
 
-                    from services.api_gateway.main import app
-                    with TestClient(app):
+                    # Reload the module to get a fresh app instance with fresh lifespan
+                    importlib.reload(main_module)
+                    fresh_app = main_module.app
+
+                    with TestClient(fresh_app):
                         pass  # TestClient lifecycle runs lifespan
 
                     assert mock_cred_cls.call_count == 1, (
@@ -671,9 +697,11 @@ Usage in route handlers:
 """
 from __future__ import annotations
 
+from typing import Optional
+
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 
 def get_credential(request: Request) -> DefaultAzureCredential:
@@ -682,8 +710,18 @@ def get_credential(request: Request) -> DefaultAzureCredential:
 
 
 def get_cosmos_client(request: Request) -> CosmosClient:
-    """Return the shared CosmosClient from app.state."""
-    return request.app.state.cosmos_client
+    """Return the shared CosmosClient from app.state.
+
+    Raises HTTP 503 if COSMOS_ENDPOINT was not configured at startup.
+    This provides a clear error message instead of AttributeError/NoneType.
+    """
+    client: Optional[CosmosClient] = request.app.state.cosmos_client
+    if client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Cosmos DB not configured (COSMOS_ENDPOINT not set)",
+        )
+    return client
 ```
 
 - [ ] **Step 4: Extend lifespan in `main.py` to initialize singletons**

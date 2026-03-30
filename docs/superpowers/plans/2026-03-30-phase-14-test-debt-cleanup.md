@@ -352,16 +352,27 @@ describe('useAuth hook', () => {
 
 **IMPORTANT:** Replace placeholders with real assertions after reading the actual hook.
 
-- [ ] **Step 5: Run the web UI test suite**
+- [ ] **Step 5: Verify no placeholder assertions remain before running tests**
+
+```bash
+# This MUST return zero matches before you proceed.
+# If it finds any, go back and replace the placeholders with real assertions.
+grep -rn "expect(true).toBe(true)" services/web-ui/__tests__/ChatPanel.test.tsx \
+                                   services/web-ui/__tests__/useAuth.test.tsx
+```
+
+Expected: **Zero matches.** If any placeholder remains, the test technically passes but provides zero coverage — which violates the spec's requirement for "meaningful coverage." Fix all placeholders before continuing.
+
+- [ ] **Step 6: Run the web UI test suite**
 
 ```bash
 cd services/web-ui
 npm test
 ```
 
-Expected: No TODO/empty tests. `ChatPanel.test.tsx` and `useAuth.test.tsx` run and pass. `layout.test.tsx` is gone.
+Expected: No TODO/empty tests. `ChatPanel.test.tsx` and `useAuth.test.tsx` run and pass with real assertions. `layout.test.tsx` is gone.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add services/web-ui/__tests__/ChatPanel.test.tsx \
