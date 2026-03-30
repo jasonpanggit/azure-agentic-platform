@@ -9,6 +9,8 @@ import pytest
 
 from classify_domain import classify_domain
 
+pytestmark = pytest.mark.integration
+
 
 class TestPipelineFlow:
     """Tests for the detect -> classify pipeline."""

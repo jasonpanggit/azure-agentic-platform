@@ -9,6 +9,8 @@ import pytest
 
 from payload_mapper import map_detection_result_to_incident_payload
 
+pytestmark = pytest.mark.integration
+
 
 SAMPLE_DETECTION_RESULT = {
     "alert_id": "alert-test-001",
