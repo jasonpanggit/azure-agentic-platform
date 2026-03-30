@@ -129,32 +129,31 @@ estimated_impact, risk_level (low/medium/high/critical), reversibility statement
 def create_arc_agent() -> ChatAgent:
     """Create and configure the Arc Agent with Arc MCP Server tooling.
 
-    Mounts the custom Arc MCP Server as a MCPTool. The server URL is provided
-    via ARC_MCP_SERVER_URL environment variable (set by Terraform arc-mcp-server
-    module output → agent-apps env var injection).
+    Mounts the custom Arc MCP Server as a MCPTool when ARC_MCP_SERVER_URL
+    is set. When absent the agent starts without MCP tooling (degraded mode).
 
     Returns:
         ChatAgent configured with Arc domain tools and TRIAGE-006 prompt.
-
-    Raises:
-        ValueError: If ARC_MCP_SERVER_URL is not set.
     """
     arc_mcp_server_url = os.environ.get("ARC_MCP_SERVER_URL")
-    if not arc_mcp_server_url:
-        raise ValueError(
-            "ARC_MCP_SERVER_URL environment variable is required. "
-            "This should be set to the internal FQDN of the Arc MCP Server Container App, "
-            "e.g. http://ca-arc-mcp-server-dev.{env_domain}/mcp"
-        )
 
     client = get_foundry_client()
 
-    # Mount the Arc MCP Server via MCPTool (AGENT-005)
-    arc_mcp_tool = MCPTool(
-        server_label="arc-mcp",
-        server_url=arc_mcp_server_url,
-        allowed_tools=ALLOWED_MCP_TOOLS,
-    )
+    # Base tools available without Arc MCP Server
+    tools = [
+        query_activity_log,
+        query_log_analytics,
+        query_resource_health,
+    ]
+
+    # Mount the Arc MCP Server via MCPTool when available (AGENT-005)
+    if arc_mcp_server_url:
+        arc_mcp_tool = MCPTool(
+            server_label="arc-mcp",
+            server_url=arc_mcp_server_url,
+            allowed_tools=ALLOWED_MCP_TOOLS,
+        )
+        tools.append(arc_mcp_tool)
 
     return ChatAgent(
         name="arc-agent",
@@ -164,12 +163,7 @@ def create_arc_agent() -> ChatAgent:
         ),
         instructions=ARC_AGENT_SYSTEM_PROMPT,
         chat_client=client,
-        tools=[
-            query_activity_log,
-            query_log_analytics,
-            query_resource_health,
-            arc_mcp_tool,
-        ],
+        tools=tools,
     )
 
 
