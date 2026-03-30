@@ -18,7 +18,18 @@ RESOURCE_GROUP="rg-aap-prod"
 ENVIRONMENT="prod"
 APP_NAME="ca-azure-mcp-prod"
 PORT=5000
-AZURE_MCP_VERSION="2.0.0-beta.34"
+
+# Determine script directory so this works regardless of where the script is invoked from
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOCKERFILE_PATH="${SCRIPT_DIR}/../services/azure-mcp-server/Dockerfile"
+
+# Read @azure/mcp version from Dockerfile (single source of truth)
+AZURE_MCP_VERSION=$(grep 'ARG AZURE_MCP_VERSION=' "${DOCKERFILE_PATH}" | cut -d= -f2)
+if [ -z "$AZURE_MCP_VERSION" ]; then
+  echo "ERROR: Could not read AZURE_MCP_VERSION from ${DOCKERFILE_PATH}" >&2
+  exit 1
+fi
+echo "Using @azure/mcp version: ${AZURE_MCP_VERSION}"
 
 # Get Container Apps environment ID
 echo "Looking up Container Apps environment..."
