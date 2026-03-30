@@ -53,6 +53,7 @@ In BOTH cases you MUST route to a domain agent — you NEVER answer from your ow
 - storage   → storage-agent  (Blob, Files, ADLS Gen2, managed disks)
 - security  → security-agent (Defender, Key Vault, RBAC drift, identity)
 - arc       → arc-agent      (Arc-enabled servers, Arc Kubernetes, Arc data services)
+- patch     → patch-agent    (Azure Update Manager, patch compliance, missing patches, KB articles, reboot-pending)
 - sre       → sre-agent      (cross-domain, SLA, reliability, incidents with no clear domain)
 
 ### Type A — Structured incident payloads
@@ -78,6 +79,8 @@ For natural-language queries, determine the domain from the **topic** of the mes
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → **network-agent**
 - Mentions "storage", "blob", "file share", "datalake" → **storage-agent**
 - Mentions "defender", "key vault", "keyvault", "rbac", "security", "identity" → **security-agent**
+- Mentions "patch", "patching", "update manager", "windows update", "missing patches",
+    "patch compliance", "patch status", "kb article", "hotfix" → **patch-agent**
 - Topic is ambiguous or spans multiple domains → **sre-agent**
 
 Important disambiguation rule:
@@ -110,6 +113,7 @@ DOMAIN_AGENT_MAP: dict = {
     "security": "security-agent",
     "sre": "sre-agent",
     "arc": "arc-agent",
+    "patch": "patch-agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -128,6 +132,7 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.keyvault": "security",
     "microsoft.hybridcompute": "arc",
     "microsoft.kubernetes": "arc",
+    "microsoft.maintenance": "patch",
 }
 
 
@@ -146,7 +151,7 @@ def classify_incident_domain(
 
     Used when the incident payload does not contain an unambiguous `domain`
     field (TRIAGE-001). Examines resource type prefixes from resource IDs
-    and maps them to compute / network / storage / security / arc / sre.
+    and maps them to compute / network / storage / security / arc / patch / sre.
 
     Args:
         affected_resources: List of Azure resource IDs from the incident payload.
@@ -197,7 +202,7 @@ def classify_incident_domain(
 def create_orchestrator() -> HandoffOrchestrator:
     """Create and configure the HandoffOrchestrator instance.
 
-    Registers all 6 domain agent targets with their Foundry agent IDs
+    Registers all 7 domain agent targets with their Foundry agent IDs
     sourced from environment variables set by the Terraform agent-apps module.
 
     Returns:
@@ -213,7 +218,7 @@ def create_orchestrator() -> HandoffOrchestrator:
         tools=[classify_incident_domain],
     )
 
-    # Register all 6 domain agent targets (AGENT-001)
+    # Register all 7 domain agent targets (AGENT-001)
     orchestrator.add_target(
         AgentTarget(
             name=DOMAIN_AGENT_MAP["compute"],
@@ -254,6 +259,13 @@ def create_orchestrator() -> HandoffOrchestrator:
             name=DOMAIN_AGENT_MAP["arc"],
             agent_id=os.environ.get("ARC_AGENT_ID", ""),
             description="Azure Arc domain specialist (Arc-enabled servers, Arc Kubernetes, Arc data services).",
+        )
+    )
+    orchestrator.add_target(
+        AgentTarget(
+            name=DOMAIN_AGENT_MAP["patch"],
+            agent_id=os.environ.get("PATCH_AGENT_ID", ""),
+            description="Azure patch management specialist (Update Manager, patch compliance, KB-to-CVE).",
         )
     )
 
