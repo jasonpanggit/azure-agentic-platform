@@ -30,23 +30,28 @@ This milestone closes all code-fixable gaps identified in the CONCERNS.md codeba
 **Source:** CONCERNS 1.5
 **Files:** `services/api-gateway/main.py`, `services/api-gateway/rate_limiter.py`
 
-The `RateLimiter` class and singleton `rate_limiter` are fully implemented but never imported or applied. Wire as a FastAPI `Depends()` on the two highest-risk endpoints.
+> **Implementation note (B-01):** The existing `RateLimiter.check(agent_name, subscription_id)` is a per-agent *remediation* guard (REMEDI-006), not an HTTP rate limiter. It cannot be wired as a FastAPI `Depends()` as-is. The implementation must add a new HTTP-oriented rate-limiting layer alongside the existing class rather than repurposing it.
+
+The `rate_limiter.py` module exists but is never applied to HTTP endpoints. Add a per-IP HTTP rate limiter using FastAPI middleware or a `slowapi`-style dependency.
 
 **Changes:**
-- Import `rate_limiter` in `main.py`
-- Add `Depends(rate_limiter.check)` to `/api/v1/chat` router (limit: 10 req/min per client IP)
-- Add `Depends(rate_limiter.check)` to `/api/v1/incidents` router (limit: 30 req/min per client IP)
+- Inspect the actual `RateLimiter` class signature in `rate_limiter.py` before writing any code
+- If `RateLimiter` is remediation-scoped only: add a separate `http_rate_limiter.py` module using `slowapi` (wraps `limits` library) or a simple in-memory `collections.defaultdict` + `time` approach for per-IP limiting
+- Wire as FastAPI middleware or a new `Depends(check_http_rate_limit)` dependency that extracts client IP from `Request.client.host`
+- Apply to `/api/v1/chat` (limit: 10 req/min) and `/api/v1/incidents` (limit: 30 req/min)
 - Return HTTP 429 with `{"detail": "Rate limit exceeded", "retry_after": N}` on breach
-- Add unit tests: verify 429 on 11th request within window; verify 200 resets after window
+- Unit tests: mock client IP, assert 429 on 11th request within window; assert 200 after window resets
+- Do NOT modify the existing `RateLimiter.check()` signature — it is used by agent remediation paths
 
 **Success criteria:**
-- `GET /api/v1/chat` returns 429 after exceeding rate limit in test
-- `GET /api/v1/incidents` returns 429 after exceeding rate limit in test
-- Existing gateway tests continue to pass
+- `/api/v1/chat` returns 429 after exceeding rate limit in unit test (no Azure credentials needed)
+- `/api/v1/incidents` returns 429 after exceeding rate limit in unit test
+- Existing gateway tests (including remediation paths) continue to pass
+- Existing `RateLimiter` class is unchanged
 
 ---
 
-### 11-02: Web UI Proxy Routes Forward MSAL Auth Token
+### 11-02: Web UI Proxy Routes Forward Auth Token (Pass-Through)
 
 **Source:** CONCERNS 1.3
 **Files:**
@@ -56,19 +61,23 @@ The `RateLimiter` class and singleton `rate_limiter` are fully implemented but n
 - `services/web-ui/app/api/proxy/approvals/[approvalId]/approve/route.ts`
 - `services/web-ui/app/api/proxy/approvals/[approvalId]/reject/route.ts`
 
-All 5 proxy route handlers call the API gateway without forwarding the user's MSAL bearer token. When `API_GATEWAY_AUTH_MODE=disabled` is eventually removed from prod, all web UI calls will break.
+All 5 proxy route handlers call the API gateway without forwarding the user's auth token. When `API_GATEWAY_AUTH_MODE=disabled` is eventually removed from prod, all web UI calls will break.
+
+> **Implementation note (W-01):** Server-side Next.js route handlers cannot use MSAL's browser `acquireTokenSilent`. The correct approach is a **pass-through**: read the `Authorization` header from the *incoming* Next.js request (sent by the browser after client-side MSAL acquisition) and forward it to the upstream gateway call. The browser is responsible for acquiring and attaching the token using `NEXT_PUBLIC_API_GATEWAY_SCOPE`; the server proxy just forwards it. Invalid or expired tokens are forwarded as-is — the API gateway is responsible for validation. This is safe because the proxy routes are server-to-server calls that never touch the token.
 
 **Changes:**
-- Add `NEXT_PUBLIC_API_GATEWAY_SCOPE` env var (e.g. `api://<client-id>/.default`)
-- Each route handler reads the incoming `Authorization` header from the Next.js request and forwards it to the upstream gateway call
-- If `Authorization` header is absent (e.g. dev mode with `NEXT_PUBLIC_DEV_MODE=true`), fall through without header (preserves dev-mode compatibility)
-- Update `.env.example` with `NEXT_PUBLIC_API_GATEWAY_SCOPE=api://<gateway-client-id>/.default`
-- Add unit tests for each proxy route: mock incoming request with `Authorization: Bearer test-token`, assert upstream fetch includes same header
+- Each route handler reads `request.headers.get('Authorization')` from the incoming Next.js `Request`
+- If present, adds `Authorization` header to the upstream `fetch()` call to the gateway
+- If absent (dev mode, `NEXT_PUBLIC_DEV_MODE=true`), makes the upstream call without an auth header (preserves dev-mode compatibility)
+- Add `NEXT_PUBLIC_API_GATEWAY_SCOPE` to `.env.example` with comment explaining the client-side MSAL scope
+- 11-02 must be completed before 11-03 (both modify the same 5 files; sequential to avoid merge conflicts)
+- Unit tests: mock incoming `Request` with `Authorization: Bearer test-token`; assert upstream `fetch` call includes same header; assert missing header case makes call without Authorization
 
 **Success criteria:**
 - All 5 proxy routes forward `Authorization` header when present on the incoming request
-- Dev mode (no auth header) still works without error
-- Tests pass for all 5 routes
+- Dev mode (no incoming auth header) still works without error
+- Tests pass for all 5 routes confirming header pass-through
+- No MSAL server-side token acquisition is introduced
 
 ---
 
@@ -76,6 +85,7 @@ All 5 proxy route handlers call the API gateway without forwarding the user's MS
 
 **Source:** CONCERNS 2.1
 **Files:** Same 5 proxy route files as 11-02
+**Dependency:** Must be implemented after 11-02 (same files — sequential to avoid merge conflicts)
 
 All 5 routes have:
 ```typescript
@@ -86,16 +96,18 @@ const API_GATEWAY_URL =
 
 A developer without `API_GATEWAY_URL` set silently targets production.
 
+> **Implementation note (W-02):** Next.js route handlers are loaded lazily on first request, not at server startup. The failure mode for a missing `API_GATEWAY_URL` is therefore a **500 on first request**, not a startup crash. The success criterion is updated accordingly.
+
 **Changes:**
 - Remove the hardcoded prod URL fallback string from all 5 files
-- In non-dev environments (`NEXT_PUBLIC_DEV_MODE !== 'true'`), throw `Error('API_GATEWAY_URL is not configured')` if env var is absent
-- In dev mode, fall back to `http://localhost:8000` (the correct local default)
+- If `API_GATEWAY_URL` is unset and `NEXT_PUBLIC_DEV_MODE !== 'true'`: throw `Error('API_GATEWAY_URL is not configured')` — this produces a 500 on the first request to that route, surfacing the misconfiguration immediately
+- In dev mode (`NEXT_PUBLIC_DEV_MODE=true`), fall back to `http://localhost:8000`
 - Update `.env.example`: document `API_GATEWAY_URL=http://localhost:8000`
 
 **Success criteria:**
-- `API_GATEWAY_URL` unset in production mode throws at startup
-- Dev mode defaults to `localhost:8000`
-- No prod URL appears anywhere in source code
+- No prod URL (`wittypebble`) appears anywhere in source code
+- Unit test: calling route handler with `API_GATEWAY_URL` unset and `NEXT_PUBLIC_DEV_MODE=false` throws/returns 500
+- Dev mode defaults to `localhost:8000` without error
 
 ---
 
@@ -104,15 +116,23 @@ A developer without `API_GATEWAY_URL` set silently targets production.
 **Source:** CONCERNS 2.2
 **File:** `services/web-ui/app/api/stream/route.ts`
 
-The SSE streaming route polls `http://localhost:3000/api/proxy/chat/result` — hardcoded hostname and port. In Container Apps the port is 3000, but this is still brittle.
+The SSE streaming route polls `http://localhost:3000/api/proxy/chat/result` — hardcoded hostname and port.
+
+> **Implementation note (B-02):** Relative URLs throw `TypeError: Failed to parse URL` in Node.js `fetch`. The correct fix is to use an absolute URL derived from an env var, not a bare relative path. Use `process.env.NEXT_PUBLIC_SITE_URL` (already set in Container Apps as the app's own FQDN) as the base, falling back to `http://localhost:3000` for local dev.
 
 **Changes:**
-- Replace `http://localhost:3000/api/proxy/chat/result?...` with `/api/proxy/chat/result?...` (relative URL)
-- Next.js server-side `fetch` resolves relative URLs against the server's own base URL automatically
+- Replace `http://localhost:3000/api/proxy/chat/result?...` with:
+  ```typescript
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const resultUrl = `${baseUrl}/api/proxy/chat/result?...`;
+  ```
+- Add `NEXT_PUBLIC_SITE_URL` to `.env.example` with comment (e.g. `NEXT_PUBLIC_SITE_URL=https://ca-web-ui-prod.xxx.azurecontainerapps.io`)
+- The Container Apps deployment already has the FQDN available — wire it as a build arg in `web-ui-build.yml`
 
 **Success criteria:**
-- SSE route no longer contains `localhost:3000`
-- Existing SSE integration tests pass
+- SSE route no longer contains the literal string `localhost:3000`
+- `NEXT_PUBLIC_SITE_URL` controls the internal poll base URL
+- SSE integration tests pass
 
 ---
 
@@ -170,16 +190,20 @@ The existing `/health` returns `{"status": "ok"}` unconditionally. The Phase 8 c
 **Source:** CONCERNS 5.7, BACKLOG F-07
 **File:** `services/api-gateway/approvals.py`
 
-`GET /api/v1/approvals/{approval_id}/approve` (and `/reject`) raise an unhandled exception when the approval record doesn't exist, returning HTTP 500.
+`POST /api/v1/approvals/{approval_id}/approve` (and `/reject`) return HTTP 500 when the approval record doesn't exist.
+
+> **Implementation note (W-04):** The Cosmos SDK's `container.read_item()` raises `azure.cosmos.exceptions.CosmosResourceNotFoundError` for missing records — it does not return `None`. The fix must catch this exception, not check for a `None` return value.
 
 **Changes:**
-- In both `approve` and `reject` handlers: fetch the record first; if `None`, return `JSONResponse({"detail": "Approval not found"}, status_code=404)` before any further processing
-- Add unit tests: `test_approve_missing_returns_404`, `test_reject_missing_returns_404`
+- In both `approve` and `reject` handlers: wrap `container.read_item()` call in `try/except CosmosResourceNotFoundError`
+- On `CosmosResourceNotFoundError`: return `JSONResponse({"detail": "Approval not found"}, status_code=404)`
+- Import `CosmosResourceNotFoundError` from `azure.cosmos.exceptions`
+- Unit tests: mock `read_item` to raise `CosmosResourceNotFoundError`; assert response is 404 with correct body
 - **Closes BACKLOG F-07**
 
 **Success criteria:**
-- `POST /api/v1/approvals/nonexistent-id/approve` returns 404
-- `POST /api/v1/approvals/nonexistent-id/reject` returns 404
+- `POST /api/v1/approvals/nonexistent-id/approve` returns 404 (not 500)
+- `POST /api/v1/approvals/nonexistent-id/reject` returns 404 (not 500)
 - Existing approval tests continue to pass
 
 ---
@@ -191,21 +215,19 @@ The existing `/health` returns `{"status": "ok"}` unconditionally. The Phase 8 c
 
 `agents/shared/auth.py` reads `AGENT_ENTRA_ID` and raises `ValueError` if missing. The env var is documented as set from the Container App's system-assigned identity `principal_id`, but it is never injected in the Terraform module.
 
+> **Implementation note (B-03):** `terraform/modules/agent-apps/main.tf` has `lifecycle { ignore_changes = [template[0].container[0].env, ...] }`. This means new env var entries added to the Terraform template are **silently ignored on `terraform apply`** for existing Container Apps — the plan will show the change but apply will not write it. The implementation must explicitly address this conflict: either remove `env` from `ignore_changes` (risky — allows Terraform to overwrite manually-set env vars) or use `az containerapp update --set-env-vars` as a one-time migration step after the Terraform change, documented as a required operator step. Recommended approach: remove `env` from `ignore_changes` for the `AGENT_ENTRA_ID` block only by restructuring the lifecycle block, then force a redeploy.
+
 **Changes:**
-- In `terraform/modules/agent-apps/main.tf`, add to the dynamic `env` block:
-  ```hcl
-  {
-    name  = "AGENT_ENTRA_ID"
-    value = azurerm_container_app.agent.identity[0].principal_id
-  }
-  ```
-- This references the Container App resource's own identity, which is available post-creation
+- Inspect `terraform/modules/agent-apps/main.tf` `lifecycle` block before writing any code
+- Add `AGENT_ENTRA_ID = azurerm_container_app.agent.identity[0].principal_id` to the dynamic env block
+- Remove `template[0].container[0].env` from `lifecycle.ignore_changes` OR document that a `terraform apply -replace` on existing Container Apps is required to actually set the env var
 - Add output `agent_entra_id` to module outputs for traceability
+- Add a note in the phase plan that this requires a Container App revision cycle to take effect on running apps
 
 **Success criteria:**
-- `terraform plan` shows `AGENT_ENTRA_ID` env var on all agent Container Apps
-- `terraform apply` completes without error
-- `agents/shared/auth.py` no longer raises `ValueError` when `get_agent_identity()` is called
+- `terraform plan` shows `AGENT_ENTRA_ID` env var diff on agent Container Apps
+- After `terraform apply` (or forced replace), `AGENT_ENTRA_ID` is visible in Container App environment variables
+- `agents/shared/auth.py` `get_agent_identity()` no longer raises `ValueError` at runtime
 
 ---
 
@@ -221,37 +243,33 @@ The existing `/health` returns `{"status": "ok"}` unconditionally. The Phase 8 c
 
 Each request currently creates fresh `DefaultAzureCredential()` and `CosmosClient()` instances. This causes IMDS HTTP calls per request and Cosmos TCP connection exhaustion under load.
 
-**Pattern** (from `agents/shared/auth.py` which already does this correctly):
-```python
-# Module level — created once per process
-_credential: DefaultAzureCredential | None = None
-_cosmos_client: CosmosClient | None = None
-
-def get_credential() -> DefaultAzureCredential:
-    global _credential
-    if _credential is None:
-        _credential = DefaultAzureCredential()
-    return _credential
-
-def get_cosmos_client() -> CosmosClient:
-    global _cosmos_client
-    if _cosmos_client is None:
-        _cosmos_client = CosmosClient(
-            url=os.environ["COSMOS_ENDPOINT"],
-            credential=get_credential()
-        )
-    return _cosmos_client
-```
+> **Implementation note (W-05):** A lazy global `if _credential is None` pattern is not async-safe under FastAPI's asyncio event loop — multiple coroutines can race past the `None` check before the first finishes initializing. The correct pattern for FastAPI is initialization in the `lifespan` startup event (already used in `main.py`). Use the FastAPI `app.state` pattern to store singletons rather than module-level globals.
 
 **Changes:**
-- Extract shared `_get_credential()` and `_get_cosmos_client()` helpers into `services/api-gateway/dependencies.py` (new module)
-- Replace per-request instantiation in all 5 files with calls to these helpers
-- Update tests: inject mock clients via module-level patching instead of per-request patching
+- In `main.py` lifespan startup: initialize `DefaultAzureCredential()` and `CosmosClient()` once, store on `app.state`:
+  ```python
+  @asynccontextmanager
+  async def lifespan(app: FastAPI):
+      app.state.credential = DefaultAzureCredential()
+      app.state.cosmos_client = CosmosClient(os.environ["COSMOS_ENDPOINT"], app.state.credential)
+      yield
+      # teardown if needed
+  ```
+- Create `services/api-gateway/dependencies.py` with FastAPI dependencies that read from `request.app.state`:
+  ```python
+  def get_credential(request: Request) -> DefaultAzureCredential:
+      return request.app.state.credential
+
+  def get_cosmos_client(request: Request) -> CosmosClient:
+      return request.app.state.cosmos_client
+  ```
+- Replace per-request `DefaultAzureCredential()` and `CosmosClient()` instantiation in all 5 files with `Depends(get_credential)` / `Depends(get_cosmos_client)`
+- Update tests: use `app.state` injection in test client setup rather than per-call patching
 
 **Success criteria:**
-- `DefaultAzureCredential` instantiated once per process (verified via mock call count in tests)
-- `CosmosClient` instantiated once per process
-- All existing gateway tests pass
+- `DefaultAzureCredential.__init__` called exactly once per process (verified via mock call count in lifespan test)
+- `CosmosClient.__init__` called exactly once per process
+- All existing gateway tests pass with injected mock clients
 
 ---
 
@@ -266,14 +284,16 @@ def get_cosmos_client() -> CosmosClient:
 
 Currently `azure-ai-agentserver-agentframework` has no version specifier — every Docker build installs the latest available version.
 
+> **Implementation note (S-03):** Determine the current version by running `docker run --rm <base-image> pip show azure-ai-agentserver-agentframework` against the most recently pushed base image, or by building a temporary image locally. Record the version in a comment before pinning.
+
 **Changes:**
-- Determine current installed version (read from base image build log or install and inspect)
-- Pin in `requirements-base.txt`: `azure-ai-agentserver-agentframework==<current-version>`
-- Add comment: `# Pinned — verify against agent-framework RC version before upgrading`
+- Build the base image locally or pull the most recent ACR base image and run `pip show azure-ai-agentserver-agentframework` to get the exact installed version
+- Pin in `requirements-base.txt`: `azure-ai-agentserver-agentframework==<version>`
+- Add inline comment: `# Pinned to current version — verify compatibility against agent-framework RC before upgrading`
 
 **Success criteria:**
-- `requirements-base.txt` line has explicit version pin
-- `pip install -r requirements-base.txt` installs deterministic version
+- `requirements-base.txt` line has explicit `==` version pin
+- `pip install -r requirements-base.txt` installs the pinned version deterministically
 
 ---
 
@@ -306,10 +326,14 @@ Version `2.0.0-beta.34` is duplicated in two places. They can drift silently.
 
 After the base image build completes, there is no record of which package versions were installed.
 
+> **Implementation note (W-07):** The `docker run` step requires the image to already be pushed to ACR. It must be guarded with `if: success()` and `continue-on-error: true` to handle fork PRs and push failures gracefully.
+
 **Changes:**
-- Add a post-build step to `base-image.yml` after the Docker build:
+- Add a post-build step to `base-image.yml` after the push step:
   ```yaml
   - name: Log installed agent package versions
+    if: success()
+    continue-on-error: true
     run: |
       docker run --rm ${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ github.sha }} \
         pip show agent-framework azure-ai-agentserver-agentframework azure-ai-projects \
@@ -317,7 +341,8 @@ After the base image build completes, there is no record of which package versio
   ```
 
 **Success criteria:**
-- GitHub Actions job summary shows installed package versions after each base image build
+- GitHub Actions job summary shows installed package versions after each successful base image push
+- Step failure does not fail the overall workflow (non-blocking)
 
 ---
 
@@ -334,16 +359,22 @@ Two tests skipped since Plan 05-02:
 - `test_heartbeat_sent_every_20_seconds`
 - `test_heartbeat_prevents_container_app_timeout`
 
+> **Implementation note (W-03):** Before implementing, verify whether the SSE heartbeat is in the **FastAPI Python gateway** (`services/api-gateway/`) or the **Next.js web-UI** (`services/web-ui/app/api/stream/route.ts`). The test file is in `services/api-gateway/tests/` which implies a Python SSE endpoint. If the heartbeat is in the web-UI TypeScript route, these tests belong in a Jest/Playwright suite, not a pytest file. The implementer must read both `services/api-gateway/main.py` (check for SSE streaming route) and `services/web-ui/app/api/stream/route.ts` (check for heartbeat events) before writing any test code.
+
 **Changes:**
-- Use `pytest-asyncio` + `httpx.AsyncClient` to open SSE stream in test
-- Mock the Foundry polling loop to not resolve (simulates long-running request)
-- Assert that a `: heartbeat` SSE comment event is received within 25 seconds
-- Second test: assert that events continue arriving at 20s intervals for 45s total
-- Remove `@pytest.mark.skip`
+- Read `services/api-gateway/main.py` to find the SSE endpoint (likely `/api/v1/chat/stream` or similar)
+- If SSE heartbeat is in Python gateway:
+  - Use `pytest-asyncio` + `httpx.AsyncClient` with `TestClient(app)` to open SSE stream
+  - Mock the Foundry polling loop to not resolve (simulates long-running request)
+  - Assert `event: heartbeat` or `: heartbeat` SSE comment received within 25s
+  - Second test: assert events continue at 20s intervals for 45s
+  - Remove `@pytest.mark.skip`
+- If SSE heartbeat is in Next.js only: move test to `services/web-ui/__tests__/` using Jest with a mocked `Response` stream, and delete the Python stub file
 
 **Success criteria:**
 - Both heartbeat tests pass in CI without Azure credentials
-- `pytest services/api-gateway/tests/test_sse_heartbeat.py` exits 0
+- Tests are in the correct service for their implementation language
+- `pytest services/api-gateway/tests/test_sse_heartbeat.py` (or equivalent JS test) exits 0
 
 ---
 
@@ -378,18 +409,21 @@ All 7 tests are empty `// TODO: Plan 05-01` bodies.
 
 All 6 TEAMS-001–006 tests are inside `describe.skip(...)`. CI never catches Teams bot regressions.
 
+> **Implementation note (W-06):** `POST /api/messages` requires a valid Bot Framework `Activity` payload and auth headers — a bare `supertest` POST will return 401 unconditionally regardless of bot health. The reachability check should instead target the `/health` endpoint (unambiguous liveness signal) and verify the Express app starts without crashing. The `POST /api/messages` test can assert 400 or 401 (both indicate the endpoint exists; 404 or 500 indicates the route is broken).
+
 **Changes:**
 - Remove outer `describe.skip`
-- Replace each stub body with an endpoint reachability assertion using a local `supertest` instance:
-  - `GET /health` → expect 200
-  - `POST /api/messages` → expect 200 or 401 (not 404/500)
-- Full Teams round-trip stubs (requiring live Teams environment) stay as inner `it.skip(reason="requires live Teams environment: TEAMS-XXX")` with explicit reason
+- Replace stub bodies with:
+  - `GET /health` → expect 200 (clear liveness signal)
+  - `POST /api/messages` with empty body → expect 400 or 401, NOT 404 or 500 (proves the route is wired)
+- Use `supertest` against the Express app instance (not a running server) to avoid port conflicts in CI
+- Full Teams round-trip tests (requiring live Teams environment) stay as inner `it.skip('TEAMS-XXX: requires live Teams environment', ...)` with explicit reason string
 - Add `supertest` as dev dependency if not already present
 
 **Success criteria:**
-- `npm test` runs 6 reachability checks (not skipped)
-- Each test verifies endpoint exists and responds
-- Full integration stubs clearly marked with `requires live Teams environment`
+- `npm test` runs at minimum 2 active tests (health + messages endpoint) — not skipped
+- Health check returns 200; messages endpoint returns 400/401, not 404/500
+- Full integration stubs clearly marked with explicit skip reason
 
 ---
 
@@ -400,20 +434,23 @@ All 6 TEAMS-001–006 tests are inside `describe.skip(...)`. CI never catches Te
 
 5 integration test files, all `pass` bodies with `# TODO` comments.
 
+> **Implementation note (W-08):** Before implementing `test_pipeline_flow.py` and `test_round_trip.py`, verify that `classify_domain()` and `map_detection_result_to_payload()` can be imported without triggering Azure SDK calls. Check `services/detection-plane/` imports for any top-level `DefaultAzureCredential()` or SDK client instantiation. If imports are safe, proceed with mock-based tests. If imports require credentials, mark those tests as `pytest.mark.skip(reason="module imports require Azure SDK initialization")` rather than producing a broken test.
+
 **Changes:**
-- `test_pipeline_flow.py`: implement using existing mock patterns from unit tests
-  - Mock Cosmos write → call `classify_domain()` → assert correct domain classification
-  - Mock `AzureEventHubProducerClient` → assert event is sent with correct schema
-- `test_round_trip.py`: inject a mock alert payload → verify `map_detection_result_to_payload()` produces valid `IncidentPayload` with all required fields
+- Read `services/detection-plane/payload_mapper.py` and `services/detection-plane/classify_domain.py` import chains before writing tests
+- If imports are credential-safe:
+  - `test_pipeline_flow.py`: mock `AzureEventHubProducerClient`; call `classify_domain()` with known alert payloads; assert correct domain string returned and event schema matches `IncidentPayload` structure
+  - `test_round_trip.py`: call `map_detection_result_to_payload()` with mock alert data; assert all required `IncidentPayload` fields are populated with correct types
+- If imports require credentials: mark both with explicit `pytest.skip` and explain in comment
 - `test_dedup_load.py`, `test_activity_log.py`, `test_state_sync.py`: replace `pass` with:
   ```python
   pytest.skip("requires Fabric deployment — enable when enable_fabric_data_plane=true")
   ```
-  (explicit condition, not vague TODO)
 
 **Success criteria:**
-- `test_pipeline_flow.py` and `test_round_trip.py` pass without Azure credentials
-- 3 remaining files have explicit `pytest.skip` with infra condition (not `pass`)
+- No test file has a bare `pass` body with a TODO comment
+- `test_pipeline_flow.py` and `test_round_trip.py` either pass without credentials or have an explicit, conditional `pytest.skip` with a real reason
+- 3 remaining files have explicit `pytest.skip` with infra condition
 - Detection-plane unit coverage stays ≥ 80%
 
 ---
@@ -455,6 +492,7 @@ All 6 TEAMS-001–006 tests are inside `describe.skip(...)`. CI never catches Te
 | 4.1 Foundry no private networking | Architectural constraint, not fixable in code |
 | 4.3 Legacy `botbuilder` SDK | Migration to new Teams SDK is a full milestone, not hardening |
 | 4.5 In-memory Teams state | Cosmos persistence is a feature addition, not debt cleanup |
+| 4.6 Single ConversationReference (no multi-channel) | Architectural change — requires persistent ConversationReference store; deferred to Teams bot refactor milestone |
 | 4.7 Detection plane disabled | Enablement requires operator Fabric config |
 | 7.1 `sys.path` manipulation | Low risk, deferred to refactor milestone |
 | 7.2 `console.log` logging | Deferred to Teams bot refactor milestone |
