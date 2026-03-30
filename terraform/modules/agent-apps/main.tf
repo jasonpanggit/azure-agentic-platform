@@ -60,6 +60,12 @@ resource "azurerm_container_app" "agents" {
         name  = "AZURE_PROJECT_ENDPOINT"
         value = var.foundry_project_endpoint
       }
+      # AZURE_AI_PROJECT_ENDPOINT is read by azure-ai-agentserver-core to configure
+      # the hosted agent adapter. Must match AZURE_PROJECT_ENDPOINT.
+      env {
+        name  = "AZURE_AI_PROJECT_ENDPOINT"
+        value = var.foundry_project_endpoint
+      }
       env {
         name  = "FOUNDRY_PROJECT_ID"
         value = var.foundry_project_id
@@ -251,6 +257,12 @@ resource "azurerm_container_app" "teams_bot" {
       }
       env {
         name  = "AZURE_PROJECT_ENDPOINT"
+        value = var.foundry_project_endpoint
+      }
+      # AZURE_AI_PROJECT_ENDPOINT is read by azure-ai-agentserver-core to configure
+      # the hosted agent adapter. Must match AZURE_PROJECT_ENDPOINT.
+      env {
+        name  = "AZURE_AI_PROJECT_ENDPOINT"
         value = var.foundry_project_endpoint
       }
       env {
