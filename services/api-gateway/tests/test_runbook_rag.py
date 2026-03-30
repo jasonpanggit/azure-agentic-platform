@@ -1,9 +1,23 @@
-"""Tests for the runbook RAG search (REMEDI-008, TRIAGE-005)."""
+"""Tests for the runbook RAG search (REMEDI-008, TRIAGE-005).
+
+Async tests in this module use `pytest.mark.anyio` so focused local runs work
+with the AnyIO plugin available in the workspace runner.
+"""
 import sys
 import time
 import types
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+
+@pytest.fixture(autouse=True)
+def _set_test_runbook_dsn(monkeypatch: pytest.MonkeyPatch):
+    """Provide an explicit DSN for runbook RAG tests.
+
+    The production code now requires a configured DSN instead of silently
+    falling back to localhost.
+    """
+    monkeypatch.setenv("POSTGRES_DSN", "postgresql://test-user:test-pass@db.test:5432/aap")
 
 
 def _make_row(id_val, title, domain, version, content, similarity):
@@ -36,7 +50,7 @@ def _install_asyncpg_stub(mock_conn):
 class TestRunbookRAG:
     """Tests for the runbook RAG search (TRIAGE-005, REMEDI-008)."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_search_returns_top_3_results(self, pre_seeded_embeddings):
         """search_runbooks returns at most 3 results when 3 rows returned."""
         rows = [
@@ -62,7 +76,7 @@ class TestRunbookRAG:
 
         assert len(results) == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_similarity_above_075_threshold(self, pre_seeded_embeddings):
         """Only results with similarity >= 0.75 are returned."""
         rows = [
@@ -92,7 +106,7 @@ class TestRunbookRAG:
         )
         assert all(r["similarity"] >= 0.75 for r in results)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_search_latency_under_500ms(self, pre_seeded_embeddings):
         """End-to-end runbook search completes in under 500ms with mocks."""
         rows = [
@@ -117,7 +131,7 @@ class TestRunbookRAG:
 
         assert elapsed < 0.5, f"Search took {elapsed:.3f}s — expected < 0.5s"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_domain_filter_applied(self, pre_seeded_embeddings):
         """When domain param provided, SQL contains WHERE domain = $2."""
         captured_sql: list = []
@@ -145,7 +159,7 @@ class TestRunbookRAG:
             f"Expected 'WHERE domain = $2' in SQL, got:\n{captured_sql[0]}"
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_citation_includes_title_and_version(self, pre_seeded_embeddings):
         """Each result includes non-empty title and version fields."""
         rows = [

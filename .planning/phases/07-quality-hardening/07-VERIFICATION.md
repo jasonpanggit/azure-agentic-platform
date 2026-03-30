@@ -42,7 +42,7 @@ Make the Azure Agentic Platform production-ready across five tracks:
 
 | REQ-ID | Description | Implemented | Evidence |
 |---|---|---|---|
-| E2E-001 | Playwright E2E suite runs against deployed Container Apps (no mocks); CI gate blocks merge | ✅ | 07-05: `e2e/playwright.config.ts` with `testDir: '.'`, real `BASE_URL`; `.github/workflows/phase7-e2e.yml` with 15-min timeout, blocks merge on PR; sc1–sc6 fully de-mocked |
+| E2E-001 | Playwright E2E suite runs against deployed Container Apps (no mocks); CI gate blocks merge | ✅ | 07-05: `e2e/playwright.config.ts` with `testDir: '.'`, real `BASE_URL`; `.github/workflows/staging-e2e-simulation.yml` with 15-min timeout, blocks merge on PR; sc1–sc6 fully de-mocked |
 | E2E-002 | Full incident flow: synthetic alert → Eventhouse → Activator → incidents API → Orchestrator → domain agent → SSE → UI | ✅ | 07-06: `e2e/e2e-incident-flow.spec.ts` — `POST /api/v1/incidents` with full payload, 202 + thread_id, `expect.poll` for triage, SSE event delivery |
 | E2E-003 | HITL approval: high-risk proposal → Adaptive Card to Teams → operator approves → thread resumes → outcome card | ✅ | 07-06: `e2e/e2e-hitl-approval.spec.ts` — GET approvals, POST approve, POST reject, optional Graph API Teams card verification gated on `E2E_GRAPH_CLIENT_ID` |
 | E2E-004 | Cross-subscription RBAC: each domain agent authenticates correctly; scope violations rejected 403 | ✅ | 07-06: `e2e/e2e-rbac.spec.ts` — all 6 domains tested; invalid domain → 422; unauthenticated request → 401/dev mode |
@@ -89,7 +89,7 @@ Make the Azure Agentic Platform production-ready across five tracks:
 | `services/web-ui/components/ActiveErrorsCard.tsx` | 07-01 | Active errors accordion |
 | `scripts/seed-runbooks/seed.py` | 07-03 | Idempotent runbook seeder |
 | `scripts/seed-runbooks/validate.py` | 07-03 | Cosine similarity validator |
-| `.github/workflows/phase7-e2e.yml` | 07-05 | E2E CI gate workflow |
+| `.github/workflows/staging-e2e-simulation.yml` | 07-05 | E2E CI gate workflow |
 
 ---
 
@@ -101,7 +101,7 @@ Make the Azure Agentic Platform production-ready across five tracks:
 | 07-02 | Remediation Audit Trail + Audit Export | ✅ Complete | `remediation_logger.py`; `audit_export.py`; export endpoint + UI button; 12 unit tests pass |
 | 07-03 | Runbook Library Seed | ✅ Complete | 60 runbook .md files; idempotent `seed.py`; `validate.py` with 0.75 threshold; staging CI steps |
 | 07-04 | Terraform Prod + Security Review | ✅ Complete | 12-module prod config; CORS env var; security-review.yml (bandit + npm audit + secrets); `terraform fmt` passes |
-| 07-05 | E2E Infrastructure + Real Endpoint Migration | ✅ Complete | Root `playwright.config.ts`; `global-setup/teardown.ts`; auth fixture; sc1–sc6 de-mocked; phase7-e2e.yml CI |
+| 07-05 | E2E Infrastructure + Real Endpoint Migration | ✅ Complete | Root `playwright.config.ts`; `global-setup/teardown.ts`; auth fixture; sc1–sc6 de-mocked; staging-e2e-simulation.yml CI |
 | 07-06 | E2E Specs — Incident Flow, HITL, RBAC, SSE Reconnect | ✅ Complete | 5 new spec files; 15 test functions; covers E2E-002–005 + AUDIT-006 |
 
 ---
@@ -110,7 +110,7 @@ Make the Azure Agentic Platform production-ready across five tracks:
 
 | # | Criterion | Status | Notes |
 |---|---|---|---|
-| SC-1 | Full Playwright E2E suite against deployed Container Apps; no test targets localhost; CI blocks merge | ✅ PASS | `phase7-e2e.yml` uses `E2E_BASE_URL`; all specs de-mocked; 15-min CI gate |
+| SC-1 | Full Playwright E2E suite against deployed Container Apps; no test targets localhost; CI blocks merge | ✅ PASS | `staging-e2e-simulation.yml` uses `E2E_BASE_URL`; all specs de-mocked; 15-min CI gate |
 | SC-2 | Full incident flow E2E: synthetic alert → Eventhouse → Activator → incidents API → agent → SSE → UI | ✅ PASS | `e2e-incident-flow.spec.ts` covers all steps; graceful skip when infra unavailable |
 | SC-3 | HITL approval E2E: proposal → Teams card → approve → thread resumes → outcome card | ✅ PASS | `e2e-hitl-approval.spec.ts`; Graph API verification optional (gated on env var) |
 | SC-4 | Cross-subscription RBAC E2E: positive (agent authenticates) + negative (scope violation → 403) | ✅ PASS | `e2e-rbac.spec.ts`; all 6 domains + invalid domain 422 |

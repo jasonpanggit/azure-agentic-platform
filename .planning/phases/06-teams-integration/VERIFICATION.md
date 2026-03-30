@@ -139,7 +139,7 @@ All 6 TEAMS-* requirements (TEAMS-001 through TEAMS-006) are implemented and ver
 | `POST /teams/internal/notify` dispatches by `card_type` | ✅ | Switch on `card_type` → 4 branches, each calling the correct builder |
 | `GET /health` returns `{ status: "ok" }` | ✅ | `services/teams-bot/src/routes/health.ts` confirmed |
 | All card builders have unit tests | ✅ | 4 test files in `src/cards/__tests__/`; summary reports 93.31% coverage |
-| `phase6-ci.yml` enforces lint + typecheck + 80% coverage | ✅ | `.github/workflows/phase6-ci.yml` confirmed with `--coverage.thresholds.lines=80`, `npm run lint`, `npm run typecheck` |
+| `teams-bot-api-gateway-ci.yml` enforces lint + typecheck + 80% coverage | ✅ | `.github/workflows/teams-bot-api-gateway-ci.yml` confirmed with `--coverage.thresholds.lines=80`, `npm run lint`, `npm run typecheck` |
 
 ### Plan 06-02 Must-Haves
 

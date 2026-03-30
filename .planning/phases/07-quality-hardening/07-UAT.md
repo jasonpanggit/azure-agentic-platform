@@ -79,7 +79,7 @@ expected: The refactored sc1, sc2, sc5, sc6 specs contain zero page.route() call
 result: pass
 
 ### 15. E2E CI Gate
-expected: .github/workflows/phase7-e2e.yml exists with timeout-minutes: 15. It triggers on PRs and uploads playwright-report + test-results as artifacts. It uses environment: staging so secrets are GitHub Environments-gated.
+expected: .github/workflows/staging-e2e-simulation.yml exists with timeout-minutes: 15. It triggers on PRs and uploads playwright-report + test-results as artifacts. It uses environment: staging so secrets are GitHub Environments-gated.
 result: pass
 
 ## Summary

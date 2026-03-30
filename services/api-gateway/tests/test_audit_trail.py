@@ -1,4 +1,8 @@
-"""Tests for the dual-write audit trail (AUDIT-002, AUDIT-004)."""
+"""Tests for the dual-write audit trail (AUDIT-002, AUDIT-004).
+
+Async tests in this module use `pytest.mark.anyio` so focused local runs work
+with the AnyIO plugin available in the workspace runner.
+"""
 import os
 import sys
 import types
@@ -48,7 +52,7 @@ def _call_upload(mock_file_client, record):
 class TestAuditTrail:
     """Tests for dual-write audit trail (Cosmos DB + OneLake)."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_approval_written_to_cosmos(self, mock_cosmos_approvals):
         """Cosmos create_item is called when an approval record is created."""
         from agents.shared.approval_manager import create_approval_record
@@ -83,7 +87,7 @@ class TestAuditTrail:
 
         mock_cosmos_approvals.create_item.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_approval_written_to_onelake(self, mock_cosmos_approvals):
         """OneLake write fires after Cosmos write (upload_data called)."""
         _stub_filedatalake()
@@ -105,7 +109,7 @@ class TestAuditTrail:
 
         mock_file_client.upload_data.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_onelake_failure_non_blocking(self, mock_cosmos_approvals):
         """OneLake write error is logged but does not raise an exception."""
         from services.api_gateway.audit_trail import write_audit_record
@@ -119,7 +123,7 @@ class TestAuditTrail:
             # Must NOT raise — OneLake failure is non-blocking
             await write_audit_record(approval_record)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_audit_query_filters_by_agent(self, client):
         """Audit log query with agent=compute includes AppRoleName KQL filter."""
         monitor_stub = _stub_monitor_query()
@@ -160,7 +164,7 @@ class TestAuditTrail:
             f"Expected \"AppRoleName == 'agent-compute'\" in KQL, got:\n{kql}"
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_audit_query_filters_by_time_range(self, client):
         """Audit log query with from/to parameters includes datetime() KQL filters."""
         monitor_stub = _stub_monitor_query()
@@ -207,3 +211,50 @@ class TestAuditTrail:
         assert to_time in kql, (
             f"Expected to_time '{to_time}' in KQL, got:\n{kql}"
         )
+
+    @pytest.mark.anyio
+    async def test_audit_query_rejects_invalid_agent_filter(self, client):
+        """Unsafe agent filters are rejected before any KQL query is executed."""
+        monitor_stub = _stub_monitor_query()
+        mock_logs_client = MagicMock()
+        monitor_stub.LogsQueryClient = MagicMock(return_value=mock_logs_client)
+
+        if "services.api_gateway.audit" in sys.modules:
+            del sys.modules["services.api_gateway.audit"]
+
+        old_val = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+        os.environ["LOG_ANALYTICS_WORKSPACE_ID"] = "ws-test-001"
+        try:
+            with patch("azure.identity.DefaultAzureCredential", return_value=MagicMock()):
+                from services.api_gateway.audit import query_audit_log
+                with pytest.raises(ValueError, match="Invalid agent"):
+                    await query_audit_log(agent="compute'; | project *")
+        finally:
+            if old_val:
+                os.environ["LOG_ANALYTICS_WORKSPACE_ID"] = old_val
+            else:
+                os.environ.pop("LOG_ANALYTICS_WORKSPACE_ID", None)
+            if "services.api_gateway.audit" in sys.modules:
+                del sys.modules["services.api_gateway.audit"]
+
+        mock_logs_client.query_workspace.assert_not_called()
+
+    def test_audit_endpoint_returns_400_for_invalid_agent(self, client):
+        """Invalid audit filters return a 400 instead of falling through to KQL."""
+        response = client.get(
+            "/api/v1/audit",
+            params={"agent": "compute'; | project *"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"].startswith("Invalid agent")
+
+    def test_audit_endpoint_returns_400_for_invalid_time_range(self, client):
+        """Invalid datetime filters return a 400 response."""
+        response = client.get(
+            "/api/v1/audit",
+            params={"from_time": "not-a-datetime"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"].startswith("Invalid from_time")

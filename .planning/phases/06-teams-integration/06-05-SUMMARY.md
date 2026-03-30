@@ -34,7 +34,7 @@ key-files:
     - services/teams-bot/src/__tests__/integration/teams-e2e-stubs.test.ts
     - services/teams-bot/vitest.config.ts
   modified:
-    - .github/workflows/phase6-ci.yml
+    - .github/workflows/teams-bot-api-gateway-ci.yml
     - .planning/phases/06-teams-integration/06-UI-SPEC.md
 
 key-decisions:
@@ -89,7 +89,7 @@ Each task was committed atomically:
 - `services/teams-bot/.env.example` - All environment variables documented with descriptions
 - `services/teams-bot/src/__tests__/integration/teams-e2e-stubs.test.ts` - 6 integration test stubs
 - `services/teams-bot/vitest.config.ts` - Vitest config with v8 coverage and exclusions
-- `.github/workflows/phase6-ci.yml` - Added --exclude for integration tests
+- `.github/workflows/teams-bot-api-gateway-ci.yml` - Added --exclude for integration tests
 - `.planning/phases/06-teams-integration/06-UI-SPEC.md` - Removed residual Action.Http references
 
 ## Decisions Made

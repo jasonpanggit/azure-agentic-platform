@@ -4,7 +4,17 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/container-app-deploy.yml'
+      - '.github/workflows/docker-push.yml'
+      - '.github/workflows/teams-bot-build.yml'
       - 'services/teams-bot/**'
+  pull_request:
+    paths:
+      - '.github/workflows/container-app-deploy.yml'
+      - '.github/workflows/docker-push.yml'
+      - '.github/workflows/teams-bot-build.yml'
+      - 'services/teams-bot/**'
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -12,10 +22,30 @@ permissions:
 
 jobs:
   build-teams-bot:
-    name: Build & Push Teams Bot
+    name: Build Teams Bot Image
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/teams-bot
       dockerfile_path: services/teams-bot/Dockerfile
       build_context: services/teams-bot/
-    secrets: inherit
+      push_image: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-teams-bot:
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    needs: build-teams-bot
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: services/teams-bot
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-teams-bot-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+      healthcheck_path: /health
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

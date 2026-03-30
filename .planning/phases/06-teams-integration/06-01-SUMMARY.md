@@ -16,7 +16,7 @@ provides:
   - GET /health liveness probe
   - AppConfig with env var validation (BOT_ID, API_GATEWAY_INTERNAL_URL, WEB_UI_PUBLIC_URL required)
   - proactive.ts stub for Bot Framework wiring in Plan 06-02
-  - phase6-ci.yml with lint + typecheck + 80% coverage gate
+  - teams-bot-api-gateway-ci.yml with lint + typecheck + 80% coverage gate
 
 affects:
   - 06-02 (bot framework wiring builds on this scaffold)
@@ -66,7 +66,7 @@ key-files:
     - services/teams-bot/src/routes/__tests__/health.test.ts
     - services/teams-bot/src/routes/__tests__/notify.test.ts
     - services/teams-bot/src/__tests__/config.test.ts
-    - .github/workflows/phase6-ci.yml
+    - .github/workflows/teams-bot-api-gateway-ci.yml
   modified: []
 
 key-decisions:
@@ -95,7 +95,7 @@ completed: 2026-03-27
 
 # Plan 06-01: Teams Bot Scaffold + Card Builders + CI
 
-**TypeScript `services/teams-bot/` scaffold with 4 Adaptive Card v1.5 builders (Action.Execute for approval/reminder, Action.OpenUrl for alert/outcome), Express notify endpoint, and phase6-ci.yml enforcing 80% coverage**
+**TypeScript `services/teams-bot/` scaffold with 4 Adaptive Card v1.5 builders (Action.Execute for approval/reminder, Action.OpenUrl for alert/outcome), Express notify endpoint, and teams-bot-api-gateway-ci.yml enforcing 80% coverage**
 
 ## Performance
 
@@ -111,7 +111,7 @@ completed: 2026-03-27
 - 4 Adaptive Card v1.5 builder functions: `buildAlertCard`, `buildApprovalCard`, `buildOutcomeCard`, `buildReminderCard` — approval/reminder correctly use `Action.Execute` (NOT `Action.Http`)
 - `POST /teams/internal/notify` dispatch endpoint routes to correct card builder by `card_type`; `GET /health` returns `{status:"ok"}`
 - 58 unit tests passing with 93.31% line coverage (threshold: 80%)
-- `phase6-ci.yml` workflow: two parallel jobs (teams-bot TS + api-gateway Python), lint + typecheck + vitest with `--coverage.thresholds.lines=80`
+- `teams-bot-api-gateway-ci.yml` workflow: two parallel jobs (teams-bot TS + api-gateway Python), lint + typecheck + vitest with `--coverage.thresholds.lines=80`
 
 ## Task Commits
 
@@ -126,7 +126,7 @@ completed: 2026-03-27
 9. **Task 06-01-09: index.ts** — `7ca68b0`
 10. **Task 06-01-10: Card builder unit tests** — `c911134`
 11. **Task 06-01-11: Route + config unit tests** — `9169340`
-12. **Task 06-01-12: phase6-ci.yml** — `c09df53`
+12. **Task 06-01-12: teams-bot-api-gateway-ci.yml** — `c09df53`
 13. **Fix: ESLint 9 flat config + unused import** — `ac76ca0`
 14. **Chore: package-lock.json for CI** — `14072e8`
 
@@ -149,7 +149,7 @@ completed: 2026-03-27
 - `services/teams-bot/src/cards/__tests__/*.test.ts` — 4 card builder test files (39 tests)
 - `services/teams-bot/src/routes/__tests__/*.test.ts` — health + notify route tests (8 tests)
 - `services/teams-bot/src/__tests__/config.test.ts` — config validation tests (6 tests)
-- `.github/workflows/phase6-ci.yml` — Phase 6 CI with TS + Python jobs
+- `.github/workflows/teams-bot-api-gateway-ci.yml` — Phase 6 CI with TS + Python jobs
 
 ## Decisions Made
 
@@ -187,7 +187,7 @@ None — no external service configuration required for this plan. Bot registrat
 - **Plan 06-02** can immediately build on this scaffold: wire `sendProactiveCard` in `proactive.ts` to the Bot Framework BotFrameworkAdapter for real proactive card posting to Teams channels
 - `/api/messages` Bot Framework endpoint placeholder is in `index.ts` (commented) ready to be uncommented and wired
 - All 4 card builders tested and producing correct Adaptive Card JSON — ready for real Teams posting
-- `phase6-ci.yml` is in place and will gate all subsequent Phase 6 changes
+- `teams-bot-api-gateway-ci.yml` is in place and will gate all subsequent Phase 6 changes
 
 ---
 *Phase: 06-teams-integration*

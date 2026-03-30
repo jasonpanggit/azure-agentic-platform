@@ -4,7 +4,16 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/container-app-deploy.yml'
+      - '.github/workflows/docker-push.yml'
       - 'services/web-ui/**'
+      - '.github/workflows/web-ui-build.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/container-app-deploy.yml'
+      - '.github/workflows/docker-push.yml'
+      - 'services/web-ui/**'
+      - '.github/workflows/web-ui-build.yml'
   workflow_dispatch:
     inputs:
       no_cache:
@@ -19,51 +28,99 @@ permissions:
   contents: read
 
 jobs:
+  validate-web-ui-build-vars:
+    name: Validate Web UI Build Vars
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate public build variables
+        env:
+          NEXT_PUBLIC_AZURE_CLIENT_ID: ${{ vars.NEXT_PUBLIC_AZURE_CLIENT_ID }}
+          NEXT_PUBLIC_TENANT_ID: ${{ vars.NEXT_PUBLIC_TENANT_ID }}
+          NEXT_PUBLIC_REDIRECT_URI: ${{ vars.NEXT_PUBLIC_REDIRECT_URI }}
+          NEXT_PUBLIC_DEV_MODE: ${{ vars.NEXT_PUBLIC_DEV_MODE }}
+        run: |
+          require_value() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::${name} is required but not set"
+              exit 1
+            fi
+          }
+
+          validate_guid() {
+            local name="$1"
+            local value="$2"
+            require_value "$name" "$value"
+            if [[ ! "$value" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+              echo "::error::${name} must be a GUID"
+              exit 1
+            fi
+          }
+
+          validate_url() {
+            local name="$1"
+            local value="$2"
+            require_value "$name" "$value"
+            if [[ "$value" =~ ^http://localhost(:[0-9]+)?([/?][^[:space:]]*)?$ ]]; then
+              return 0
+            fi
+
+            if [[ ! "$value" =~ ^https://[^[:space:]]+$ ]]; then
+              echo "::error::${name} must be an https URL without whitespace (http is only allowed for localhost)"
+              exit 1
+            fi
+          }
+
+          validate_boolean() {
+            local name="$1"
+            local value="$2"
+            require_value "$name" "$value"
+            if [[ "$value" != "true" && "$value" != "false" ]]; then
+              echo "::error::${name} must be 'true' or 'false'"
+              exit 1
+            fi
+          }
+
+          validate_guid "NEXT_PUBLIC_AZURE_CLIENT_ID" "$NEXT_PUBLIC_AZURE_CLIENT_ID"
+          validate_guid "NEXT_PUBLIC_TENANT_ID" "$NEXT_PUBLIC_TENANT_ID"
+          validate_url "NEXT_PUBLIC_REDIRECT_URI" "$NEXT_PUBLIC_REDIRECT_URI"
+          validate_boolean "NEXT_PUBLIC_DEV_MODE" "$NEXT_PUBLIC_DEV_MODE"
+
   build-web-ui:
-    name: Build & Push Web UI
+    name: Build Web UI Image
+    needs: validate-web-ui-build-vars
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/web-ui
       dockerfile_path: services/web-ui/Dockerfile
       build_context: services/web-ui/
       no_cache: ${{ github.event.inputs.no_cache == 'true' }}
+      push_image: ${{ github.event_name != 'pull_request' }}
       build_args: |
         NEXT_PUBLIC_AZURE_CLIENT_ID=${{ vars.NEXT_PUBLIC_AZURE_CLIENT_ID }}
         NEXT_PUBLIC_TENANT_ID=${{ vars.NEXT_PUBLIC_TENANT_ID }}
         NEXT_PUBLIC_REDIRECT_URI=${{ vars.NEXT_PUBLIC_REDIRECT_URI }}
         NEXT_PUBLIC_DEV_MODE=${{ vars.NEXT_PUBLIC_DEV_MODE }}
-    secrets: inherit
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   deploy-web-ui:
-    name: Deploy Web UI to Container Apps
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: build-web-ui
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}"}'
-
-      - name: Deploy new revision
-        run: |
-          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/services/web-ui:${{ github.sha }}"
-          az containerapp update \
-            --name ${{ vars.WEB_UI_CONTAINER_APP }} \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --image "$IMAGE"
-          echo "✅ Deployed $IMAGE to ${{ vars.WEB_UI_CONTAINER_APP }}"
-
-      - name: Verify revision is active
-        run: |
-          ACTIVE=$(az containerapp revision list \
-            --name ${{ vars.WEB_UI_CONTAINER_APP }} \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --query "[?properties.trafficWeight==\`100\`].name" \
-            -o tsv)
-          echo "Active revision: $ACTIVE"
-          if [ -z "$ACTIVE" ]; then
-            echo "::error::No active revision with 100% traffic found"
-            exit 1
-          fi
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: services/web-ui
+      image_tag: ${{ github.sha }}
+      container_app_name: ${{ vars.WEB_UI_CONTAINER_APP || 'ca-web-ui-prod' }}
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+      healthcheck_path: /
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

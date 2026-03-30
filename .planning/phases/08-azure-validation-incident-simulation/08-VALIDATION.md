@@ -51,7 +51,7 @@ created: 2026-03-29
 | 08-03-01 | 03 | 3 | DETECT-004 | simulation | `cd scripts/simulate-incidents && python scenario_compute.py` | ❌ W0 | ⬜ pending |
 | 08-03-02 | 03 | 3 | TRIAGE-001 | simulation | `cd scripts/simulate-incidents && python scenario_network.py` | ❌ W0 | ⬜ pending |
 | 08-03-03 | 03 | 3 | TRIAGE-001 | simulation | `cd scripts/simulate-incidents && python scenario_storage.py` | ❌ W0 | ⬜ pending |
-| 08-03-04 | 03 | 3 | E2E-001 | CI gate | `grep "run-all.sh" .github/workflows/phase7-e2e.yml` | ✅ | ⬜ pending |
+| 08-03-04 | 03 | 3 | E2E-001 | CI gate | `grep "run-all.sh" .github/workflows/staging-e2e-simulation.yml` | ✅ | ⬜ pending |
 | 08-03-05 | 03 | 3 | TRIAGE-001 | simulation | `cd scripts/simulate-incidents && bash run-all.sh` | ❌ W0 | ⬜ pending |
 | 08-04-01 | 04 | 3 | MONITOR-007 | code check | `grep "agent_span\|foundry_span\|mcp_span" services/api-gateway/instrumentation.py` | ❌ W0 | ⬜ pending |
 | 08-04-02 | 04 | 3 | MONITOR-007 | manual | App Insights Transaction Search shows `foundry.*`, `mcp.*`, `agent.orchestrator` spans | n/a | ⬜ pending |

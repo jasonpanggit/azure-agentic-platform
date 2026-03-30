@@ -156,6 +156,31 @@ class TestHandoffOrchestrator:
         assert result["domain"] == "sre"
         assert result["confidence"] == "low"
 
+    def test_classify_arc_enabled_servers_query_to_arc(self):
+        """Conversational Arc server queries must not be routed to compute."""
+        result = classify_incident_domain(
+            affected_resources=[],
+            detection_rule="show my arc enabled servers",
+        )
+        assert result["domain"] == "arc"
+        assert result["confidence"] == "medium"
+
+    @pytest.mark.parametrize(
+        "query_text",
+        [
+            "list my arc servers",
+            "show azure arc machines",
+            "find connected clusters managed by arc",
+        ],
+    )
+    def test_classify_arc_conversational_variants(self, query_text: str):
+        """Arc-specific conversational variants must classify to arc."""
+        result = classify_incident_domain(
+            affected_resources=[],
+            detection_rule=query_text,
+        )
+        assert result["domain"] == "arc"
+
     def test_domain_agent_map_values_are_agent_names(self):
         """Each domain maps to a properly named agent string."""
         for domain, agent_name in DOMAIN_AGENT_MAP.items():

@@ -30,12 +30,25 @@ on:
         required: false
         type: boolean
         default: false
+      push_image:
+        description: 'Whether to push the built image to ACR'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
 
 permissions:
+  id-token: write
   contents: read
 
 env:
-  ARM_USE_OIDC: false
+  ARM_USE_OIDC: true
 
 jobs:
   build-and-push:
@@ -44,18 +57,33 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}"}'
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to ACR
-        run: docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          ACR_NAME="${{ vars.ACR_LOGIN_SERVER }}"
+          if [ -z "$ACR_NAME" ]; then
+            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
+            exit 1
+          fi
+
+          ACR_NAME="${ACR_NAME%%.azurecr.io}"
+          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
+            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
+            exit 1
+          fi
+
+          az acr login --name "$ACR_NAME"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Resolve image tag
         id: tag
@@ -64,31 +92,51 @@ jobs:
           if [ -z "$TAG" ]; then
             TAG="${{ github.sha }}"
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          if [[ ! "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Resolved image tag has an invalid format: $TAG"
+            exit 1
+          fi
+
+          printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build and Push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ inputs.build_context }}
           file: ${{ inputs.dockerfile_path }}
-          push: true
+          push: ${{ inputs.push_image }}
           platforms: linux/amd64
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:latest
+            ${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}
+            ${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:latest
           build-args: ${{ inputs.build_args }}
           no-cache: ${{ inputs.no_cache }}
           cache-from: ${{ inputs.no_cache && '' || 'type=gha' }}
           cache-to: ${{ inputs.no_cache && '' || 'type=gha,mode=max' }}
 
       - name: Image Size Check
+        if: ${{ inputs.push_image }}
         run: |
-          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}"
-          MANIFEST=$(docker manifest inspect "$IMAGE" 2>/dev/null || true)
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}"
+          MANIFEST=""
+          for attempt in 1 2 3 4 5 6; do
+            MANIFEST=$(docker manifest inspect "$IMAGE" 2>/dev/null || true)
+            if [ -n "$MANIFEST" ]; then
+              break
+            fi
+
+            if [ "$attempt" -lt 6 ]; then
+              echo "Manifest not yet available for $IMAGE; retrying after registry propagation delay"
+              sleep 10
+            fi
+          done
+
           if [ -z "$MANIFEST" ]; then
-            echo "::warning::Could not inspect manifest for $IMAGE — skipping size check"
-            exit 0
+            echo "::error::Could not inspect manifest for $IMAGE after waiting for registry propagation"
+            exit 1
           fi
+
           SIZE=$(echo "$MANIFEST" | jq '([.layers // .manifests // [] | .[].size // 0] | add) // 0')
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "Image size: ${SIZE_MB}MB"

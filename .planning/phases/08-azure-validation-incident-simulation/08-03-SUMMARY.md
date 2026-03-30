@@ -13,7 +13,7 @@ provides:
   - scripts/simulate-incidents/common.py — SimulationClient, cleanup_incident, run_scenario, SimulationResult
   - 7 scenario scripts (compute, network, storage, security, arc, sre, cross)
   - run-all.sh orchestrator with exit code propagation and rate limit backoff
-  - CI simulation job wired into phase7-e2e.yml (E2E-001 gate, needs: [e2e])
+  - CI simulation job wired into staging-e2e-simulation.yml (E2E-001 gate, needs: [e2e])
   - Simulation run results: 7/7 PASS, 8/8 incident injections completed
   - VALIDATION-REPORT.md updated with Simulation Results section (SIM-01 through SIM-07b)
   - 3 new DEGRADED findings (F-09, F-10, F-11: MCP tool groups not configured)
@@ -49,7 +49,7 @@ key-files:
     - scripts/simulate-incidents/run-all.sh
     - scripts/simulate-incidents/simulation-results.log
   modified:
-    - .github/workflows/phase7-e2e.yml (added simulation job + paths trigger)
+    - .github/workflows/staging-e2e-simulation.yml (added simulation job + paths trigger)
     - .planning/phases/08-azure-validation-incident-simulation/08-VALIDATION-REPORT.md (Simulation Results section)
 
 key-decisions:
@@ -88,7 +88,7 @@ completed: 2026-03-29
 
 - Created `scripts/simulate-incidents/` package with `common.py` (SimulationClient, cleanup_incident, run_scenario, SimulationResult), 7 scenario scripts, and `run-all.sh` orchestrator
 - Ran full simulation suite against prod: **7/7 scenarios PASS, 8/8 Foundry run_status=completed** — confirms dispatch pipeline end-to-end
-- Wired simulation as CI gate in `phase7-e2e.yml` (`simulation` job, `needs: [e2e]`, satisfies E2E-001)
+- Wired simulation as CI gate in `staging-e2e-simulation.yml` (`simulation` job, `needs: [e2e]`, satisfies E2E-001)
 - Updated VALIDATION-REPORT.md with Simulation Results section and 3 new DEGRADED findings (F-09 Network MCP tools, F-10 Security MCP tools, F-11 Arc/SRE MCP tools)
 
 ## Task Commits
@@ -115,7 +115,7 @@ Each task was committed atomically:
 - `scripts/simulate-incidents/scenario_cross.py` — Sev1 cross-domain disk full (2 incidents)
 - `scripts/simulate-incidents/run-all.sh` — sequential orchestrator with 5s backoff, PASS/FAIL tracking
 - `scripts/simulate-incidents/simulation-results.log` — actual run output (7/7 PASS)
-- `.github/workflows/phase7-e2e.yml` — added `simulation` job + `scripts/simulate-incidents/**` paths trigger
+- `.github/workflows/staging-e2e-simulation.yml` — added `simulation` job + `scripts/simulate-incidents/**` paths trigger
 - `.planning/phases/08-azure-validation-incident-simulation/08-VALIDATION-REPORT.md` — added Simulation Results section, F-09/F-10/F-11 findings, updated Critical Path Status
 
 ## Decisions Made

@@ -148,7 +148,7 @@ Phase 5 goal achieved. All 18 requirement IDs (TRIAGE-005, TRIAGE-007, REMEDI-00
 | All Wave 0 test stubs implemented and passing (no remaining skips) | 8 in-scope test files: 0 skips across all. test_sse_heartbeat.py has 2 retained stubs (Wave 0 residuals, out of Plan 05-06 scope — documented in Known Issues). All other files clean. | ✅ |
 | 80%+ Python coverage on api-gateway and agents/shared | Per 05-06 SUMMARY: 80.60% coverage achieved after coverage booster (`test_coverage_booster.py`, 13 tests). CI configured with `--cov-fail-under=80`. | ✅ |
 | SC-1 through SC-6 Playwright tests implemented (mocked, no live backends) | `e2e/sc1.spec.ts` (domContentLoadedEventEnd assertion, first-token mock), `e2e/sc2.spec.ts` (Last-Event-ID reconnect, new Set(seqs).size dedup), `e2e/sc5.spec.ts` (stale_approval), `e2e/sc6.spec.ts` (aiops/fix-, Applied directly to cluster). All 4 files: zero test.skip. | ✅ |
-| Phase 5 CI workflow runs pytest and Playwright on PR and merge to main | `.github/workflows/phase5-ci.yml`: triggers on services/api-gateway/**, services/web-ui/**, agents/shared/**, e2e/**; python-tests job (Python 3.12); playwright-tests job (Node 20, npx playwright test --project=chromium) | ✅ |
+| Phase 5 CI workflow runs pytest and Playwright on PR and merge to main | `.github/workflows/api-gateway-web-ui-ci.yml`: triggers on services/api-gateway/**, services/web-ui/**, agents/shared/**, e2e/**; python-tests job (Python 3.12); playwright-tests job (Node 20, npx playwright test --project=chromium) | ✅ |
 | CI blocks merge on any test failure | `--cov-fail-under=80` in pytest command; Playwright test failures exit non-zero; both jobs are required checks (no `continue-on-error`) | ✅ |
 
 **Plan 05-06: PASS ✅**
@@ -209,7 +209,7 @@ services/api-gateway/tests/test_sse_heartbeat.py::TestSSEHeartbeat::test_heartbe
 
 **2. E2E tests are mock-based (no live backends)**
 
-- SC-1 through SC-6 Playwright tests use `page.route()` interception. Live integration testing against real Container Apps is deferred to Phase 7 (`phase7-e2e.yml` with global-setup.ts MSAL auth, which is confirmed present and operational).
+- SC-1 through SC-6 Playwright tests use `page.route()` interception. Live integration testing against real Container Apps is deferred to Phase 7 (`staging-e2e-simulation.yml` with global-setup.ts MSAL auth, which is confirmed present and operational).
 - **Impact:** Accepted per Plan 05-06 spec: "no live backends required in CI".
 
 **3. DashboardPanel has 5 tabs (not 4)**

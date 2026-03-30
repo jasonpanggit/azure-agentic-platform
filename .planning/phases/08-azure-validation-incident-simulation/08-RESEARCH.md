@@ -939,7 +939,7 @@ Phase 8 doesn't ADD new requirements — it VALIDATES existing ones:
 | `e2e/e2e-incident-flow.spec.ts` | Remove `test.skip()` graceful skips |
 | `e2e/e2e-hitl-approval.spec.ts` | Remove `test.skip()` graceful skips |
 | `e2e/e2e-sse-reconnect.spec.ts` | Remove `test.skip()` if present |
-| `.github/workflows/phase7-e2e.yml` | Update to Phase 8 CI (or create new workflow) |
+| `.github/workflows/staging-e2e-simulation.yml` | Update to Phase 8 CI (or create new workflow) |
 
 ---
 
@@ -1033,7 +1033,7 @@ Phase 8 uses four validation layers, executed in dependency order:
 ### CI Integration
 
 ```yaml
-# Phase 8 validation pipeline (extend .github/workflows/phase7-e2e.yml)
+# Phase 8 validation pipeline (extend .github/workflows/staging-e2e-simulation.yml)
 jobs:
   e2e-prod:
     # Run existing E2E suite against prod (no test.skip())

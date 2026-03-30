@@ -10,13 +10,47 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional
+
+from agents.shared.routing import classify_query_text
 
 from services.api_gateway.foundry import _get_foundry_client
 from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _build_operator_query_envelope(
+    *,
+    thread_id: str,
+    request: ChatRequest,
+    initiated_by: str,
+) -> str:
+    """Build a structured operator-query envelope for orchestrator routing."""
+    classification = classify_query_text(request.message)
+    payload: dict[str, object] = {
+        "message": request.message,
+        "initiated_by": initiated_by,
+        "domain_hint": classification["domain"],
+        "classification_confidence": classification["confidence"],
+        "classification_reason": classification["reason"],
+    }
+
+    if request.subscription_ids:
+        payload["subscription_ids"] = request.subscription_ids
+
+    envelope = {
+        "correlation_id": request.incident_id or thread_id,
+        "thread_id": thread_id,
+        "source_agent": "api-gateway",
+        "target_agent": "orchestrator",
+        "message_type": "operator_query",
+        "payload": payload,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return json.dumps(envelope)
 
 
 async def _lookup_thread_by_incident(incident_id: str) -> Optional[str]:
@@ -86,15 +120,11 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             "Created chat thread %s for user %s", thread_id, effective_user_id
         )
 
-    # Build message content — prepend subscription context if provided so the
-    # agent can call Azure MCP tools without asking for clarification.
-    message_content = request.message
-    if request.subscription_ids:
-        subs_csv = ", ".join(request.subscription_ids)
-        message_content = (
-            f"[Context: Azure subscription IDs in scope: {subs_csv}]\n\n"
-            f"{request.message}"
-        )
+    message_content = _build_operator_query_envelope(
+        thread_id=thread_id,
+        request=request,
+        initiated_by=effective_user_id,
+    )
 
     with foundry_span("post_message", thread_id=thread_id) as span:
         client.messages.create(

@@ -75,7 +75,7 @@ Make the Azure Agentic Platform production-ready:
 - `.planning/phases/07-quality-hardening/` — this directory (for RESEARCH.md when created)
 - `e2e/sc1.spec.ts`, `e2e/sc2.spec.ts`, `e2e/sc5.spec.ts`, `e2e/sc6.spec.ts` — existing E2E tests (understand the pattern before extending)
 - `services/web-ui/playwright.config.ts` — Playwright config (testDir, auth, webServer)
-- `.github/workflows/phase5-ci.yml` — existing Playwright CI job pattern
+- `.github/workflows/api-gateway-web-ui-ci.yml` — existing Playwright CI job pattern
 
 ### API Gateway + Services
 - `services/api-gateway/main.py` — all endpoint signatures (E2E must hit real endpoints)
@@ -84,7 +84,7 @@ Make the Azure Agentic Platform production-ready:
 
 ### Observability
 - `services/api-gateway/main.py` — check for existing `x-correlation-id` header injection
-- `.github/workflows/phase5-ci.yml` — existing CI structure to extend with OTel config
+- `.github/workflows/api-gateway-web-ui-ci.yml` — existing CI structure to extend with OTel config
 
 ### Terraform
 - `terraform/envs/prod/` — prod environment config to apply

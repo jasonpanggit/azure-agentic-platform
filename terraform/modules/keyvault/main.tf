@@ -7,7 +7,7 @@ resource "azurerm_key_vault" "main" {
   soft_delete_retention_days    = 90
   purge_protection_enabled      = true
   public_network_access_enabled = false
-  enable_rbac_authorization     = true
+  rbac_authorization_enabled    = true
 
   tags = var.required_tags
 }

@@ -563,7 +563,7 @@ The 06-UI-SPEC.md defines 4 card JSON schemas. These are directly implementable 
 
 ### CI Integration
 
-Add a `phase6-ci.yml` workflow:
+Add a `teams-bot-api-gateway-ci.yml` workflow:
 - TypeScript lint (`eslint`)
 - Type check (`tsc --noEmit`)
 - Unit tests (`vitest run --coverage`)
@@ -601,7 +601,7 @@ Based on the research, the following plan structure addresses all 6 requirements
 - Card builder functions for all 4 card types (alert, approval, outcome, reminder) -- using `Action.Execute` for approval/reminder cards
 - `types.ts` with all payload interfaces
 - `config.ts` with environment variable parsing
-- `phase6-ci.yml` with lint, type check, unit tests, 80% coverage gate
+- `teams-bot-api-gateway-ci.yml` with lint, type check, unit tests, 80% coverage gate
 - Unit tests for card builders and notify route
 
 ### Plan 06-02: Bot Framework Integration + Conversational Flow (TEAMS-001)

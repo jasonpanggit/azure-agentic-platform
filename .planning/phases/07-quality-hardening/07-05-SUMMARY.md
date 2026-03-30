@@ -15,7 +15,7 @@ Set up the Phase 7 Playwright E2E test infrastructure for running tests against 
 | 7-05-05 | `e2e/sc1.spec.ts` | ✅ Refactored |
 | 7-05-06 | `e2e/sc2.spec.ts` | ✅ Refactored |
 | 7-05-07 | `e2e/sc5.spec.ts` + `e2e/sc6.spec.ts` | ✅ Refactored |
-| 7-05-08 | `.github/workflows/phase7-e2e.yml` | ✅ Created |
+| 7-05-08 | `.github/workflows/staging-e2e-simulation.yml` | ✅ Created |
 
 ## Files Modified
 
@@ -24,7 +24,7 @@ Set up the Phase 7 Playwright E2E test infrastructure for running tests against 
 - `e2e/global-setup.ts` — Acquires MSAL bearer token via `ConfidentialClientApplication`, creates `incidents-e2e` and `approvals-e2e` Cosmos DB containers
 - `e2e/global-teardown.ts` — Idempotent cleanup: deletes `incidents-e2e` and `approvals-e2e` containers, skips if no `E2E_COSMOS_ENDPOINT`
 - `e2e/fixtures/auth.ts` — Extended Playwright `test` with `bearerToken`, `apiUrl`, `baseUrl`, `apiRequest` fixtures
-- `.github/workflows/phase7-e2e.yml` — CI workflow: `environment: staging`, `timeout-minutes: 15`, uploads report + results artifacts
+- `.github/workflows/staging-e2e-simulation.yml` — CI workflow: `environment: staging`, `timeout-minutes: 15`, uploads report + results artifacts
 
 ### Modified Files
 - `e2e/sc1.spec.ts` — Removed all `page.route()` mocks; tests health endpoint (`status: ok`, `version: 1.0.0`) and chat endpoint via `apiRequest` fixture

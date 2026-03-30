@@ -369,7 +369,7 @@ Ph 7                                                                ████
 |---|---|---|---|
 | 08-01 | Fix Provisioning Gaps | ✅ Complete | Task 08-01-01 committed (--create flag); tasks 08-01-02 through 08-01-06 require operator execution |
 | 08-02 | Critical-Path Validation | ✅ Complete | E2E strict mode (no test.skip), 22/30 tests pass, VALIDATION-REPORT.md: 2 BLOCKING (F-01 RBAC, F-02 runbook 500), 6 DEGRADED |
-| 08-03 | Incident Simulation | ✅ Complete | 7/7 scenarios PASS, 8/8 Foundry runs completed; CI gate (simulation job) wired into phase7-e2e.yml; F-09/F-10/F-11 (MCP tool groups) logged |
+| 08-03 | Incident Simulation | ✅ Complete | 7/7 scenarios PASS, 8/8 Foundry runs completed; CI gate (simulation job) wired into staging-e2e-simulation.yml; F-09/F-10/F-11 (MCP tool groups) logged |
 | 08-04 | Deferred Phase 7 Work | ✅ Complete | instrumentation.py (foundry_span/mcp_span/agent_span); foundry.py/chat.py/approvals.py instrumented; e2e-teams-roundtrip.spec.ts (3 tests); 08-04-06 operator-only |
 | 08-05 | Validation Closeout | ✅ Complete | VALIDATION-REPORT.md finalized (OTel section, summary counts, conclusion, backlog items); BACKLOG.md created (11 items); STATE.md updated |
 
@@ -418,10 +418,26 @@ Phase 1 (Foundation)
 **Goal:** Tear down and rebuild the web UI from scratch. Replace Fluent UI / Griffel with Tailwind CSS + shadcn/ui. Redesign the full portal: scrollable chat panel with fixed input, dashboard, and layout — using a frontend specialist for visual design quality.
 **Requirements**: UI-001 through UI-008 (re-addressed)
 **Depends on:** Phase 8
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 9 to break down)
+- [ ] 09-01 Tailwind + shadcn/ui Foundation
+- [ ] 09-02 Layout Foundation
+- [ ] 09-03 Chat Components
+- [ ] 09-04 Dashboard Components
+- [ ] 09-05 Observability Components
+- [ ] 09-06 Cleanup + Verification
+
+### Phase 10: API Gateway Hardening
+
+**Goal:** Harden the API gateway control plane by removing implicit auth bypass, validating audit query inputs before KQL execution, and making runbook search fail truthfully when its data plane is unavailable.
+**Requirements:** Hardening for DETECT-004, TRIAGE-005, AUDIT-004
+**Depends on:** Phase 8
+**Plans:** 2 plans
+
+Plans:
+- [x] 10-01 API Gateway Auth & Audit Hardening
+- [x] 10-02 Runbook Search Availability Hardening
 
 ---
 

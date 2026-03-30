@@ -1,19 +1,19 @@
-name: Build API Gateway
+name: Build Azure MCP Server
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/api-gateway-build.yml'
+      - '.github/workflows/azure-mcp-server-build.yml'
       - '.github/workflows/container-app-deploy.yml'
       - '.github/workflows/docker-push.yml'
-      - 'services/api-gateway/**'
+      - 'services/azure-mcp-server/**'
   pull_request:
     paths:
-      - '.github/workflows/api-gateway-build.yml'
+      - '.github/workflows/azure-mcp-server-build.yml'
       - '.github/workflows/container-app-deploy.yml'
       - '.github/workflows/docker-push.yml'
-      - 'services/api-gateway/**'
+      - 'services/azure-mcp-server/**'
   workflow_dispatch:
 
 permissions:
@@ -21,30 +21,29 @@ permissions:
   contents: read
 
 jobs:
-  build-gateway:
-    name: Build API Gateway Image
+  build-azure-mcp-server:
+    name: Build Azure MCP Server Image
     uses: ./.github/workflows/docker-push.yml
     with:
-      image_name: services/api-gateway
-      dockerfile_path: services/api-gateway/Dockerfile
-      build_context: services/api-gateway/
+      image_name: services/azure-mcp-server
+      dockerfile_path: services/azure-mcp-server/Dockerfile
+      build_context: services/azure-mcp-server/
       push_image: ${{ github.event_name != 'pull_request' }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  deploy-gateway:
+  deploy-azure-mcp-server:
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
-    needs: build-gateway
+    needs: build-azure-mcp-server
     uses: ./.github/workflows/container-app-deploy.yml
     with:
-      image_name: services/api-gateway
+      image_name: services/azure-mcp-server
       image_tag: ${{ github.sha }}
-      container_app_name: ca-api-gateway-prod
+      container_app_name: ca-azure-mcp-prod
       resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
       github_environment: production
-      healthcheck_path: /health
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}

@@ -1,15 +1,17 @@
-name: Phase 5 — Triage & Remediation + Web UI CI
+name: API Gateway + Web UI CI
 
 on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/api-gateway-web-ui-ci.yml'
       - 'services/api-gateway/**'
       - 'services/web-ui/**'
       - 'agents/shared/**'
       - 'e2e/**'
   pull_request:
     paths:
+      - '.github/workflows/api-gateway-web-ui-ci.yml'
       - 'services/api-gateway/**'
       - 'services/web-ui/**'
       - 'agents/shared/**'

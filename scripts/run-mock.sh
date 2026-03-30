@@ -23,7 +23,7 @@ echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  api-gateway — local mock mode                      ║"
 echo "║  http://localhost:${PORT}                              ║"
-echo "║  Auth:    disabled (no AZURE_CLIENT_ID)             ║"
+echo "║  Auth:    disabled (API_GATEWAY_AUTH_MODE=disabled) ║"
 echo "║  OTel:    disabled (no APPINSIGHTS_CONNECTION_STR)  ║"
 echo "║  Cosmos:  disabled (no COSMOS_ENDPOINT)             ║"
 echo "║  Foundry: disabled (no AZURE_PROJECT_ENDPOINT)      ║"
@@ -32,8 +32,9 @@ echo ""
 
 # ── Dev / mock environment ──────────────────────────────────────────────────
 export CORS_ALLOWED_ORIGINS="*"
+export API_GATEWAY_AUTH_MODE="disabled"
 
-# Auth: leave AZURE_CLIENT_ID unset → dev mode (all requests allowed)
+# Auth: explicit local bypass
 unset AZURE_CLIENT_ID  2>/dev/null || true
 unset AZURE_TENANT_ID  2>/dev/null || true
 

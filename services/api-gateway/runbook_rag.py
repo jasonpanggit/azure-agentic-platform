@@ -12,11 +12,14 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 SIMILARITY_THRESHOLD = float(os.environ.get("RUNBOOK_SIMILARITY_THRESHOLD", "0.75"))
-POSTGRES_DSN = os.environ.get("POSTGRES_DSN", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_DEPLOYMENT_NAME", "text-embedding-3-small")
 
 # Content excerpt length
 MAX_EXCERPT_LENGTH = 300
+
+
+class RunbookSearchUnavailableError(RuntimeError):
+    """Raised when the runbook search data plane is unavailable."""
 
 
 async def generate_query_embedding(query: str) -> list[float]:
@@ -71,14 +74,17 @@ async def search_runbooks(
     Returns:
         List of dicts with id, title, domain, version, similarity, content_excerpt.
     """
+    dsn = resolve_postgres_dsn()
+
     import asyncpg
     from pgvector.asyncpg import register_vector
 
-    dsn = POSTGRES_DSN or _build_dsn()
-    conn = await asyncpg.connect(dsn)
-    await register_vector(conn)
+    conn = None
 
     try:
+        conn = await asyncpg.connect(dsn)
+        await register_vector(conn)
+
         # After register_vector, asyncpg handles vector encoding natively.
         # Pass query_embedding as a list directly — do NOT stringify or cast with ::vector.
         if domain:
@@ -121,8 +127,45 @@ async def search_runbooks(
                     "content_excerpt": row["content"][:MAX_EXCERPT_LENGTH],
                 })
         return results
+    except Exception as exc:
+        if _is_runbook_data_plane_error(exc):
+            logger.error("Runbook search unavailable: %s", exc)
+            raise RunbookSearchUnavailableError(
+                "Runbook search database is unavailable."
+            ) from exc
+        raise
     finally:
-        await conn.close()
+        if conn is not None:
+            await conn.close()
+
+
+def resolve_postgres_dsn() -> str:
+    """Resolve the runbook PostgreSQL DSN from supported env vars."""
+    pgvector_dsn = os.environ.get("PGVECTOR_CONNECTION_STRING", "").strip()
+    if pgvector_dsn:
+        return pgvector_dsn
+
+    postgres_dsn = os.environ.get("POSTGRES_DSN", "").strip()
+    if postgres_dsn:
+        return postgres_dsn
+
+    postgres_host = os.environ.get("POSTGRES_HOST", "").strip()
+    if postgres_host:
+        return _build_dsn()
+
+    raise RunbookSearchUnavailableError(
+        "Runbook search database is not configured. Set PGVECTOR_CONNECTION_STRING, "
+        "POSTGRES_DSN, or all POSTGRES_* env vars (HOST, PORT, DB, USER, PASSWORD)."
+    )
+
+
+def _is_runbook_data_plane_error(exc: Exception) -> bool:
+    """Return True when the exception comes from the DB access layer."""
+    if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
+        return True
+
+    module_name = exc.__class__.__module__
+    return module_name.startswith("asyncpg") or module_name.startswith("pgvector")
 
 
 def _build_dsn() -> str:

@@ -2,10 +2,42 @@ name: Prod DB Setup (one-time)
 
 on:
   workflow_dispatch:
+    inputs:
+      resource_group:
+        description: 'Resource group containing the PostgreSQL server'
+        required: false
+        type: string
+        default: 'rg-aap-prod'
+      postgres_server_name:
+        description: 'PostgreSQL Flexible Server name'
+        required: false
+        type: string
+        default: 'aap-postgres-prod'
+      postgres_database:
+        description: 'Database to migrate'
+        required: false
+        type: string
+        default: 'aap'
+      postgres_admin_user:
+        description: 'Admin username for the PostgreSQL server'
+        required: false
+        type: string
+        default: 'aap_admin'
 
 permissions:
   id-token: write
   contents: read
+
+concurrency:
+  group: prod-db-setup
+  cancel-in-progress: false
+
+env:
+  TEMP_FIREWALL_RULE_NAME: gh-runner-temp-prod-db-setup
+  POSTGRES_RESOURCE_GROUP: ${{ github.event.inputs.resource_group || 'rg-aap-prod' }}
+  POSTGRES_SERVER_NAME: ${{ github.event.inputs.postgres_server_name || 'aap-postgres-prod' }}
+  POSTGRES_DATABASE: ${{ github.event.inputs.postgres_database || 'aap' }}
+  POSTGRES_ADMIN_USER: ${{ github.event.inputs.postgres_admin_user || 'aap_admin' }}
 
 jobs:
   setup-pgvector:
@@ -14,30 +46,77 @@ jobs:
     environment: prod
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate workflow inputs
+        run: |
+          if [[ ! "$POSTGRES_RESOURCE_GROUP" =~ ^[A-Za-z0-9_.()-]{1,90}$ ]]; then
+            echo "::error::Invalid resource group name format"
+            exit 1
+          fi
+
+          if [[ ! "$POSTGRES_SERVER_NAME" =~ ^[a-z0-9-]{3,63}$ ]]; then
+            echo "::error::Invalid PostgreSQL server name format"
+            exit 1
+          fi
+
+          if [[ ! "$POSTGRES_DATABASE" =~ ^[A-Za-z0-9_-]{1,63}$ ]]; then
+            echo "::error::Invalid PostgreSQL database name format"
+            exit 1
+          fi
+
+          if [[ ! "$POSTGRES_ADMIN_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$ ]]; then
+            echo "::error::Invalid PostgreSQL admin username format"
+            exit 1
+          fi
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}"}'
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Get Runner Egress IP
         id: runner_ip
-        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+        run: |
+          IP=$(curl -s --max-time 10 --retry 3 --retry-delay 2 https://api.ipify.org)
+          if [ -z "$IP" ]; then
+            echo "::error::Failed to retrieve runner egress IP"
+            exit 1
+          fi
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
 
       - name: Enable Public Access + Add Temporary Firewall Rule
         run: |
           az postgres flexible-server update \
-            --resource-group rg-aap-prod \
-            --name aap-postgres-prod \
+            --resource-group "$POSTGRES_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
             --public-access Enabled
+          # Wait for Azure network propagation after enabling public access.
           sleep 15
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$POSTGRES_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+            --yes || true
           az postgres flexible-server firewall-rule create \
-            --resource-group "rg-aap-prod" \
-            --name "aap-postgres-prod" \
-            --rule-name "gh-runner-temp-$$" \
+            --resource-group "$POSTGRES_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
             --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
             --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Validate migration files
+        run: |
+          for file in \
+            services/api-gateway/migrations/001_create_runbooks_table.sql \
+            services/api-gateway/migrations/003_create_gitops_config_table.sql; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing migration file: $file"
+              exit 1
+            fi
+          done
 
       - name: Install PostgreSQL Client
         run: |
@@ -47,27 +126,42 @@ jobs:
       - name: Enable pgvector and Run Migrations
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          PGSSLMODE: require
         run: |
+          # 002_seed_runbooks.py is a data-seeding utility, not a schema migration.
           psql \
-            -h "aap-postgres-prod.postgres.database.azure.com" \
-            -U aap_admin \
-            -d aap \
+            -v ON_ERROR_STOP=1 \
+            -h "${POSTGRES_SERVER_NAME}.postgres.database.azure.com" \
+            -U "$POSTGRES_ADMIN_USER" \
+            -d "$POSTGRES_DATABASE" \
             -f services/api-gateway/migrations/001_create_runbooks_table.sql
           psql \
-            -h "aap-postgres-prod.postgres.database.azure.com" \
-            -U aap_admin \
-            -d aap \
+            -v ON_ERROR_STOP=1 \
+            -h "${POSTGRES_SERVER_NAME}.postgres.database.azure.com" \
+            -U "$POSTGRES_ADMIN_USER" \
+            -d "$POSTGRES_DATABASE" \
             -f services/api-gateway/migrations/003_create_gitops_config_table.sql
 
       - name: Remove Temporary Firewall Rule + Disable Public Access
         if: always()
         run: |
           az postgres flexible-server firewall-rule delete \
-            --resource-group "rg-aap-prod" \
-            --name "aap-postgres-prod" \
-            --rule-name "gh-runner-temp-$$" \
-            --yes || true
-          az postgres flexible-server update \
-            --resource-group rg-aap-prod \
-            --name aap-postgres-prod \
-            --public-access Disabled || true
+            --resource-group "$POSTGRES_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+            --yes || echo "::warning::Failed to delete temporary firewall rule"
+
+          for attempt in 1 2 3; do
+            if az postgres flexible-server update \
+              --resource-group "$POSTGRES_RESOURCE_GROUP" \
+              --name "$POSTGRES_SERVER_NAME" \
+              --public-access Disabled; then
+              exit 0
+            fi
+
+            echo "::warning::Attempt ${attempt} to disable public access failed"
+            sleep 10
+          done
+
+          echo "::error::Failed to disable public access after multiple attempts"
+          exit 1

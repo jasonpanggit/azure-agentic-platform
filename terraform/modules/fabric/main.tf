@@ -51,6 +51,10 @@ resource "azapi_resource" "fabric_workspace" {
   name      = "aap-${var.environment}"
   parent_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}"
 
+  # Fabric workspace items are data-plane resources and are not available in
+  # the AzAPI embedded ARM schema catalog.
+  schema_validation_enabled = false
+
   body = {
     properties = {
       displayName = "aap-${var.environment}"
@@ -71,6 +75,8 @@ resource "azapi_resource" "fabric_eventhouse" {
   name      = "eh-aap-${var.environment}"
   parent_id = azapi_resource.fabric_workspace.id
 
+  schema_validation_enabled = false
+
   body = {
     properties = {
       displayName = "eh-aap-${var.environment}"
@@ -90,6 +96,8 @@ resource "azapi_resource" "fabric_kql_database" {
   name      = "kqldb-aap-${var.environment}"
   parent_id = azapi_resource.fabric_eventhouse.id
 
+  schema_validation_enabled = false
+
   body = {
     properties = {
       displayName = "kqldb-aap-${var.environment}"
@@ -107,6 +115,8 @@ resource "azapi_resource" "fabric_activator" {
   type      = "Microsoft.Fabric/workspaces/reflex@2023-11-01"
   name      = "act-aap-${var.environment}"
   parent_id = azapi_resource.fabric_workspace.id
+
+  schema_validation_enabled = false
 
   body = {
     properties = {
@@ -127,6 +137,8 @@ resource "azapi_resource" "fabric_lakehouse" {
   type      = "Microsoft.Fabric/workspaces/lakehouses@2023-11-01"
   name      = "lh-aap-${var.environment}"
   parent_id = azapi_resource.fabric_workspace.id
+
+  schema_validation_enabled = false
 
   body = {
     properties = {

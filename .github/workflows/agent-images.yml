@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/agent-images.yml'
       - 'agents/orchestrator/**'
       - 'agents/compute/**'
       - 'agents/network/**'
@@ -21,6 +22,7 @@ jobs:
     name: Detect Changed Agents
     runs-on: ubuntu-latest
     outputs:
+      base_related: ${{ steps.changes.outputs.base_related }}
       orchestrator: ${{ steps.changes.outputs.orchestrator }}
       compute: ${{ steps.changes.outputs.compute }}
       network: ${{ steps.changes.outputs.network }}
@@ -29,11 +31,18 @@ jobs:
       sre: ${{ steps.changes.outputs.sre }}
       arc: ${{ steps.changes.outputs.arc }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: changes
         with:
           filters: |
+            base_related:
+              - '.github/workflows/base-image.yml'
+              - '.github/workflows/container-app-deploy.yml'
+              - '.github/workflows/docker-push.yml'
+              - 'agents/Dockerfile.base'
+              - 'agents/requirements-base.txt'
+              - 'agents/shared/**'
             orchestrator:
               - 'agents/orchestrator/**'
             compute:
@@ -49,79 +58,284 @@ jobs:
             arc:
               - 'agents/arc/**'
 
+  resolve-base-image:
+    name: Resolve Published Base Image Tag
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.base_related != 'true' && (
+      needs.detect-changes.outputs.orchestrator == 'true' ||
+      needs.detect-changes.outputs.compute == 'true' ||
+      needs.detect-changes.outputs.network == 'true' ||
+      needs.detect-changes.outputs.storage == 'true' ||
+      needs.detect-changes.outputs.security == 'true' ||
+      needs.detect-changes.outputs.sre == 'true' ||
+      needs.detect-changes.outputs.arc == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve latest immutable base tag
+        id: resolve
+        run: |
+          ACR_NAME="${{ vars.ACR_LOGIN_SERVER }}"
+          if [ -z "$ACR_NAME" ]; then
+            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
+            exit 1
+          fi
+
+          ACR_NAME="${ACR_NAME%%.azurecr.io}"
+          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
+            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
+            exit 1
+          fi
+
+          BASE_TAG=$(az acr repository show-tags \
+            --name "$ACR_NAME" \
+            --repository agents/base \
+            --orderby time_desc \
+            --top 20 \
+            -o tsv | grep -vx 'latest' | head -n 1)
+
+          if [ -z "$BASE_TAG" ]; then
+            echo "::error::No immutable base image tag found in ACR for agents/base"
+            exit 1
+          fi
+
+          if [[ ! "$BASE_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Resolved base image tag has an invalid format: $BASE_TAG"
+            exit 1
+          fi
+
+          echo "Resolved base image tag: $BASE_TAG"
+          printf 'tag=%s\n' "$BASE_TAG" >> "$GITHUB_OUTPUT"
+
   build-orchestrator:
     name: Build Orchestrator
-    needs: detect-changes
-    if: needs.detect-changes.outputs.orchestrator == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.orchestrator == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/orchestrator
       dockerfile_path: agents/orchestrator/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/orchestrator/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-compute:
     name: Build Compute Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.compute == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.compute == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/compute
       dockerfile_path: agents/compute/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/compute/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-network:
     name: Build Network Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.network == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.network == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/network
       dockerfile_path: agents/network/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/network/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-storage:
     name: Build Storage Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.storage == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.storage == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/storage
       dockerfile_path: agents/storage/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/storage/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-security:
     name: Build Security Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.security == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.security == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/security
       dockerfile_path: agents/security/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/security/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-sre:
     name: Build SRE Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.sre == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.sre == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/sre
       dockerfile_path: agents/sre/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/sre/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   build-arc:
     name: Build Arc Agent
-    needs: detect-changes
-    if: needs.detect-changes.outputs.arc == 'true'
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.arc == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/arc
       dockerfile_path: agents/arc/Dockerfile
-      build_context: agents/
-    secrets: inherit
+      build_context: agents/arc/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-orchestrator:
+    needs: [detect-changes, build-orchestrator]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.orchestrator == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/orchestrator
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-orchestrator-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-compute:
+    needs: [detect-changes, build-compute]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.compute == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/compute
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-compute-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-network:
+    needs: [detect-changes, build-network]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.network == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/network
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-network-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-storage:
+    needs: [detect-changes, build-storage]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.storage == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/storage
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-storage-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-security:
+    needs: [detect-changes, build-security]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.security == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/security
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-security-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-sre:
+    needs: [detect-changes, build-sre]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.sre == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/sre
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-sre-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-arc:
+    needs: [detect-changes, build-arc]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.arc == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/arc
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-arc-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

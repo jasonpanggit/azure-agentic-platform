@@ -112,7 +112,7 @@ Validate the full platform is correctly provisioned and functional in Azure agai
 - `scripts/run-mock.sh` — Existing mock server (reference for simulation structure)
 
 ### CI/CD
-- `.github/workflows/phase7-e2e.yml` — Phase 7 E2E CI job (extend for Phase 8 scenarios)
+- `.github/workflows/staging-e2e-simulation.yml` — Phase 7 E2E CI job (extend for Phase 8 scenarios)
 - `.github/workflows/security-review.yml` — Security CI (reference for CI job pattern)
 
 </canonical_refs>

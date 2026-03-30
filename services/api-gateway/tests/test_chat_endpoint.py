@@ -226,6 +226,32 @@ class TestChatThreadContinuation:
         envelope = json.loads(call_args.kwargs["content"])
         assert envelope["payload"]["initiated_by"] == "teams-user@example.com"
 
+    def test_chat_query_includes_arc_domain_hint(self, client):
+        """Arc conversational queries include an Arc domain hint for orchestrator routing."""
+        import json
+
+        mock_foundry = MagicMock()
+        mock_thread = MagicMock(id="thread-test-arc")
+        mock_run = MagicMock(id="run-test-arc")
+        mock_foundry.threads.create.return_value = mock_thread
+        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-arc")
+        mock_foundry.runs.create.return_value = mock_run
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            response = client.post(
+                "/api/v1/chat",
+                json={"message": "show my arc enabled servers"},
+            )
+
+        assert response.status_code == 202
+        envelope = json.loads(mock_foundry.messages.create.call_args.kwargs["content"])
+        assert envelope["message_type"] == "operator_query"
+        assert envelope["payload"]["message"] == "show my arc enabled servers"
+        assert envelope["payload"]["domain_hint"] == "arc"
+
     def test_chat_without_thread_id_creates_new_thread(self, client):
         """POST /api/v1/chat without thread_id creates a new thread (default behavior)."""
         mock_foundry = MagicMock()

@@ -3,15 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-29T14:33:55.905Z"
+last_updated: "2026-03-30T00:00:00Z"
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 30
-  completed_plans: 23
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 49
+  completed_plans: 42
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-30 — Phase 10 COMPLETE: API Gateway Hardening. The gateway no longer disables auth merely because `AZURE_CLIENT_ID` is missing. Local bypass now requires `API_GATEWAY_AUTH_MODE=disabled`, `/api/v1/audit` rejects invalid filters with HTTP 400 before any KQL is built, and runbook search now uses explicit DSN resolution with truthful 503s for runbook DB outages.
 
 > Last updated: 2026-03-29 — Phase 9 added: Web UI Revamp — tear down Fluent UI / Griffel, rebuild with Tailwind CSS + shadcn/ui, redesign full portal with frontend specialist.
 
@@ -23,13 +25,23 @@ progress:
 
 ## Current Phase
 
-**Phase 8: Azure Validation & Incident Simulation — ⚠️ PLANS COMPLETE (5/5 plans), VALIDATION FAIL (2 BLOCKING open)**
+**Phase 10: API Gateway Hardening — ✅ COMPLETE (2/2 plans)**
+
+Plan 10-01 complete: API gateway auth now fails closed by default; explicit local bypass requires `API_GATEWAY_AUTH_MODE=disabled`. Audit filters are validated before KQL construction, invalid audit requests now return HTTP 400, and the focused gateway security test run passed (`11 passed`).
+
+Plan 10-02 complete: runbook search now resolves `PGVECTOR_CONNECTION_STRING`, `POSTGRES_DSN`, or explicit `POSTGRES_*` settings, startup migrations reuse the same resolver, and `/api/v1/runbooks/search` returns HTTP 503 instead of HTTP 500 when the runbook DB is unavailable. Combined gateway regression run passed (`19 passed`).
+
+Parallel status:
+- Phase 8 remains blocked on operator-only findings F-01 (Foundry RBAC) and F-02 (prod runbook search 500).
+- Phase 9 has six authored plans and remains pending implementation.
+
+Recent completed context retained below for continuity:
 
 Plan 08-01 complete: Fix Provisioning Gaps — Foundry Orchestrator Agent created, ORCHESTRATOR_AGENT_ID set on ca-api-gateway-prod, Azure Bot Service registered, 3 GitHub secrets added.
 
 Plan 08-02 complete: Critical-Path Validation — test.skip() removed from E2E tests, E2E suite run against prod (22/30 pass), 7 smoke tests executed, VALIDATION-REPORT.md initialized with 2 BLOCKING + 6 DEGRADED findings.
 
-Plan 08-03 complete: Incident Simulation — 7 scenario scripts + common utilities + run-all.sh orchestrator, simulation CI gate wired into phase7-e2e.yml, all 8 scenarios/injections executed against prod (7/7 scenarios PASS), 3 additional DEGRADED findings (F-09/F-10/F-11 MCP tool groups).
+Plan 08-03 complete: Incident Simulation — 7 scenario scripts + common utilities + run-all.sh orchestrator, simulation CI gate wired into staging-e2e-simulation.yml, all 8 scenarios/injections executed against prod (7/7 scenarios PASS), 3 additional DEGRADED findings (F-09/F-10/F-11 MCP tool groups).
 
 Plan 08-04 complete: Deferred Phase 7 Work — instrumentation.py with foundry_span/mcp_span/agent_span (span pattern: agent.{agent_name}), manual OTel spans added to foundry.py/chat.py/approvals.py, e2e-teams-roundtrip.spec.ts created (3 tests). Container App rebuild (08-04-06) is operator-only.
 
@@ -43,7 +55,7 @@ Plan 07-03 complete: 60 synthetic runbooks (10 per domain × 6 domains: compute,
 
 Plan 07-04 complete: Terraform prod extended — `agent-apps` module supports teams-bot (port 3978) and web-ui (port 3000) with configurable `target_port`; CORS_ALLOWED_ORIGINS env var wired end-to-end from Python to Terraform. Security CI workflow `security-review.yml` with 3 jobs (bandit, npm audit, secrets scan). All 12 prod modules confirmed present; `terraform fmt` passes.
 
-Plan 07-05 complete: E2E test infrastructure — root `e2e/playwright.config.ts` (workers:1, timeout:120s, retries:2 in CI); `global-setup.ts` (MSAL CCAF auth + Cosmos E2E container creation); `global-teardown.ts` (idempotent cleanup); `fixtures/auth.ts` (bearerToken, apiRequest, apiUrl, baseUrl). sc1–sc6 de-mocked to real endpoints. `phase7-e2e.yml` CI gate with 15-min timeout, blocks merge on PR failure.
+Plan 07-05 complete: E2E test infrastructure — root `e2e/playwright.config.ts` (workers:1, timeout:120s, retries:2 in CI); `global-setup.ts` (MSAL CCAF auth + Cosmos E2E container creation); `global-teardown.ts` (idempotent cleanup); `fixtures/auth.ts` (bearerToken, apiRequest, apiUrl, baseUrl). sc1–sc6 de-mocked to real endpoints. `staging-e2e-simulation.yml` CI gate with 15-min timeout, blocks merge on PR failure.
 
 Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-002), `e2e-hitl-approval.spec.ts` (E2E-003), `e2e-rbac.spec.ts` (E2E-004), `e2e-sse-reconnect.spec.ts` (E2E-005), `e2e-audit-export.spec.ts` (AUDIT-006 E2E validation). 15 test functions total; all tests use real endpoints with graceful skip when infra unavailable; no `page.route()` mocks.
 
@@ -73,6 +85,8 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
+| 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
+| 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 
 ---
 
@@ -117,7 +131,8 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | Prod multi-subscription RBAC variables | 2-01 | compute/network/storage/all_subscription_ids vars added to prod only; dev/staging default all to platform subscription_id |
 | ETag optimistic concurrency for Cosmos budget records | 2-02 | Prevents lost-update race conditions when multiple agent iterations write to the same session record |
 | pythonpath=["."] in pyproject.toml | 2-02 | Required for pytest to resolve `agents.shared.*` imports from repo root without installing the package |
-| Dev-mode auth fallback for gateway | 2-03 | AZURE_CLIENT_ID absent → validator is None → all requests allowed with WARNING; enables local development without Entra credentials |
+| Explicit local auth bypass for gateway | 10-01 | API_GATEWAY_AUTH_MODE=disabled is now required for insecure local bypass; missing AZURE_CLIENT_ID / AZURE_TENANT_ID no longer authorizes requests |
+| Explicit DSN resolution for runbook search | 10-02 | Runbook search now resolves PGVECTOR_CONNECTION_STRING, POSTGRES_DSN, or explicit POSTGRES_* values and returns 503 for data-plane outages instead of generic 500s |
 | Optional[X] over X\|None in FastAPI signatures | 2-03 | FastAPI's get_type_hints() evaluates annotations at runtime; `|` union fails on Python 3.9 even with `from __future__ import annotations` |
 | conftest.py hyphenated package shim | 2-03 | Python cannot import hyphenated directories; shim registers `services/api-gateway` as `sys.modules["services.api_gateway"]` + setattr on parent for mock.patch compat |
 | Gateway as thin router only | 2-03 | No business logic in gateway; all incident reasoning deferred to Foundry agent threads; keeps gateway small and independently testable |
@@ -149,7 +164,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | Constructor-based event registration for Bot Framework | 6-02 | Bot Framework SDK's onMessage/onInstallationUpdate are event registrators, not overridable handlers; must use this.onMessage(handler) pattern for TypeScript type safety |
 | handleMessage as public method for testability | 6-02 | Direct method call in tests avoids Bot Framework event pipeline; onAdaptiveCardInvoke remains protected override |
 | In-memory conversation state with 24h TTL | 6-02 | Map<teamsConversationId, {threadId, incidentId, lastUsed}> sufficient for MVP; upgrade to Cosmos DB if durability needed |
-| Dev-mode auth: isDevelopmentMode() returns dev-token | 6-02 | Matches api-gateway auth.py pattern — no AZURE_CLIENT_ID = dev mode; consistent across all platform services |
+| Teams bot still uses dev-token fallback | 6-02 | Legacy local bot workflow remains unchanged; it no longer mirrors the API gateway, which now requires API_GATEWAY_AUTH_MODE=disabled for bypass |
 | In-memory dedup Map for escalation reminders | 6-04 | Map<approvalId, lastReminderTimestamp> sufficient for single-instance MVP; upgrade to Cosmos DB if HA/multi-instance needed |
 | 503 pre-flight on notify route | 6-04 | hasConversationReference() check returns 503 Service Unavailable when bot not installed — prevents silent failures from api-gateway calls |
 | 30-second startup delay for escalation scheduler | 6-04 | Allows bot installation event to fire and ConversationReference to be captured before scheduler attempts proactive posting |

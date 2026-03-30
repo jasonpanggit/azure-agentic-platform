@@ -26,6 +26,7 @@ from agent_framework import AgentTarget, HandoffOrchestrator, ai_function
 from agents.shared.auth import get_credential, get_foundry_client
 from agents.shared.envelope import IncidentMessage, validate_envelope
 from agents.shared.otel import setup_telemetry
+from agents.shared.routing import classify_query_text
 
 # Telemetry tracer for the orchestrator service
 tracer = setup_telemetry("aiops-orchestrator-agent")
@@ -61,14 +62,28 @@ In BOTH cases you MUST route to a domain agent — you NEVER answer from your ow
 3. Hand off via HandoffOrchestrator with a typed envelope (AGENT-002).
 
 ### Type B — Conversational operator queries
+Conversational queries may arrive either as raw natural language or as a JSON
+`operator_query` envelope from the API gateway.
+
+When the input is an `operator_query` envelope:
+- Read the operator question from `payload.message`
+- Treat `payload.domain_hint` as the primary routing signal when present
+- Preserve `payload.message` verbatim when handing off to the target domain agent
+- Preserve `payload.subscription_ids` as query scope context
+
 For natural-language queries, determine the domain from the **topic** of the message:
-- Mentions "arc", "arc-enabled", "hybrid", "arc server", "arc kubernetes",
-  "connected cluster", "arc sql", "arc postgres" → **arc-agent**
+- Mentions "arc", "arc-enabled", "hybrid", "arc server", "arc enabled servers",
+    "connected cluster", "arc sql", "arc postgres" → **arc-agent**
 - Mentions "vm", "virtual machine", "aks", "app service", "compute", "cpu", "disk" → **compute-agent**
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → **network-agent**
 - Mentions "storage", "blob", "file share", "datalake" → **storage-agent**
 - Mentions "defender", "key vault", "keyvault", "rbac", "security", "identity" → **security-agent**
 - Topic is ambiguous or spans multiple domains → **sre-agent**
+
+Important disambiguation rule:
+- "Arc-enabled servers" and "Arc servers" are Azure Arc resources, not Azure IaaS virtual machines.
+    Route those queries to **arc-agent**, even if the message also contains words like
+    "servers", "machines", or "show/list my".
 
 Do NOT attempt to answer the query yourself. Route it immediately.
 Pass the operator's original question verbatim as the handoff payload so the domain agent can execute it.
@@ -145,34 +160,7 @@ def classify_incident_domain(
             reason (str): Short explanation of classification decision.
     """
     if not affected_resources:
-        # For conversational queries the API gateway passes the raw user message
-        # as detection_rule. Scan it for domain keywords before falling back to sre.
-        rule_lower = detection_rule.lower()
-        if any(k in rule_lower for k in ("arc", "arc-enabled", "arc enabled", "hybrid", "hybridcompute",
-                                          "arc server", "arc kubernetes", "connected cluster",
-                                          "arc sql", "arc postgres")):
-            return {"domain": "arc", "confidence": "medium",
-                    "reason": "No affected_resources; arc keyword found in query text."}
-        if any(k in rule_lower for k in ("vm", "virtual machine", "compute", "cpu", "disk",
-                                          "aks", "app service", "function app", "container")):
-            return {"domain": "compute", "confidence": "medium",
-                    "reason": "No affected_resources; compute keyword found in query text."}
-        if any(k in rule_lower for k in ("network", "vnet", "nsg", "subnet", "load balancer",
-                                          "dns", "expressroute", "vpn", "firewall", "cdn")):
-            return {"domain": "network", "confidence": "medium",
-                    "reason": "No affected_resources; network keyword found in query text."}
-        if any(k in rule_lower for k in ("storage", "blob", "file share", "datalake", "adls")):
-            return {"domain": "storage", "confidence": "medium",
-                    "reason": "No affected_resources; storage keyword found in query text."}
-        if any(k in rule_lower for k in ("defender", "keyvault", "key vault", "rbac",
-                                          "security", "identity", "credential")):
-            return {"domain": "security", "confidence": "medium",
-                    "reason": "No affected_resources; security keyword found in query text."}
-        return {
-            "domain": "sre",
-            "confidence": "low",
-            "reason": "No affected_resources and no domain keyword found; defaulting to SRE.",
-        }
+        return classify_query_text(detection_rule)
 
     domain_votes: dict = {}
     for resource_id in affected_resources:
@@ -184,22 +172,7 @@ def classify_incident_domain(
 
     if not domain_votes:
         # Fall back to detection rule keyword matching
-        rule_lower = detection_rule.lower()
-        if any(k in rule_lower for k in ("vm", "cpu", "disk", "compute", "app", "aks")):
-            return {"domain": "compute", "confidence": "medium", "reason": "Detection rule keyword match."}
-        if any(k in rule_lower for k in ("nsg", "vnet", "network", "lb", "dns", "bgp", "expressroute")):
-            return {"domain": "network", "confidence": "medium", "reason": "Detection rule keyword match."}
-        if any(k in rule_lower for k in ("storage", "blob", "datalake", "throttl")):
-            return {"domain": "storage", "confidence": "medium", "reason": "Detection rule keyword match."}
-        if any(k in rule_lower for k in ("defender", "keyvault", "rbac", "security", "identity")):
-            return {"domain": "security", "confidence": "medium", "reason": "Detection rule keyword match."}
-        if any(k in rule_lower for k in ("arc", "hybrid", "k8s", "kubernetes")):
-            return {"domain": "arc", "confidence": "medium", "reason": "Detection rule keyword match."}
-        return {
-            "domain": "sre",
-            "confidence": "low",
-            "reason": "Unable to classify from resource types or detection rule; defaulting to SRE.",
-        }
+        return classify_query_text(detection_rule)
 
     top_domain = max(domain_votes, key=lambda d: domain_votes[d])
     total_votes = sum(domain_votes.values())

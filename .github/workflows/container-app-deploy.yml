@@ -1,0 +1,201 @@
+name: Deploy Azure Container App
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Container image name inside ACR (for example services/api-gateway)'
+        required: true
+        type: string
+      image_tag:
+        description: 'Container image tag to deploy'
+        required: true
+        type: string
+      container_app_name:
+        description: 'Azure Container App name'
+        required: true
+        type: string
+      resource_group:
+        description: 'Azure resource group for the Container App'
+        required: true
+        type: string
+      github_environment:
+        description: 'GitHub environment used for deployment approvals and secrets'
+        required: false
+        type: string
+        default: 'production'
+      healthcheck_url:
+        description: 'Optional HTTPS health check URL to probe after deployment'
+        required: false
+        type: string
+        default: ''
+      healthcheck_path:
+        description: 'Optional path to probe using the Container App external ingress FQDN'
+        required: false
+        type: string
+        default: ''
+      rollout_timeout_seconds:
+        description: 'Maximum time to wait for the new revision to become active'
+        required: false
+        type: number
+        default: 300
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: container-app-${{ inputs.resource_group }}-${{ inputs.container_app_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.container_app_name }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deploy inputs
+        run: |
+          ACR_LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER }}"
+          if [ -z "$ACR_LOGIN_SERVER" ]; then
+            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
+            exit 1
+          fi
+
+          ACR_NAME="${ACR_LOGIN_SERVER%%.azurecr.io}"
+          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
+            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
+            exit 1
+          fi
+
+          if [ -z "${{ inputs.resource_group }}" ]; then
+            echo "::error::resource_group input is required"
+            exit 1
+          fi
+
+          if [[ ! "${{ inputs.image_tag }}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::image_tag input has an invalid format"
+            exit 1
+          fi
+
+          if [ -n "${{ inputs.healthcheck_url }}" ]; then
+            if [[ "${{ inputs.healthcheck_url }}" != https://* ]] || [[ "${{ inputs.healthcheck_url }}" =~ [[:space:]] ]]; then
+              echo "::error::healthcheck_url must be an https URL without whitespace"
+              exit 1
+            fi
+          fi
+
+          if [ -n "${{ inputs.healthcheck_path }}" ]; then
+            if [[ "${{ inputs.healthcheck_path }}" != /* ]] || [[ "${{ inputs.healthcheck_path }}" =~ [[:space:]] ]]; then
+              echo "::error::healthcheck_path must start with '/' and must not contain whitespace"
+              exit 1
+            fi
+          fi
+
+      - name: Resolve image reference
+        id: image
+        run: |
+          printf 'ref=%s\n' "${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new revision
+        run: |
+          az containerapp update \
+            --name "${{ inputs.container_app_name }}" \
+            --resource-group "${{ inputs.resource_group }}" \
+            --image "${{ steps.image.outputs.ref }}"
+
+      - name: Wait for latest revision to become active
+        run: |
+          MAX_WAIT=${{ inputs.rollout_timeout_seconds }}
+          ELAPSED=0
+          SLEEP_SECONDS=10
+
+          while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+            LATEST=$(az containerapp show \
+              --name "${{ inputs.container_app_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --query 'properties.latestRevisionName' \
+              -o tsv)
+            ACTIVE=$(az containerapp revision list \
+              --name "${{ inputs.container_app_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --query '[?properties.active].name' \
+              -o tsv)
+
+            echo "Latest revision: $LATEST"
+            echo "Active revisions:"
+            echo "$ACTIVE"
+
+            if [ -n "$LATEST" ] && echo "$ACTIVE" | grep -Fx "$LATEST" >/dev/null; then
+              echo "Revision $LATEST is active"
+              exit 0
+            fi
+
+            sleep "$SLEEP_SECONDS"
+            ELAPSED=$((ELAPSED + SLEEP_SECONDS))
+          done
+
+          echo "::error::Timed out waiting for the latest revision to become active"
+          az containerapp revision list \
+            --name "${{ inputs.container_app_name }}" \
+            --resource-group "${{ inputs.resource_group }}" \
+            -o table
+          exit 1
+
+      - name: Health check
+        if: ${{ inputs.healthcheck_url != '' || inputs.healthcheck_path != '' }}
+        run: |
+          MAX_RETRIES=$(( (${{ inputs.rollout_timeout_seconds }} + 9) / 10 ))
+          if [ "$MAX_RETRIES" -lt 1 ]; then
+            MAX_RETRIES=1
+          fi
+
+          if [ -n "${{ inputs.healthcheck_url }}" ]; then
+            HEALTHCHECK_URL="${{ inputs.healthcheck_url }}"
+          else
+            IS_EXTERNAL=$(az containerapp show \
+              --name "${{ inputs.container_app_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --query 'properties.configuration.ingress.external' \
+              -o tsv)
+
+            if [ "$IS_EXTERNAL" != "true" ]; then
+              echo "::warning::Skipping health check for internal-only Container App ${{ inputs.container_app_name }}"
+              exit 0
+            fi
+
+            FQDN=$(az containerapp show \
+              --name "${{ inputs.container_app_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --query 'properties.configuration.ingress.fqdn' \
+              -o tsv)
+
+            if [ -z "$FQDN" ]; then
+              echo "::error::Container App did not report an ingress FQDN for health checking"
+              exit 1
+            fi
+
+            HEALTHCHECK_URL="https://${FQDN}${{ inputs.healthcheck_path }}"
+          fi
+
+          echo "Probing $HEALTHCHECK_URL"
+          curl --fail --silent --show-error \
+            --retry "$MAX_RETRIES" \
+            --retry-delay 10 \
+            --retry-all-errors \
+            "$HEALTHCHECK_URL"

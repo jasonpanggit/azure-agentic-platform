@@ -17,7 +17,7 @@ Every REQ-ID relevant to Phase 8 is accounted for below. Source: `.planning/REQU
 
 | REQ-ID | Requirement | Phase Target | Phase 8 Treatment | Status |
 |--------|-------------|--------------|-------------------|--------|
-| **E2E-001** | CI gate blocks merge if any E2E test fails | Phase 7 | Simulation job added to `phase7-e2e.yml` with `needs: [e2e]`; `run-all.sh` exit code propagation gates CI (task 08-03-04) | ✅ SATISFIED |
+| **E2E-001** | CI gate blocks merge if any E2E test fails | Phase 7 | Simulation job added to `staging-e2e-simulation.yml` with `needs: [e2e]`; `run-all.sh` exit code propagation gates CI (task 08-03-04) | ✅ SATISFIED |
 | **E2E-002** | E2E test verifies full incident flow (inject → agent → SSE) | Phase 7 | `test.skip()` removed (08-02-01); test ran against prod — triage polling timed out (F-01 RBAC root cause); test structure correct, infrastructure gap prevents full pass | ⚠️ PARTIAL (F-01 blocks) |
 | **E2E-003** | E2E test verifies HITL approval flow | Phase 7 | `test.skip()` removed (08-02-02); ran against prod — passes vacuously (no pending approvals); approve/reject endpoints functional | ✅ SATISFIED |
 | **E2E-004** | E2E test verifies cross-subscription RBAC | Phase 7 | Ran against prod — all 6 domain routing checks pass, invalid domain rejected, auth enforcement confirmed | ✅ SATISFIED |
@@ -66,7 +66,7 @@ Every REQ-ID relevant to Phase 8 is accounted for below. Source: `.planning/REQU
 | `run-all.sh` runs 7 scenarios with exit code propagation | File exists; contains all 7 scenario names in SCENARIOS array; exits 1 if any fail | ✅ DONE |
 | `requirements.txt` lists all Python dependencies | File exists; contains `azure-identity`, `azure-cosmos`, `requests` | ✅ DONE |
 | VALIDATION-REPORT.md updated with simulation results | `## Simulation Results` section present; 8 rows (SIM-01 through SIM-07b) with durations and reply status | ✅ DONE |
-| `phase7-e2e.yml` updated with `simulation` job (E2E-001 gate) | `grep "simulation"` in workflow confirms job exists with `needs: [e2e]`; `run-all.sh` step present | ✅ DONE |
+| `staging-e2e-simulation.yml` updated with `simulation` job (E2E-001 gate) | `grep "simulation"` in workflow confirms job exists with `needs: [e2e]`; `run-all.sh` step present | ✅ DONE |
 
 ### Plan 08-04: Deferred Phase 7 Work
 
@@ -145,7 +145,7 @@ All artifacts specified across the 5 plans are verified present:
 | Chat OTel instrumented | `services/api-gateway/chat.py` | ✅ |
 | Approvals OTel instrumented | `services/api-gateway/approvals.py` | ✅ |
 | Teams roundtrip E2E spec | `e2e/e2e-teams-roundtrip.spec.ts` | ✅ |
-| CI simulation job | `.github/workflows/phase7-e2e.yml` | ✅ |
+| CI simulation job | `.github/workflows/staging-e2e-simulation.yml` | ✅ |
 | Validation report | `08-VALIDATION-REPORT.md` | ✅ |
 | Backlog | `.planning/BACKLOG.md` | ✅ |
 | STATE.md updated | `.planning/STATE.md` | ✅ |

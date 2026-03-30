@@ -7,14 +7,63 @@ resource, and time range.
 """
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 import os
+import re
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 APPINSIGHTS_CONNECTION_STRING = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
 LOG_ANALYTICS_WORKSPACE_ID = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+
+_SAFE_AGENT_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+_SAFE_ACTION_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+_SAFE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9._:/-]{1,256}$")
+_MAX_AUDIT_LIMIT = 200
+
+
+def _validate_agent(agent: Optional[str]) -> Optional[str]:
+    if agent is None:
+        return None
+    if not _SAFE_AGENT_PATTERN.fullmatch(agent):
+        raise ValueError("Invalid agent filter. Use lowercase agent names like 'compute'.")
+    return agent
+
+
+def _validate_action(action: Optional[str]) -> Optional[str]:
+    if action is None:
+        return None
+    if not _SAFE_ACTION_PATTERN.fullmatch(action):
+        raise ValueError("Invalid action filter. Use action names without quotes or operators.")
+    return action
+
+
+def _validate_token_filter(filter_name: str, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    if not _SAFE_TOKEN_PATTERN.fullmatch(value):
+        raise ValueError(f"Invalid {filter_name} filter. Use resource IDs or IDs without quotes.")
+    return value
+
+
+def _validate_iso8601(filter_name: str, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid {filter_name}. Expected ISO 8601 datetime.") from exc
+    return value
+
+
+def _validate_limit(limit: int) -> int:
+    if not isinstance(limit, int):
+        raise ValueError("Invalid limit. Expected an integer.")
+    if limit < 1 or limit > _MAX_AUDIT_LIMIT:
+        raise ValueError(f"Invalid limit. Use a value between 1 and {_MAX_AUDIT_LIMIT}.")
+    return limit
 
 
 async def query_audit_log(
@@ -27,6 +76,14 @@ async def query_audit_log(
     limit: int = 50,
 ) -> list[dict]:
     """Query agent action history from Application Insights."""
+    incident_id = _validate_token_filter("incident_id", incident_id)
+    agent = _validate_agent(agent)
+    action = _validate_action(action)
+    resource = _validate_token_filter("resource", resource)
+    from_time = _validate_iso8601("from_time", from_time)
+    to_time = _validate_iso8601("to_time", to_time)
+    limit = _validate_limit(limit)
+
     if not LOG_ANALYTICS_WORKSPACE_ID:
         logger.warning("LOG_ANALYTICS_WORKSPACE_ID not configured; returning empty audit log")
         return []
@@ -36,6 +93,9 @@ async def query_audit_log(
         "AppDependencies",
         "| where AppRoleName startswith 'agent-'",
     ]
+
+    # SECURITY: every interpolated value below is validated before reaching
+    # this block. Azure Monitor Query does not support parameterized KQL.
 
     if incident_id:
         kql_parts.append(f"| where Properties has '{incident_id}'")

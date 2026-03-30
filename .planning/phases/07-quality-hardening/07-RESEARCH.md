@@ -55,7 +55,7 @@ Phase 7 has **5 workstreams** that are largely independent:
 **What needs to happen:**
 1. Refactor `sc1`–`sc6` to remove `page.route()` mocks and use `BASE_URL` (real Container Apps FQDN)
 2. Add 5 new E2E spec files: `e2e-incident-flow.spec.ts`, `e2e-hitl-approval.spec.ts`, `e2e-rbac.spec.ts`, `e2e-sse-reconnect.spec.ts`, `e2e-audit-export.spec.ts`
-3. New CI workflow (`phase7-e2e.yml`) that deploys E2E environment, runs tests, tears down
+3. New CI workflow (`staging-e2e-simulation.yml`) that deploys E2E environment, runs tests, tears down
 4. CI gate: `required_status_checks` blocks merge if E2E fails
 5. 15-minute timeout on the full suite
 
@@ -225,7 +225,7 @@ Phase 7 has **5 workstreams** that are largely independent:
 ### CI Architecture for E2E Against Real Endpoints
 
 ```
-GitHub Actions Workflow (phase7-e2e.yml)
+GitHub Actions Workflow (staging-e2e-simulation.yml)
 │
 ├── Job 1: Deploy E2E Environment
 │   ├── terraform apply terraform/envs/e2e (dedicated E2E tfvars)
@@ -732,7 +732,7 @@ Set `CORS_ALLOWED_ORIGINS` to the prod web-ui FQDN in Terraform env vars.
 | `terraform/modules/agent-apps/main.tf` | Add teams-bot, web-ui; make target_port configurable | Terraform Prod |
 | `terraform/envs/prod/main.tf` | Verify all modules present | Terraform Prod |
 | `terraform/envs/prod/variables.tf` | May need teams-bot specific vars | Terraform Prod |
-| `.github/workflows/phase5-ci.yml` | Rename/extend for Phase 7 | CI |
+| `.github/workflows/api-gateway-web-ui-ci.yml` | Rename/extend for Phase 7 | CI |
 
 ### 10.2 New Files to Create
 
@@ -746,7 +746,7 @@ Set `CORS_ALLOWED_ORIGINS` to the prod web-ui FQDN in Terraform env vars.
 | `e2e/global-setup.ts` | Playwright global setup (auth + Cosmos) | E2E-001 |
 | `e2e/global-teardown.ts` | Playwright global teardown (cleanup) | E2E-001 |
 | `e2e/fixtures/auth.ts` | Auth fixture for bearer token injection | E2E-001 |
-| `.github/workflows/phase7-e2e.yml` | E2E CI workflow | E2E-001 |
+| `.github/workflows/staging-e2e-simulation.yml` | E2E CI workflow | E2E-001 |
 | `services/api-gateway/remediation_logger.py` | OneLake write for REMEDI-007 | REMEDI-007 |
 | `services/api-gateway/audit_export.py` | Report generation for AUDIT-006 | AUDIT-006 |
 | `services/web-ui/components/ObservabilityTab.tsx` | Observability tab container | Observability |
@@ -772,7 +772,7 @@ Set `CORS_ALLOWED_ORIGINS` to the prod web-ui FQDN in Terraform env vars.
 | Tab addition in DashboardPanel | `DashboardPanel.tsx` existing pattern | Observability tab |
 | E2E spec with `request.post()` | `arc-mcp-server.spec.ts` | All new E2E specs |
 | Terraform Container App for_each | `agent-apps/main.tf` | teams-bot, web-ui addition |
-| CI workflow with Playwright | `phase5-ci.yml` | Phase 7 E2E workflow |
+| CI workflow with Playwright | `api-gateway-web-ui-ci.yml` | Phase 7 E2E workflow |
 | Temporary PG firewall rule | `terraform-apply.yml` | Runbook seed in CI |
 
 ---
@@ -873,7 +873,7 @@ Based on the dependency analysis and complexity, the phase should be split into 
 - Playwright global setup/teardown (auth + Cosmos containers)
 - Auth fixture with service principal token injection
 - Refactored sc1–sc6 specs (mocks removed, real endpoints)
-- `phase7-e2e.yml` CI workflow
+- `staging-e2e-simulation.yml` CI workflow
 - E2E environment configuration (GitHub Secrets documentation)
 
 ### Plan 07-06: E2E Test Specs (E2E-002 through E2E-005)

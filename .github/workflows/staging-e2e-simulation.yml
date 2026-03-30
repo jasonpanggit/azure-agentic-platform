@@ -1,10 +1,11 @@
-name: Phase 7 E2E Tests
+name: Staging E2E + Incident Simulation
 
 on:
   push:
     branches: [main]
   pull_request:
     paths:
+      - '.github/workflows/staging-e2e-simulation.yml'
       - 'services/**'
       - 'e2e/**'
       - 'agents/**'

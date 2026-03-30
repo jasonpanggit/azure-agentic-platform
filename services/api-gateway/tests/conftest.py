@@ -11,9 +11,13 @@ Fixtures:
 - sample_remediation_proposal: Pre-built RemediationProposal for testing
 - pre_seeded_embeddings: 3 pre-computed 1536-dim float vectors for runbook RAG testing (no Azure OpenAI call)
 """
+import os
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 
 from services.api_gateway.main import app
 

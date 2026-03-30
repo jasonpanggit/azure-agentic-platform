@@ -58,14 +58,19 @@ async def _run_startup_migrations() -> None:
     Enables pgvector extension and creates the runbooks table if they don't
     exist. Runs silently if postgres env vars are not set (dev/test mode).
     """
-    postgres_host = os.environ.get("POSTGRES_HOST", "")
-    if not postgres_host:
-        logger.info("POSTGRES_HOST not set — skipping startup migrations")
-        return
     try:
         import asyncpg
-        from services.api_gateway.runbook_rag import _build_dsn
-        dsn = os.environ.get("POSTGRES_DSN", "") or _build_dsn()
+        from services.api_gateway.runbook_rag import (
+            RunbookSearchUnavailableError,
+            resolve_postgres_dsn,
+        )
+
+        try:
+            dsn = resolve_postgres_dsn()
+        except RunbookSearchUnavailableError:
+            logger.info("Runbook DB not configured — skipping startup migrations")
+            return
+
         conn = await asyncpg.connect(dsn)
         try:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -233,8 +238,18 @@ async def search_runbooks_endpoint(
 
     Authentication: Entra ID Bearer token required.
     """
-    embedding = await generate_query_embedding(query)
-    results = await search_runbooks(embedding, domain=domain, limit=limit)
+    from services.api_gateway.runbook_rag import RunbookSearchUnavailableError
+
+    try:
+        embedding = await generate_query_embedding(query)
+        results = await search_runbooks(embedding, domain=domain, limit=limit)
+    except RunbookSearchUnavailableError as exc:
+        logger.error("Runbook search unavailable: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
     return [RunbookResult(**r) for r in results]
 
 
@@ -466,15 +481,19 @@ async def get_audit_log(
 
     Authentication: Entra ID Bearer token required.
     """
-    results = await query_audit_log(
-        incident_id=incident_id,
-        agent=agent,
-        action=action,
-        resource=resource,
-        from_time=from_time,
-        to_time=to_time,
-        limit=limit,
-    )
+    try:
+        results = await query_audit_log(
+            incident_id=incident_id,
+            agent=agent,
+            action=action,
+            resource=resource,
+            from_time=from_time,
+            to_time=to_time,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return [AuditEntry(**r) for r in results]
 
 

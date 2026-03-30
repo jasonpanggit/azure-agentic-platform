@@ -20,9 +20,9 @@ resource "azurerm_cognitive_account_project" "main" {
   cognitive_account_id = azurerm_cognitive_account.foundry.id
   location             = var.location
 
-  # NOTE (ISSUE-09): identity block removed — azurerm_cognitive_account_project
-  # likely does not support the identity block. The project inherits identity
-  # from the parent cognitive account.
+  identity {
+    type = "SystemAssigned"
+  }
 
   tags = var.required_tags
 }
@@ -41,9 +41,6 @@ resource "azurerm_cognitive_deployment" "gpt4o" {
     name     = "Standard"
     capacity = var.model_capacity
   }
-
-  # ISSUE-03: tags were missing from model deployment
-  tags = var.required_tags
 }
 
 # Diagnostic settings for Foundry account
@@ -60,7 +57,7 @@ resource "azurerm_monitor_diagnostic_setting" "foundry" {
     category = "RequestResponse"
   }
 
-  metric {
+  enabled_metric {
     category = "AllMetrics"
   }
 }

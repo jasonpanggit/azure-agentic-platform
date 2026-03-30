@@ -17,7 +17,8 @@ set -euo pipefail
 RESOURCE_GROUP="rg-aap-prod"
 ENVIRONMENT="prod"
 APP_NAME="ca-azure-mcp-prod"
-PORT=8080
+PORT=5000
+AZURE_MCP_VERSION="2.0.0-beta.34"
 
 # Get Container Apps environment ID
 echo "Looking up Container Apps environment..."
@@ -39,18 +40,18 @@ if [ -n "$EXISTING" ]; then
   az containerapp update \
     --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
-    --image "node:20-slim" \
+    --image "node:20" \
     --set-env-vars "PORT=$PORT" \
     --min-replicas 1 \
     --max-replicas 2 \
-    --args "sh","-c","npm install -g @azure/mcp@latest && npx @azure/mcp@latest server start --transport http --port $PORT"
+    --args "sh","-c","npm install -g @azure/mcp@$AZURE_MCP_VERSION && azmcp server start --transport http"
 else
   echo "Creating Container App $APP_NAME..."
   az containerapp create \
     --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$CAE_ID" \
-    --image "node:20-slim" \
+    --image "node:20" \
     --target-port "$PORT" \
     --ingress "internal" \
     --transport "http" \
@@ -59,7 +60,7 @@ else
     --min-replicas 1 \
     --max-replicas 2 \
     --env-vars "PORT=$PORT" \
-    --command "sh" "-c" "npm install -g @azure/mcp@latest && npx @azure/mcp@latest server start --transport http --port $PORT" \
+    --command "sh" "-c" "npm install -g @azure/mcp@$AZURE_MCP_VERSION && azmcp server start --transport http" \
     --system-assigned
 fi
 
