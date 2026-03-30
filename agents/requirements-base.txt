@@ -10,13 +10,13 @@ azure-ai-projects>=2.0.1
 azure-ai-agents>=1.0.0
 
 # Foundry Hosted Agent adapters
-# PINNED: 1.0.0b17 is the latest available (released 2026-03-16).
-# WARNING: 1.0.0b17 declares agent-framework-core>=1.0.0rc2,<=1.0.0rc3 but this repo
-# pins agent-framework==1.0.0rc5. These packages need to release a b18+ that supports rc4/rc5.
-# Monitor https://pypi.org/project/azure-ai-agentserver-agentframework/ and upgrade together.
-# Do NOT change either pin in isolation — upgrade agent-framework + agentserver as a matched pair.
-azure-ai-agentserver-core==1.0.0b17
-azure-ai-agentserver-agentframework==1.0.0b17
+# NOTE: Cannot pin to ==1.0.0b17 — that version declares agent-framework-core<=1.0.0rc3
+# which conflicts with agent-framework==1.0.0rc5 (requires agent-framework-core==1.0.0rc5).
+# Kept unpinned until Microsoft releases a b18+ build that supports rc4+/rc5.
+# Monitor https://pypi.org/project/azure-ai-agentserver-agentframework/ and pin once
+# a version compatible with agent-framework==1.0.0rc5 is available.
+azure-ai-agentserver-core
+azure-ai-agentserver-agentframework
 
 # Azure Identity (managed identity via IMDS)
 azure-identity>=1.17.0

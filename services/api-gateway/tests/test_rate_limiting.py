@@ -89,7 +89,7 @@ class TestRateLimiting:
             return_value=mock_container,
         ), patch.dict("os.environ", {"PROD_SUBSCRIPTION_IDS": prod_sub_id}):
             with pytest.raises(ValueError) as exc_info:
-                asyncio.get_event_loop().run_until_complete(
+                asyncio.run(
                     process_approval_decision(
                         approval_id="appr_test-001",
                         thread_id="thread-test-001",

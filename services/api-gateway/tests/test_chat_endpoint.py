@@ -304,7 +304,7 @@ class TestGetChatResult:
     async def test_get_chat_result_with_run_id_targets_specific_run(self):
         """get_chat_result(run_id=...) retrieves that specific run directly."""
         mock_foundry = MagicMock()
-        mock_foundry.runs.retrieve.return_value = MagicMock(
+        mock_foundry.runs.get.return_value = MagicMock(
             id="run-specific", status="queued", required_action=None
         )
 
@@ -317,7 +317,7 @@ class TestGetChatResult:
             result = await get_chat_result("thread-123", run_id="run-specific")
 
         assert result["run_status"] == "queued"
-        mock_foundry.runs.retrieve.assert_called_once_with(
+        mock_foundry.runs.get.assert_called_once_with(
             thread_id="thread-123", run_id="run-specific"
         )
         # runs.list should NOT have been called
