@@ -22,8 +22,8 @@ import os
 
 from agent_framework import Agent, MCPStreamableHTTPTool
 
-from agents.shared.auth import get_foundry_client
-from agents.shared.otel import setup_telemetry
+from shared.auth import get_foundry_client
+from shared.otel import setup_telemetry
 from agents.patch.tools import (
     ALLOWED_MCP_TOOLS,
     query_activity_log,

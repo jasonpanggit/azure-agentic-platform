@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from agent_framework import Agent
 
-from agents.shared.auth import get_foundry_client
-from agents.shared.otel import setup_telemetry
+from shared.auth import get_foundry_client
+from shared.otel import setup_telemetry
 from agents.storage.tools import (
     ALLOWED_MCP_TOOLS,
     query_blob_diagnostics,

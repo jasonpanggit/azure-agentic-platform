@@ -20,9 +20,9 @@ from typing import Any, Dict, List, Optional
 import httpx
 from agent_framework import tool
 
-from agents.shared.auth import get_agent_identity, get_credential
-from agents.shared.otel import instrument_tool_call, setup_telemetry
-from agents.shared.runbook_tool import retrieve_runbooks
+from shared.auth import get_agent_identity, get_credential
+from shared.otel import instrument_tool_call, setup_telemetry
+from shared.runbook_tool import retrieve_runbooks
 
 # Lazy import — azure-mgmt-resourcegraph may not be installed in all envs
 # (e.g., local dev, test runner). Imported at module level for type checking
@@ -560,7 +560,7 @@ def search_runbooks(
     filtered to the patch domain. Results are cited in triage responses.
 
     This is a sync @tool wrapper around the async retrieve_runbooks
-    from agents.shared.runbook_tool. The shared retrieve_runbooks is an
+    from shared.runbook_tool. The shared retrieve_runbooks is an
     async def without @tool — it cannot be registered directly in
     Agent(tools=[...]). This wrapper bridges the gap.
 

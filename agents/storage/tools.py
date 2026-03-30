@@ -11,8 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from agent_framework import tool
 
-from agents.shared.auth import get_agent_identity
-from agents.shared.otel import instrument_tool_call, setup_telemetry
+from shared.auth import get_agent_identity
+from shared.otel import instrument_tool_call, setup_telemetry
 
 tracer = setup_telemetry("aiops-storage-agent")
 

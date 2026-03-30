@@ -9,12 +9,23 @@ can be imported during tests without requiring the real agent-framework RC
 package to be installed (it requires Python >=3.10 and is pre-release).
 The stub exposes the symbols used by our source code; actual framework
 behaviour is not needed for unit/integration tests.
+
+Path note: agent source files use `from shared.xxx import ...` which matches
+the container filesystem (/app/shared/). In the test environment the shared
+package lives at agents/shared/, so we add agents/ to sys.path so that
+`import shared` resolves to agents/shared/ during testing.
 """
 import sys
 import types
 from pathlib import Path
 
 _ROOT = Path(__file__).parent
+
+# Make `import shared` resolve to agents/shared/ in test context,
+# matching the container runtime path /app/shared/.
+_AGENTS_DIR = str(_ROOT / "agents")
+if _AGENTS_DIR not in sys.path:
+    sys.path.insert(0, _AGENTS_DIR)
 
 
 # ---------------------------------------------------------------------------

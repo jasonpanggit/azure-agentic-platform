@@ -26,10 +26,10 @@ from typing import List, Optional
 
 from agent_framework import Agent, tool
 
-from agents.shared.auth import get_foundry_client
-from agents.shared.envelope import IncidentMessage, validate_envelope
-from agents.shared.otel import setup_telemetry
-from agents.shared.routing import classify_query_text
+from shared.auth import get_foundry_client
+from shared.envelope import IncidentMessage, validate_envelope
+from shared.otel import setup_telemetry
+from shared.routing import classify_query_text
 
 # Telemetry tracer for the orchestrator service
 tracer = setup_telemetry("aiops-orchestrator-agent")
