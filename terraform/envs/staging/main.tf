@@ -170,6 +170,7 @@ module "agent_apps" {
   container_apps_environment_id  = module.compute_env.container_apps_environment_id
   acr_login_server               = module.compute_env.acr_login_server
   foundry_account_endpoint       = module.foundry.foundry_account_endpoint
+  foundry_project_endpoint       = module.foundry.foundry_project_endpoint
   foundry_project_id             = module.foundry.foundry_project_id
   foundry_model_deployment_name  = module.foundry.foundry_model_deployment_name
   app_insights_connection_string = module.monitoring.app_insights_connection_string
