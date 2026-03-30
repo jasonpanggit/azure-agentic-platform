@@ -19,15 +19,24 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from agent_framework import ai_function
-from azure.mgmt.resourcegraph import ResourceGraphClient
-from azure.mgmt.resourcegraph.models import (
-    QueryRequest,
-    QueryRequestOptions,
-)
 
 from agents.shared.auth import get_agent_identity, get_credential
 from agents.shared.otel import instrument_tool_call, setup_telemetry
 from agents.shared.runbook_tool import retrieve_runbooks
+
+# Lazy import — azure-mgmt-resourcegraph may not be installed in all envs
+# (e.g., local dev, test runner). Imported at module level for type checking
+# and IDE support, but actual class resolution happens inside tool functions.
+try:
+    from azure.mgmt.resourcegraph import ResourceGraphClient
+    from azure.mgmt.resourcegraph.models import (
+        QueryRequest,
+        QueryRequestOptions,
+    )
+except ImportError:
+    ResourceGraphClient = None  # type: ignore[assignment,misc]
+    QueryRequest = None  # type: ignore[assignment,misc]
+    QueryRequestOptions = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-patch-agent")
 
