@@ -3,26 +3,42 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const API_GATEWAY_URL =
-  process.env.API_GATEWAY_URL ||
-  'https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io';
+function getApiGatewayUrl(): string {
+  const url = process.env.API_GATEWAY_URL;
+  if (!url) {
+    if (process.env.NEXT_PUBLIC_DEV_MODE === 'true') {
+      return 'http://localhost:8000';
+    }
+    throw new Error('API_GATEWAY_URL is not configured');
+  }
+  return url;
+}
 
 /**
  * POST /api/proxy/chat
  *
  * Proxies chat messages from the web UI to the API gateway.
+ * Forwards the Authorization header from the browser (MSAL pass-through).
  * Body: { message: string, thread_id?: string, subscription_ids?: string[] }
  * Response: { thread_id: string }
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    const apiGatewayUrl = getApiGatewayUrl();
     const body = await request.json();
 
-    const res = await fetch(`${API_GATEWAY_URL}/api/v1/chat`, {
+    const upstreamHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader) {
+      upstreamHeaders['Authorization'] = authHeader;
+    }
+
+    const res = await fetch(`${apiGatewayUrl}/api/v1/chat`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: upstreamHeaders,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000),
     });
