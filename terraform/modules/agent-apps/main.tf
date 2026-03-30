@@ -190,8 +190,13 @@ resource "azurerm_container_app" "agents" {
 
   # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
   # AGENT_ENTRA_ID (and other required env vars) must propagate on every `terraform apply`.
-  # If you need to preserve manually-set env vars between applies, use:
-  #   az containerapp update --name <app> --resource-group <rg> --set-env-vars "KEY=VALUE"
+  #
+  # ⚠️  IMPORTANT: Any env vars set manually via `az containerapp update --set-env-vars`
+  # (e.g. ORCHESTRATOR_AGENT_ID, domain agent IDs) will be WIPED on the next `terraform apply`
+  # unless they are also set in terraform.tfvars (var.orchestrator_agent_id etc.).
+  # Before running `terraform apply` in production, ensure all required agent IDs are
+  # populated in the tfvars file for that environment.
+  #
   # Runtime image revisions are still ignored — CI/CD owns the image tag.
   lifecycle {
     ignore_changes = [
@@ -326,6 +331,8 @@ resource "azurerm_container_app" "teams_bot" {
   # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
   # AGENT_ENTRA_ID must propagate on apply. Secret values (BOT_PASSWORD) are managed
   # out-of-band via `az containerapp secret set` — those are in the secret block, not env.
+  # ⚠️  IMPORTANT: Manually-set env vars (e.g. BOT_ID, BOT_TENANT_ID) will be wiped on
+  # `terraform apply` unless also set in terraform.tfvars (var.bot_id etc.).
   # Runtime image revisions are still ignored — CI/CD owns the image tag.
   lifecycle {
     ignore_changes = [

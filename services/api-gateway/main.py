@@ -185,6 +185,11 @@ async def apply_http_rate_limit(request: Request, call_next):
                 headers={"Retry-After": str(retry)},
             )
     elif path == "/api/v1/incidents" and request.method == "GET":
+        # GET (list) is rate-limited to protect the UI dashboard from polling abuse.
+        # POST (ingest) is deliberately NOT rate-limited here — it is called by the
+        # Fabric Activator webhook (trusted machine-to-machine) and must not be
+        # throttled. POST /api/v1/incidents also requires a valid Entra Bearer token
+        # (Depends(verify_token)), which provides its own access control.
         if not incidents_rate_limiter.check(ip):
             retry = incidents_rate_limiter.retry_after(ip)
             return JSONResponse(
