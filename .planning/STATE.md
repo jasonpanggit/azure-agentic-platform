@@ -5,7 +5,7 @@ milestone_name: milestone
 status: unknown
 last_updated: "2026-03-30T00:00:00Z"
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 8
   total_plans: 49
   completed_plans: 42
@@ -89,6 +89,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
 | 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
+| 11 | Patch Domain Agent | Not planned yet |
 
 ---
 
@@ -207,6 +208,16 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
 | 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
 | 260330-p8d | Fix critical bugs in GitHub Actions workflows | 2026-03-30 | 3758e75 | [260330-p8d-fix-critical-bugs-in-github-actions-work](./quick/260330-p8d-fix-critical-bugs-in-github-actions-work/) |
+
+---
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 9 added: Web UI Revamp — rebuild with Tailwind CSS + shadcn/ui
+- Phase 10 added: API Gateway Auth Audit Hardening
+- Phase 11 added: Patch Domain Agent — ARG-based patch assessment/installation agent using Azure Update Manager query-logs, wired into orchestrator routing
 
 ---
 
