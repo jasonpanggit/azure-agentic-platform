@@ -14,7 +14,7 @@ RBAC scope: Virtual Machine Contributor + Monitoring Reader (enforced by Terrafo
 """
 from __future__ import annotations
 
-from agent_framework import ChatAgent
+from agent_framework import Agent
 
 from agents.shared.auth import get_foundry_client
 from agents.shared.otel import setup_telemetry
@@ -97,19 +97,19 @@ AKS node-level issues, App Service, and Azure Functions.
 # ---------------------------------------------------------------------------
 
 
-def create_compute_agent() -> ChatAgent:
-    """Create and configure the Compute ChatAgent instance.
+def create_compute_agent() -> Agent:
+    """Create and configure the Compute Agent instance.
 
     Returns:
-        ChatAgent configured with compute-domain tools and system prompt.
+        Agent configured with compute-domain tools and instructions.
     """
     client = get_foundry_client()
 
-    return ChatAgent(
+    return Agent(
+        client,
+        COMPUTE_AGENT_SYSTEM_PROMPT,
         name="compute-agent",
         description="Azure compute domain specialist — VMs, VMSS, AKS, App Service.",
-        system_prompt=COMPUTE_AGENT_SYSTEM_PROMPT,
-        client=client,
         tools=[
             query_activity_log,
             query_log_analytics,
@@ -124,5 +124,5 @@ def create_compute_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_compute_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_compute_agent()).run()

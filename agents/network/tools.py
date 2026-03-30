@@ -1,7 +1,7 @@
 """Network Agent tool functions — azure-mgmt-network SDK wrappers + Monitor.
 
 The Azure MCP Server has limited dedicated networking tools (no direct VNet/NSG/LB
-tools confirmed GA). The Network Agent supplements MCP tools with @ai_function
+tools confirmed GA). The Network Agent supplements MCP tools with @tool
 wrappers around the azure-mgmt-network SDK.
 
 Allowed MCP tools (explicit allowlist — no wildcards):
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from agent_framework import ai_function
+from agent_framework import tool
 
 from agents.shared.auth import get_agent_identity
 from agents.shared.otel import instrument_tool_call, setup_telemetry
@@ -24,7 +24,7 @@ tracer = setup_telemetry("aiops-network-agent")
 
 # Explicit MCP tool allowlist — no wildcards permitted.
 # NOTE: azure-mgmt-network SDK (not available in Azure MCP Server).
-# Direct VNet/NSG/LB operations are provided as @ai_function wrappers below.
+# Direct VNet/NSG/LB operations are provided as @tool wrappers below.
 ALLOWED_MCP_TOOLS: List[str] = [
     "monitor.query_logs",
     "monitor.query_metrics",
@@ -33,7 +33,7 @@ ALLOWED_MCP_TOOLS: List[str] = [
 ]
 
 
-@ai_function
+@tool
 def query_nsg_rules(
     resource_group: str,
     nsg_name: str,
@@ -77,7 +77,7 @@ def query_nsg_rules(
         }
 
 
-@ai_function
+@tool
 def query_load_balancer_health(
     resource_group: str,
     lb_name: str,
@@ -120,7 +120,7 @@ def query_load_balancer_health(
         }
 
 
-@ai_function
+@tool
 def query_vnet_topology(
     resource_group: str,
     vnet_name: str,
@@ -165,7 +165,7 @@ def query_vnet_topology(
         }
 
 
-@ai_function
+@tool
 def query_peering_status(
     resource_group: str,
     vnet_name: str,

@@ -1,11 +1,15 @@
 """Orchestrator Agent — incident classifier and domain router (AGENT-001, AGENT-002, TRIAGE-001).
 
 The Orchestrator is the central dispatcher for all Azure infrastructure incidents.
-It classifies incoming incidents by domain, routes to the correct specialist agent
-via HandoffOrchestrator, and manages cross-domain escalations.
+It classifies incoming incidents by domain and routes to the correct specialist agent
+via the Foundry thread mechanism. Domain agents are invoked as separate Foundry-hosted
+agents (each running in their own Container App) — routing happens by the api-gateway
+reading the orchestrator's classification result and dispatching to the appropriate
+domain agent endpoint.
 
 Requirements:
-    AGENT-001: All routing via HandoffOrchestrator handoff mechanism.
+    AGENT-001: All routing via Foundry handoff mechanism (orchestrator outputs target domain;
+               api-gateway dispatches to domain agent Container App).
     AGENT-002: Typed JSON envelope (IncidentMessage) for all inter-agent messages.
     TRIAGE-001: Every incident MUST be classified before handoff.
 
@@ -18,12 +22,11 @@ Safety constraints:
 """
 from __future__ import annotations
 
-import os
 from typing import List, Optional
 
-from agent_framework import AgentTarget, HandoffOrchestrator, ai_function
+from agent_framework import Agent, tool
 
-from agents.shared.auth import get_credential, get_foundry_client
+from agents.shared.auth import get_foundry_client
 from agents.shared.envelope import IncidentMessage, validate_envelope
 from agents.shared.otel import setup_telemetry
 from agents.shared.routing import classify_query_text
@@ -60,7 +63,7 @@ In BOTH cases you MUST route to a domain agent — you NEVER answer from your ow
 1. Use the `domain` field when present and unambiguous.
 2. When `domain` is absent or ambiguous, call `classify_incident_domain` with
    `affected_resources`, `detection_rule`, and `kql_evidence`.
-3. Hand off via HandoffOrchestrator with a typed envelope (AGENT-002).
+3. Hand off with a typed envelope (AGENT-002).
 
 ### Type B — Conversational operator queries
 Conversational queries may arrive either as raw natural language or as a JSON
@@ -141,7 +144,7 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
 # ---------------------------------------------------------------------------
 
 
-@ai_function
+@tool
 def classify_incident_domain(
     affected_resources: List[str],
     detection_rule: str,
@@ -199,77 +202,32 @@ def classify_incident_domain(
 # ---------------------------------------------------------------------------
 
 
-def create_orchestrator() -> HandoffOrchestrator:
-    """Create and configure the HandoffOrchestrator instance.
+def create_orchestrator() -> Agent:
+    """Create and configure the Orchestrator Agent instance.
 
-    Registers all 7 domain agent targets with their Foundry agent IDs
-    sourced from environment variables set by the Terraform agent-apps module.
+    Returns an Agent that classifies incidents and outputs routing decisions.
+    Domain agents are invoked as separate Foundry-hosted agents (each running
+    in their own Container App). The api-gateway reads the orchestrator's
+    classification output and dispatches to the appropriate domain agent
+    endpoint — routing is NOT performed by the orchestrator directly (AGENT-001).
+
+    Environment variables (set by Terraform agent-apps module):
+        COMPUTE_AGENT_ID, NETWORK_AGENT_ID, STORAGE_AGENT_ID,
+        SECURITY_AGENT_ID, SRE_AGENT_ID, ARC_AGENT_ID, PATCH_AGENT_ID
 
     Returns:
-        Configured HandoffOrchestrator ready to accept incident messages.
+        Agent configured with classify_incident_domain tool and routing
+        instructions.
     """
     client = get_foundry_client()
 
-    orchestrator = HandoffOrchestrator(
+    return Agent(
+        client,
+        ORCHESTRATOR_SYSTEM_PROMPT,
         name="orchestrator-agent",
         description="Central incident dispatcher — classifies and routes to domain agents.",
-        system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
-        client=client,
         tools=[classify_incident_domain],
     )
-
-    # Register all 7 domain agent targets (AGENT-001)
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["compute"],
-            agent_id=os.environ.get("COMPUTE_AGENT_ID", ""),
-            description="Azure compute domain specialist (VMs, VMSS, AKS, App Service).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["network"],
-            agent_id=os.environ.get("NETWORK_AGENT_ID", ""),
-            description="Azure network domain specialist (VNets, NSGs, load balancers, DNS).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["storage"],
-            agent_id=os.environ.get("STORAGE_AGENT_ID", ""),
-            description="Azure storage domain specialist (Blob, Files, ADLS Gen2, managed disks).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["security"],
-            agent_id=os.environ.get("SECURITY_AGENT_ID", ""),
-            description="Azure security domain specialist (Defender, Key Vault, RBAC drift).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["sre"],
-            agent_id=os.environ.get("SRE_AGENT_ID", ""),
-            description="SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["arc"],
-            agent_id=os.environ.get("ARC_AGENT_ID", ""),
-            description="Azure Arc domain specialist (Arc-enabled servers, Arc Kubernetes, Arc data services).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["patch"],
-            agent_id=os.environ.get("PATCH_AGENT_ID", ""),
-            description="Azure patch management specialist (Update Manager, patch compliance, KB-to-CVE).",
-        )
-    )
-
-    return orchestrator
 
 
 # ---------------------------------------------------------------------------
@@ -277,5 +235,5 @@ def create_orchestrator() -> HandoffOrchestrator:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    orchestrator = create_orchestrator()
-    orchestrator.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_orchestrator()).run()

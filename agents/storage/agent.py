@@ -14,7 +14,7 @@ RBAC scope: Storage Blob Data Reader (enforced by Terraform).
 """
 from __future__ import annotations
 
-from agent_framework import ChatAgent
+from agent_framework import Agent
 
 from agents.shared.auth import get_foundry_client
 from agents.shared.otel import setup_telemetry
@@ -95,19 +95,19 @@ ADLS Gen2, and managed disks.
 # ---------------------------------------------------------------------------
 
 
-def create_storage_agent() -> ChatAgent:
-    """Create and configure the Storage ChatAgent instance.
+def create_storage_agent() -> Agent:
+    """Create and configure the Storage Agent instance.
 
     Returns:
-        ChatAgent configured with storage-domain tools and system prompt.
+        Agent configured with storage-domain tools and instructions.
     """
     client = get_foundry_client()
 
-    return ChatAgent(
+    return Agent(
+        client,
+        STORAGE_AGENT_SYSTEM_PROMPT,
         name="storage-agent",
         description="Azure storage domain specialist — Blob, Files, ADLS Gen2, managed disks.",
-        system_prompt=STORAGE_AGENT_SYSTEM_PROMPT,
-        client=client,
         tools=[
             query_storage_metrics,
             query_blob_diagnostics,
@@ -121,5 +121,5 @@ def create_storage_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_storage_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_storage_agent()).run()

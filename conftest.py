@@ -21,56 +21,90 @@ _ROOT = Path(__file__).parent
 # agent_framework stub
 # ---------------------------------------------------------------------------
 
+def _install_orchestrations_stub() -> None:
+    """Install a minimal agent_framework_orchestrations stub."""
+    if "agent_framework_orchestrations" in sys.modules:
+        return
+
+    stub = types.ModuleType("agent_framework_orchestrations")
+
+    class HandoffBuilder:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def participants(self, participants):
+            return self
+
+        def build(self):
+            return None
+
+    stub.HandoffBuilder = HandoffBuilder
+    sys.modules["agent_framework_orchestrations"] = stub
+
+
 def _install_agent_framework_stub() -> None:
     """Install a minimal agent_framework stub into sys.modules.
 
-    Provides the symbols referenced in our agent source files:
-        AgentTarget, HandoffOrchestrator, ChatAgent, ai_function
+    Provides the symbols referenced in our agent source files (rc5 API):
+        Agent, tool, MCPStreamableHTTPTool
+    Also installs agent_framework_orchestrations stub with HandoffBuilder.
     Real framework behaviour is not required for unit/integration tests.
     Only installed when the real package is not present OR when the real
     package does not export these symbols (RC API mismatch).
     """
-    # Check if the real package already exports the symbols we need
+    # Check if the real package already exports the rc5 symbols we need
     real_pkg = sys.modules.get("agent_framework")
-    if real_pkg is not None and hasattr(real_pkg, "ai_function"):
-        return  # Real package is present and has the right API
+    if real_pkg is not None and hasattr(real_pkg, "Agent") and hasattr(real_pkg, "tool"):
+        _install_orchestrations_stub()
+        return  # Real rc5 package is present
 
     stub = types.ModuleType("agent_framework")
 
-    def ai_function(fn=None, **kwargs):
+    def tool(fn=None, **kwargs):
         """No-op decorator — returns the function unchanged."""
         if fn is None:
-            # Called as @ai_function(name=...) — return decorator
             def decorator(f):
                 return f
             return decorator
         return fn
 
+    # Legacy alias so any remaining old-API references don't crash on import
+    ai_function = tool
+
     class _Base:
         def __init__(self, *args, **kwargs):
-            pass
-
-        def add_target(self, target):
             pass
 
         def serve(self):
             pass
 
+    class Agent(_Base):
+        pass
+
+    class MCPStreamableHTTPTool(_Base):
+        pass
+
+    # Legacy aliases — kept so old test stubs that reference these don't break
+    class ChatAgent(_Base):
+        pass
+
     class AgentTarget(_Base):
         pass
 
     class HandoffOrchestrator(_Base):
-        pass
+        def add_target(self, target):
+            pass
 
-    class ChatAgent(_Base):
-        pass
-
+    stub.tool = tool
     stub.ai_function = ai_function
+    stub.Agent = Agent
+    stub.MCPStreamableHTTPTool = MCPStreamableHTTPTool
+    stub.ChatAgent = ChatAgent
     stub.AgentTarget = AgentTarget
     stub.HandoffOrchestrator = HandoffOrchestrator
-    stub.ChatAgent = ChatAgent
 
     sys.modules["agent_framework"] = stub
+    _install_orchestrations_stub()
 
 
 _install_agent_framework_stub()

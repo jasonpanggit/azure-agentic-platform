@@ -1,6 +1,6 @@
 """Compute Agent tool functions — Azure Monitor and Resource Health wrappers.
 
-Provides @ai_function tools for querying Activity Log, Log Analytics,
+Provides @tool functions for querying Activity Log, Log Analytics,
 Resource Health, and Azure Monitor metrics for compute resources.
 
 Allowed MCP tools (explicit allowlist — no wildcards):
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from agent_framework import ai_function
+from agent_framework import tool
 
 from agents.shared.auth import get_agent_identity
 from agents.shared.otel import instrument_tool_call, setup_telemetry
@@ -35,7 +35,7 @@ ALLOWED_MCP_TOOLS: List[str] = [
 ]
 
 
-@ai_function
+@tool
 def query_activity_log(
     resource_ids: List[str],
     timespan_hours: int = 2,
@@ -76,7 +76,7 @@ def query_activity_log(
         }
 
 
-@ai_function
+@tool
 def query_log_analytics(
     workspace_id: str,
     kql_query: str,
@@ -121,7 +121,7 @@ def query_log_analytics(
         }
 
 
-@ai_function
+@tool
 def query_resource_health(
     resource_id: str,
 ) -> Dict[str, Any]:
@@ -161,7 +161,7 @@ def query_resource_health(
         }
 
 
-@ai_function
+@tool
 def query_monitor_metrics(
     resource_id: str,
     metric_names: List[str],

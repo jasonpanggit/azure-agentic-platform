@@ -15,7 +15,7 @@ RBAC scope: Reader + Monitoring Reader across all subscriptions (enforced by Ter
 """
 from __future__ import annotations
 
-from agent_framework import ChatAgent
+from agent_framework import Agent
 
 from agents.shared.auth import get_foundry_client
 from agents.shared.otel import setup_telemetry
@@ -110,19 +110,19 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 # ---------------------------------------------------------------------------
 
 
-def create_sre_agent() -> ChatAgent:
-    """Create and configure the SRE ChatAgent instance.
+def create_sre_agent() -> Agent:
+    """Create and configure the SRE Agent instance.
 
     Returns:
-        ChatAgent configured with SRE tools and system prompt.
+        Agent configured with SRE tools and instructions.
     """
     client = get_foundry_client()
 
-    return ChatAgent(
+    return Agent(
+        client,
+        SRE_AGENT_SYSTEM_PROMPT,
         name="sre-agent",
         description="SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",
-        system_prompt=SRE_AGENT_SYSTEM_PROMPT,
-        client=client,
         tools=[
             query_availability_metrics,
             query_performance_baselines,
@@ -136,5 +136,5 @@ def create_sre_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_sre_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_sre_agent()).run()

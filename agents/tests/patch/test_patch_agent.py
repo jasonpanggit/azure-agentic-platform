@@ -120,23 +120,23 @@ class TestCreatePatchAgent:
     """Verify create_patch_agent factory function."""
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
-    @patch("agents.patch.agent.ChatAgent")
+    @patch("agents.patch.agent.Agent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
-    def test_create_patch_agent_returns_chat_agent(self, mock_client, mock_chat_agent):
+    def test_create_patch_agent_returns_chat_agent(self, mock_client, mock_agent):
         from agents.patch.agent import create_patch_agent
 
         agent = create_patch_agent()
 
-        # ChatAgent was called with name="patch-agent"
-        mock_chat_agent.assert_called_once()
-        call_kwargs = mock_chat_agent.call_args[1]
+        # Agent was called with name="patch-agent"
+        mock_agent.assert_called_once()
+        call_kwargs = mock_agent.call_args[1]
         assert call_kwargs["name"] == "patch-agent"
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
-    @patch("agents.patch.agent.ChatAgent")
+    @patch("agents.patch.agent.Agent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
     def test_create_patch_agent_registers_search_runbooks_in_tools(
-        self, mock_client, mock_chat_agent
+        self, mock_client, mock_agent
     ):
         """Verify search_runbooks (the sync wrapper) is in the agent's tools list (TRIAGE-005)."""
         from agents.patch.agent import create_patch_agent
@@ -144,20 +144,20 @@ class TestCreatePatchAgent:
 
         create_patch_agent()
 
-        call_kwargs = mock_chat_agent.call_args[1]
+        call_kwargs = mock_agent.call_args[1]
         assert search_runbooks in call_kwargs["tools"]
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
-    @patch("agents.patch.agent.ChatAgent")
+    @patch("agents.patch.agent.Agent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
     def test_create_patch_agent_registers_all_seven_tools(
-        self, mock_client, mock_chat_agent
+        self, mock_client, mock_agent
     ):
         from agents.patch.agent import create_patch_agent
 
         create_patch_agent()
 
-        call_kwargs = mock_chat_agent.call_args[1]
+        call_kwargs = mock_agent.call_args[1]
         assert len(call_kwargs["tools"]) == 7
 
     @patch.dict(
@@ -165,34 +165,34 @@ class TestCreatePatchAgent:
         {"AZURE_MCP_SERVER_URL": "http://azure-mcp.internal:8080/mcp"},
         clear=False,
     )
-    @patch("agents.patch.agent.MCPTool")
-    @patch("agents.patch.agent.ChatAgent")
+    @patch("agents.patch.agent.MCPStreamableHTTPTool")
+    @patch("agents.patch.agent.Agent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
     def test_create_patch_agent_mounts_mcp_tool_when_url_set(
-        self, mock_client, mock_chat_agent, mock_mcp_tool
+        self, mock_client, mock_agent, mock_mcp_tool
     ):
         from agents.patch.agent import create_patch_agent
 
         create_patch_agent()
 
-        # MCPTool should have been created
+        # MCPStreamableHTTPTool should have been created
         mock_mcp_tool.assert_called_once()
-        # ChatAgent should receive non-empty tool_resources
-        call_kwargs = mock_chat_agent.call_args[1]
-        assert len(call_kwargs["tool_resources"]) >= 1
+        # Agent should receive non-empty tools list
+        call_kwargs = mock_agent.call_args[1]
+        assert len(call_kwargs["tools"]) >= 1
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
-    @patch("agents.patch.agent.ChatAgent")
+    @patch("agents.patch.agent.Agent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
     def test_create_patch_agent_works_without_mcp_url(
-        self, mock_client, mock_chat_agent
+        self, mock_client, mock_agent
     ):
         from agents.patch.agent import create_patch_agent
 
         create_patch_agent()
 
-        call_kwargs = mock_chat_agent.call_args[1]
-        assert call_kwargs["tool_resources"] == []
+        call_kwargs = mock_agent.call_args[1]
+        assert isinstance(call_kwargs["tools"], list)
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())

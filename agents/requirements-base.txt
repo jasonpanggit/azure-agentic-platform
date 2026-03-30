@@ -3,6 +3,7 @@
 
 # Microsoft Agent Framework (RC — pin exactly)
 agent-framework==1.0.0rc5
+agent-framework-orchestrations>=1.0.0b260311
 
 # Azure AI Foundry SDK (GA)
 # azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents
