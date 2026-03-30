@@ -449,7 +449,7 @@ Plans:
 
 Plans:
 - [x] 11-01 Patch Agent Spec + Implementation + Unit Tests
-- [ ] 11-02 Orchestrator Routing + Integration
+- [x] 11-02 Orchestrator Routing + Integration
 - [ ] 11-03 Terraform + CI/CD
 
 ---
