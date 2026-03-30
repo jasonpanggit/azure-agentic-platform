@@ -91,6 +91,13 @@ resource "azurerm_container_app" "agents" {
         name  = "CORS_ALLOWED_ORIGINS"
         value = var.cors_allowed_origins
       }
+      # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
+      # Value is this Container App's own system-assigned managed identity principal_id.
+      # agents/shared/auth.py raises ValueError if this is missing at runtime.
+      env {
+        name  = "AGENT_ENTRA_ID"
+        value = azurerm_container_app.agents[each.key].identity[0].principal_id
+      }
       # Orchestrator Agent ID — required by api-gateway and orchestrator for Foundry dispatch
       dynamic "env" {
         for_each = var.orchestrator_agent_id != "" ? [1] : []
@@ -181,10 +188,13 @@ resource "azurerm_container_app" "agents" {
 
   tags = var.required_tags
 
-  # Runtime image revisions and env vars are updated by CI/CD and manual setup steps.
+  # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
+  # AGENT_ENTRA_ID (and other required env vars) must propagate on every `terraform apply`.
+  # If you need to preserve manually-set env vars between applies, use:
+  #   az containerapp update --name <app> --resource-group <rg> --set-env-vars "KEY=VALUE"
+  # Runtime image revisions are still ignored — CI/CD owns the image tag.
   lifecycle {
     ignore_changes = [
-      template[0].container[0].env,
       template[0].container[0].image,
     ]
   }
@@ -283,6 +293,11 @@ resource "azurerm_container_app" "teams_bot" {
         name  = "PORT"
         value = "3978"
       }
+      # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
+      env {
+        name  = "AGENT_ENTRA_ID"
+        value = azurerm_container_app.teams_bot.identity[0].principal_id
+      }
     }
   }
 
@@ -308,11 +323,13 @@ resource "azurerm_container_app" "teams_bot" {
 
   tags = var.required_tags
 
-  # Teams Bot credentials and runtime image updates are managed out of band.
+  # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
+  # AGENT_ENTRA_ID must propagate on apply. Secret values (BOT_PASSWORD) are managed
+  # out-of-band via `az containerapp secret set` — those are in the secret block, not env.
+  # Runtime image revisions are still ignored — CI/CD owns the image tag.
   lifecycle {
     ignore_changes = [
       secret,
-      template[0].container[0].env,
       template[0].container[0].image,
     ]
   }

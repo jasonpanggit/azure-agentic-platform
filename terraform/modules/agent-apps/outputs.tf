@@ -58,3 +58,19 @@ output "container_app_ids" {
     }
   )
 }
+
+# TASK-12-03: Expose per-app AGENT_ENTRA_ID values so calling modules / CI scripts can
+# cross-reference what was injected into each Container App's environment.
+# This mirrors the value set in main.tf → env { name = "AGENT_ENTRA_ID" }.
+output "agent_entra_id" {
+  description = "Map of agent/service name to the AGENT_ENTRA_ID value injected into each Container App (system-assigned managed identity principal_id)."
+  value = merge(
+    {
+      for name, app in azurerm_container_app.agents :
+      name => app.identity[0].principal_id
+    },
+    {
+      "teams-bot" = azurerm_container_app.teams_bot.identity[0].principal_id
+    }
+  )
+}
