@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/agent-images.yml'
+      - 'agents/requirements-base.txt'
+      - 'agents/Dockerfile.base'
+      - 'agents/shared/**'
       - 'agents/orchestrator/**'
       - 'agents/compute/**'
       - 'agents/network/**'
