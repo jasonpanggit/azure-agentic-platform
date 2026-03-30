@@ -25,9 +25,9 @@ from agents.shared.envelope import IncidentMessage, validate_envelope
 class TestHandoffOrchestrator:
     """Verify Orchestrator classifies and routes incidents correctly."""
 
-    def test_domain_agent_map_has_all_six_domains(self):
-        """DOMAIN_AGENT_MAP must contain all 6 domains."""
-        expected_domains = {"compute", "network", "storage", "security", "sre", "arc"}
+    def test_domain_agent_map_has_all_seven_domains(self):
+        """DOMAIN_AGENT_MAP must contain all 7 domains."""
+        expected_domains = {"compute", "network", "storage", "security", "sre", "arc", "patch"}
         assert set(DOMAIN_AGENT_MAP.keys()) == expected_domains
 
     def test_classify_compute_resource(self):
@@ -188,3 +188,39 @@ class TestHandoffOrchestrator:
             assert agent_name.endswith("-agent"), (
                 f"Domain '{domain}' maps to '{agent_name}' — expected '-agent' suffix"
             )
+
+    def test_classify_maintenance_resource(self):
+        """Maintenance resource (Update Manager) is classified to patch domain."""
+        result = classify_incident_domain(
+            affected_resources=[
+                "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Maintenance/maintenanceConfigurations/mc-1"
+            ],
+            detection_rule="patch-compliance-drift",
+        )
+        assert result["domain"] == "patch"
+
+    @pytest.mark.parametrize(
+        "query_text",
+        [
+            "show patch compliance status",
+            "which machines have missing patches",
+            "check update manager assessment results",
+            "find machines pending reboot after patching",
+        ],
+    )
+    def test_classify_patch_conversational_variants(self, query_text: str):
+        """Patch-related conversational variants must classify to patch."""
+        result = classify_incident_domain(
+            affected_resources=[],
+            detection_rule=query_text,
+        )
+        assert result["domain"] == "patch"
+
+    def test_classify_generic_update_does_not_route_to_patch(self):
+        """Generic 'update' should NOT route to patch (D-12 exclusion)."""
+        result = classify_incident_domain(
+            affected_resources=[],
+            detection_rule="update my vm size to standard_d4",
+        )
+        # Should route to compute (mentions "vm") or sre, NOT patch
+        assert result["domain"] != "patch"
