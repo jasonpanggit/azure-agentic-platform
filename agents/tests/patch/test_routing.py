@@ -9,14 +9,14 @@ from agents.shared.routing import QUERY_DOMAIN_KEYWORDS, classify_query_text
 class TestQueryDomainKeywordsStructure:
     """Validate QUERY_DOMAIN_KEYWORDS tuple structure after patch addition."""
 
-    def test_has_six_entries(self):
-        """QUERY_DOMAIN_KEYWORDS must have exactly 6 entries."""
-        assert len(QUERY_DOMAIN_KEYWORDS) == 6
+    def test_has_seven_entries(self):
+        """QUERY_DOMAIN_KEYWORDS must have exactly 7 entries (arc, patch, eol, compute, network, storage, security)."""
+        assert len(QUERY_DOMAIN_KEYWORDS) == 7
 
     def test_domain_ordering(self):
-        """Domains must be in order: arc, patch, compute, network, storage, security."""
+        """Domains must be in order: arc, patch, eol, compute, network, storage, security."""
         domain_names = [entry[0] for entry in QUERY_DOMAIN_KEYWORDS]
-        assert domain_names == ["arc", "patch", "compute", "network", "storage", "security"]
+        assert domain_names == ["arc", "patch", "eol", "compute", "network", "storage", "security"]
 
     def test_patch_entry_has_twelve_keywords(self):
         """The patch entry must have exactly 12 keywords."""

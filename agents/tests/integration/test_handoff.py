@@ -25,9 +25,9 @@ from agents.shared.envelope import IncidentMessage, validate_envelope
 class TestHandoffOrchestrator:
     """Verify Orchestrator classifies and routes incidents correctly."""
 
-    def test_domain_agent_map_has_all_seven_domains(self):
-        """DOMAIN_AGENT_MAP must contain all 7 domains."""
-        expected_domains = {"compute", "network", "storage", "security", "sre", "arc", "patch"}
+    def test_domain_agent_map_has_all_eight_domains(self):
+        """DOMAIN_AGENT_MAP must contain all 8 domains (including eol)."""
+        expected_domains = {"compute", "network", "storage", "security", "sre", "arc", "patch", "eol"}
         assert set(DOMAIN_AGENT_MAP.keys()) == expected_domains
 
     def test_classify_compute_resource(self):
@@ -182,11 +182,11 @@ class TestHandoffOrchestrator:
         assert result["domain"] == "arc"
 
     def test_domain_agent_map_values_are_agent_names(self):
-        """Each domain maps to a properly named agent string."""
+        """Each domain maps to a properly named agent tool string (underscore format)."""
         for domain, agent_name in DOMAIN_AGENT_MAP.items():
             assert isinstance(agent_name, str)
-            assert agent_name.endswith("-agent"), (
-                f"Domain '{domain}' maps to '{agent_name}' — expected '-agent' suffix"
+            assert agent_name.endswith("_agent"), (
+                f"Domain '{domain}' maps to '{agent_name}' — expected '_agent' suffix"
             )
 
     def test_classify_maintenance_resource(self):
