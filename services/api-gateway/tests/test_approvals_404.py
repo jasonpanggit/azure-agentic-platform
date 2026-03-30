@@ -26,6 +26,9 @@ class TestApprovals404:
     @pytest.fixture
     def client(self):
         from services.api_gateway.main import app
+        from unittest.mock import MagicMock
+        app.state.credential = MagicMock(name="DefaultAzureCredential")
+        app.state.cosmos_client = MagicMock(name="CosmosClient")
         return TestClient(app, raise_server_exceptions=False)
 
     @pytest.fixture

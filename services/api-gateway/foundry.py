@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
 from azure.ai.agents import AgentsClient
 from azure.identity import DefaultAzureCredential
@@ -20,8 +21,12 @@ from services.api_gateway.models import IncidentPayload
 logger = logging.getLogger(__name__)
 
 
-def _get_foundry_client() -> AgentsClient:
+def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None) -> AgentsClient:
     """Create an AgentsClient using DefaultAzureCredential.
+
+    Accepts an optional pre-initialized credential (from app.state singleton).
+    Falls back to creating a new DefaultAzureCredential when not provided
+    (backward compatibility for direct calls outside the FastAPI lifespan).
 
     Reads AZURE_PROJECT_ENDPOINT from environment, falling back to
     FOUNDRY_ACCOUNT_ENDPOINT for backward compatibility with the
@@ -40,9 +45,12 @@ def _get_foundry_client() -> AgentsClient:
             "environment variable is required."
         )
 
+    if credential is None:
+        credential = DefaultAzureCredential()
+
     return AgentsClient(
         endpoint=endpoint,
-        credential=DefaultAzureCredential(),
+        credential=credential,
     )
 
 

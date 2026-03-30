@@ -24,7 +24,13 @@ from services.api_gateway.main import app
 
 @pytest.fixture()
 def client():
-    """FastAPI TestClient for the api-gateway."""
+    """FastAPI TestClient for the api-gateway.
+
+    Initializes app.state with mock singletons so dependency providers
+    (get_credential, get_cosmos_client) resolve without running lifespan.
+    """
+    app.state.credential = MagicMock(name="DefaultAzureCredential")
+    app.state.cosmos_client = MagicMock(name="CosmosClient")
     return TestClient(app)
 
 

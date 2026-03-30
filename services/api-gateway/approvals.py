@@ -27,15 +27,19 @@ logger = logging.getLogger(__name__)
 APPROVAL_TIMEOUT_MINUTES = int(os.environ.get("APPROVAL_TIMEOUT_MINUTES", "30"))
 
 
-def _get_approvals_container() -> ContainerProxy:
-    """Get the Cosmos DB approvals container."""
-    endpoint = os.environ.get("COSMOS_ENDPOINT", "")
-    if not endpoint:
-        raise ValueError("COSMOS_ENDPOINT environment variable is required.")
+def _get_approvals_container(cosmos_client: Optional[CosmosClient] = None) -> ContainerProxy:
+    """Get the Cosmos DB approvals container.
+
+    Uses the provided cosmos_client singleton when available; falls back to
+    creating a per-call client for backward compatibility.
+    """
+    if cosmos_client is None:
+        endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+        if not endpoint:
+            raise ValueError("COSMOS_ENDPOINT environment variable is required.")
+        cosmos_client = CosmosClient(url=endpoint, credential=DefaultAzureCredential())
     database_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
-    credential = DefaultAzureCredential()
-    client = CosmosClient(url=endpoint, credential=credential)
-    database = client.get_database_client(database_name)
+    database = cosmos_client.get_database_client(database_name)
     return database.get_container_client("approvals")
 
 
@@ -45,18 +49,18 @@ def _is_expired(record: dict) -> bool:
     return datetime.now(timezone.utc) > expires_at
 
 
-async def get_approval(approval_id: str, thread_id: str) -> dict:
+async def get_approval(approval_id: str, thread_id: str, cosmos_client: Optional[CosmosClient] = None) -> dict:
     """Read an approval record from Cosmos DB."""
-    container = _get_approvals_container()
+    container = _get_approvals_container(cosmos_client=cosmos_client)
     try:
         return container.read_item(item=approval_id, partition_key=thread_id)
     except CosmosResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Approval not found")
 
 
-async def list_approvals_for_thread(thread_id: str) -> list[dict]:
+async def list_approvals_for_thread(thread_id: str, cosmos_client: Optional[CosmosClient] = None) -> list[dict]:
     """List all approval records for a thread."""
-    container = _get_approvals_container()
+    container = _get_approvals_container(cosmos_client=cosmos_client)
     query = "SELECT * FROM c WHERE c.thread_id = @thread_id"
     items = container.query_items(
         query=query,
@@ -66,13 +70,13 @@ async def list_approvals_for_thread(thread_id: str) -> list[dict]:
     return list(items)
 
 
-async def list_approvals_by_status(status_filter: str = "pending") -> list[dict]:
+async def list_approvals_by_status(status_filter: str = "pending", cosmos_client: Optional[CosmosClient] = None) -> list[dict]:
     """List all approval records matching the given status (TEAMS-005).
 
     Cross-partition query -- acceptable for small pending approval counts.
     Used by the Teams bot escalation scheduler.
     """
-    container = _get_approvals_container()
+    container = _get_approvals_container(cosmos_client=cosmos_client)
     query = "SELECT * FROM c WHERE c.status = @status ORDER BY c.proposed_at ASC"
     items = container.query_items(
         query=query,
@@ -88,6 +92,7 @@ async def process_approval_decision(
     decision: str,  # "approved" or "rejected"
     decided_by: str,
     scope_confirmed: Optional[bool] = None,
+    cosmos_client: Optional[CosmosClient] = None,
 ) -> dict:
     """Process an approve/reject decision on a pending proposal.
 
@@ -96,7 +101,7 @@ async def process_approval_decision(
     - 30-minute expiry — returns 410 Gone for expired (D-13)
     - Only "pending" records can be decided
     """
-    container = _get_approvals_container()
+    container = _get_approvals_container(cosmos_client=cosmos_client)
     try:
         record = container.read_item(item=approval_id, partition_key=thread_id)
     except CosmosResourceNotFoundError:

@@ -15,15 +15,20 @@ from azure.identity import DefaultAzureCredential
 logger = logging.getLogger(__name__)
 
 
-def _get_incidents_container() -> ContainerProxy:
-    """Get the Cosmos DB incidents container."""
-    endpoint = os.environ.get("COSMOS_ENDPOINT", "")
-    if not endpoint:
-        raise ValueError("COSMOS_ENDPOINT environment variable is required.")
+def _get_incidents_container(cosmos_client: Optional[CosmosClient] = None) -> ContainerProxy:
+    """Get the Cosmos DB incidents container.
+
+    Uses the provided cosmos_client singleton when available; falls back to
+    creating a per-call client for backward compatibility (e.g. direct calls
+    in tests that do not go through the FastAPI lifespan).
+    """
+    if cosmos_client is None:
+        endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+        if not endpoint:
+            raise ValueError("COSMOS_ENDPOINT environment variable is required.")
+        cosmos_client = CosmosClient(url=endpoint, credential=DefaultAzureCredential())
     database_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
-    credential = DefaultAzureCredential()
-    client = CosmosClient(url=endpoint, credential=credential)
-    database = client.get_database_client(database_name)
+    database = cosmos_client.get_database_client(database_name)
     return database.get_container_client("incidents")
 
 
@@ -34,9 +39,10 @@ async def list_incidents(
     domain: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 50,
+    cosmos_client: Optional[CosmosClient] = None,  # injected from app.state
 ) -> list[dict]:
     """List incidents from Cosmos DB with optional filters."""
-    container = _get_incidents_container()
+    container = _get_incidents_container(cosmos_client=cosmos_client)
 
     conditions = []
     parameters = []

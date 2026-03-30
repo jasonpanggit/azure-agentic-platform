@@ -8,6 +8,9 @@ from services.api_gateway.main import app
 
 @pytest.fixture()
 def client():
+    from unittest.mock import MagicMock
+    app.state.credential = MagicMock(name="DefaultAzureCredential")
+    app.state.cosmos_client = MagicMock(name="CosmosClient")
     return TestClient(app)
 
 

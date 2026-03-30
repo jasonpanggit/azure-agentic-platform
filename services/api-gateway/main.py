@@ -16,6 +16,8 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
+from azure.cosmos import CosmosClient
+from azure.identity import DefaultAzureCredential
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +28,7 @@ from services.api_gateway.http_rate_limiter import (
 )
 
 from services.api_gateway.audit import query_audit_log
+from services.api_gateway.dependencies import get_cosmos_client, get_credential
 from services.api_gateway.audit_export import generate_remediation_report
 from services.api_gateway.auth import verify_token
 from services.api_gateway.chat import create_chat_thread, get_chat_result
@@ -105,10 +108,24 @@ async def _run_startup_migrations() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # noqa: ARG001
-    """FastAPI lifespan: run startup migrations, then yield for request handling."""
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan: initialize shared clients, run migrations, then yield."""
+    # Initialize shared credential and Cosmos client singletons (CONCERNS 4.4)
+    app.state.credential = DefaultAzureCredential()
+    cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+    if cosmos_endpoint:
+        app.state.cosmos_client = CosmosClient(
+            url=cosmos_endpoint, credential=app.state.credential
+        )
+    else:
+        app.state.cosmos_client = None
+        logger.warning("COSMOS_ENDPOINT not set — CosmosClient singleton not initialized")
+
     await _run_startup_migrations()
     yield
+    # Teardown: close Cosmos client if initialized
+    if app.state.cosmos_client is not None:
+        app.state.cosmos_client.close()
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
@@ -364,6 +381,7 @@ async def approve_proposal(
     payload: ApprovalAction,
     thread_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
 ) -> ApprovalResponse:
     """Approve a pending remediation proposal (REMEDI-005, TEAMS-003).
 
@@ -382,6 +400,7 @@ async def approve_proposal(
             decision="approved",
             decided_by=payload.decided_by,
             scope_confirmed=payload.scope_confirmed,
+            cosmos_client=cosmos_client,
         )
         return ApprovalResponse(approval_id=approval_id, status="approved")
     except ValueError as exc:
@@ -399,6 +418,7 @@ async def reject_proposal(
     payload: ApprovalAction,
     thread_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
 ) -> ApprovalResponse:
     """Reject a pending remediation proposal (REMEDI-005, TEAMS-003).
 
@@ -416,6 +436,7 @@ async def reject_proposal(
             thread_id=effective_thread_id,
             decision="rejected",
             decided_by=payload.decided_by,
+            cosmos_client=cosmos_client,
         )
         return ApprovalResponse(approval_id=approval_id, status="rejected")
     except ValueError as exc:
@@ -429,6 +450,7 @@ async def reject_proposal(
 async def list_approvals(
     status: str = "pending",
     token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
 ) -> list[ApprovalRecord]:
     """List approvals by status (TEAMS-005 escalation support).
 
@@ -437,7 +459,7 @@ async def list_approvals(
 
     Authentication: Entra ID Bearer token required.
     """
-    results = await list_approvals_by_status(status_filter=status)
+    results = await list_approvals_by_status(status_filter=status, cosmos_client=cosmos_client)
     return [
         ApprovalRecord(**{k: v for k, v in r.items() if not k.startswith("_")})
         for r in results
@@ -449,9 +471,10 @@ async def get_approval_status(
     approval_id: str,
     thread_id: str,
     token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
 ) -> ApprovalRecord:
     """Get the current status of an approval record."""
-    record = await get_approval(approval_id, thread_id)
+    record = await get_approval(approval_id, thread_id, cosmos_client=cosmos_client)
     return ApprovalRecord(**{k: v for k, v in record.items() if not k.startswith("_")})
 
 
@@ -464,6 +487,7 @@ async def list_incidents_endpoint(
     status: Optional[str] = None,
     limit: int = 50,
     token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
 ) -> list[IncidentSummary]:
     """List incidents for the alert feed (UI-006).
 
@@ -485,6 +509,7 @@ async def list_incidents_endpoint(
         domain=domain,
         status=status,
         limit=limit,
+        cosmos_client=cosmos_client,
     )
     return [
         IncidentSummary(**{k: v for k, v in r.items() if not k.startswith("_")})
