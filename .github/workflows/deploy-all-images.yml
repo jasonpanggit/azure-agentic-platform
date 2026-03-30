@@ -236,12 +236,13 @@ jobs:
   # ---------------------------------------------------------------------------
   build-api-gateway:
     name: Build API Gateway
+    needs: build-agent-base
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/api-gateway
       dockerfile_path: services/api-gateway/Dockerfile
       build_context: services/api-gateway/
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -250,12 +251,13 @@ jobs:
 
   build-arc-mcp-server:
     name: Build Arc MCP Server
+    needs: build-agent-base
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/arc-mcp-server
       dockerfile_path: services/arc-mcp-server/Dockerfile
       build_context: services/arc-mcp-server/
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -264,12 +266,13 @@ jobs:
 
   build-teams-bot:
     name: Build Teams Bot
+    needs: build-agent-base
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/teams-bot
       dockerfile_path: services/teams-bot/Dockerfile
       build_context: services/teams-bot/
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -278,12 +281,13 @@ jobs:
 
   build-web-ui:
     name: Build Web UI
+    needs: build-agent-base
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/web-ui
       dockerfile_path: services/web-ui/Dockerfile
       build_context: services/web-ui/
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -292,14 +296,16 @@ jobs:
 
   build-azure-mcp-server:
     name: Build Azure MCP Server
+    needs: build-agent-base
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/azure-mcp-server
       dockerfile_path: services/azure-mcp-server/Dockerfile
       build_context: services/azure-mcp-server/
-      image_tag: ${{ inputs.image_tag }}
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
