@@ -162,6 +162,7 @@ async def apply_http_rate_limit(request: Request, call_next):
             return JSONResponse(
                 {"detail": "Rate limit exceeded", "retry_after": retry},
                 status_code=429,
+                headers={"Retry-After": str(retry)},
             )
     elif path == "/api/v1/incidents" and request.method == "GET":
         if not incidents_rate_limiter.check(ip):
@@ -169,6 +170,7 @@ async def apply_http_rate_limit(request: Request, call_next):
             return JSONResponse(
                 {"detail": "Rate limit exceeded", "retry_after": retry},
                 status_code=429,
+                headers={"Retry-After": str(retry)},
             )
 
     return await call_next(request)

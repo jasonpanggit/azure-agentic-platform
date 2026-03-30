@@ -1,4 +1,5 @@
 """Tests for per-IP HTTP rate limiter (CONCERNS 1.5)."""
+import time
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -39,6 +40,30 @@ class TestHttpRateLimiter:
         limiter = HttpRateLimiter(max_per_minute=10)
         limiter.check("10.0.0.1")
         assert len(limiter._windows["10.0.0.1"]) == 1
+
+    def test_window_expiry_allows_requests_after_60_seconds(self):
+        """After 60 seconds, the sliding window expires and requests are allowed again."""
+        import unittest.mock
+
+        call_count = [0]
+        start_time = time.monotonic()
+
+        def fake_monotonic():
+            call_count[0] += 1
+            # check #1 uses calls 1-2 (clean + append), check #2 uses call 3 (clean only)
+            # From call #4 onward (the 3rd check), simulate 61 seconds have passed
+            if call_count[0] <= 3:
+                return start_time
+            return start_time + 61.0
+
+        limiter = HttpRateLimiter(max_per_minute=1)
+
+        with unittest.mock.patch('time.monotonic', fake_monotonic):
+            # Use up the limit
+            assert limiter.check("127.0.0.1") is True
+            assert limiter.check("127.0.0.1") is False
+            # After 61 seconds (simulated), should be allowed again
+            assert limiter.check("127.0.0.1") is True
 
 
 class TestRateLimitEndpoints:

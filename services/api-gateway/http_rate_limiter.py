@@ -25,9 +25,11 @@ class HttpRateLimiter:
         self._windows: dict[str, list[float]] = defaultdict(list)
 
     def _clean(self, ip: str) -> None:
-        """Remove timestamps older than 1 minute."""
+        """Remove timestamps older than 1 minute; evict empty entries."""
         window_start = time.monotonic() - 60.0
         self._windows[ip] = [t for t in self._windows[ip] if t > window_start]
+        if not self._windows[ip]:
+            del self._windows[ip]
 
     def check(self, ip: str) -> bool:
         """Return True if request is allowed and record it. Return False if rate limited."""
