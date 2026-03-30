@@ -3,15 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-30T19:00:00.000Z"
+last_updated: "2026-03-30T20:00:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 41
-  completed_plans: 27
+  completed_plans: 30
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-30 — Plan 11-03 COMPLETE (Phase 11 COMPLETE): Terraform + CI/CD for Patch Agent. patch added to local.agents (8 agents), PATCH_AGENT_ID dynamic env block for orchestrator, patch_agent_id variable declared. RBAC: Reader + Monitoring Reader on all subscriptions (ARG cross-sub). Staging/prod explicitly wire patch_agent_id. build-patch CI job added (14 jobs in summary). All 5 terraform dirs pass fmt -check. Phase 11 fully complete: 3/3 plans, 49 unit tests + 47 integration/routing tests passing.
 
 > Last updated: 2026-03-30 — Plan 11-02 COMPLETE: Orchestrator routing wired for patch domain. QUERY_DOMAIN_KEYWORDS has 6 entries (patch added after arc, before compute with 12 keywords). DOMAIN_AGENT_MAP has 7 entries, RESOURCE_TYPE_TO_DOMAIN has 12 entries (microsoft.maintenance → patch). Orchestrator system prompt updated with patch routing rules. Patch AgentTarget registered with PATCH_AGENT_ID env var. 47 tests pass (23 integration + 24 routing unit).
 
@@ -92,7 +94,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
 | 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
-| 11 | Patch Domain Agent | In Progress (2/3 plans) |
+| 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 
 ---
 
