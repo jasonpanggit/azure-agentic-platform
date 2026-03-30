@@ -73,8 +73,10 @@ jobs:
       - name: Create pgvector Extension
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          PGSSLMODE: require
         run: |
           psql \
+            -v ON_ERROR_STOP=1 \
             -h "aap-postgres-dev.postgres.database.azure.com" \
             -U aap_admin \
             -d aap \
@@ -148,8 +150,10 @@ jobs:
       - name: Create pgvector Extension
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          PGSSLMODE: require
         run: |
           psql \
+            -v ON_ERROR_STOP=1 \
             -h "aap-postgres-staging.postgres.database.azure.com" \
             -U aap_admin \
             -d aap \
@@ -248,8 +252,10 @@ jobs:
       - name: Create pgvector Extension
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          PGSSLMODE: require
         run: |
           psql \
+            -v ON_ERROR_STOP=1 \
             -h "aap-postgres-prod.postgres.database.azure.com" \
             -U aap_admin \
             -d aap \
