@@ -100,7 +100,29 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS runbooks_embedding_idx "
                 "ON runbooks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);"
             )
-            logger.info("Startup migrations complete (pgvector + runbooks table)")
+            # EOL cache table (Phase 12) — 24h TTL lifecycle cache
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS eol_cache (
+                    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    product         TEXT NOT NULL,
+                    version         TEXT NOT NULL,
+                    eol_date        DATE,
+                    is_eol          BOOLEAN NOT NULL,
+                    lts             BOOLEAN,
+                    latest_version  TEXT,
+                    support_end     DATE,
+                    source          TEXT NOT NULL,
+                    raw_response    JSONB,
+                    cached_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    expires_at      TIMESTAMPTZ NOT NULL,
+                    UNIQUE (product, version, source)
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_eol_cache_lookup "
+                "ON eol_cache (product, version, expires_at);"
+            )
+            logger.info("Startup migrations complete (pgvector + runbooks table + eol_cache table)")
         finally:
             await conn.close()
     except Exception as exc:  # noqa: BLE001
