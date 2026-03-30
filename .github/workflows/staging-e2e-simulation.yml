@@ -46,12 +46,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
 
       - name: Install dependencies
         working-directory: e2e
-        run: |
-          npm init -y
-          npm install @playwright/test @azure/msal-node @azure/cosmos @azure/identity @azure/monitor-query typescript
+        run: npm ci
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium

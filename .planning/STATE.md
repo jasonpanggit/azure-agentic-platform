@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-03-30 — Completed quick task 260330-p8d: Fix critical bugs in GitHub Actions workflows (deploy-all-images missing secret + image tag, terraform-apply SSL/error-stop, staging-e2e deterministic npm ci).
+
 > Last updated: 2026-03-30 — Phase 10 COMPLETE: API Gateway Hardening. The gateway no longer disables auth merely because `AZURE_CLIENT_ID` is missing. Local bypass now requires `API_GATEWAY_AUTH_MODE=disabled`, `/api/v1/audit` rejects invalid filters with HTTP 400 before any KQL is built, and runbook search now uses explicit DSN resolution with truthful 503s for runbook DB outages.
 
 > Last updated: 2026-03-29 — Phase 9 added: Web UI Revamp — tear down Fluent UI / Griffel, rebuild with Tailwind CSS + shadcn/ui, redesign full portal with frontend specialist.
@@ -204,6 +206,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260328-va0 | Validate MANUAL-SETUP.md provisioning state — 3 DONE, 3 PARTIAL, 1 PENDING, 1 SKIPPED, 1 CANNOT_VERIFY | 2026-03-28 | fcca5fc | [260328-va0-validate-manual-setup-md-provisioning-st](./quick/260328-va0-validate-manual-setup-md-provisioning-st/) |
 | 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
 | 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
+| 260330-p8d | Fix critical bugs in GitHub Actions workflows | 2026-03-30 | 3758e75 | [260330-p8d-fix-critical-bugs-in-github-actions-work](./quick/260330-p8d-fix-critical-bugs-in-github-actions-work/) |
 
 ---
 
