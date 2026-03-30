@@ -18,6 +18,12 @@ from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from services.api_gateway.http_rate_limiter import (
+    chat_rate_limiter,
+    incidents_rate_limiter,
+)
 
 from services.api_gateway.audit import query_audit_log
 from services.api_gateway.audit_export import generate_remediation_report
@@ -142,6 +148,30 @@ async def add_correlation_id(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Correlation-ID"] = correlation_id
     return response
+
+
+@app.middleware("http")
+async def apply_http_rate_limit(request: Request, call_next):
+    """Apply per-IP rate limits to chat and incidents endpoints (CONCERNS 1.5)."""
+    ip = request.client.host if request.client else "unknown"
+    path = request.url.path
+
+    if path == "/api/v1/chat" and request.method == "POST":
+        if not chat_rate_limiter.check(ip):
+            retry = chat_rate_limiter.retry_after(ip)
+            return JSONResponse(
+                {"detail": "Rate limit exceeded", "retry_after": retry},
+                status_code=429,
+            )
+    elif path == "/api/v1/incidents" and request.method == "GET":
+        if not incidents_rate_limiter.check(ip):
+            retry = incidents_rate_limiter.retry_after(ip)
+            return JSONResponse(
+                {"detail": "Rate limit exceeded", "retry_after": retry},
+                status_code=429,
+            )
+
+    return await call_next(request)
 
 
 @app.get("/health", response_model=HealthResponse)
