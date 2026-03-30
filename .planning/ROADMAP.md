@@ -445,7 +445,7 @@ Plans:
 **Requirements**: TRIAGE-002, TRIAGE-003, TRIAGE-004, TRIAGE-005, REMEDI-001, AGENT-001, AGENT-002, AGENT-008, AGENT-009, AUDIT-001, AUDIT-005
 **Depends on:** Phase 10
 **Reference:** https://learn.microsoft.com/en-us/azure/update-manager/query-logs
-**Plans:** 3 plans (3 complete)
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 11-01 Patch Agent Spec + Implementation + Unit Tests
