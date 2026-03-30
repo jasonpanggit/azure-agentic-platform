@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from azure.cosmos import ContainerProxy, CosmosClient
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from azure.identity import DefaultAzureCredential
+from fastapi import HTTPException
 
 from services.api_gateway.instrumentation import agent_span, foundry_span
 from services.api_gateway.remediation_logger import (
@@ -46,7 +48,10 @@ def _is_expired(record: dict) -> bool:
 async def get_approval(approval_id: str, thread_id: str) -> dict:
     """Read an approval record from Cosmos DB."""
     container = _get_approvals_container()
-    return container.read_item(item=approval_id, partition_key=thread_id)
+    try:
+        return container.read_item(item=approval_id, partition_key=thread_id)
+    except CosmosResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Approval not found")
 
 
 async def list_approvals_for_thread(thread_id: str) -> list[dict]:
@@ -92,7 +97,10 @@ async def process_approval_decision(
     - Only "pending" records can be decided
     """
     container = _get_approvals_container()
-    record = container.read_item(item=approval_id, partition_key=thread_id)
+    try:
+        record = container.read_item(item=approval_id, partition_key=thread_id)
+    except CosmosResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Approval not found")
     etag = record["_etag"]
 
     # Check expiry (D-13)
