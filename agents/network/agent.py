@@ -16,11 +16,11 @@ RBAC scope: Network Contributor (enforced by Terraform).
 """
 from __future__ import annotations
 
-from agent_framework import Agent
+from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
-from agents.network.tools import (
+from network.tools import (
     ALLOWED_MCP_TOOLS,
     query_load_balancer_health,
     query_nsg_rules,
@@ -105,19 +105,19 @@ azure-mgmt-network SDK directly.
 # ---------------------------------------------------------------------------
 
 
-def create_network_agent() -> Agent:
-    """Create and configure the Network Agent instance.
+def create_network_agent() -> ChatAgent:
+    """Create and configure the Network ChatAgent instance.
 
     Returns:
-        Agent configured with network-domain tools and instructions.
+        ChatAgent configured with network-domain tools and system prompt.
     """
     client = get_foundry_client()
 
-    return Agent(
-        client,
-        NETWORK_AGENT_SYSTEM_PROMPT,
+    return ChatAgent(
         name="network-agent",
         description="Azure network domain specialist — VNets, NSGs, load balancers, DNS, ExpressRoute.",
+        system_prompt=NETWORK_AGENT_SYSTEM_PROMPT,
+        client=client,
         tools=[
             query_nsg_rules,
             query_load_balancer_health,
@@ -132,5 +132,5 @@ def create_network_agent() -> Agent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from azure.ai.agentserver.agentframework import from_agent_framework
-    from_agent_framework(create_network_agent()).run()
+    agent = create_network_agent()
+    agent.serve()

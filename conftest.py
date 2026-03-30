@@ -5,10 +5,9 @@ The directory `services/api-gateway/` is registered as `services.api_gateway`
 to match the production import path used in the Dockerfile and runtime.
 
 Also installs a lightweight agent_framework stub so that agent source modules
-can be imported during tests without requiring the real agent-framework RC
-package to be installed (it requires Python >=3.10 and is pre-release).
-The stub exposes the symbols used by our source code; actual framework
-behaviour is not needed for unit/integration tests.
+can be imported during tests without requiring the real agent-framework package.
+The stub exposes the symbols used by our source code (beta API: ChatAgent,
+ai_function, HandoffBuilder); actual framework behaviour is not needed for tests.
 
 Path note: agent source files use `from shared.xxx import ...` which matches
 the container filesystem (/app/shared/). In the test environment the shared
@@ -32,46 +31,21 @@ if _AGENTS_DIR not in sys.path:
 # agent_framework stub
 # ---------------------------------------------------------------------------
 
-def _install_orchestrations_stub() -> None:
-    """Install a minimal agent_framework_orchestrations stub."""
-    if "agent_framework_orchestrations" in sys.modules:
-        return
-
-    stub = types.ModuleType("agent_framework_orchestrations")
-
-    class HandoffBuilder:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def participants(self, participants):
-            return self
-
-        def build(self):
-            return None
-
-    stub.HandoffBuilder = HandoffBuilder
-    sys.modules["agent_framework_orchestrations"] = stub
-
-
 def _install_agent_framework_stub() -> None:
     """Install a minimal agent_framework stub into sys.modules.
 
-    Provides the symbols referenced in our agent source files (rc5 API):
-        Agent, tool, MCPStreamableHTTPTool
-    Also installs agent_framework_orchestrations stub with HandoffBuilder.
-    Real framework behaviour is not required for unit/integration tests.
+    Provides the symbols referenced in our agent source files (beta API):
+        ChatAgent, ai_function, HandoffBuilder, AgentTarget, HandoffOrchestrator
     Only installed when the real package is not present OR when the real
-    package does not export these symbols (RC API mismatch).
+    package does not export these symbols.
     """
-    # Check if the real package already exports the rc5 symbols we need
     real_pkg = sys.modules.get("agent_framework")
-    if real_pkg is not None and hasattr(real_pkg, "Agent") and hasattr(real_pkg, "tool"):
-        _install_orchestrations_stub()
-        return  # Real rc5 package is present
+    if real_pkg is not None and hasattr(real_pkg, "ai_function") and hasattr(real_pkg, "ChatAgent"):
+        return  # Real beta package is present with correct API
 
     stub = types.ModuleType("agent_framework")
 
-    def tool(fn=None, **kwargs):
+    def ai_function(fn=None, **kwargs):
         """No-op decorator — returns the function unchanged."""
         if fn is None:
             def decorator(f):
@@ -79,23 +53,16 @@ def _install_agent_framework_stub() -> None:
             return decorator
         return fn
 
-    # Legacy alias so any remaining old-API references don't crash on import
-    ai_function = tool
-
     class _Base:
         def __init__(self, *args, **kwargs):
+            pass
+
+        def add_target(self, target):
             pass
 
         def serve(self):
             pass
 
-    class Agent(_Base):
-        pass
-
-    class MCPStreamableHTTPTool(_Base):
-        pass
-
-    # Legacy aliases — kept so old test stubs that reference these don't break
     class ChatAgent(_Base):
         pass
 
@@ -103,19 +70,20 @@ def _install_agent_framework_stub() -> None:
         pass
 
     class HandoffOrchestrator(_Base):
-        def add_target(self, target):
-            pass
+        pass
 
-    stub.tool = tool
+    # rc5-style aliases (kept so any forward references don't break)
+    Agent = ChatAgent
+    tool = ai_function
+
     stub.ai_function = ai_function
-    stub.Agent = Agent
-    stub.MCPStreamableHTTPTool = MCPStreamableHTTPTool
     stub.ChatAgent = ChatAgent
     stub.AgentTarget = AgentTarget
     stub.HandoffOrchestrator = HandoffOrchestrator
+    stub.Agent = Agent
+    stub.tool = tool
 
     sys.modules["agent_framework"] = stub
-    _install_orchestrations_stub()
 
 
 _install_agent_framework_stub()

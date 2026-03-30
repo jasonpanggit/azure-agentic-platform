@@ -1,23 +1,21 @@
 # Pinned base requirements for all AAP agent containers
 # Update versions here to propagate to all agents
 
-# Microsoft Agent Framework (RC — pin exactly)
-agent-framework==1.0.0rc5
-agent-framework-orchestrations>=1.0.0b260311
+# Microsoft Agent Framework — pinned to beta that has ChatAgent/ai_function/HandoffBuilder API.
+# rc5 introduced a breaking API overhaul (Agent/tool/WorkflowBuilder) that is incompatible
+# with the current azure-ai-agentserver-agentframework release. Pin to the last beta that
+# has the original API AND is compatible with azure-ai-agentserver-agentframework b9.
+# Upgrade path: wait for agentserver b10+ that supports agent-framework rc5+.
+agent-framework==1.0.0b260107
 
 # Azure AI Foundry SDK (GA)
 # azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents
 azure-ai-projects>=2.0.1
 azure-ai-agents>=1.0.0
 
-# Foundry Hosted Agent adapters
-# NOTE: Cannot pin to ==1.0.0b17 — that version declares agent-framework-core<=1.0.0rc3
-# which conflicts with agent-framework==1.0.0rc5 (requires agent-framework-core==1.0.0rc5).
-# Kept unpinned until Microsoft releases a b18+ build that supports rc4+/rc5.
-# Monitor https://pypi.org/project/azure-ai-agentserver-agentframework/ and pin once
-# a version compatible with agent-framework==1.0.0rc5 is available.
-azure-ai-agentserver-core
-azure-ai-agentserver-agentframework
+# Foundry Hosted Agent adapters — b9 is compatible with agent-framework b260107
+azure-ai-agentserver-core>=1.0.0b9
+azure-ai-agentserver-agentframework==1.0.0b9
 
 # Azure Identity (managed identity via IMDS)
 azure-identity>=1.17.0

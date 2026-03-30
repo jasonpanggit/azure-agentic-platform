@@ -1,7 +1,7 @@
 """Patch Agent tool functions — ARG queries, ConfigurationData, KB-to-CVE mapper,
 Activity Log wrapper, Resource Health wrapper, and runbook search wrapper.
 
-Provides @tool functions for querying Azure Resource Graph
+Provides @ai_function tools for querying Azure Resource Graph
 PatchAssessmentResources and PatchInstallationResources tables,
 Log Analytics ConfigurationData, MSRC CVRF API for KB-to-CVE mapping,
 Activity Log, Resource Health, and a sync wrapper for runbook search.
@@ -18,7 +18,7 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import httpx
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -49,11 +49,11 @@ ALLOWED_MCP_TOOLS: List[str] = [
 
 
 # ---------------------------------------------------------------------------
-# @tool functions
+# @ai_function tools
 # ---------------------------------------------------------------------------
 
 
-@tool
+@ai_function
 def query_activity_log(
     resource_ids: List[str],
     timespan_hours: int = 2,
@@ -96,7 +96,7 @@ def query_activity_log(
         }
 
 
-@tool
+@ai_function
 def query_patch_assessment(
     subscription_ids: List[str],
     resource_ids: Optional[List[str]] = None,
@@ -198,7 +198,7 @@ def query_patch_assessment(
             }
 
 
-@tool
+@ai_function
 def query_patch_installations(
     subscription_ids: List[str],
     resource_ids: Optional[List[str]] = None,
@@ -301,7 +301,7 @@ def query_patch_installations(
             }
 
 
-@tool
+@ai_function
 def query_configuration_data(
     workspace_id: str,
     computer_names: Optional[List[str]] = None,
@@ -423,7 +423,7 @@ _MONTH_MAP = {
 }
 
 
-@tool
+@ai_function
 def lookup_kb_cves(
     kb_id: str,
     publish_date: Optional[str] = None,
@@ -508,7 +508,7 @@ def lookup_kb_cves(
             }
 
 
-@tool
+@ai_function
 def query_resource_health(
     resource_id: str,
 ) -> Dict[str, Any]:
@@ -548,7 +548,7 @@ def query_resource_health(
         }
 
 
-@tool
+@ai_function
 def search_runbooks(
     query: str,
     domain: str = "patch",
@@ -559,10 +559,10 @@ def search_runbooks(
     Retrieves the top runbooks by semantic similarity for the given query,
     filtered to the patch domain. Results are cited in triage responses.
 
-    This is a sync @tool wrapper around the async retrieve_runbooks
+    This is a sync @ai_function wrapper around the async retrieve_runbooks
     from shared.runbook_tool. The shared retrieve_runbooks is an
-    async def without @tool — it cannot be registered directly in
-    Agent(tools=[...]). This wrapper bridges the gap.
+    async def without @ai_function — it cannot be registered directly in
+    ChatAgent(tools=[...]). This wrapper bridges the gap.
 
     Args:
         query: Natural-language description of the incident or hypothesis.

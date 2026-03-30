@@ -14,11 +14,11 @@ RBAC scope: Security Reader across all in-scope subscriptions (enforced by Terra
 """
 from __future__ import annotations
 
-from agent_framework import Agent
+from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
-from agents.security.tools import (
+from security.tools import (
     ALLOWED_MCP_TOOLS,
     query_defender_alerts,
     query_iam_changes,
@@ -105,19 +105,19 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
 # ---------------------------------------------------------------------------
 
 
-def create_security_agent() -> Agent:
-    """Create and configure the Security Agent instance.
+def create_security_agent() -> ChatAgent:
+    """Create and configure the Security ChatAgent instance.
 
     Returns:
-        Agent configured with security-domain tools and instructions.
+        ChatAgent configured with security-domain tools and system prompt.
     """
     client = get_foundry_client()
 
-    return Agent(
-        client,
-        SECURITY_AGENT_SYSTEM_PROMPT,
+    return ChatAgent(
         name="security-agent",
         description="Azure security domain specialist — Defender, Key Vault, RBAC drift.",
+        system_prompt=SECURITY_AGENT_SYSTEM_PROMPT,
+        client=client,
         tools=[
             query_defender_alerts,
             query_keyvault_diagnostics,
@@ -131,5 +131,5 @@ def create_security_agent() -> Agent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from azure.ai.agentserver.agentframework import from_agent_framework
-    from_agent_framework(create_security_agent()).run()
+    agent = create_security_agent()
+    agent.serve()

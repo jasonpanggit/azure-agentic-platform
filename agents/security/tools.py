@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -27,7 +27,7 @@ ALLOWED_MCP_TOOLS: List[str] = [
 ]
 
 
-@tool
+@ai_function
 def query_defender_alerts(
     subscription_id: str,
     severity: Optional[str] = None,
@@ -71,7 +71,7 @@ def query_defender_alerts(
         }
 
 
-@tool
+@ai_function
 def query_keyvault_diagnostics(
     vault_name: str,
     timespan_hours: int = 2,
@@ -119,7 +119,7 @@ def query_keyvault_diagnostics(
         }
 
 
-@tool
+@ai_function
 def query_iam_changes(
     subscription_id: str,
     timespan_hours: int = 2,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -27,7 +27,7 @@ ALLOWED_MCP_TOOLS: List[str] = [
 ]
 
 
-@tool
+@ai_function
 def query_availability_metrics(
     resource_id: str,
     timespan: str = "PT24H",
@@ -70,7 +70,7 @@ def query_availability_metrics(
         }
 
 
-@tool
+@ai_function
 def query_performance_baselines(
     resource_id: str,
     metric_names: List[str],
@@ -119,7 +119,7 @@ def query_performance_baselines(
         }
 
 
-@tool
+@ai_function
 def propose_remediation(
     incident_id: str,
     hypothesis: str,

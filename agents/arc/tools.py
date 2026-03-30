@@ -1,11 +1,11 @@
 """Arc Agent tool functions — Activity Log, Log Analytics, Resource Health wrappers.
 
-Provides @tool functions for querying Activity Log, Log Analytics,
+Provides @ai_function tools for querying Activity Log, Log Analytics,
 and Resource Health as the mandatory pre-triage steps (TRIAGE-002, TRIAGE-003).
 
 Arc-specific tools (arc_servers_list, arc_k8s_list, arc_extensions_list,
 arc_k8s_gitops_status, etc.) are mounted via the McpTool in agent.py and
-called directly by the LLM — they do NOT need @tool wrappers here.
+called directly by the LLM — they do NOT need @ai_function wrappers here.
 
 Explicit MCP tool allowlist — no wildcards permitted (AGENT-001):
   Arc MCP Server tools: arc_servers_list, arc_servers_get, arc_k8s_list,
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -47,12 +47,12 @@ ALLOWED_MCP_TOOLS: List[str] = [
 
 
 # ---------------------------------------------------------------------------
-# @tool functions — mandatory pre-triage steps (TRIAGE-002, TRIAGE-003)
+# @ai_function tools — mandatory pre-triage steps (TRIAGE-002, TRIAGE-003)
 # These cannot be delegated to MCP servers as they are always-first steps.
 # ---------------------------------------------------------------------------
 
 
-@tool
+@ai_function
 def query_activity_log(
     resource_ids: List[str],
     timespan_hours: int = 2,
@@ -96,7 +96,7 @@ def query_activity_log(
         }
 
 
-@tool
+@ai_function
 def query_log_analytics(
     workspace_id: str,
     kql_query: str,
@@ -142,7 +142,7 @@ def query_log_analytics(
         }
 
 
-@tool
+@ai_function
 def query_resource_health(
     resource_id: str,
 ) -> Dict[str, Any]:
