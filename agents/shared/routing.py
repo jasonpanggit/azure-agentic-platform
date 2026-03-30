@@ -27,6 +27,23 @@ QUERY_DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "patch",
+        (
+            "patch",
+            "patches",
+            "patching",
+            "update manager",
+            "windows update",
+            "security patch",
+            "patch compliance",
+            "patch status",
+            "missing patches",
+            "pending patches",
+            "kb article",
+            "hotfix",
+        ),
+    ),
+    (
         "compute",
         (
             "virtual machine",
