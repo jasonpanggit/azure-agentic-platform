@@ -116,8 +116,9 @@ export async function GET(request: NextRequest) {
         if (aborted) break;
 
         try {
+          const siteBase = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
           const res = await fetch(
-            `http://localhost:3000/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}${runIdParam}`,
+            `${siteBase}/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}${runIdParam}`,
             { signal: AbortSignal.timeout(8000) }
           );
 
