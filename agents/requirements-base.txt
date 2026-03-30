@@ -1,25 +1,29 @@
 # Pinned base requirements for all AAP agent containers
 # Update versions here to propagate to all agents
 
-# Microsoft Agent Framework — pinned to beta that has ChatAgent/ai_function/HandoffBuilder API.
-# rc5 introduced a breaking API overhaul (Agent/tool/WorkflowBuilder) that is incompatible
-# with the current azure-ai-agentserver-agentframework release. Pin to the last beta that
-# has the original API AND is compatible with azure-ai-agentserver-agentframework b9.
-# Upgrade path: wait for agentserver b10+ that supports agent-framework rc5+.
+# Microsoft Agent Framework — pinned to beta that has ChatAgent/ai_function API.
+# rc5 introduced a breaking API overhaul (Agent/tool/WorkflowBuilder) that is
+# incompatible with agentserver-agentframework b10-b15. agentserver b16+ requires
+# agent-framework-core>=rc2 (rc5 API). Use b15 stack: last version compatible with
+# the b260107 beta API AND the lifespan (not on_event) starlette integration.
 agent-framework==1.0.0b260107
 
-# Azure AI Foundry SDK
-# Compatibility matrix for agent-framework b260107 + agentserver b9:
-#   - azure-ai-projects >= 2.0.0: PromptAgentDefinitionText removed → agentserver b9 crash
-#   - azure-ai-projects < 2.0.0b1: MCPTool absent → arc/patch agents crash
-#   - azure-ai-projects == 2.0.0b3: both MCPTool AND PromptAgentDefinitionText present ✓
-# Pin to 2.0.0b3 until agent-framework upgrades to target azure-ai-projects>=2.0.0.
-azure-ai-projects==2.0.0b3
-azure-ai-agents>=1.0.0
+# Foundry Hosted Agent adapters
+# Compatibility: b15 is the pivot version:
+#   - core b9-b14: uses @app.on_event("startup") removed in starlette 0.21; ships
+#     starlette>=0.45 requirement but code fails at runtime → never use b14 or earlier
+#   - core b15+: uses starlette lifespan (correct); requires azure-ai-projects>=2.0.0b1
+#   - agentframework b15: last version requiring agent-framework-core<=b260107
+#   - agentframework b16+: requires agent-framework-core>=rc2 (rc5 API)
+azure-ai-agentserver-core==1.0.0b15
+azure-ai-agentserver-agentframework==1.0.0b15
 
-# Foundry Hosted Agent adapters — b9 is compatible with agent-framework b260107
-azure-ai-agentserver-core>=1.0.0b9
-azure-ai-agentserver-agentframework==1.0.0b9
+# Azure AI Foundry SDK
+# agentserver-core b15 requires azure-ai-projects>=2.0.0b1 and azure-ai-agents==1.2.0b5.
+# azure-ai-projects 2.0.0b3 has MCPTool (needed by arc/patch) and PromptAgentDefinitionText
+# (needed by agent_framework_azure_ai companion to agent-framework b260107).
+azure-ai-projects==2.0.0b3
+azure-ai-agents==1.2.0b5
 
 # Azure Identity (managed identity via IMDS)
 azure-identity>=1.17.0
@@ -31,12 +35,6 @@ azure-cosmos>=4.7.0
 azure-monitor-opentelemetry>=1.6.0
 opentelemetry-sdk>=1.25.0
 opentelemetry-exporter-otlp>=1.25.0
-
-# Starlette version pin for azure-ai-agentserver-core b9 compatibility.
-# b9 uses @app.on_event("startup") which was removed in starlette 0.21.0.
-# Pin to the last version that has on_event support.
-# Upgrade path: when agentserver is updated to use lifespan (b10+), remove this pin.
-starlette==0.20.4
 
 # Data validation
 pydantic>=2.8.0
