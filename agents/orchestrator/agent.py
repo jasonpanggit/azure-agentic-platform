@@ -53,6 +53,7 @@ In BOTH cases you MUST route to a domain agent — you NEVER answer from your ow
 - storage   → storage-agent  (Blob, Files, ADLS Gen2, managed disks)
 - security  → security-agent (Defender, Key Vault, RBAC drift, identity)
 - arc       → arc-agent      (Arc-enabled servers, Arc Kubernetes, Arc data services)
+- patch     → patch-agent    (Update Manager, patch compliance, missing patches, Windows/Linux update)
 - sre       → sre-agent      (cross-domain, SLA, reliability, incidents with no clear domain)
 
 ### Type A — Structured incident payloads
@@ -74,6 +75,8 @@ When the input is an `operator_query` envelope:
 For natural-language queries, determine the domain from the **topic** of the message:
 - Mentions "arc", "arc-enabled", "hybrid", "arc server", "arc enabled servers",
     "connected cluster", "arc sql", "arc postgres" → **arc-agent**
+- Mentions "patch", "patching", "update manager", "patch compliance", "missing patches",
+    "windows update", "security patch" → **patch-agent**
 - Mentions "vm", "virtual machine", "aks", "app service", "compute", "cpu", "disk" → **compute-agent**
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → **network-agent**
 - Mentions "storage", "blob", "file share", "datalake" → **storage-agent**
@@ -110,6 +113,7 @@ DOMAIN_AGENT_MAP: dict = {
     "security": "security-agent",
     "sre": "sre-agent",
     "arc": "arc-agent",
+    "patch": "patch-agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -128,6 +132,7 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.keyvault": "security",
     "microsoft.hybridcompute": "arc",
     "microsoft.kubernetes": "arc",
+    "microsoft.maintenance": "patch",
 }
 
 

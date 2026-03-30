@@ -8,9 +8,13 @@
 # Upgrade path: wait for agentserver b10+ that supports agent-framework rc5+.
 agent-framework==1.0.0b260107
 
-# Azure AI Foundry SDK (GA)
-# azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents
-azure-ai-projects>=2.0.1
+# Azure AI Foundry SDK
+# Compatibility matrix for agent-framework b260107 + agentserver b9:
+#   - azure-ai-projects >= 2.0.0: PromptAgentDefinitionText removed → agentserver b9 crash
+#   - azure-ai-projects < 2.0.0b1: MCPTool absent → arc/patch agents crash
+#   - azure-ai-projects == 2.0.0b3: both MCPTool AND PromptAgentDefinitionText present ✓
+# Pin to 2.0.0b3 until agent-framework upgrades to target azure-ai-projects>=2.0.0.
+azure-ai-projects==2.0.0b3
 azure-ai-agents>=1.0.0
 
 # Foundry Hosted Agent adapters — b9 is compatible with agent-framework b260107
