@@ -98,6 +98,26 @@ locals {
       }
     },
 
+    # Patch Agent: Reader + Monitoring Reader across all in-scope subscriptions (ARG cross-subscription queries)
+    merge(
+      {
+        for sub_id in var.all_subscription_ids :
+        "patch-reader-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["patch"]
+          role_definition_name = "Reader"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      },
+      {
+        for sub_id in var.all_subscription_ids :
+        "patch-monreader-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["patch"]
+          role_definition_name = "Monitoring Reader"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      }
+    ),
+
     # API Gateway: Cognitive Services User on platform subscription (Foundry API access)
     {
       "api-gateway-coguser-platform" = {
