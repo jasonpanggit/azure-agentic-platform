@@ -195,6 +195,7 @@ module "agent_apps" {
   security_agent_id              = var.security_agent_id
   sre_agent_id                   = var.sre_agent_id
   arc_agent_id                   = var.arc_agent_id
+  patch_agent_id                 = var.patch_agent_id
 
   # Deploy real agent images from ACR (not placeholder)
   use_placeholder_image = false
@@ -248,13 +249,13 @@ module "eventhub" {
 module "fabric" {
   source = "../../modules/fabric"
 
-  resource_group_name = azurerm_resource_group.main.name
-  location            = var.location
-  environment         = var.environment
-  required_tags       = local.required_tags
-  fabric_capacity_sku = "F4" # Prod: higher capacity
-  fabric_admin_email  = var.fabric_admin_email
-  fabric_capacity_name = "fcaapprod"
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = var.location
+  environment              = var.environment
+  required_tags            = local.required_tags
+  fabric_capacity_sku      = "F4" # Prod: higher capacity
+  fabric_admin_email       = var.fabric_admin_email
+  fabric_capacity_name     = "fcaapprod"
   enable_fabric_data_plane = false
 }
 
@@ -266,9 +267,9 @@ module "fabric" {
 module "entra_apps" {
   source = "../../modules/entra-apps"
 
-  environment      = var.environment
+  environment       = var.environment
   web_ui_public_url = var.web_ui_public_url
-  keyvault_id      = module.keyvault.keyvault_id
+  keyvault_id       = module.keyvault.keyvault_id
 }
 
 # --- Activity Log Export (depends on: monitoring) ---

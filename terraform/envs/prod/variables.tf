@@ -146,3 +146,8 @@ variable "arc_agent_id" {
   type    = string
   default = ""
 }
+
+variable "patch_agent_id" {
+  type    = string
+  default = ""
+}
