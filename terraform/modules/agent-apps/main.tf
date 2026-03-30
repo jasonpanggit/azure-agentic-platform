@@ -24,7 +24,9 @@ resource "azurerm_container_app" "agents" {
   name                         = "ca-${each.key}-${var.environment}"
   container_app_environment_id = var.container_apps_environment_id
   resource_group_name          = var.resource_group_name
+  max_inactive_revisions       = 0
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
 
   identity {
     type = "SystemAssigned"
@@ -178,6 +180,14 @@ resource "azurerm_container_app" "agents" {
   }
 
   tags = var.required_tags
+
+  # Runtime image revisions and env vars are updated by CI/CD and manual setup steps.
+  lifecycle {
+    ignore_changes = [
+      template[0].container[0].env,
+      template[0].container[0].image,
+    ]
+  }
 }
 
 # Teams Bot managed separately to support bot-specific env vars (BOT_ID, BOT_PASSWORD, etc.)
@@ -185,7 +195,9 @@ resource "azurerm_container_app" "teams_bot" {
   name                         = "ca-teams-bot-${var.environment}"
   container_app_environment_id = var.container_apps_environment_id
   resource_group_name          = var.resource_group_name
+  max_inactive_revisions       = 0
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
 
   identity {
     type = "SystemAssigned"
@@ -295,4 +307,13 @@ resource "azurerm_container_app" "teams_bot" {
   }
 
   tags = var.required_tags
+
+  # Teams Bot credentials and runtime image updates are managed out of band.
+  lifecycle {
+    ignore_changes = [
+      secret,
+      template[0].container[0].env,
+      template[0].container[0].image,
+    ]
+  }
 }

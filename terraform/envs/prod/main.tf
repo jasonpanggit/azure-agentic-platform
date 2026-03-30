@@ -4,6 +4,9 @@ locals {
     managed-by  = "terraform"
     project     = "aap"
   }
+
+  # Prod currently uses the platform Azure MCP sidecar, not the custom Arc MCP server module.
+  enable_arc_mcp_server = false
 }
 
 resource "azurerm_resource_group" "main" {
@@ -50,7 +53,7 @@ module "foundry" {
   log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
 
   # Prod: higher TPM capacity
-  model_capacity = 30
+  model_capacity = 100
 }
 
 # --- Databases (depends on: networking) ---
@@ -146,6 +149,7 @@ module "private_endpoints" {
 # Arc Agent calls it at http://{arc_mcp_server_fqdn}/mcp (ARC_MCP_SERVER_URL).
 
 module "arc_mcp_server" {
+  count  = local.enable_arc_mcp_server ? 1 : 0
   source = "../../modules/arc-mcp-server"
 
   resource_group_name            = azurerm_resource_group.main.name
@@ -184,7 +188,7 @@ module "agent_apps" {
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
   orchestrator_agent_id          = var.orchestrator_agent_id
-  arc_mcp_server_url             = module.arc_mcp_server.arc_mcp_server_url
+  arc_mcp_server_url             = local.enable_arc_mcp_server ? module.arc_mcp_server[0].arc_mcp_server_url : ""
   compute_agent_id               = var.compute_agent_id
   network_agent_id               = var.network_agent_id
   storage_agent_id               = var.storage_agent_id
@@ -250,6 +254,8 @@ module "fabric" {
   required_tags       = local.required_tags
   fabric_capacity_sku = "F4" # Prod: higher capacity
   fabric_admin_email  = var.fabric_admin_email
+  fabric_capacity_name = "fcaapprod"
+  enable_fabric_data_plane = false
 }
 
 # --- Entra App Registrations (depends on: keyvault) ---

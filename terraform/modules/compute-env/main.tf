@@ -10,8 +10,11 @@ resource "azurerm_container_app_environment" "main" {
   location                       = var.location
   resource_group_name            = var.resource_group_name
   log_analytics_workspace_id     = var.log_analytics_workspace_id
+  logs_destination               = "log-analytics"
   infrastructure_subnet_id       = var.container_apps_subnet_id
+  infrastructure_resource_group_name = "ME_cae-aap-${var.environment}_${var.resource_group_name}_${replace(lower(var.location), " ", "")}"
   internal_load_balancer_enabled = false
+  public_network_access          = "Enabled"
 
   workload_profile {
     name                  = "Consumption"

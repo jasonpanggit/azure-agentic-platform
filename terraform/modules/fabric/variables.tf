@@ -35,6 +35,18 @@ variable "fabric_capacity_sku" {
   default     = "F2"
 }
 
+variable "fabric_capacity_name" {
+  description = "Fabric capacity resource name"
+  type        = string
+  default     = ""
+}
+
+variable "enable_fabric_data_plane" {
+  description = "Whether to manage Fabric workspace/Eventhouse/Activator/Lakehouse resources"
+  type        = bool
+  default     = true
+}
+
 variable "fabric_admin_email" {
   description = "Email of the Fabric capacity administrator"
   type        = string

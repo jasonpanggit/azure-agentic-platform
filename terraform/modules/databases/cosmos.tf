@@ -4,6 +4,7 @@ resource "azurerm_cosmosdb_account" "main" {
   resource_group_name           = var.resource_group_name
   offer_type                    = "Standard"
   kind                          = "GlobalDocumentDB"
+  local_authentication_disabled = true
   public_network_access_enabled = false
 
   dynamic "capabilities" {

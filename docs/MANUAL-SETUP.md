@@ -263,6 +263,10 @@ Open the GitHub repository → **Settings** → **Secrets and variables** → **
 | `AZURE_OPENAI_ENDPOINT` | e.g. `https://aap-foundry-prod.openai.azure.com/` | Same as `AZURE_PROJECT_ENDPOINT` prefix |
 | `AZURE_OPENAI_API_KEY` | API key | Azure Portal → Foundry account → Keys and Endpoint |
 
+> GitHub Actions auth modes:
+> - Preferred: configure a federated identity credential on the app or service principal referenced by `AZURE_CLIENT_ID` so `azure/login` can use OIDC.
+> - Fallback: set `AZURE_CLIENT_SECRET` in GitHub Actions secrets. The reusable build and deploy workflows will use the client secret automatically when it is present.
+
 ### Required Variables
 
 | Name | Value | How to Obtain |

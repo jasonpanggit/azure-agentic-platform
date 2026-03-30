@@ -19,13 +19,20 @@
 
 data "azurerm_subscription" "current" {}
 
+locals {
+  fabric_capacity_name = var.fabric_capacity_name != "" ? var.fabric_capacity_name : "fcaap${var.environment}"
+}
+
 # --- Fabric Capacity ---
 
 resource "azapi_resource" "fabric_capacity" {
   type      = "Microsoft.Fabric/capacities@2023-11-01"
-  name      = "fc-aap-${var.environment}"
+  name      = local.fabric_capacity_name
   location  = var.location
   parent_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/resourceGroups/${var.resource_group_name}"
+
+  # Fabric capacity types are not reliably covered by the AzAPI embedded schema catalog.
+  schema_validation_enabled = false
 
   body = {
     properties = {
@@ -47,6 +54,7 @@ resource "azapi_resource" "fabric_capacity" {
 # azapi_resource supports this via the Microsoft.Fabric/workspaces type.
 
 resource "azapi_resource" "fabric_workspace" {
+  count     = var.enable_fabric_data_plane ? 1 : 0
   type      = "Microsoft.Fabric/workspaces@2023-11-01"
   name      = "aap-${var.environment}"
   parent_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}"
@@ -71,9 +79,10 @@ resource "azapi_resource" "fabric_workspace" {
 # Eventhouse is the KQL-native time-series store within the Fabric workspace.
 
 resource "azapi_resource" "fabric_eventhouse" {
+  count     = var.enable_fabric_data_plane ? 1 : 0
   type      = "Microsoft.Fabric/workspaces/eventhouses@2023-11-01"
   name      = "eh-aap-${var.environment}"
-  parent_id = azapi_resource.fabric_workspace.id
+  parent_id = azapi_resource.fabric_workspace[0].id
 
   schema_validation_enabled = false
 
@@ -92,9 +101,10 @@ resource "azapi_resource" "fabric_eventhouse" {
 # The KQL database holds detection results, ingested from Event Hub via Eventstreams.
 
 resource "azapi_resource" "fabric_kql_database" {
+  count     = var.enable_fabric_data_plane ? 1 : 0
   type      = "Microsoft.Fabric/workspaces/eventhouses/databases@2023-11-01"
   name      = "kqldb-aap-${var.environment}"
-  parent_id = azapi_resource.fabric_eventhouse.id
+  parent_id = azapi_resource.fabric_eventhouse[0].id
 
   schema_validation_enabled = false
 
@@ -112,9 +122,10 @@ resource "azapi_resource" "fabric_kql_database" {
 # NOTE: Activator trigger wiring must be configured manually — see null_resource below.
 
 resource "azapi_resource" "fabric_activator" {
+  count     = var.enable_fabric_data_plane ? 1 : 0
   type      = "Microsoft.Fabric/workspaces/reflex@2023-11-01"
   name      = "act-aap-${var.environment}"
-  parent_id = azapi_resource.fabric_workspace.id
+  parent_id = azapi_resource.fabric_workspace[0].id
 
   schema_validation_enabled = false
 
@@ -134,9 +145,10 @@ resource "azapi_resource" "fabric_activator" {
 # Activity Log mirroring must be configured manually — see null_resource below.
 
 resource "azapi_resource" "fabric_lakehouse" {
+  count     = var.enable_fabric_data_plane ? 1 : 0
   type      = "Microsoft.Fabric/workspaces/lakehouses@2023-11-01"
   name      = "lh-aap-${var.environment}"
-  parent_id = azapi_resource.fabric_workspace.id
+  parent_id = azapi_resource.fabric_workspace[0].id
 
   schema_validation_enabled = false
 
@@ -160,6 +172,7 @@ resource "azapi_resource" "fabric_lakehouse" {
 #   3. Set trigger condition: new row where `domain IS NOT NULL`
 #   4. Set action: invoke User Data Function (`handle_activator_trigger`)
 resource "null_resource" "activator_setup_reminder" {
+  count = var.enable_fabric_data_plane ? 1 : 0
   depends_on = [azapi_resource.fabric_capacity]
 
   provisioner "local-exec" {
@@ -172,6 +185,7 @@ resource "null_resource" "activator_setup_reminder" {
 #   See services/detection-plane/docs/AUDIT-003-onelake-setup.md for detailed steps.
 #   Retention must be >= 2 years (730 days) per AUDIT-003.
 resource "null_resource" "onelake_mirror_setup_reminder" {
+  count = var.enable_fabric_data_plane ? 1 : 0
   depends_on = [azapi_resource.fabric_capacity]
 
   provisioner "local-exec" {

@@ -107,12 +107,12 @@ locals {
       }
     },
 
-    # All agents: Cosmos DB Built-in Data Contributor on platform subscription (session budget tracking)
+    # All agents: Cosmos DB Operator on platform subscription
     {
       for name, principal_id in var.agent_principal_ids :
       "${name}-cosmoscontributor-platform" => {
         principal_id         = principal_id
-        role_definition_name = "Cosmos DB Built-in Data Contributor"
+        role_definition_name = "Cosmos DB Operator"
         scope                = "/subscriptions/${var.platform_subscription_id}"
       }
     },

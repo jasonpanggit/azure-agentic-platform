@@ -5,30 +5,30 @@ output "fabric_capacity_id" {
 
 output "fabric_capacity_name" {
   description = "Name of the Fabric capacity"
-  value       = "fc-aap-${var.environment}"
+  value       = azapi_resource.fabric_capacity.name
 }
 
 output "fabric_workspace_id" {
   description = "Resource ID of the Fabric workspace"
-  value       = azapi_resource.fabric_workspace.id
+  value       = try(azapi_resource.fabric_workspace[0].id, null)
 }
 
 output "fabric_eventhouse_id" {
   description = "Resource ID of the Fabric Eventhouse"
-  value       = azapi_resource.fabric_eventhouse.id
+  value       = try(azapi_resource.fabric_eventhouse[0].id, null)
 }
 
 output "fabric_kql_database_name" {
   description = "Name of the KQL database within the Eventhouse"
-  value       = "kqldb-aap-${var.environment}"
+  value       = var.enable_fabric_data_plane ? "kqldb-aap-${var.environment}" : null
 }
 
 output "fabric_activator_id" {
   description = "Resource ID of the Fabric Activator"
-  value       = azapi_resource.fabric_activator.id
+  value       = try(azapi_resource.fabric_activator[0].id, null)
 }
 
 output "fabric_lakehouse_id" {
   description = "Resource ID of the OneLake Lakehouse"
-  value       = azapi_resource.fabric_lakehouse.id
+  value       = try(azapi_resource.fabric_lakehouse[0].id, null)
 }

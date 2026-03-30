@@ -12,7 +12,9 @@ resource "azurerm_container_app" "arc_mcp_server" {
   name                         = "ca-arc-mcp-server-${var.environment}"
   container_app_environment_id = var.container_apps_environment_id
   resource_group_name          = var.resource_group_name
+  max_inactive_revisions       = 0
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
 
   identity {
     type = "SystemAssigned"

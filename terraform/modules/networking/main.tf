@@ -34,6 +34,7 @@ resource "azurerm_subnet" "container_apps" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_container_apps_cidr]
+  default_outbound_access_enabled = false
 
   delegation {
     name = "container-apps-delegation"
@@ -49,6 +50,7 @@ resource "azurerm_subnet" "private_endpoints" {
   resource_group_name               = var.resource_group_name
   virtual_network_name              = azurerm_virtual_network.main.name
   address_prefixes                  = [var.subnet_private_endpoints_cidr]
+  default_outbound_access_enabled   = false
   private_endpoint_network_policies = "Enabled"
 }
 
@@ -57,6 +59,7 @@ resource "azurerm_subnet" "postgres" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_postgres_cidr]
+  default_outbound_access_enabled = false
 
   delegation {
     name = "postgres-delegation"
@@ -72,6 +75,7 @@ resource "azurerm_subnet" "foundry" {
   resource_group_name               = var.resource_group_name
   virtual_network_name              = azurerm_virtual_network.main.name
   address_prefixes                  = [var.subnet_foundry_cidr]
+  default_outbound_access_enabled   = false
   private_endpoint_network_policies = "Enabled"
 }
 
@@ -80,6 +84,7 @@ resource "azurerm_subnet" "reserved_1" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_reserved_1_cidr]
+  default_outbound_access_enabled = false
 
   # Phase 4: Event Hub networking — service endpoint enables VNet rule on Event Hub namespace.
   service_endpoints = ["Microsoft.EventHub"]

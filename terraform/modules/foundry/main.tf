@@ -5,6 +5,7 @@ resource "azurerm_cognitive_account" "foundry" {
   kind                          = "AIServices"
   sku_name                      = "S0"
   custom_subdomain_name         = "aap-foundry-${var.environment}"
+  local_auth_enabled            = false
   public_network_access_enabled = true # Required during Preview for Hosted Agents
   project_management_enabled    = true
 
