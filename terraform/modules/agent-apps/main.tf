@@ -7,6 +7,7 @@ locals {
     security     = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     arc          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     sre          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    patch        = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
   }
 
   # services excludes teams-bot (managed separately for bot-specific env vars)
@@ -147,6 +148,13 @@ resource "azurerm_container_app" "agents" {
         content {
           name  = "ARC_AGENT_ID"
           value = var.arc_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.patch_agent_id != "" ? [1] : []
+        content {
+          name  = "PATCH_AGENT_ID"
+          value = var.patch_agent_id
         }
       }
       # Inject Arc MCP Server URL into the arc agent

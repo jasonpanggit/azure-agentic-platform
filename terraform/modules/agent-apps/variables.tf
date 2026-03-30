@@ -124,6 +124,12 @@ variable "arc_agent_id" {
   default     = ""
 }
 
+variable "patch_agent_id" {
+  description = "Foundry Agent ID for the Patch domain agent"
+  type        = string
+  default     = ""
+}
+
 variable "arc_mcp_server_url" {
   description = "Internal URL of the Arc MCP Server Container App (e.g. http://ca-arc-mcp-server-prod.internal/mcp)"
   type        = string
