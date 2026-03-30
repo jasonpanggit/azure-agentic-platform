@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
+    # Skip when E2E_BASE_URL is not configured (requires live staging environment)
+    if: ${{ vars.E2E_BASE_URL != '' }}
 
     env:
       E2E_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
@@ -83,6 +85,8 @@ jobs:
     timeout-minutes: 20
     needs: [e2e]
     environment: staging
+    # Skip when E2E_BASE_URL is not configured (requires live staging environment)
+    if: ${{ vars.E2E_BASE_URL != '' }}
 
     env:
       API_GATEWAY_URL: ${{ vars.E2E_API_URL }}
