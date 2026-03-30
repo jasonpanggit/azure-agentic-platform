@@ -108,8 +108,8 @@ def create_compute_agent() -> ChatAgent:
     return ChatAgent(
         name="compute-agent",
         description="Azure compute domain specialist — VMs, VMSS, AKS, App Service.",
-        system_prompt=COMPUTE_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=COMPUTE_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_activity_log,
             query_log_analytics,
@@ -124,5 +124,5 @@ def create_compute_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_compute_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_compute_agent()).run()

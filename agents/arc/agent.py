@@ -162,14 +162,14 @@ def create_arc_agent() -> ChatAgent:
             "Azure Arc domain specialist — Arc Servers, Arc K8s, Arc Data Services. "
             "Uses custom Arc MCP Server for ARM-native Arc tooling (Phase 3)."
         ),
-        system_prompt=ARC_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=ARC_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_activity_log,
             query_log_analytics,
             query_resource_health,
+            arc_mcp_tool,
         ],
-        tool_resources=[arc_mcp_tool],
     )
 
 
@@ -178,5 +178,5 @@ def create_arc_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_arc_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_arc_agent()).run()

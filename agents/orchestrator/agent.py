@@ -21,9 +21,9 @@ from __future__ import annotations
 import os
 from typing import List, Optional
 
-from agent_framework import AgentTarget, HandoffOrchestrator, ai_function
+from agent_framework import ChatAgent, ai_function
 
-from shared.auth import get_credential, get_foundry_client
+from shared.auth import get_foundry_client
 from shared.envelope import IncidentMessage, validate_envelope
 from shared.otel import setup_telemetry
 from shared.routing import classify_query_text
@@ -194,70 +194,26 @@ def classify_incident_domain(
 # ---------------------------------------------------------------------------
 
 
-def create_orchestrator() -> HandoffOrchestrator:
-    """Create and configure the HandoffOrchestrator instance.
+def create_orchestrator() -> ChatAgent:
+    """Create and configure the Orchestrator ChatAgent instance.
 
-    Registers all 6 domain agent targets with their Foundry agent IDs
-    sourced from environment variables set by the Terraform agent-apps module.
+    The orchestrator is a single ChatAgent with a classify_incident_domain tool.
+    Domain routing to specialist agents happens via the system prompt instructions
+    and the Foundry thread mechanism — domain agent IDs are injected as env vars
+    for the orchestrator's LLM context.
 
     Returns:
-        Configured HandoffOrchestrator ready to accept incident messages.
+        ChatAgent configured with the orchestrator system prompt and classification tool.
     """
     client = get_foundry_client()
 
-    orchestrator = HandoffOrchestrator(
+    return ChatAgent(
+        chat_client=client,
+        instructions=ORCHESTRATOR_SYSTEM_PROMPT,
         name="orchestrator-agent",
         description="Central incident dispatcher — classifies and routes to domain agents.",
-        system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
-        client=client,
         tools=[classify_incident_domain],
     )
-
-    # Register all 6 domain agent targets (AGENT-001)
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["compute"],
-            agent_id=os.environ.get("COMPUTE_AGENT_ID", ""),
-            description="Azure compute domain specialist (VMs, VMSS, AKS, App Service).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["network"],
-            agent_id=os.environ.get("NETWORK_AGENT_ID", ""),
-            description="Azure network domain specialist (VNets, NSGs, load balancers, DNS).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["storage"],
-            agent_id=os.environ.get("STORAGE_AGENT_ID", ""),
-            description="Azure storage domain specialist (Blob, Files, ADLS Gen2, managed disks).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["security"],
-            agent_id=os.environ.get("SECURITY_AGENT_ID", ""),
-            description="Azure security domain specialist (Defender, Key Vault, RBAC drift).",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["sre"],
-            agent_id=os.environ.get("SRE_AGENT_ID", ""),
-            description="SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",
-        )
-    )
-    orchestrator.add_target(
-        AgentTarget(
-            name=DOMAIN_AGENT_MAP["arc"],
-            agent_id=os.environ.get("ARC_AGENT_ID", ""),
-            description="Azure Arc domain specialist (Arc-enabled servers, Arc Kubernetes, Arc data services).",
-        )
-    )
-
-    return orchestrator
 
 
 # ---------------------------------------------------------------------------
@@ -265,5 +221,5 @@ def create_orchestrator() -> HandoffOrchestrator:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    orchestrator = create_orchestrator()
-    orchestrator.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_orchestrator()).run()

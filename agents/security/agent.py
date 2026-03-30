@@ -116,8 +116,8 @@ def create_security_agent() -> ChatAgent:
     return ChatAgent(
         name="security-agent",
         description="Azure security domain specialist — Defender, Key Vault, RBAC drift.",
-        system_prompt=SECURITY_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=SECURITY_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_defender_alerts,
             query_keyvault_diagnostics,
@@ -131,5 +131,5 @@ def create_security_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_security_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_security_agent()).run()

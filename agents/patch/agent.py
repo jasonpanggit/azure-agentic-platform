@@ -148,14 +148,22 @@ def create_patch_agent() -> ChatAgent:
     azure_mcp_url = os.environ.get("AZURE_MCP_SERVER_URL", "")
     client = get_foundry_client()
 
-    tool_resources = []
+    tools = [
+        query_activity_log,
+        query_patch_assessment,
+        query_patch_installations,
+        query_configuration_data,
+        lookup_kb_cves,
+        query_resource_health,
+        search_runbooks,
+    ]
     if azure_mcp_url:
         azure_mcp_tool = MCPTool(
             server_label="azure-mcp",
             server_url=azure_mcp_url,
             allowed_tools=ALLOWED_MCP_TOOLS,
         )
-        tool_resources.append(azure_mcp_tool)
+        tools.append(azure_mcp_tool)
 
     return ChatAgent(
         name="patch-agent",
@@ -163,18 +171,9 @@ def create_patch_agent() -> ChatAgent:
             "Azure patch management specialist — Update Manager compliance, "
             "assessment, installation history, KB-to-CVE mapping."
         ),
-        system_prompt=PATCH_AGENT_SYSTEM_PROMPT,
-        client=client,
-        tools=[
-            query_activity_log,
-            query_patch_assessment,
-            query_patch_installations,
-            query_configuration_data,
-            lookup_kb_cves,
-            query_resource_health,
-            search_runbooks,
-        ],
-        tool_resources=tool_resources,
+        instructions=PATCH_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
+        tools=tools,
     )
 
 
@@ -183,5 +182,5 @@ def create_patch_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_patch_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_patch_agent()).run()

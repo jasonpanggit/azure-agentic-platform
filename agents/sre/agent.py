@@ -121,8 +121,8 @@ def create_sre_agent() -> ChatAgent:
     return ChatAgent(
         name="sre-agent",
         description="SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",
-        system_prompt=SRE_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=SRE_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_availability_metrics,
             query_performance_baselines,
@@ -136,5 +136,5 @@ def create_sre_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_sre_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_sre_agent()).run()

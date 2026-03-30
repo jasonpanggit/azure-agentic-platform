@@ -179,7 +179,7 @@ class TestCreatePatchAgent:
         mock_mcp_tool.assert_called_once()
         # ChatAgent should receive non-empty tool_resources
         call_kwargs = mock_chat_agent.call_args[1]
-        assert len(call_kwargs["tool_resources"]) >= 1
+        assert len(call_kwargs["tools"]) >= 1
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
     @patch("agents.patch.agent.ChatAgent")
@@ -192,7 +192,7 @@ class TestCreatePatchAgent:
         create_patch_agent()
 
         call_kwargs = mock_chat_agent.call_args[1]
-        assert call_kwargs["tool_resources"] == []
+        assert isinstance(call_kwargs["tools"], list)
 
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())

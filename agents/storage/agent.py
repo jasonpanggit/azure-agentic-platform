@@ -106,8 +106,8 @@ def create_storage_agent() -> ChatAgent:
     return ChatAgent(
         name="storage-agent",
         description="Azure storage domain specialist — Blob, Files, ADLS Gen2, managed disks.",
-        system_prompt=STORAGE_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=STORAGE_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_storage_metrics,
             query_blob_diagnostics,
@@ -121,5 +121,5 @@ def create_storage_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_storage_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_storage_agent()).run()

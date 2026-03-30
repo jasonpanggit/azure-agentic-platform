@@ -116,8 +116,8 @@ def create_network_agent() -> ChatAgent:
     return ChatAgent(
         name="network-agent",
         description="Azure network domain specialist — VNets, NSGs, load balancers, DNS, ExpressRoute.",
-        system_prompt=NETWORK_AGENT_SYSTEM_PROMPT,
-        client=client,
+        instructions=NETWORK_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=[
             query_nsg_rules,
             query_load_balancer_health,
@@ -132,5 +132,5 @@ def create_network_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = create_network_agent()
-    agent.serve()
+    from azure.ai.agentserver.agentframework import from_agent_framework
+    from_agent_framework(create_network_agent()).run()
