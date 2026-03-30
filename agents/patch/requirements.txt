@@ -1,0 +1,2 @@
+# Patch agent — Azure Resource Graph SDK for ARG queries
+azure-mgmt-resourcegraph>=8.0.1
