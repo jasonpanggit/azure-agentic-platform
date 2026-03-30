@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-30T15:41:44.131Z"
+last_updated: "2026-03-30T16:03:50.389Z"
 progress:
   total_phases: 9
   completed_phases: 7
@@ -223,6 +223,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 - Phase 9 added: Web UI Revamp — rebuild with Tailwind CSS + shadcn/ui
 - Phase 10 added: API Gateway Auth Audit Hardening
 - Phase 11 added: Patch Domain Agent — ARG-based patch assessment/installation agent using Azure Update Manager query-logs, wired into orchestrator routing
+- Phase 12 added: EOL Domain Agent with multi-source internet search and PostgreSQL caching
 
 ---
 
