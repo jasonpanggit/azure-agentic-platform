@@ -1,39 +1,59 @@
-"""Integration test: Full round-trip SLA (SC-2).
+"""Detection plane round-trip — payload mapping mock-based tests (CONCERNS 3.1).
 
-Fires a synthetic Azure Monitor alert and verifies the entire pipeline
-completes within 60 seconds: Event Hub -> Eventhouse -> Activator ->
-User Data Function -> API Gateway -> Cosmos DB incident record.
-
-Requires:
-- Full Phase 4 infrastructure deployed
-- Live Event Hub, Fabric Eventhouse, API gateway, Cosmos DB
-- Environment variables: EVENTHUB_CONNECTION_STRING, API_GATEWAY_URL,
-  COSMOS_ENDPOINT, COSMOS_DATABASE_NAME
-
-Run with: pytest tests/integration/test_round_trip.py -v -m integration
+Tests map_detection_result_to_incident_payload() with mock alert data.
+Import-safe: payload_mapper.py has no Azure SDK at module level.
 """
 from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.integration
+from payload_mapper import map_detection_result_to_incident_payload
 
 
-@pytest.mark.skip(reason="Requires full Phase 4 infrastructure (SC-2 round-trip SLA)")
-class TestRoundTripSLA:
-    """Full round-trip: alert fire -> Cosmos DB incident within 60 seconds."""
+SAMPLE_DETECTION_RESULT = {
+    "alert_id": "alert-test-001",
+    "severity": "Sev2",
+    "resource_type": "Microsoft.Compute/virtualMachines",
+    "resource_id": "/subscriptions/sub-123/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-01",
+    "subscription_id": "sub-123",
+    "resource_name": "vm-01",
+    "alert_rule": "HighCpuUtilization",
+    "domain": "compute",
+    "description": "CPU utilization exceeded 95% for 15 minutes",
+    "kql_evidence": "Perf | where ObjectName == 'Processor' | where CounterValue > 95",
+    "fired_at": "2026-03-30T10:00:00Z",
+    "classified_at": "2026-03-30T10:00:05Z",
+}
 
-    def test_round_trip_under_60_seconds(self) -> None:
-        """SC-2: Total time from alert fire to Cosmos DB incident < 60 seconds."""
-        # TODO: Implement after full Phase 4 deployment
-        # 1. Record start timestamp
-        # 2. Send Common Alert Schema payload to Event Hub
-        # 3. Poll Cosmos DB incidents container for up to 60 seconds
-        # 4. Assert incident record exists
-        # 5. Assert (incident.created_at - start_timestamp) < 60 seconds
-        pass
 
-    def test_incident_record_has_thread_id(self) -> None:
-        """SC-2: Incident record should have a Foundry thread_id after round-trip."""
-        # TODO: Verify Cosmos DB incident has non-empty thread_id
-        pass
+class TestRoundTrip:
+    """Tests for detection result -> incident payload mapping."""
+
+    def test_mapped_payload_has_required_fields(self) -> None:
+        """map_detection_result_to_incident_payload returns all required IncidentPayload fields."""
+        result = map_detection_result_to_incident_payload(SAMPLE_DETECTION_RESULT)
+        required_fields = ["incident_id", "severity", "domain", "detection_rule", "affected_resources"]
+        for field in required_fields:
+            assert field in result, f"Missing required field: {field}"
+
+    def test_incident_id_prefixed_with_det(self) -> None:
+        """Incident ID is prefixed with 'det-' for traceability."""
+        result = map_detection_result_to_incident_payload(SAMPLE_DETECTION_RESULT)
+        assert result["incident_id"] == "det-alert-test-001"
+
+    def test_severity_preserved_from_input(self) -> None:
+        """Severity from detection result is preserved in the mapped payload."""
+        result = map_detection_result_to_incident_payload(SAMPLE_DETECTION_RESULT)
+        assert result["severity"] == "Sev2"
+
+    def test_affected_resources_populated(self) -> None:
+        """Mapped payload includes at least one affected_resource."""
+        result = map_detection_result_to_incident_payload(SAMPLE_DETECTION_RESULT)
+        assert "affected_resources" in result
+        assert len(result["affected_resources"]) >= 1
+
+    def test_missing_alert_id_raises_value_error(self) -> None:
+        """map_detection_result_to_incident_payload raises ValueError for empty alert_id."""
+        bad_input = dict(SAMPLE_DETECTION_RESULT, alert_id="")
+        with pytest.raises(ValueError, match="alert_id"):
+            map_detection_result_to_incident_payload(bad_input)
