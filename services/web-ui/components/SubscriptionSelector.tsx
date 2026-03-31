@@ -34,10 +34,14 @@ export function SubscriptionSelector({ selected, onChange, onLoad, trigger }: Su
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch('/api/subscriptions')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
       .then((data: { subscriptions?: Subscription[]; error?: string }) => {
         if (data.subscriptions) {
           setSubscriptions(data.subscriptions);
@@ -48,7 +52,7 @@ export function SubscriptionSelector({ selected, onChange, onLoad, trigger }: Su
         }
       })
       .catch(() => {
-        // Silently fail — selector stays empty
+        setError(true)
       })
       .finally(() => setLoading(false));
   // onLoad intentionally excluded — only run once on mount
@@ -67,6 +71,12 @@ export function SubscriptionSelector({ selected, onChange, onLoad, trigger }: Su
       <span className="text-sm text-muted-foreground">
         Showing results for {selected.length > 0 ? selected.length : 'all'} subscription(s)
       </span>
+
+      {error && (
+        <span className="text-xs" style={{ color: 'var(--accent-red)' }}>
+          Failed to load subscriptions
+        </span>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

@@ -53,7 +53,7 @@ export function ChatInput({
         }}
       />
       <button
-        onClick={onSubmit}
+        onClick={() => { if (!disabled && value.trim()) onSubmit() }}
         disabled={disabled || !value.trim()}
         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
         style={{

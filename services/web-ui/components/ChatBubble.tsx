@@ -17,9 +17,8 @@ export function ChatBubble({ agentName, content, isStreaming, timestamp, isError
           className="rounded-lg px-3 py-2.5"
           style={{
             background: 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
-            borderLeft: '4px solid var(--accent-red)',
             border: '1px solid var(--border)',
-            borderLeftWidth: '4px',
+            borderLeft: '4px solid var(--accent-red)',
           }}
         >
           <div className="text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--accent-red)' }}>
