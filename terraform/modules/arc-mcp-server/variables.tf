@@ -28,6 +28,12 @@ variable "acr_login_server" {
   type        = string
 }
 
+variable "acr_id" {
+  description = "Resource ID of the Azure Container Registry for AcrPull role assignment"
+  type        = string
+  default     = ""
+}
+
 variable "image_tag" {
   description = "Docker image tag to deploy"
   type        = string
