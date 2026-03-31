@@ -21,6 +21,8 @@ progress:
 
 > Last updated: 2026-03-31 — Plan 09-03 COMPLETE: Chat Components. ChatBubble (prose prose-sm prose-zinc, bg-primary/10 badge, bg-foreground cursor, mt-1 timestamp), UserBubble (rounded-lg p-3 mb-2 opacity-70 mt-1), ThinkingIndicator (already spec-exact), ChatInput (already spec-exact), ProposalCard (Dialog import consolidated to single line, all timer/approval logic preserved), ChatPanel (removed w-full from messages div, critical scroll layout intact: absolute inset-0 outer + ScrollArea flex-1 min-h-0 + shrink-0 grow-0 input, all SSE streaming + approval logic preserved byte-for-byte). All 6 tasks verified.
 
+> Last updated: 2026-03-31 — Completed quick task 260331-ghg: Provision EOL agent in Foundry (asst_s1TancOQbpIjltYQ0oGgfTDD), EOL_AGENT_ID set on ca-orchestrator-prod
+
 > Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
 
 > Last updated: 2026-03-31 — Plan 09-02 COMPLETE: Layout Foundation. Root layout (Inter font, globals.css), providers.tsx (FluentProvider removed, MSAL 100% preserved), next.config.ts (transpilePackages removed), DesktopOnlyGate (shadcn Alert + Monitor icon), AuthenticatedApp (shadcn Button + Tailwind login), AppLayout (react-resizable-panels + exact UI-SPEC classes: bg-background top bar, bg-background chat panel, w-2 border-l resize handle). All 7 tasks verified against acceptance criteria.
@@ -238,6 +240,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
 | 260330-p8d | Fix critical bugs in GitHub Actions workflows | 2026-03-30 | 3758e75 | [260330-p8d-fix-critical-bugs-in-github-actions-work](./quick/260330-p8d-fix-critical-bugs-in-github-actions-work/) |
 | 260331-chg | Deploy Arc MCP Server to Container Apps and wire ARC_MCP_SERVER_URL to ca-arc-prod | 2026-03-31 | 06a2ae0 | [260331-chg-deploy-arc-mcp-server-to-container-apps-](./quick/260331-chg-deploy-arc-mcp-server-to-container-apps-/) |
+| 260331-ghg | Provision EOL agent in Foundry by adding it to provision-domain-agents.py and running provisioning | 2026-03-31 | a100a28 | [260331-ghg-provision-eol-agent-in-foundry-by-adding](./quick/260331-ghg-provision-eol-agent-in-foundry-by-adding/) |
 
 ---
 
