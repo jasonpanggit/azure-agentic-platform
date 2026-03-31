@@ -244,11 +244,42 @@ async def get_chat_result(
 
     if run_status == "requires_action":
         required_action = latest_run.required_action
-        if (
-            required_action is not None
-            and hasattr(required_action, "type")
-            and required_action.type == "submit_tool_outputs"
-        ):
+        if required_action is None or not hasattr(required_action, "type"):
+            pass
+        elif required_action.type == "submit_tool_approval":
+            # Foundry MCP tool calls require explicit approval before execution.
+            # Auto-approve all MCP tool calls — the human-in-the-loop gate for
+            # destructive actions is handled separately at the proposal/approval
+            # layer (approval_gate), not at the MCP tool level.
+            tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore[attr-defined]
+            approvals = [{"tool_call_id": tc.id, "approve": True} for tc in tool_calls]
+            logger.info(
+                "Auto-approving %d MCP tool call(s) for thread %s run %s",
+                len(approvals),
+                thread_id,
+                latest_run.id,
+            )
+            try:
+                import requests as _requests
+                endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+                    "FOUNDRY_ACCOUNT_ENDPOINT", ""
+                )
+                from azure.identity import DefaultAzureCredential
+                _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
+                _headers = {
+                    "Authorization": f"Bearer {_token.token}",
+                    "Content-Type": "application/json",
+                }
+                _url = f"{endpoint}/threads/{thread_id}/runs/{latest_run.id}/submit_tool_outputs?api-version=2025-05-15-preview"
+                _resp = _requests.post(_url, headers=_headers, json={"tool_approvals": approvals})
+                if _resp.status_code in (200, 201):
+                    return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
+                else:
+                    logger.warning("Failed to submit tool approvals: %s %s", _resp.status_code, _resp.text[:200])
+            except Exception as exc:
+                logger.warning("Exception submitting tool approvals: %s", exc)
+
+        elif required_action.type == "submit_tool_outputs":
             tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore[attr-defined]
             tool_outputs = []
             for tc in tool_calls:
