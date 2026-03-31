@@ -25,9 +25,8 @@ USER mcp
 
 EXPOSE 5000
 
-# Bind to all interfaces (not just localhost) so Container Apps ingress can reach the server.
-# azmcp (ASP.NET Core / Kestrel) defaults to http://localhost:5000; this overrides it.
-ENV ASPNETCORE_URLS="http://+:5000"
-
-# Start Azure MCP Server in HTTP transport mode
+# Start Azure MCP Server in HTTP transport mode.
+# --dangerously-disable-http-incoming-auth: required because Foundry hosted agent
+# runtime fetches the MCP tool list without sending a Bearer token.
+# When this flag is set, azmcp binds to 0.0.0.0:5000 automatically (not localhost-only).
 CMD ["azmcp", "server", "start", "--transport", "http", "--dangerously-disable-http-incoming-auth"]
