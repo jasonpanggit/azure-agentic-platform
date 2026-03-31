@@ -24,25 +24,31 @@ Revamp the Claude Code status line from a single dense line to a two-line tiered
 
 | Segment | Example | Condition | Colour |
 |---|---|---|---|
-| Blocker alert | `⚠ blockers` | `## Blockers` section in `STATE.md` contains `OPEN` or `BLOCKING` | Red |
-| GSD update | `⬆ /gsd:update` | `gsd-update-check.json` has `update_available: true` | Yellow |
-| Stale hooks | `⚠ stale hooks` | `gsd-update-check.json` has `stale_hooks` entries | Red |
-| Model | `sonnet-4.6` | Always | Dim white |
-| Clock + elapsed | `14:32 +47m` | Always; elapsed hidden if no session start timestamp | Dim |
-| Repo name | `azure-agentic-platform` | Always | White |
-| Branch | `main` | In a git repo | Green (clean) / Yellow (dirty) |
-| Dirty marker | `*` | Uncommitted changes exist | Yellow |
-| Ahead/behind | `↑2↓1` | Non-zero; each shown independently | Green `↑` / Red `↓` |
-| Stash count | `≡1` | Stashes exist | Dim |
-| Dirty file count | `±3` | Uncommitted files exist | Yellow |
-| Context bar | `████░░░░░░ 40%` | Always | Green <50% / Yellow <65% / Orange <80% / Red+blink 💀 ≥80% |
+| Blocker alert | `⚠ blockers` | `## Blockers` section in `STATE.md` (see GSD Project State below) contains `OPEN` or `BLOCKING` | Red |
+| GSD update | `⬆ /gsd:update` | `~/.claude/cache/gsd-update-check.json` has `"update_available": true` | Yellow |
+| Stale hooks | `⚠ stale hooks — run /gsd:update` | `~/.claude/cache/gsd-update-check.json` has `"stale_hooks"` array with ≥1 entry | Red |
+| Model | `sonnet-4.6` | Always; sourced from `data.model.display_name` or `data.model.id` in stdin JSON | Dim white |
+| Clock + elapsed | `14:32 +47m` | Always; elapsed segment omitted if session ID unavailable or start file missing | Dim |
+| Repo name | `azure-agentic-platform` | Always; `path.basename(data.workspace.current_dir)` | White |
+| Branch | `main` | In a git repo (`git branch --show-current`); omit entire git block if not a repo | Green (clean) / Yellow (dirty) |
+| Dirty marker | `*` | `git status --porcelain` output is non-empty | Yellow |
+| Ahead/behind | `↑2↓1` | `git rev-list --count HEAD..@{u}` and `@{u}..HEAD`; each shown independently only if non-zero; omit if no upstream | Green `↑` / Red `↓` |
+| Stash count | `≡1` | `git stash list` line count ≥ 1; omit if zero or git unavailable | Dim |
+| Dirty file count | `±3` | Count of lines from `git status --porcelain`; omit if zero | Yellow |
+| Context bar | `████░░░░░░ 40%` | Sourced from `data.context_window.remaining_percentage` / `used_percentage` in stdin JSON; always shown when present | Green <50% / Yellow <65% / Orange <80% / Red+blink 💀 ≥80% |
 
 ### Elapsed Time
 
-- At `SessionStart`, write `{ "start": <unix_ms> }` to `~/.claude/cache/claude-session-start-<session_id>.json`
-- Status line reads this file and computes `now - start`
-- Display: `+Xm` for < 60 min, `+Xhm` for ≥ 60 min (e.g. `+2h3m`)
-- If file missing or session ID unavailable: elapsed segment omitted silently
+- **Session ID source:** `data.session_id` from the stdin JSON payload passed to the status line hook. The same field is available in the `SessionStart` hook input.
+- At `SessionStart`, write `{ "start": <unix_ms> }` to `~/.claude/cache/claude-session-start-<session_id>.json`. Create the `~/.claude/cache/` directory if absent (`fs.mkdirSync(..., { recursive: true })`).
+- Status line reads this file, parses `start`, computes elapsed as `Date.now() - start`.
+- Display: `+Xm` for elapsed < 3600s, `+XhYm` for ≥ 3600s (e.g. `+2h3m`).
+- If file is missing, unreadable, or malformed (JSON parse error): elapsed segment omitted silently.
+- If `data.session_id` is absent: session start file is not written; elapsed segment omitted.
+
+### Git Timeout
+
+All `git` calls use `execSync` with a `timeout: 500` option (milliseconds). On timeout or any error, the entire git block (branch, dirty, ahead/behind, stash, file count) is silently omitted.
 
 ---
 
@@ -58,32 +64,53 @@ Fixing auth bug… │ ▰▰▰▰▱▱▱▱ 5/12ph 20/41p │ ✗ 3 tests �
 
 | Segment | Example | Condition | Colour |
 |---|---|---|---|
-| Active task | `Fixing auth bug…` | Todo with `status: in_progress` exists | Bold white |
-| GSD progress bar | `▰▰▰▰▱▱▱▱ 5/12ph 20/41p` | `.planning/STATE.md` present and parseable | Cyan (in progress) / Green (all done) |
-| Test status | `✗ 3 tests` / `✓ tests` | Cached result exists and age < 30 min | Red (fail) / Green (pass) |
-| Build status | `✗ build` / `✓ build` | Cached result exists and age < 30 min | Red (fail) / Green (pass) |
+| Active task | `Fixing auth bug…` | Todo with `status: in_progress` exists in the session todos file | Bold white |
+| GSD progress bar | `▰▰▰▰▱▱▱▱ 5/12ph 20/41p` | `<cwd>/.planning/STATE.md` present and frontmatter parseable (see GSD Project State) | Cyan (in progress) / Green (all done) |
+| Test status | `✗ 3 tests` / `✓ tests` | `~/.claude/cache/last-test-result.json` exists and `Date.now() - timestamp_ms < 1_800_000` (30 min wall clock) | Red (fail) / Green (pass) |
+| Build status | `✗ build` / `✓ build` | `~/.claude/cache/last-build-result.json` exists and `Date.now() - timestamp_ms < 1_800_000` (30 min wall clock) | Red (fail) / Green (pass) |
 
 ### Suppression Logic
 
-Line 2 is **not written at all** (no blank line) when all of the following are true:
-- No in-progress todo
-- No parseable `STATE.md` in the working directory
-- No cached test/build result younger than 30 minutes
+Line 2 is **not written at all** (no trailing newline, no blank line) when ALL of the following are true:
+- No in-progress todo (`activeTodo === null`)
+- `STATE.md` does not exist at `<cwd>/.planning/STATE.md` OR its frontmatter is unparseable
+- Neither `last-test-result.json` nor `last-build-result.json` passes the 30-min freshness check
+
+**Partial Line 2:** When Line 2 IS rendered but only some segments have data, only segments with data are shown. Segments with no data are omitted (no empty placeholder). A Line 2 with only a task and no GSD/test data is valid — it renders just the task.
+
+### GSD Project State
+
+`STATE.md` location: `<cwd>/.planning/STATE.md` where `<cwd>` is `data.workspace.current_dir` from the stdin JSON.
+
+"Parseable" means: the file exists, is readable, contains a YAML frontmatter block delimited by `---`, and that block includes at least `total_phases` and `completed_phases` as integers.
+
+Frontmatter fields read:
+- `total_phases` (integer, required)
+- `completed_phases` (integer, required)
+- `total_plans` (integer, optional)
+- `completed_plans` (integer, optional)
+
+Blocker detection: split on `## Blockers` heading (case-insensitive), take the text up to the next `##` heading, test for `/\bOPEN\b|\bBLOCKING\b/i`.
+
+On any read/parse error: GSD segment silently omitted.
 
 ### Test/Build Cache
 
-A `PostToolUse` hook fires after `Bash` tool calls. It inspects the command string for test/build keywords:
+A `PostToolUse` hook (`gsd-test-build-watcher.js`) fires after `Bash` tool calls. It inspects `tool_input.command` (the bash command string) for keyword matches:
 
-**Test keywords:** `jest`, `vitest`, `pytest`, `npm test`, `yarn test`, `pnpm test`, `npx playwright`, `go test`, `cargo test`, `dotnet test`
-**Build keywords:** `npm run build`, `yarn build`, `pnpm build`, `next build`, `tsc`, `cargo build`, `go build`, `dotnet build`
+**Test command keywords (substring match, case-insensitive):**
+`jest`, `vitest`, `pytest`, `npm test`, `yarn test`, `pnpm test`, `npx playwright`, `go test`, `cargo test`, `dotnet test`, `make test`
 
-On match, the hook captures:
-- `exit_code` from the tool result
-- A pass/fail boolean
-- Failure count (parsed from output where possible — e.g. `3 failed` in jest output)
-- Timestamp
+**Build command keywords (substring match, case-insensitive):**
+`npm run build`, `yarn build`, `pnpm build`, `next build`, `tsc --`, `cargo build`, `go build`, `dotnet build`, `make build`
 
-Written to: `~/.claude/cache/last-test-result.json` (test) and `~/.claude/cache/last-build-result.json` (build)
+On keyword match, the hook reads `tool_result.content` (stdout/stderr) and `tool_result.exit_code`:
+- `passed`: `exit_code === 0`
+- `failure_count`: parse from output using patterns like `(\d+) (failed|failures|errors)` (best-effort; `null` if unparseable)
+- `timestamp_ms`: `Date.now()`
+- `command`: the matched command string (truncated to 120 chars)
+
+Written to: `~/.claude/cache/last-test-result.json` (test match) and/or `~/.claude/cache/last-build-result.json` (build match). Create `~/.claude/cache/` directory if absent.
 
 Schema:
 ```json
@@ -94,6 +121,8 @@ Schema:
   "command": "npm test"
 }
 ```
+
+**Read failure behavior:** If either cache file exists but is malformed (JSON parse error, missing `passed` or `timestamp_ms` fields): treat as absent — silently omit the segment. Do not error.
 
 ---
 
@@ -129,13 +158,18 @@ Writing migration script… │ ✗ 12 tests
 | Scenario | Behaviour |
 |---|---|
 | Not in a git repo | All git segments (branch, dirty, ahead/behind, stash, file count) hidden |
-| `git` command times out (>500ms) | Git segments skipped silently |
-| No session ID | Elapsed time hidden; session start file not written |
-| Test result > 30 min old | Test/build badges hidden |
-| `STATE.md` missing or malformed | GSD segment silently omitted |
-| Session start file missing | Elapsed segment omitted |
-| stdin parse error | Hook exits silently (existing behaviour preserved) |
-| Line 2 all empty | Line 2 not written — no blank line emitted |
+| `git` command times out (>500ms) or errors | Entire git block silently omitted |
+| No upstream branch configured | Ahead/behind segment omitted (no error) |
+| No session ID in stdin | Elapsed time hidden; session start file not written |
+| Session start file missing or malformed | Elapsed segment omitted silently |
+| `~/.claude/cache/` directory absent | Created with `fs.mkdirSync(..., { recursive: true })` before any write |
+| Test/build result > 30 min old | Badge hidden (staleness: `Date.now() - timestamp_ms >= 1_800_000`) |
+| Test/build cache file malformed | Segment omitted silently |
+| `STATE.md` missing | GSD segment omitted silently |
+| `STATE.md` malformed (bad frontmatter) | GSD segment omitted silently |
+| Line 2 all segments empty | Line 2 not written — no newline, no blank line |
+| Partial Line 2 (some segments have data) | Only populated segments rendered; no placeholders |
+| stdin JSON parse error | Hook exits with code 0, writes nothing (status line shows blank) |
 
 ---
 
