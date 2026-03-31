@@ -8,7 +8,7 @@
 #
 # Auth: DefaultAzureCredential (managed identity in Container Apps)
 
-FROM node:20-slim
+FROM node:20
 
 ARG AZURE_MCP_VERSION=2.0.0-beta.34
 
