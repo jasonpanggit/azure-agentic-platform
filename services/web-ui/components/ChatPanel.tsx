@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useMsal } from '@azure/msal-react';
 import { MessageSquare } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { ChatInput } from './ChatInput';
 import { ProposalCard } from './ProposalCard';
 import { useSSE, SSEEvent } from '@/lib/use-sse';
-import { gatewayTokenRequest } from '@/lib/msal-config';
 import type { Message, ApprovalGateTracePayload } from '@/types/sse';
 
 const QUICK_EXAMPLES = [
@@ -29,7 +27,6 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ subscriptions }: ChatPanelProps) {
-  const { instance, accounts } = useMsal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -135,22 +132,9 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     setMessages((prev) => [...prev, userMsg]);
     setIsStreaming(true);
     try {
-      // Acquire Bearer token for the API gateway (silent, falls back to popup).
-      let authHeader: string | undefined;
-      if (accounts.length > 0) {
-        const tokenResponse = await instance.acquireTokenSilent({
-          ...gatewayTokenRequest,
-          account: accounts[0],
-        }).catch(() => instance.acquireTokenPopup(gatewayTokenRequest));
-        authHeader = `Bearer ${tokenResponse.accessToken}`;
-      }
-
       const res = await fetch('/api/proxy/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authHeader ? { Authorization: authHeader } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
           thread_id: threadId,
@@ -195,7 +179,7 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         },
       ]);
     }
-  }, [threadId, subscriptions, instance, accounts]);
+  }, [threadId, subscriptions]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     try {
