@@ -214,10 +214,14 @@ def _approve_pending_subrun_mcp_calls(
     thread_id: str,
     run_id: str,
 ) -> None:
-    """Synchronous — safe to run in asyncio.to_thread.
+    """Find and approve pending MCP tool approval gates on domain-agent sub-runs.
 
-    Find domain-agent sub-runs with pending MCP approval gates and approve them.
-    All Foundry SDK calls here are synchronous (no await).
+    Uses the Foundry REST API directly (NOT the SDK) because:
+    - SDK's threads.list() ignores the limit parameter and returns ALL threads (~18s)
+    - REST API with limit=5 returns in ~1.5s
+
+    Strategy: list the 5 most recent threads, find any domain-agent runs with
+    requires_action: submit_tool_approval, and approve them.
     """
     import requests as _requests
     from azure.identity import DefaultAzureCredential
@@ -234,91 +238,78 @@ def _approve_pending_subrun_mcp_calls(
     }
 
     try:
-        main_run = client.runs.get(thread_id=thread_id, run_id=run_id)
-        main_run_created_at = getattr(main_run, "created_at", 0)
-        if hasattr(main_run_created_at, "timestamp"):
-            main_run_created_at = int(main_run_created_at.timestamp())
-        else:
-            main_run_created_at = int(main_run_created_at) if main_run_created_at else 0
+        _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
     except Exception as exc:
-        logger.debug("Could not get main run: %s", exc)
+        logger.warning("Could not get access token for approval: %s", exc)
         return
 
+    headers = {
+        "Authorization": f"Bearer {_token.token}",
+        "Content-Type": "application/json",
+    }
+    api_ver = "2025-05-15-preview"
+
+    # Get 5 most recent threads (fast: REST API with limit respected)
     try:
-        recent_threads = list(client.threads.list(limit=20))
+        r = _requests.get(
+            f"{endpoint}/threads?api-version={api_ver}&limit=5",
+            headers=headers, timeout=8
+        )
+        recent_threads = r.json().get("data") or []
     except Exception as exc:
-        logger.debug("Could not list threads: %s", exc)
+        logger.warning("Could not list threads for approval: %s", exc)
         return
 
     for t in recent_threads:
-        t_id = getattr(t, "id", None)
+        t_id = t.get("id")
         if not t_id or t_id == thread_id:
-            continue
+            continue  # Skip the orchestrator's own thread
 
-        t_created = getattr(t, "created_at", 0)
-        if hasattr(t_created, "timestamp"):
-            t_created = int(t_created.timestamp())
-        else:
-            t_created = int(t_created) if t_created else 0
-
-        if main_run_created_at and t_created < main_run_created_at - 5:
-            break
-
+        # Check runs on this thread for pending approval
         try:
-            runs = list(client.runs.list(thread_id=t_id))
+            r2 = _requests.get(
+                f"{endpoint}/threads/{t_id}/runs?api-version={api_ver}&limit=3",
+                headers=headers, timeout=5
+            )
+            runs = r2.json().get("data") or []
         except Exception:
             continue
 
-        for sub_run in runs:
-            _s = getattr(sub_run, "status", "")
-            sub_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
-            if sub_status != "requires_action":
+        for sub_run_data in runs:
+            if sub_run_data.get("status") != "requires_action":
+                continue
+            if sub_run_data.get("assistant_id") not in domain_agent_ids:
                 continue
 
-            sub_agent_id = getattr(sub_run, "assistant_id", "")
-            if sub_agent_id not in domain_agent_ids:
+            ra = sub_run_data.get("required_action") or {}
+            if ra.get("type") != "submit_tool_approval":
                 continue
 
-            required_action = getattr(sub_run, "required_action", None)
-            if required_action is None:
-                continue
+            tool_calls = (ra.get("submit_tool_approval") or {}).get("tool_calls", [])
+            approvals = [{"tool_call_id": tc["id"], "approve": True} for tc in tool_calls]
+            sub_run_id = sub_run_data["id"]
 
-            ra_type = str(getattr(required_action, "type", ""))
-            if ra_type != "submit_tool_approval":
-                continue
-
-            tool_calls_to_approve = getattr(
-                required_action.submit_tool_approval, "tool_calls", []  # type: ignore
-            )
-            approvals = [{"tool_call_id": tc.id, "approve": True} for tc in tool_calls_to_approve]
             logger.info(
-                "Approving %d MCP tool call(s) for sub-run %s/%s (agent=%s)",
-                len(approvals), t_id, sub_run.id, sub_agent_id,
+                "Approving %d MCP tool call(s) for sub-run %s/%s",
+                len(approvals), t_id, sub_run_id,
             )
             try:
-                _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
-                _url = (
-                    f"{endpoint}/threads/{t_id}/runs/{sub_run.id}"
-                    "/submit_tool_outputs?api-version=2025-05-15-preview"
-                )
-                _resp = _requests.post(
-                    _url,
-                    headers={
-                        "Authorization": f"Bearer {_token.token}",
-                        "Content-Type": "application/json",
-                    },
+                resp = _requests.post(
+                    f"{endpoint}/threads/{t_id}/runs/{sub_run_id}/submit_tool_outputs"
+                    f"?api-version={api_ver}",
+                    headers=headers,
                     json={"tool_approvals": approvals},
                     timeout=10,
                 )
-                if _resp.status_code in (200, 201):
-                    logger.info("✅ Approved MCP call for sub-run %s", sub_run.id)
+                if resp.status_code in (200, 201):
+                    logger.info("✅ Approved MCP sub-run %s", sub_run_id)
                 else:
                     logger.warning(
                         "Failed to approve sub-run %s: %s %s",
-                        sub_run.id, _resp.status_code, _resp.text[:200],
+                        sub_run_id, resp.status_code, resp.text[:200],
                     )
             except Exception as exc:
-                logger.warning("Exception approving sub-run %s: %s", sub_run.id, exc)
+                logger.warning("Exception approving sub-run %s: %s", sub_run_id, exc)
 
 
 
