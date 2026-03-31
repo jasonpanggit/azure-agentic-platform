@@ -115,8 +115,13 @@ jobs:
             fi
             printf '%s=%s\n' "$a" "$val" >> "$GITHUB_OUTPUT"
           done
-          # base_related: never force-true for manual single-agent dispatch
-          printf 'base_related=%s\n' "${{ steps.changes.outputs.base_related }}" >> "$GITHUB_OUTPUT"
+          # base_related: force false for manual single-agent dispatch so
+          # the resolve-base-image and build jobs are not gated out.
+          if [ -n "$MANUAL" ]; then
+            printf 'base_related=false\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'base_related=%s\n' "${{ steps.changes.outputs.base_related }}" >> "$GITHUB_OUTPUT"
+          fi
 
   resolve-base-image:
     name: Resolve Published Base Image Tag
