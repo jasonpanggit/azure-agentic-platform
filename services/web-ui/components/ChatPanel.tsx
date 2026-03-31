@@ -201,23 +201,6 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
     } catch { /* Error handled by ProposalCard state */ }
   }, []);
 
-  const ExampleChips = (
-    <div className="flex flex-wrap gap-2 px-4 py-1">
-      {QUICK_EXAMPLES.map((example) => (
-        <Button
-          key={example}
-          variant="outline"
-          size="sm"
-          disabled={isStreaming}
-          onClick={() => handleSubmit(example)}
-          className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors cursor-pointer whitespace-nowrap h-auto"
-        >
-          {example}
-        </Button>
-      ))}
-    </div>
-  );
-
   if (messages.length === 0) {
     return (
       <div className="absolute inset-0 flex flex-col overflow-hidden">
@@ -243,7 +226,6 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
           </div>
         </div>
         <div className="shrink-0 grow-0">
-          {ExampleChips}
           <ChatInput onSend={handleSubmit} disabled={isStreaming} />
         </div>
       </div>
@@ -295,7 +277,20 @@ export function ChatPanel({ subscriptions }: ChatPanelProps) {
         </div>
       </ScrollArea>
       <div className="shrink-0 grow-0">
-        {ExampleChips}
+        <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-border">
+          {QUICK_EXAMPLES.map((example) => (
+            <Button
+              key={example}
+              variant="outline"
+              size="sm"
+              disabled={isStreaming}
+              onClick={() => handleSubmit(example)}
+              className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none transition-colors cursor-pointer whitespace-nowrap h-auto"
+            >
+              {example}
+            </Button>
+          ))}
+        </div>
         <ChatInput onSend={handleSubmit} disabled={isStreaming} />
       </div>
     </div>
