@@ -293,6 +293,32 @@ module "entra_apps" {
   keyvault_id       = module.keyvault.keyvault_id
 }
 
+<<<<<<< Updated upstream
+=======
+# --- Teams Bot (depends on: keyvault, agent-apps) ---
+# Creates the Azure Bot service resource and bot app registration.
+# The teams-bot Container App stays in module.agent_apps.
+# Gate behind enable_teams_bot until bot registration credentials are ready
+# and import blocks for the existing aap-teams-bot-prod resource are in place.
+#
+# Pre-requisites before enabling:
+#   1. Grant Terraform SP: Microsoft Graph Application.ReadWrite.All
+#   2. Uncomment import blocks in terraform/modules/teams-bot/main.tf
+#   3. Set enable_teams_bot = true in terraform.tfvars
+
+module "teams_bot" {
+  count  = var.enable_teams_bot ? 1 : 0
+  source = "../../modules/teams-bot"
+
+  resource_group_name = azurerm_resource_group.main.name
+  environment         = var.environment
+  required_tags       = local.required_tags
+  tenant_id           = var.tenant_id
+  keyvault_id         = module.keyvault.keyvault_id
+  teams_bot_fqdn      = module.agent_apps.teams_bot_fqdn
+}
+
+>>>>>>> Stashed changes
 # --- Activity Log Export (depends on: monitoring) ---
 # AUDIT-003: Export Activity Log from all subscriptions to Log Analytics.
 
