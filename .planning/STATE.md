@@ -6,12 +6,14 @@ status: unknown
 last_updated: "2026-03-30T16:03:50.389Z"
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 9
   total_plans: 41
-  completed_plans: 28
+  completed_plans: 33
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-31 — Phase 12 COMPLETE: EOL Domain Agent with multi-source internet search and PostgreSQL caching. 3/3 plans, 86 unit tests green (59 tools + 15 agent + 12 routing). endoflife.date + MS Product Lifecycle APIs with 24h PostgreSQL cache (eol_cache table). 9 @tool functions (query_activity_log, query_os_inventory, query_software_inventory, query_k8s_versions, query_endoflife_date, query_ms_lifecycle, query_resource_health, search_runbooks, scan_estate_eol). Orchestrator routing wired (DOMAIN_AGENT_MAP 8 entries, RESOURCE_TYPE_TO_DOMAIN 13 entries, QUERY_DOMAIN_KEYWORDS 7 entries). EOL_AGENT_ID Terraform env block, build-eol CI job added.
 
 > Last updated: 2026-03-30 — Plan 11-03 COMPLETE (Phase 11 COMPLETE): Terraform + CI/CD for Patch Agent. patch added to local.agents (8 agents), PATCH_AGENT_ID dynamic env block for orchestrator, patch_agent_id variable declared. RBAC: Reader + Monitoring Reader on all subscriptions (ARG cross-sub). Staging/prod explicitly wire patch_agent_id. build-patch CI job added (14 jobs in summary). All 5 terraform dirs pass fmt -check. Phase 11 fully complete: 3/3 plans, 49 unit tests + 47 integration/routing tests passing.
 
@@ -95,6 +97,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
+| 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
 
 ---
 
