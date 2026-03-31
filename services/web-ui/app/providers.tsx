@@ -12,11 +12,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    const timeout = setTimeout(() => {
-      if (!cancelled) getMsalInstance().then((i) => { if (!cancelled) setMsalInstance(i) })
-    }, 5000)
     getMsalInstance().then((i) => {
-      clearTimeout(timeout)
       if (!cancelled) setMsalInstance(i)
     })
     return () => { cancelled = true }
