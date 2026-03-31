@@ -1,6 +1,23 @@
 name: Build Agent Images
 
 on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent to build and deploy (leave empty to build all changed agents)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - orchestrator
+          - compute
+          - network
+          - storage
+          - security
+          - sre
+          - arc
+          - patch
+          - eol
   push:
     branches: [main]
     paths:
@@ -15,6 +32,8 @@ on:
       - 'agents/security/**'
       - 'agents/sre/**'
       - 'agents/arc/**'
+      - 'agents/patch/**'
+      - 'agents/eol/**'
 
 permissions:
   id-token: write
@@ -25,14 +44,16 @@ jobs:
     name: Detect Changed Agents
     runs-on: ubuntu-latest
     outputs:
-      base_related: ${{ steps.changes.outputs.base_related }}
-      orchestrator: ${{ steps.changes.outputs.orchestrator }}
-      compute: ${{ steps.changes.outputs.compute }}
-      network: ${{ steps.changes.outputs.network }}
-      storage: ${{ steps.changes.outputs.storage }}
-      security: ${{ steps.changes.outputs.security }}
-      sre: ${{ steps.changes.outputs.sre }}
-      arc: ${{ steps.changes.outputs.arc }}
+      base_related: ${{ steps.resolve.outputs.base_related }}
+      orchestrator: ${{ steps.resolve.outputs.orchestrator }}
+      compute: ${{ steps.resolve.outputs.compute }}
+      network: ${{ steps.resolve.outputs.network }}
+      storage: ${{ steps.resolve.outputs.storage }}
+      security: ${{ steps.resolve.outputs.security }}
+      sre: ${{ steps.resolve.outputs.sre }}
+      arc: ${{ steps.resolve.outputs.arc }}
+      patch: ${{ steps.resolve.outputs.patch }}
+      eol: ${{ steps.resolve.outputs.eol }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -60,6 +81,42 @@ jobs:
               - 'agents/sre/**'
             arc:
               - 'agents/arc/**'
+            patch:
+              - 'agents/patch/**'
+            eol:
+              - 'agents/eol/**'
+
+      # When triggered via workflow_dispatch with a specific agent, override the
+      # paths-filter output so only that agent builds regardless of file changes.
+      - name: Resolve agent flags
+        id: resolve
+        run: |
+          MANUAL="${{ inputs.agent }}"
+          agents=(orchestrator compute network storage security sre arc patch eol)
+          for a in "${agents[@]}"; do
+            if [ -n "$MANUAL" ]; then
+              # Manual dispatch: force only the selected agent to true
+              [ "$a" = "$MANUAL" ] && val=true || val=false
+            else
+              # Push: use paths-filter output
+              val="${{ steps.changes.outputs[format('{0}', matrix.agent)] }}"
+              # Inline eval since GitHub expressions can't do dynamic keys here
+              case "$a" in
+                orchestrator) val="${{ steps.changes.outputs.orchestrator }}" ;;
+                compute)      val="${{ steps.changes.outputs.compute }}" ;;
+                network)      val="${{ steps.changes.outputs.network }}" ;;
+                storage)      val="${{ steps.changes.outputs.storage }}" ;;
+                security)     val="${{ steps.changes.outputs.security }}" ;;
+                sre)          val="${{ steps.changes.outputs.sre }}" ;;
+                arc)          val="${{ steps.changes.outputs.arc }}" ;;
+                patch)        val="${{ steps.changes.outputs.patch }}" ;;
+                eol)          val="${{ steps.changes.outputs.eol }}" ;;
+              esac
+            fi
+            printf '%s=%s\n' "$a" "$val" >> "$GITHUB_OUTPUT"
+          done
+          # base_related: never force-true for manual single-agent dispatch
+          printf 'base_related=%s\n' "${{ steps.changes.outputs.base_related }}" >> "$GITHUB_OUTPUT"
 
   resolve-base-image:
     name: Resolve Published Base Image Tag
@@ -72,7 +129,9 @@ jobs:
       needs.detect-changes.outputs.storage == 'true' ||
       needs.detect-changes.outputs.security == 'true' ||
       needs.detect-changes.outputs.sre == 'true' ||
-      needs.detect-changes.outputs.arc == 'true')
+      needs.detect-changes.outputs.arc == 'true' ||
+      needs.detect-changes.outputs.patch == 'true' ||
+      needs.detect-changes.outputs.eol == 'true')
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
@@ -376,6 +435,74 @@ jobs:
       image_name: agents/arc
       image_tag: ${{ github.sha }}
       container_app_name: ca-arc-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  build-patch:
+    name: Build Patch Agent
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.patch == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/patch
+      dockerfile_path: agents/patch/Dockerfile
+      build_context: agents/patch/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  build-eol:
+    name: Build EOL Agent
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.eol == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/eol
+      dockerfile_path: agents/eol/Dockerfile
+      build_context: agents/eol/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-patch:
+    needs: [detect-changes, build-patch]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.patch == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/patch
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-patch-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-eol:
+    needs: [detect-changes, build-eol]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.eol == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/eol
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-eol-prod
       resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
       github_environment: production
     secrets:

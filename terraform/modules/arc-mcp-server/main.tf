@@ -22,15 +22,21 @@ resource "azurerm_container_app" "arc_mcp_server" {
 
   # ACR registry configuration — uses managed identity for image pull (no admin credentials)
   # Matches the agent-apps pattern: system-assigned MI authenticates to ACR.
-  registry {
-    server   = var.acr_login_server
-    identity = "system"
+  # When use_placeholder_image is true, skip the registry block to avoid the chicken-and-egg
+  # problem: the MI needs AcrPull but that role is assigned AFTER the app is created.
+  dynamic "registry" {
+    for_each = var.use_placeholder_image ? [] : [1]
+    content {
+      server   = var.acr_login_server
+      identity = "system"
+    }
   }
 
   # INTERNAL INGRESS — not publicly accessible, reachable within Container Apps env
+  # target_port 80 when using placeholder (hello-world listens on 80); 8080 for real image.
   ingress {
     external_enabled = false # Internal only — AGENT-005 success criteria SC-1
-    target_port      = 8080  # FastMCP streamable-http port
+    target_port      = var.use_placeholder_image ? 80 : 8080
     transport        = "http"
     traffic_weight {
       percentage      = 100
@@ -44,7 +50,7 @@ resource "azurerm_container_app" "arc_mcp_server" {
 
     container {
       name   = "arc-mcp-server"
-      image  = "${var.acr_login_server}/services/arc-mcp-server:${var.image_tag}"
+      image  = var.use_placeholder_image ? "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" : "${var.acr_login_server}/services/arc-mcp-server:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -69,10 +75,12 @@ resource "azurerm_container_app" "arc_mcp_server" {
 
   tags = var.required_tags
 
-  # Runtime image revisions are owned by CI/CD — ignore drift from manual deploys.
+  # Runtime image and port revisions are owned by CI/CD — ignore drift from manual deploys.
+  # ingress[0].target_port is also ignored so CI/CD can update port without Terraform reverting.
   lifecycle {
     ignore_changes = [
       template[0].container[0].image,
+      ingress[0].target_port,
     ]
   }
 }

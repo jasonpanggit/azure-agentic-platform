@@ -62,3 +62,9 @@ variable "required_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "use_placeholder_image" {
+  description = "Use a public placeholder image for initial provisioning (avoids ACR auth chicken-and-egg). CI/CD deploys the real image after AcrPull role is assigned."
+  type        = bool
+  default     = false
+}

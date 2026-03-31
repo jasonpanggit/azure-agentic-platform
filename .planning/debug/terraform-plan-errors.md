@@ -1,7 +1,7 @@
 # Debug: Terraform Plan Errors
 
 **Created:** 2026-03-31
-**Status:** IN PROGRESS
+**Status:** RESOLVED
 
 ## Summary
 
@@ -46,12 +46,31 @@ value = azurerm_container_app.teams_bot.identity[0].principal_id
 **Location:** `modules/eventhub/main.tf` lines 44, 55
 **Root Cause:** `namespace_name` + `resource_group_name` is deprecated on `azurerm_eventhub` and `azurerm_eventhub_consumer_group`. Will be removed in azurerm v5.0.
 
-**Fix:** Replace `namespace_name` with `namespace_id = azurerm_eventhub_namespace.main.id` and remove `resource_group_name` from those resources.
+**Fix:** Replace `namespace_name` with `namespace_id = azurerm_eventhub_namespace.main.id` and remove `resource_group_name` from `azurerm_eventhub`. Note: `azurerm_eventhub_consumer_group` and `azurerm_eventhub_namespace_authorization_rule` do NOT yet support `namespace_id` in azurerm ~> 4.65.0 — only `azurerm_eventhub` does.
 
 ## Fix Order
 
 1. [x] Error 3 (self-referential teams_bot) — remove AGENT_ENTRA_ID self-reference
 2. [x] Error 2 (cycle in for_each agents) — remove AGENT_ENTRA_ID self-reference
 3. [x] Error 1 (Entra AD 403) — add enable_entra_apps flag
-4. [x] Warnings (eventhub deprecation) — switch to namespace_id
-5. [ ] Validate with `terraform validate`
+4. [x] Warnings (eventhub deprecation) — switch to namespace_id on azurerm_eventhub
+5. [x] Validate with `terraform validate` — PASSED
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `terraform/modules/agent-apps/main.tf` | Removed self-referencing AGENT_ENTRA_ID env vars from both `agents` (for_each) and `teams_bot` resources |
+| `terraform/modules/eventhub/main.tf` | Replaced deprecated `namespace_name` + `resource_group_name` with `namespace_id` on `azurerm_eventhub` |
+| `terraform/envs/prod/main.tf` | Gated `entra_apps` module and `fabric_sp` resources behind `var.enable_entra_apps` |
+| `terraform/envs/prod/variables.tf` | Added `enable_entra_apps` variable (default: false) |
+| `terraform/envs/prod/imports.tf` | Converted import blocks to comments with CLI instructions (import blocks don't support count) |
+| `agents/shared/auth.py` | Added runtime IMDS token fallback for `get_agent_identity()` when AGENT_ENTRA_ID env var is absent |
+
+## Manual Action Still Required
+
+To enable Entra app management via Terraform in the future:
+1. Grant `Application.ReadWrite.All` Graph API permission to the Terraform SP
+2. Set `enable_entra_apps = true` in prod tfvars
+3. Run: `terraform import 'module.entra_apps[0].azuread_application.web_ui' '/applications/8176f860-9715-46e3-8875-5939a6b76a69'`
+4. Run: `terraform import 'module.entra_apps[0].azuread_service_principal.web_ui' '505df1d3-3bd3-4151-ae87-6e5974b72a44'`

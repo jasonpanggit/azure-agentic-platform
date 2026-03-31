@@ -34,13 +34,12 @@ resource "azurerm_container_app" "agents" {
     type = "SystemAssigned"
   }
 
-  # ACR registry configuration — uses managed identity for image pull (no admin credentials)
-  dynamic "registry" {
-    for_each = var.use_placeholder_image ? [] : [1]
-    content {
-      server   = var.acr_login_server
-      identity = "system"
-    }
+  # ACR registry configuration — always present so existing ACR-tagged images can pull
+  # even when use_placeholder_image=true. The placeholder image (public) doesn't need it
+  # but existing revisions with ACR SHA tags do.
+  registry {
+    server   = var.acr_login_server
+    identity = "system"
   }
 
   template {
@@ -249,13 +248,11 @@ resource "azurerm_container_app" "teams_bot" {
     type = "SystemAssigned"
   }
 
-  # ACR registry configuration — uses managed identity for image pull (no admin credentials)
-  dynamic "registry" {
-    for_each = var.use_placeholder_image ? [] : [1]
-    content {
-      server   = var.acr_login_server
-      identity = "system"
-    }
+  # ACR registry configuration — always present so existing ACR-tagged images can pull
+  # even when use_placeholder_image=true.
+  registry {
+    server   = var.acr_login_server
+    identity = "system"
   }
 
   template {

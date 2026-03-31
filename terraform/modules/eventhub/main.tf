@@ -25,8 +25,13 @@ resource "azurerm_eventhub_namespace" "main" {
   maximum_throughput_units      = var.environment == "prod" ? 10 : 0
   public_network_access_enabled = false
 
+  # network_rulesets.public_network_access_enabled MUST match the namespace-level
+  # public_network_access_enabled to avoid the Azure API conflict:
+  # "the value of public network access of namespace should be the same as of the network rulesets"
   network_rulesets {
-    default_action = "Deny"
+    default_action                = "Deny"
+    public_network_access_enabled = false
+    trusted_service_access_enabled = true
 
     virtual_network_rule {
       subnet_id = var.subnet_reserved_1_id
@@ -90,7 +95,7 @@ resource "azurerm_monitor_action_group" "main" {
 
   event_hub_receiver {
     name                    = "forward-to-eventhub"
-    event_hub_namespace     = azurerm_eventhub_namespace.main.id
+    event_hub_namespace     = azurerm_eventhub_namespace.main.name
     event_hub_name          = azurerm_eventhub.raw_alerts.name
     subscription_id         = data.azurerm_subscription.current.subscription_id
     use_common_alert_schema = true
