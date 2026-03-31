@@ -242,7 +242,9 @@ async def get_chat_result(
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
         latest_run = run_list[-1]
 
-    run_status = latest_run.status
+    # Status may be a string (SDK 1.2.x) or an enum with .value (older SDK)
+    _s = latest_run.status
+    run_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
 
     logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
@@ -304,8 +306,8 @@ async def get_chat_result(
                         run_id=latest_run.id,
                         tool_outputs=outputs,
                     )
-                except Exception as exc:
-                    logger.warning("Failed to submit tool outputs: %s", exc)
+            except Exception as exc:
+                logger.warning("Failed to submit tool outputs: %s", exc)
 
     # Return non-terminal status immediately — caller polls again
     if run_status not in terminal:
