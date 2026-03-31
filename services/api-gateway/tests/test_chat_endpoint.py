@@ -281,61 +281,69 @@ class TestGetChatResult:
 
     @pytest.mark.asyncio
     async def test_get_chat_result_picks_latest_run(self):
-        """get_chat_result() picks the last (most recent) run, not the first."""
+        """get_chat_result() with run_id polls until terminal and returns the result."""
         mock_foundry = MagicMock()
 
-        # Simulate two runs: run-old (completed) then run-new (in_progress)
-        run_old = MagicMock(id="run-old", status="completed")
-        run_new = MagicMock(id="run-new", status="in_progress")
-        mock_foundry.runs.list.return_value = [run_old, run_new]
+        # Simulate run that immediately completes
+        run_completed = MagicMock()
+        run_completed.id = "run-specific"
+        run_completed.status.value = "completed"
+        run_completed.required_action = None
+        mock_foundry.runs.get.return_value = run_completed
+
+        # No messages needed — reply will be None but status is completed
+        mock_foundry.messages.list.return_value = []
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
             return_value=mock_foundry,
-        ):
-            from services.api_gateway.chat import get_chat_result
-
-            result = await get_chat_result("thread-123")
-
-        # Should pick run-new (last element), not run-old
-        assert result["run_status"] == "in_progress"
-
-    @pytest.mark.asyncio
-    async def test_get_chat_result_with_run_id_targets_specific_run(self):
-        """get_chat_result(run_id=...) retrieves that specific run directly."""
-        mock_foundry = MagicMock()
-        mock_foundry.runs.get.return_value = MagicMock(
-            id="run-specific", status="queued", required_action=None
-        )
-
-        with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ):
+        ), patch("asyncio.sleep", new_callable=AsyncMock):
             from services.api_gateway.chat import get_chat_result
 
             result = await get_chat_result("thread-123", run_id="run-specific")
 
-        assert result["run_status"] == "queued"
-        mock_foundry.runs.get.assert_called_once_with(
-            thread_id="thread-123", run_id="run-specific"
-        )
-        # runs.list should NOT have been called
-        mock_foundry.runs.list.assert_not_called()
+        assert result["run_status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_get_chat_result_empty_runs_returns_not_found(self):
-        """get_chat_result() returns not_found when no runs exist."""
+    async def test_get_chat_result_with_run_id_targets_specific_run(self):
+        """get_chat_result(run_id=...) polls until the run reaches a terminal state."""
         mock_foundry = MagicMock()
-        mock_foundry.runs.list.return_value = []
+
+        run_done = MagicMock()
+        run_done.id = "run-specific"
+        run_done.status.value = "completed"
+        run_done.required_action = None
+        mock_foundry.runs.get.return_value = run_done
+        mock_foundry.messages.list.return_value = []
 
         with patch(
             "services.api_gateway.chat._get_foundry_client",
             return_value=mock_foundry,
-        ):
+        ), patch("asyncio.sleep", new_callable=AsyncMock):
             from services.api_gateway.chat import get_chat_result
 
-            result = await get_chat_result("thread-empty")
+            result = await get_chat_result("thread-123", run_id="run-specific")
+
+        assert result["run_status"] == "completed"
+        mock_foundry.runs.get.assert_called_with(
+            thread_id="thread-123", run_id="run-specific"
+        )
+        mock_foundry.runs.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_chat_result_empty_runs_returns_not_found(self):
+        """get_chat_result() returns not_found when the run cannot be retrieved."""
+        mock_foundry = MagicMock()
+        # Simulate run never becoming visible (all get() calls raise)
+        mock_foundry.runs.get.side_effect = Exception("Run not found")
+
+        with patch(
+            "services.api_gateway.chat._get_foundry_client",
+            return_value=mock_foundry,
+        ), patch("asyncio.sleep", new_callable=AsyncMock):
+            from services.api_gateway.chat import get_chat_result
+
+            result = await get_chat_result("thread-empty", run_id="run-missing")
 
         assert result["run_status"] == "not_found"
 
