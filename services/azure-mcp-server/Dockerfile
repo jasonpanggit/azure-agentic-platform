@@ -30,4 +30,4 @@ EXPOSE 5000
 ENV ASPNETCORE_URLS="http://+:5000"
 
 # Start Azure MCP Server in HTTP transport mode
-CMD ["azmcp", "server", "start", "--transport", "http"]
+CMD ["azmcp", "server", "start", "--transport", "http", "--dangerously-disable-http-incoming-auth"]
