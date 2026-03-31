@@ -1,0 +1,108 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-31T00:55:32.737Z",
+  "phase": "prod-ops",
+  "phase_name": "Production Operations — Arc Routing Fix",
+  "phase_dir": "ad-hoc (not a numbered phase)",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Fix all 7 agent containers crashing on startup",
+      "status": "done",
+      "commit": "b4c1532",
+      "detail": "Pinned azure-ai-projects==2.0.0b3, agentserver b15, removed starlette pin, added AZURE_AI_PROJECT_ENDPOINT to Terraform"
+    },
+    {
+      "id": 2,
+      "name": "Fix orchestrator Foundry agent definition — stale system prompt",
+      "status": "done",
+      "commit": "80428c3",
+      "detail": "Updated asst_NeBVjCA5isNrIERoGYzRpBTu with new system prompt referencing arc_agent underscore tool names"
+    },
+    {
+      "id": 3,
+      "name": "Register connected-agent tools on orchestrator Foundry agent",
+      "status": "done",
+      "commit": "80428c3",
+      "detail": "Registered 7 connected_agent tools (arc_agent, compute_agent, etc.) + classify_incident_domain. Removed stale azure_tools."
+    },
+    {
+      "id": 4,
+      "name": "Register built-in tools on arc agent Foundry definition",
+      "status": "done",
+      "commit": "80428c3",
+      "detail": "asst_xTN3oTWku0R5Cbxsf56WkEdP now has query_activity_log, query_log_analytics, query_resource_health registered"
+    },
+    {
+      "id": 5,
+      "name": "Verify routing works end-to-end",
+      "status": "done",
+      "detail": "Confirmed: orchestrator calls arc_agent connected-agent tool for 'show my arc enabled servers'. Run step shows: connected_agent: arc_agent | args: {query: 'show my arc enabled servers'}"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 6,
+      "name": "Deploy Arc MCP Server (ca-arc-mcp-prod)",
+      "status": "not_started",
+      "detail": "Arc agent responds 'no direct access' because arc_servers_list tool is only provided by the Arc MCP Server container. Need to deploy it and set ARC_MCP_SERVER_URL env var on ca-arc-prod."
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Arc MCP Server not deployed — arc agent can't list/query Arc resources",
+      "type": "human_action",
+      "workaround": "Arc agent works for triage with specific resource IDs; just can't list all servers"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Deploy Arc MCP Server container to ca-arc-mcp-prod and set ARC_MCP_SERVER_URL on ca-arc-prod",
+      "context": "The Arc agent is routed correctly but responds 'no access' for listing Arc resources — Arc MCP Server provides arc_servers_list, arc_extensions_list, arc_k8s_list, arc_k8s_gitops_status",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Use Foundry connected-agent tools (not HandoffOrchestrator) for routing",
+      "rationale": "Foundry's native connected_agent tool type enables direct agent-to-agent routing without the orchestrator needing to call a custom tool. The tool name must match ^[a-zA-Z_]+$ so underscores required.",
+      "phase": "prod-ops"
+    },
+    {
+      "decision": "Register domain agent tools on each Foundry agent definition",
+      "rationale": "When orchestrator routes via connected_agent, the target agent's Foundry definition must have its function tools registered — container runtime tools alone are not visible to Foundry's connected-agent execution",
+      "phase": "prod-ops"
+    },
+    {
+      "decision": "Keep eol in DOMAIN_AGENT_MAP (as eol_agent) even though eol-agent not in Foundry yet",
+      "rationale": "Linter/Phase 12 code added eol entries; keeping them avoids regressions. The eol_agent connected-agent tool would simply not be registered on orchestrator until eol-agent is deployed.",
+      "phase": "prod-ops"
+    }
+  ],
+  "foundry_agent_ids": {
+    "orchestrator": "asst_NeBVjCA5isNrIERoGYzRpBTu",
+    "arc_agent": "asst_xTN3oTWku0R5Cbxsf56WkEdP",
+    "compute_agent": "asst_LRwIRuuMi0vxzfe0sN6Gl7ro",
+    "network_agent": "asst_xgfrgpYy3t0tHMz6XtuZSfkt",
+    "storage_agent": "asst_eyJ5bKQLMpuC17sfeZZmwOkI",
+    "security_agent": "asst_E3zcct7P9mKHlqcRzU5CGbp4",
+    "sre_agent": "asst_nSWrfRFyGhMqmtgzuWF4GgKH",
+    "patch_agent": "asst_XxAMxgwC9NAlKqqN7FLRiA3O"
+  },
+  "production_urls": {
+    "api_gateway": "https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io",
+    "project_endpoint": "https://aap-foundry-prod.services.ai.azure.com/api/projects/aap-project-prod",
+    "foundry_api_version": "2025-05-01"
+  },
+  "uncommitted_files": [
+    ".planning/ROADMAP.md",
+    "scripts/domain-agent-ids.json",
+    "terraform/modules/agent-apps/.terraform.lock.hcl"
+  ],
+  "next_action": "If arc listing is needed: deploy the Arc MCP Server container (services/arc-mcp-server/) as a Container App and set ARC_MCP_SERVER_URL env var on ca-arc-prod. Otherwise routing is fully functional — test other domain queries (compute, network, security) to validate the connected-agent routing works across all domains.",
+  "context_notes": "Routing was broken because the Foundry orchestrator agent definition had a stale system prompt (from before arc/patch routing was added) and a wrong azure_tools function instead of connected_agent tools. The fix was entirely on the Foundry API side (no container rebuild needed) plus code changes to use underscore tool names. All 192 tests pass. The arc routing works but arc agent can only triage with specific resource IDs — it can't LIST all arc servers without the Arc MCP Server."
+}
