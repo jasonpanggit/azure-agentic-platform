@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
+
 > Last updated: 2026-03-31 — Plan 09-01 COMPLETE: Tailwind + shadcn/ui Foundation. Fluent UI fully removed. Tailwind CSS v4.2.2 installed, 18 shadcn/ui components scaffolded in components/ui/, cn() utility, CSS custom property design system with Azure Blue --primary: 207 90% 42%, PostCSS config, tailwind.config.ts with blink-cursor + pulse-dot animations. globals.css aligned to UI-SPEC (pure white background, standard shadcn variable values, .prose table styles added).
 
 > Last updated: 2026-03-30 — Plan 11-03 COMPLETE (Phase 11 COMPLETE): Terraform + CI/CD for Patch Agent. patch added to local.agents (8 agents), PATCH_AGENT_ID dynamic env block for orchestrator, patch_agent_id variable declared. RBAC: Reader + Monitoring Reader on all subscriptions (ARG cross-sub). Staging/prod explicitly wire patch_agent_id. build-patch CI job added (14 jobs in summary). All 5 terraform dirs pass fmt -check. Phase 11 fully complete: 3/3 plans, 49 unit tests + 47 integration/routing tests passing.
@@ -215,6 +217,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
 | 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
 | 260330-p8d | Fix critical bugs in GitHub Actions workflows | 2026-03-30 | 3758e75 | [260330-p8d-fix-critical-bugs-in-github-actions-work](./quick/260330-p8d-fix-critical-bugs-in-github-actions-work/) |
+| 260331-chg | Deploy Arc MCP Server to Container Apps and wire ARC_MCP_SERVER_URL to ca-arc-prod | 2026-03-31 | 06a2ae0 | [260331-chg-deploy-arc-mcp-server-to-container-apps-](./quick/260331-chg-deploy-arc-mcp-server-to-container-apps-/) |
 
 ---
 
