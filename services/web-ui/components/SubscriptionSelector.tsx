@@ -27,9 +27,10 @@ interface SubscriptionSelectorProps {
   selected: string[];
   onChange: (ids: string[]) => void;
   onLoad?: (ids: string[]) => void;
+  trigger?: React.ReactNode;
 }
 
-export function SubscriptionSelector({ selected, onChange, onLoad }: SubscriptionSelectorProps) {
+export function SubscriptionSelector({ selected, onChange, onLoad, trigger }: SubscriptionSelectorProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -75,10 +76,12 @@ export function SubscriptionSelector({ selected, onChange, onLoad }: Subscriptio
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <button className="flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm bg-background hover:bg-accent">
-              Filter subscriptions...
-              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-            </button>
+            {trigger ?? (
+              <button className="flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm bg-background hover:bg-accent">
+                Filter subscriptions...
+                <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+              </button>
+            )}
           </PopoverTrigger>
           <PopoverContent className="w-[280px] p-0">
             <Command>
