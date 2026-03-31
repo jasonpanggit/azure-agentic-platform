@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -31,7 +31,11 @@ from services.api_gateway.audit import query_audit_log
 from services.api_gateway.dependencies import get_cosmos_client, get_credential
 from services.api_gateway.audit_export import generate_remediation_report
 from services.api_gateway.auth import verify_token
-from services.api_gateway.chat import create_chat_thread, get_chat_result
+from services.api_gateway.chat import (
+    _approve_pending_subrun_mcp_calls,
+    create_chat_thread,
+    get_chat_result,
+)
 from services.api_gateway.foundry import create_foundry_thread
 from services.api_gateway.incidents_list import list_incidents
 from services.api_gateway.models import (
@@ -381,19 +385,18 @@ async def start_chat(
 )
 async def get_chat_result_endpoint(
     thread_id: str,
+    background_tasks: BackgroundTasks,
     run_id: Optional[str] = None,
     token: dict[str, Any] = Depends(verify_token),
 ) -> ChatResultResponse:
     """Poll for the result of a Foundry chat run.
 
-    The web UI stream route calls this endpoint to check whether the
-    Orchestrator agent has completed its run on a given thread.
+    Returns run_status immediately (non-blocking). When the run is still
+    in_progress, schedules a background task to approve any pending MCP
+    tool approval gates on connected_agent sub-runs.
 
-    Args:
-        thread_id: Foundry thread ID (path parameter).
-        run_id: Optional run ID to poll a specific run (query parameter).
-
-    Returns run_status and the assistant reply once completed.
+    The SSE stream route polls this endpoint every 2s; the approval fires
+    after each poll response, keeping the sub-run unblocked.
     """
     try:
         result = await get_chat_result(thread_id, run_id=run_id)
@@ -403,6 +406,18 @@ async def get_chat_result_endpoint(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Foundry polling error: {exc}",
         ) from exc
+
+    # Schedule sub-run approval AFTER the response is sent (never blocks caller)
+    if result["run_status"] not in ("completed", "failed", "cancelled", "expired") and run_id:
+        import os as _os
+        _endpoint = _os.environ.get("AZURE_PROJECT_ENDPOINT") or _os.environ.get(
+            "FOUNDRY_ACCOUNT_ENDPOINT", ""
+        )
+        from services.api_gateway.foundry import _get_foundry_client as _gfc
+        background_tasks.add_task(
+            _approve_pending_subrun_mcp_calls,
+            _gfc(), _endpoint, thread_id, run_id,
+        )
 
     return ChatResultResponse(
         thread_id=result["thread_id"],
