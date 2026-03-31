@@ -275,7 +275,7 @@ jobs:
     with:
       image_name: services/api-gateway
       dockerfile_path: services/api-gateway/Dockerfile
-      build_context: services/api-gateway/
+      build_context: .
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}

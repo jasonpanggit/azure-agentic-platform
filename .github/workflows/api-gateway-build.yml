@@ -27,7 +27,7 @@ jobs:
     with:
       image_name: services/api-gateway
       dockerfile_path: services/api-gateway/Dockerfile
-      build_context: services/api-gateway/
+      build_context: .
       push_image: ${{ github.event_name != 'pull_request' }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
