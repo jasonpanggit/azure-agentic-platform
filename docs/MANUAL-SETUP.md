@@ -2,6 +2,8 @@
 
 This document lists every configuration step that **cannot be automated by Terraform** and must be performed manually in the Azure Portal, Azure CLI, or GitHub. Follow steps in order; some later steps depend on values produced by earlier ones.
 
+> **See `docs/BOOTSTRAP.md`** for the two remaining genuinely manual steps that have no automation path: (1) granting the CI service principal `Application.ReadWrite.All` on the Entra tenant, and (2) enabling the Teams channel in the Azure Bot portal. Also covers GitHub secrets setup including the new `FOUNDRY_PROJECT_ENDPOINT` secret.
+
 ---
 
 ## Prerequisites
@@ -14,6 +16,12 @@ This document lists every configuration step that **cannot be automated by Terra
 ---
 
 ## Step 1 — API Gateway: Set Missing Environment Variables
+
+> ✅ **Now automated by Terraform** — `AZURE_PROJECT_ENDPOINT` and `ORCHESTRATOR_AGENT_ID` are
+> wired by `module.container_apps` in `terraform/modules/container_apps/main.tf`. For a fresh
+> `terraform apply` these variables are set automatically. The manual `az containerapp update`
+> command below is only needed to patch a running environment without re-applying Terraform.
+> See `docs/BOOTSTRAP.md` for the one-time setup steps still required.
 
 The API gateway container app (`ca-api-gateway-prod`) fails to start the Foundry dispatch because two critical variables are not injected by Terraform.
 
@@ -66,6 +74,12 @@ curl https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps
 ---
 
 ## Step 2 — Foundry: Grant Managed Identity Access to the Project
+
+> ✅ **Now automated by Terraform** — the `Azure AI Developer` role assignment for the API
+> gateway managed identity is managed by `module.rbac` (`api-gateway-aidev-foundry` resource
+> in `terraform/modules/rbac/main.tf`). The manual `az role assignment create` command below
+> is preserved for reference or emergency manual remediation only.
+> See `docs/BOOTSTRAP.md` for the one-time setup steps still required.
 
 The API gateway uses its **system-assigned managed identity** to call Foundry. The identity needs the `Azure AI Developer` role on the Foundry account.
 
@@ -154,6 +168,10 @@ az cosmosdb sql container create \
 ```
 
 ### 4c. Grant Managed Identity data plane access (Cosmos RBAC)
+
+> ✅ **Now automated by Terraform** — Cosmos DB data-plane role assignments are managed by
+> `module.databases` via `azurerm_cosmosdb_sql_role_assignment` resources. The manual loop
+> below is preserved for reference or emergency manual remediation only.
 
 Each container app that reads/writes Cosmos needs a **data plane role assignment** (distinct from ARM RBAC).
 
@@ -262,6 +280,7 @@ Open the GitHub repository → **Settings** → **Secrets and variables** → **
 | `POSTGRES_ADMIN_PASSWORD` | `Jas190277on!` | Already in credentials.tfvars |
 | `AZURE_OPENAI_ENDPOINT` | e.g. `https://aap-foundry-prod.openai.azure.com/` | Same as `AZURE_PROJECT_ENDPOINT` prefix |
 | `AZURE_OPENAI_API_KEY` | API key | Azure Portal → Foundry account → Keys and Endpoint |
+| `FOUNDRY_PROJECT_ENDPOINT` | `https://<account>.services.ai.azure.com/api/projects/<project-id>` | Foundry account endpoint + `/api/projects/<project-id>`; required by `provision-foundry-agents.py` in CI — see `docs/BOOTSTRAP.md` Step 3 |
 
 > GitHub Actions auth modes:
 > - Preferred: configure a federated identity credential on the app or service principal referenced by `AZURE_CLIENT_ID` so `azure/login` can use OIDC.
@@ -384,19 +403,23 @@ After rotating:
 IMMEDIATE (platform will not work without these):
 ✅ Step 1 — Set AZURE_PROJECT_ENDPOINT + ORCHESTRATOR_AGENT_ID on api-gateway
            ORCHESTRATOR_AGENT_ID=asst_NeBVjCA5isNrIERoGYzRpBTu (set 2026-03-31, revision 0000030)
-           Also wired in terraform/envs/prod/terraform.tfvars
+           ✅ Now wired by Terraform (module.container_apps) — automated for fresh apply
 ✅ Step 2 — Grant Azure AI Developer role to api-gateway managed identity
            Role assignment ID: 6a001d6b-bc29-4355-962f-0103c81f90c6 (created 2026-03-31)
-           Also wired in terraform/modules/rbac/main.tf (api-gateway-aidev-foundry)
+           ✅ Now wired in terraform/modules/rbac/main.tf (api-gateway-aidev-foundry) — automated
 □ Step 3 — Set LOG_ANALYTICS_WORKSPACE_ID on web-ui container app
-□ Step 4 — Verify Cosmos DB 'incidents' container + RBAC
+✅ Step 4c — Cosmos DB RBAC (data-plane role assignments)
+           ✅ Now managed by module.databases (azurerm_cosmosdb_sql_role_assignment) — automated
+□ Step 4a/4b — Verify Cosmos DB 'incidents' container exists
 
 BEFORE TEAMS GO-LIVE:
 □ Step 5 — Register Azure Bot, get BOT_ID + BOT_PASSWORD, set Teams channel
+           ⚠️  Teams channel (Step 5c) must be enabled manually in portal — see docs/BOOTSTRAP.md Step 2
 □ Step 5e — Re-run terraform apply with teams_bot_id + teams_bot_password
 
 GITHUB ACTIONS (CI/CD will fail without these):
-□ Step 6 — Add all repository secrets
+□ Step 6 — Add all repository secrets (including new FOUNDRY_PROJECT_ENDPOINT)
+           Use scripts/bootstrap-github-secrets.sh — see docs/BOOTSTRAP.md Step 3
 □ Step 6 — Add all repository variables
 □ Step 6 — Trigger no-cache web-ui rebuild
 
@@ -405,4 +428,8 @@ PRODUCTION READINESS:
 □ Step 8 — Grant Reader on additional subscriptions (if multi-sub)
 □ Step 9 — Verify Entra redirect URIs
 □ Step 10 — Rotate client_secret and postgres_admin_password out of git
+
+ONE-TIME BOOTSTRAP (see docs/BOOTSTRAP.md):
+□ Bootstrap Step 1 — Grant CI SP Application.ReadWrite.All on Entra (Global Admin required)
+□ Bootstrap Step 2 — Enable Teams channel in Azure Bot portal (accept Terms of Service)
 ```
