@@ -193,6 +193,14 @@ resource "azurerm_container_app" "agents" {
           value = var.log_analytics_workspace_customer_id
         }
       }
+      # Web UI specific: API Gateway URL for server-side proxy routes (chat, incidents, approvals)
+      dynamic "env" {
+        for_each = each.key == "web-ui" ? [1] : []
+        content {
+          name  = "API_GATEWAY_URL"
+          value = var.api_gateway_internal_url != "" ? var.api_gateway_internal_url : "https://ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io"
+        }
+      }
     }
   }
 
