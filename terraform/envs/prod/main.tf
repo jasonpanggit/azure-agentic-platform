@@ -350,7 +350,6 @@ module "teams_bot" {
   source = "../../modules/teams-bot"
 
   resource_group_name = azurerm_resource_group.main.name
-  location            = var.location
   environment         = var.environment
   required_tags       = local.required_tags
   tenant_id           = var.tenant_id
