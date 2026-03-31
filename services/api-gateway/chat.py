@@ -214,54 +214,76 @@ async def _approve_pending_subrun_mcp_calls(
     thread_id: str,
     run_id: str,
 ) -> None:
-    """Scan orchestrator run steps for connected_agent sub-runs needing MCP approval.
+    """Find and approve pending MCP tool approval gates on domain-agent sub-runs.
 
     When the orchestrator calls a domain agent via connected_agent, Foundry creates
-    an internal sub-run on a new thread. If that sub-run's MCP tool calls require
-    approval (submit_tool_approval), we must approve them — the top-level orchestrator
-    run will stay in_progress until the sub-run completes.
+    an internal sub-run on a new thread. The sub-run's MCP tool calls fire a
+    submit_tool_approval gate that nobody approves unless we explicitly handle it.
+
+    Strategy: list the most recent threads and find any runs from domain agents
+    that have requires_action: submit_tool_approval. These are the sub-runs
+    created by connected_agent calls from our orchestrator.
+
+    The orchestrator run's step tool_calls are empty while in_progress (they only
+    populate after the connected_agent call completes), so we cannot use run_steps
+    to find sub-runs during execution.
     """
+    # Known domain agent IDs — only approve runs from these agents
+    domain_agent_ids = {
+        "asst_rPDw83BXGrmNDE73xMy6IFE5",  # compute-agent
+        "asst_ynlfwck70rb2olLGohZSWoKz",  # network-agent
+        "asst_BDm56ofymsrQnbdvutNmP7fI",  # storage-agent
+        "asst_bHgDk44qPDLoqqMsln4GjPoK",  # security-agent
+        "asst_4JoNlqMcQC3WPq9cTpowFfPe",  # sre-agent
+        "asst_YFobGKxsDGo9j1oIrimzWyfL",  # arc-agent
+        "asst_AEFTnaxXKMpOUCmjiLWhzlsW",  # patch-agent
+        "asst_hUNs2ASp1WsrMvGvuwA5T495",  # eol-agent
+    }
+
     try:
-        steps = list(client.run_steps.list(thread_id=thread_id, run_id=run_id))
+        # Get the main run's creation time to filter recent sub-threads
+        main_run = client.runs.get(thread_id=thread_id, run_id=run_id)
+        main_run_created_at = getattr(main_run, "created_at", 0)
+        if hasattr(main_run_created_at, "timestamp"):
+            main_run_created_at = int(main_run_created_at.timestamp())
     except Exception as exc:
-        logger.debug("Could not list run steps for %s/%s: %s", thread_id, run_id, exc)
+        logger.debug("Could not get main run %s/%s: %s", thread_id, run_id, exc)
         return
 
-    for step in steps:
-        step_status = str(getattr(step, "status", ""))
-        # Steps are RunStepStatus enum or string
-        if "in_progress" not in step_status and "requires_action" not in step_status:
+    try:
+        # List the most recent 20 threads — sub-threads are created right after the main run
+        recent_threads = list(client.threads.list(limit=20))
+    except Exception as exc:
+        logger.debug("Could not list threads: %s", exc)
+        return
+
+    for t in recent_threads:
+        t_id = getattr(t, "id", None)
+        if not t_id or t_id == thread_id:
+            continue  # Skip the main orchestrator thread
+
+        # Only check threads created around the same time as the main run (within 5 min)
+        t_created = getattr(t, "created_at", 0)
+        if hasattr(t_created, "timestamp"):
+            t_created = int(t_created.timestamp())
+        if main_run_created_at and t_created < main_run_created_at - 5:
+            break  # Threads are ordered newest-first; stop if older than run
+
+        # Check runs on this thread for pending approval from domain agents
+        try:
+            runs = list(client.runs.list(thread_id=t_id))
+        except Exception:
             continue
 
-        step_details = getattr(step, "step_details", None)
-        if step_details is None:
-            continue
-
-        tool_calls = getattr(step_details, "tool_calls", None) or []
-        for tc in tool_calls:
-            tc_type = str(getattr(tc, "type", ""))
-            if tc_type != "connected_agent":
-                continue
-
-            # Access connected_agent data as dict (SDK returns dict-like object)
-            tc_dict = tc.as_dict() if hasattr(tc, "as_dict") else {}
-            ca_data = tc_dict.get("connected_agent", {})
-            sub_thread_id = ca_data.get("thread_id")
-            sub_run_id = ca_data.get("run_id")
-
-            if not sub_thread_id or not sub_run_id:
-                continue
-
-            # Check if sub-run needs MCP approval
-            try:
-                sub_run = client.runs.get(thread_id=sub_thread_id, run_id=sub_run_id)
-            except Exception as exc:
-                logger.debug("Could not get sub-run %s/%s: %s", sub_thread_id, sub_run_id, exc)
-                continue
-
+        for sub_run in runs:
             _s = getattr(sub_run, "status", "")
             sub_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
             if sub_status != "requires_action":
+                continue
+
+            # Only handle runs from known domain agents
+            sub_agent_id = getattr(sub_run, "assistant_id", "")
+            if sub_agent_id not in domain_agent_ids:
                 continue
 
             required_action = getattr(sub_run, "required_action", None)
@@ -274,11 +296,11 @@ async def _approve_pending_subrun_mcp_calls(
                     required_action.submit_tool_approval, "tool_calls", []  # type: ignore
                 )
                 logger.info(
-                    "Approving %d MCP tool call(s) for sub-run %s/%s",
-                    len(tool_calls_to_approve), sub_thread_id, sub_run_id,
+                    "Approving %d MCP tool call(s) for domain sub-run %s/%s (agent=%s)",
+                    len(tool_calls_to_approve), t_id, sub_run.id, sub_agent_id,
                 )
                 await _submit_mcp_approval(
-                    endpoint, sub_thread_id, sub_run_id, tool_calls_to_approve
+                    endpoint, t_id, sub_run.id, tool_calls_to_approve
                 )
 
 
