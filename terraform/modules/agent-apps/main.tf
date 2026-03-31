@@ -98,6 +98,17 @@ resource "azurerm_container_app" "agents" {
         name  = "CORS_ALLOWED_ORIGINS"
         value = var.cors_allowed_origins
       }
+      # API Gateway: disable Entra token validation for internal Container Apps calls.
+      # The api-gateway sits behind private internal ingress — not publicly reachable.
+      # MSAL user-delegated auth is deferred; internal service-to-service calls use
+      # network isolation as the security boundary at this stage.
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "API_GATEWAY_AUTH_MODE"
+          value = "disabled"
+        }
+      }
       # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
       # Value is injected post-creation via azurerm_container_app_custom_domain or
       # read at runtime from IMDS / DefaultAzureCredential JWT `oid` claim.
