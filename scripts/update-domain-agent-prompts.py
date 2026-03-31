@@ -24,6 +24,7 @@ AGENT_MAP = {
     "sre":      ("asst_nSWrfRFyGhMqmtgzuWF4GgKH", "SRE_AGENT_SYSTEM_PROMPT"),
     "arc":      ("asst_xTN3oTWku0R5Cbxsf56WkEdP", "ARC_AGENT_SYSTEM_PROMPT"),
     "patch":    ("asst_XxAMxgwC9NAlKqqN7FLRiA3O", "PATCH_AGENT_SYSTEM_PROMPT"),
+    "eol":      ("asst_s1TancOQbpIjltYQ0oGgfTDD", "EOL_AGENT_SYSTEM_PROMPT"),
 }
 
 

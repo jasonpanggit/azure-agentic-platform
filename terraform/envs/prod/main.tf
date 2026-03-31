@@ -5,8 +5,8 @@ locals {
     project     = "aap"
   }
 
-  # Prod currently uses the platform Azure MCP sidecar, not the custom Arc MCP server module.
-  enable_arc_mcp_server = false
+  # Prod deploys the Arc MCP Server for Arc-specific tools (arc_servers_list, etc.)
+  enable_arc_mcp_server = true
 }
 
 resource "azurerm_resource_group" "main" {
@@ -159,6 +159,7 @@ module "arc_mcp_server" {
   container_apps_environment_id  = module.compute_env.container_apps_environment_id
   container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
   acr_login_server               = module.compute_env.acr_login_server
+  acr_id                         = module.compute_env.acr_id
   app_insights_connection_string = module.monitoring.app_insights_connection_string
 
   # Prod: Arc resources may span multiple subscriptions.
@@ -166,6 +167,13 @@ module "arc_mcp_server" {
   arc_subscription_ids = var.all_subscription_ids != [] ? var.all_subscription_ids : [var.subscription_id]
 
   arc_disconnect_alert_hours = 1
+
+  # First apply: use placeholder image to break the chicken-and-egg cycle.
+  # The Container App needs AcrPull role to pull from ACR, but the role can only
+  # be assigned after the app (and its managed identity) exists. Placeholder image
+  # lets the app provision; CI/CD deploys the real image once AcrPull is in place.
+  # lifecycle { ignore_changes = [template[0].container[0].image] } prevents drift.
+  use_placeholder_image = true
 }
 
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
@@ -196,9 +204,12 @@ module "agent_apps" {
   sre_agent_id                   = var.sre_agent_id
   arc_agent_id                   = var.arc_agent_id
   patch_agent_id                 = var.patch_agent_id
+  eol_agent_id                   = var.eol_agent_id
 
-  # Deploy real agent images from ACR (not placeholder)
-  use_placeholder_image = false
+  # Use placeholder image on first deploy — ACR images don't exist yet.
+  # CI/CD pipeline deploys real images after initial infra provisioning.
+  # lifecycle.ignore_changes on image prevents Terraform from reverting CI/CD deploys.
+  use_placeholder_image = true
   image_tag             = "latest"
 
   # Teams Bot specific configuration
@@ -226,6 +237,10 @@ module "rbac" {
   compute_subscription_id = var.compute_subscription_id
   network_subscription_id = var.network_subscription_id
   storage_subscription_id = var.storage_subscription_id
+
+  # F-01 fix: grant Azure AI Developer to gateway MI on Foundry account
+  resource_group_name  = azurerm_resource_group.main.name
+  foundry_account_name = module.foundry.foundry_account_name
 }
 
 # --- Event Hub (depends on: networking) ---
@@ -263,8 +278,13 @@ module "fabric" {
 # Web UI app registration for MSAL browser auth (SPA flow).
 # The client_id output is also stored in Key Vault and referenced by CI/CD
 # as a GitHub Actions variable (NEXT_PUBLIC_AZURE_CLIENT_ID) for the web-ui image build.
+#
+# Gated behind var.enable_entra_apps because the azuread provider requires
+# Microsoft Graph Application.ReadWrite.All permission on the Terraform SP.
+# When disabled, manage app registrations manually via `az ad app` CLI.
 
 module "entra_apps" {
+  count  = var.enable_entra_apps ? 1 : 0
   source = "../../modules/entra-apps"
 
   environment       = var.environment
@@ -286,10 +306,10 @@ module "activity_log" {
 # --- Fabric Service Principal (D-08, D-09) ---
 # App registration for the Fabric User Data Function to authenticate
 # to the API gateway's POST /api/v1/incidents endpoint.
-# Only provisioned when gateway_app_client_id is set.
+# Only provisioned when both enable_entra_apps AND gateway_app_client_id are set.
 
 resource "azuread_application" "fabric_sp" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   display_name = "aap-fabric-detection-${var.environment}"
 
   required_resource_access {
@@ -303,7 +323,7 @@ resource "azuread_application" "fabric_sp" {
 }
 
 resource "azuread_service_principal" "fabric_sp" {
-  count     = var.gateway_app_client_id != "" ? 1 : 0
+  count     = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   client_id = azuread_application.fabric_sp[0].client_id
 }
 
@@ -311,21 +331,21 @@ resource "azuread_service_principal" "fabric_sp" {
 # timestamp() returns a new value on every plan/apply, causing perpetual diff.
 # See WARN-D4a in 04-01-PLAN.md. Update this date during scheduled secret rotation.
 resource "azuread_application_password" "fabric_sp" {
-  count          = var.gateway_app_client_id != "" ? 1 : 0
+  count          = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   application_id = azuread_application.fabric_sp[0].id
   display_name   = "fabric-detection-secret"
   end_date       = "2027-03-26T00:00:00Z" # Fixed 1-year expiry — rotate before this date
 }
 
 resource "azurerm_key_vault_secret" "fabric_sp_client_id" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   name         = "fabric-sp-client-id"
   value        = azuread_application.fabric_sp[0].client_id
   key_vault_id = module.keyvault.keyvault_id
 }
 
 resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   name         = "fabric-sp-client-secret"
   value        = azuread_application_password.fabric_sp[0].value
   key_vault_id = module.keyvault.keyvault_id

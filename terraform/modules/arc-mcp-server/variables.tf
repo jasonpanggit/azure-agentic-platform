@@ -28,6 +28,12 @@ variable "acr_login_server" {
   type        = string
 }
 
+variable "acr_id" {
+  description = "Resource ID of the Azure Container Registry for AcrPull role assignment"
+  type        = string
+  default     = ""
+}
+
 variable "image_tag" {
   description = "Docker image tag to deploy"
   type        = string
@@ -55,4 +61,10 @@ variable "required_tags" {
   description = "Tags applied to all resources in this module"
   type        = map(string)
   default     = {}
+}
+
+variable "use_placeholder_image" {
+  description = "Use a public placeholder image for initial provisioning (avoids ACR auth chicken-and-egg). CI/CD deploys the real image after AcrPull role is assigned."
+  type        = bool
+  default     = false
 }

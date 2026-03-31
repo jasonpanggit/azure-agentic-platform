@@ -150,6 +150,7 @@ module "arc_mcp_server" {
   container_apps_environment_id  = module.compute_env.container_apps_environment_id
   container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
   acr_login_server               = module.compute_env.acr_login_server
+  acr_id                         = module.compute_env.acr_id
   app_insights_connection_string = module.monitoring.app_insights_connection_string
 
   # Staging: Arc resources live in the same subscription as the platform.
@@ -184,6 +185,7 @@ module "agent_apps" {
   sre_agent_id                   = var.sre_agent_id
   arc_agent_id                   = var.arc_agent_id
   patch_agent_id                 = var.patch_agent_id
+  eol_agent_id                   = var.eol_agent_id
 }
 
 # --- RBAC (depends on: agent-apps) ---

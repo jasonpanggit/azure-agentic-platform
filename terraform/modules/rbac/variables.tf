@@ -42,3 +42,15 @@ variable "acr_id" {
   type        = string
   default     = ""
 }
+
+variable "resource_group_name" {
+  description = "Resource group name containing the Foundry account (used for Azure AI Developer scope)"
+  type        = string
+  default     = ""
+}
+
+variable "foundry_account_name" {
+  description = "Name of the Azure AI Foundry (Cognitive Services) account (used for Azure AI Developer scope)"
+  type        = string
+  default     = ""
+}

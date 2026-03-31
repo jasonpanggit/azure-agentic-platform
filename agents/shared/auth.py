@@ -57,23 +57,68 @@ def get_foundry_client() -> AgentsClient:
     )
 
 
+def _resolve_principal_id_from_token() -> str | None:
+    """Resolve the managed identity principal_id (oid) from an ARM access token.
+
+    Uses DefaultAzureCredential to obtain a token for Azure Resource Manager,
+    then decodes the JWT payload (without signature verification — we only need
+    the `oid` claim for attribution, not auth) to extract the principal's
+    object ID.
+
+    Returns:
+        The `oid` claim string, or None if extraction fails.
+    """
+    import base64
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        token = get_credential().get_token("https://management.azure.com/.default")
+        # JWT is header.payload.signature — we need the payload
+        payload_segment = token.token.split(".")[1]
+        # Add padding if needed for base64 decoding
+        padding = 4 - len(payload_segment) % 4
+        if padding != 4:
+            payload_segment += "=" * padding
+        claims = json.loads(base64.urlsafe_b64decode(payload_segment))
+        oid = claims.get("oid")
+        if oid:
+            logger.info("Resolved agent identity from token: oid=%s", oid)
+            return oid
+        logger.warning("Token claims missing 'oid' field")
+    except Exception:
+        logger.warning("Failed to resolve agent identity from access token", exc_info=True)
+    return None
+
+
 def get_agent_identity() -> str:
     """Return the current agent's Entra object ID for AUDIT-005 attribution.
 
-    Reads AGENT_ENTRA_ID from environment, set by the agent-apps
-    Terraform module from the Container App's system-assigned identity
-    principal_id.
+    Resolution order:
+    1. AGENT_ENTRA_ID environment variable (set via `az containerapp update`
+       post-deployment or CI/CD pipeline).
+    2. Auto-discovery from the managed identity access token's `oid` claim.
+       This eliminates the need for Terraform to inject the value at
+       creation time (which caused self-referential / dependency cycle errors).
 
     Returns:
         Entra Agent ID object ID string.
 
     Raises:
-        ValueError: If AGENT_ENTRA_ID is not set.
+        ValueError: If identity cannot be resolved from env or token.
     """
     agent_id = os.environ.get("AGENT_ENTRA_ID")
-    if not agent_id:
-        raise ValueError(
-            "AGENT_ENTRA_ID environment variable is required. "
-            "This must be the system-assigned managed identity principal_id."
-        )
-    return agent_id
+    if agent_id:
+        return agent_id
+
+    # Fallback: resolve from managed identity token
+    agent_id = _resolve_principal_id_from_token()
+    if agent_id:
+        return agent_id
+
+    raise ValueError(
+        "AGENT_ENTRA_ID could not be resolved. "
+        "Set the AGENT_ENTRA_ID environment variable or ensure the "
+        "container app has a system-assigned managed identity."
+    )

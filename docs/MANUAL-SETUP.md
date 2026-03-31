@@ -382,8 +382,12 @@ After rotating:
 
 ```
 IMMEDIATE (platform will not work without these):
-□ Step 1 — Set AZURE_PROJECT_ENDPOINT + ORCHESTRATOR_AGENT_ID on api-gateway
-□ Step 2 — Grant Azure AI Developer role to api-gateway managed identity
+✅ Step 1 — Set AZURE_PROJECT_ENDPOINT + ORCHESTRATOR_AGENT_ID on api-gateway
+           ORCHESTRATOR_AGENT_ID=asst_NeBVjCA5isNrIERoGYzRpBTu (set 2026-03-31, revision 0000030)
+           Also wired in terraform/envs/prod/terraform.tfvars
+✅ Step 2 — Grant Azure AI Developer role to api-gateway managed identity
+           Role assignment ID: 6a001d6b-bc29-4355-962f-0103c81f90c6 (created 2026-03-31)
+           Also wired in terraform/modules/rbac/main.tf (api-gateway-aidev-foundry)
 □ Step 3 — Set LOG_ANALYTICS_WORKSPACE_ID on web-ui container app
 □ Step 4 — Verify Cosmos DB 'incidents' container + RBAC
 

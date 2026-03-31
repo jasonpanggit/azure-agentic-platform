@@ -421,12 +421,12 @@ Phase 1 (Foundation)
 **Plans:** 6 plans
 
 Plans:
-- [ ] 09-01 Tailwind + shadcn/ui Foundation
-- [ ] 09-02 Layout Foundation
-- [ ] 09-03 Chat Components
-- [ ] 09-04 Dashboard Components
-- [ ] 09-05 Observability Components
-- [ ] 09-06 Cleanup + Verification
+- [x] 09-01 Tailwind + shadcn/ui Foundation
+- [x] 09-02 Layout Foundation
+- [x] 09-03 Chat Components
+- [x] 09-04 Dashboard Components
+- [x] 09-05 Observability Components
+- [x] 09-06 Cleanup + Verification
 
 ### Phase 10: API Gateway Hardening
 

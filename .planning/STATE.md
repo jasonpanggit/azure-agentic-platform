@@ -3,15 +3,37 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-30T16:03:50.389Z"
+last_updated: "2026-03-31T01:40:47.007Z"
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 41
-  completed_plans: 28
+  completed_plans: 34
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-31 — Plan 09-06 COMPLETE: Cleanup + Verification. Phase 9 Web UI Revamp fully complete (6/6 plans). Zero @fluentui/makeStyles/FluentProvider/tokens. in app/components/lib. npx tsc --noEmit exits 0 (fixed 16 TS errors: jest.MockedFunction<typeof fetch> typing + jest-globals-setup.ts for @testing-library/jest-dom @jest/globals augmentation). npm run build exits 0 (fixed Tailwind v4 PostCSS — installed @tailwindcss/postcss, replaced @apply border-border/bg-background/text-foreground with direct CSS hsl(var(--border)) in globals.css). All 8 acceptance criteria verified: scroll layout (absolute inset-0 + ScrollArea flex-1 min-h-0 + shrink-0 grow-0), CSS vars (--primary: 207 90% 42%), SSE business logic (useSSE/handleTokenEvent/handleTraceEvent/handleSubmit/handleApprove/handleReject/currentAgentRef), all 5 unchanged lib files exist.
+
+> Last updated: 2026-03-31 — Plan 09-04 COMPLETE: Dashboard Components. All 8 dashboard components migrated to Tailwind + shadcn/ui: DashboardPanel (shadcn Tabs + Bell/ClipboardList/Network/Server/Activity lucide icons), AlertFeed (shadcn Table + 5s polling, SeverityBadge destructive/outline), AlertFilters (3× shadcn Select, flex gap-2 items-center flex-wrap), AuditLogViewer (shadcn Table + "Export Report" Button + Input filter, flex flex-col gap-2 h-full), SubscriptionSelector (Popover+Command+Checkbox multiselect, w-[280px], fetch('/api/subscriptions'), onLoad auto-select, "Showing results for"), TraceTree (shadcn Collapsible, border-t border-border max-h-[200px], font-mono text-[12px] JSON block), TopologyTab (Collapsible tree hierarchy, Skeleton, Search input), ResourcesTab (shadcn Table + Select type filter + Input search, 30+ type labels). Zero @fluentui/makeStyles/tokens/DataGrid/Dropdown/Combobox/TabList remnants. All business logic preserved.
+
+> Last updated: 2026-03-31 — Plan 09-05 COMPLETE: Observability Components. All 7 files migrated to Tailwind + shadcn/ui: MetricCard (health-colored left border border-l-green/yellow/red-500, shadcn Badge), TimeRangeSelector (shadcn Select, 1h/6h/24h/7d, w-[120px]), ObservabilityTab (POLL_INTERVAL_MS=30000 polling preserved, shadcn Skeleton + Alert, Activity lucide empty state), AgentLatencyCard + PipelineLagCard + ApprovalQueueCard + ActiveErrorsCard (all using MetricCard wrapper, font-mono text-[13px] values, health calculations intact). Zero @fluentui/makeStyles/tokens/MessageBar/Dropdown remnants.
+
+> Last updated: 2026-03-31 — Plan 09-03 COMPLETE: Chat Components. ChatBubble (prose prose-sm prose-zinc, bg-primary/10 badge, bg-foreground cursor, mt-1 timestamp), UserBubble (rounded-lg p-3 mb-2 opacity-70 mt-1), ThinkingIndicator (already spec-exact), ChatInput (already spec-exact), ProposalCard (Dialog import consolidated to single line, all timer/approval logic preserved), ChatPanel (removed w-full from messages div, critical scroll layout intact: absolute inset-0 outer + ScrollArea flex-1 min-h-0 + shrink-0 grow-0 input, all SSE streaming + approval logic preserved byte-for-byte). All 6 tasks verified.
+
+> Last updated: 2026-03-31 — Completed quick task 260331-krz: Fixed broken api-gateway Docker image. Build context was scoped to services/api-gateway/ — agents/shared/ never copied into image. Fixed Dockerfile COPY instructions + CI workflows (api-gateway-build.yml + deploy-all-images.yml) to use repo root as build context. Operator must rebuild+push to ACR and az containerapp update ca-api-gateway-prod.
+
+> Last updated: 2026-03-31 — Completed quick task 260331-k6y: Resolved both chat blockers. ORCHESTRATOR_AGENT_ID=asst_NeBVjCA5isNrIERoGYzRpBTu set on ca-api-gateway-prod (revision 0000030, healthy). Azure AI Developer RBAC granted to gateway MI 69e05934-... on Foundry scope (role assignment 6a001d6b-...). Both fixes wired in Terraform (terraform.tfvars + rbac module). Phase 8 F-01 CLOSED. Gateway /health returns 200 ok, startup logs clean.
+
+> Last updated: 2026-03-31 — Completed quick task 260331-ize: Fixed orchestrator domain agent routing. All 8 connected_agent tools registered on Foundry orchestrator (asst_NeBVjCA5isNrIERoGYzRpBTu): compute, network, storage, security, sre, arc, patch, eol. All 8 *_AGENT_ID + ORCHESTRATOR_AGENT_ID env vars set on ca-orchestrator-prod. EOL entry added to update-domain-agent-prompts.py AGENT_MAP.
+
+> Last updated: 2026-03-31 — Completed quick task 260331-ghg: Provision EOL agent in Foundry (asst_s1TancOQbpIjltYQ0oGgfTDD), EOL_AGENT_ID set on ca-orchestrator-prod
+
+> Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
+
+> Last updated: 2026-03-31 — Plan 09-02 COMPLETE: Layout Foundation. Root layout (Inter font, globals.css), providers.tsx (FluentProvider removed, MSAL 100% preserved), next.config.ts (transpilePackages removed), DesktopOnlyGate (shadcn Alert + Monitor icon), AuthenticatedApp (shadcn Button + Tailwind login), AppLayout (react-resizable-panels + exact UI-SPEC classes: bg-background top bar, bg-background chat panel, w-2 border-l resize handle). All 7 tasks verified against acceptance criteria.
+
+> Last updated: 2026-03-31 — Plan 09-01 COMPLETE: Tailwind + shadcn/ui Foundation. Fluent UI fully removed. Tailwind CSS v4.2.2 installed, 18 shadcn/ui components scaffolded in components/ui/, cn() utility, CSS custom property design system with Azure Blue --primary: 207 90% 42%, PostCSS config, tailwind.config.ts with blink-cursor + pulse-dot animations. globals.css aligned to UI-SPEC (pure white background, standard shadcn variable values, .prose table styles added).
 
 > Last updated: 2026-03-30 — Plan 11-03 COMPLETE (Phase 11 COMPLETE): Terraform + CI/CD for Patch Agent. patch added to local.agents (8 agents), PATCH_AGENT_ID dynamic env block for orchestrator, patch_agent_id variable declared. RBAC: Reader + Monitoring Reader on all subscriptions (ARG cross-sub). Staging/prod explicitly wire patch_agent_id. build-patch CI job added (14 jobs in summary). All 5 terraform dirs pass fmt -check. Phase 11 fully complete: 3/3 plans, 49 unit tests + 47 integration/routing tests passing.
 
@@ -31,20 +53,29 @@ progress:
 
 ## Current Phase
 
-**Phase 10: API Gateway Hardening — ✅ COMPLETE (2/2 plans)**
+**Phase 9: Web UI Revamp — COMPLETE (6/6 plans)**
 
-Plan 10-01 complete: API gateway auth now fails closed by default; explicit local bypass requires `API_GATEWAY_AUTH_MODE=disabled`. Audit filters are validated before KQL construction, invalid audit requests now return HTTP 400, and the focused gateway security test run passed (`11 passed`).
+Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
-Plan 10-02 complete: runbook search now resolves `PGVECTOR_CONNECTION_STRING`, `POSTGRES_DSN`, or explicit `POSTGRES_*` settings, startup migrations reuse the same resolver, and `/api/v1/runbooks/search` returns HTTP 503 instead of HTTP 500 when the runbook DB is unavailable. Combined gateway regression run passed (`19 passed`).
+Plan 09-02 complete: Layout Foundation. Root layout uses Inter font via `next/font/google` with `--font-inter` CSS variable. `FluentProvider` fully removed from `providers.tsx` — all MSAL logic preserved (initialize, handleRedirectPromise, 5000ms timeout race). `next.config.ts` cleaned of transpilePackages. `DesktopOnlyGate` rebuilt with shadcn `Alert` + lucide `Monitor` icon. `AuthenticatedApp` rebuilt with shadcn `Button` + Tailwind login page. `AppLayout` rebuilt with `react-resizable-panels` and exact UI-SPEC Tailwind classes (bg-background top bar, bg-background chat panel, w-2 border-l resize handle).
+
+Plan 09-03 complete: Chat Components. ChatBubble rebuilt with `prose prose-sm prose-zinc max-w-none` content, `bg-primary/10` agent badge, `bg-foreground` blink cursor, `mt-1` timestamp. UserBubble aligned to `rounded-lg p-3 mb-2 shadow-sm`, `opacity-70 mt-1`. ThinkingIndicator and ChatInput were already spec-exact. ProposalCard Dialog import consolidated to single line, all timer/approval logic preserved. ChatPanel: removed `w-full` from messages container div — critical scroll layout intact (`absolute inset-0` outer, `ScrollArea flex-1 min-h-0`, `shrink-0 grow-0` input footer). All SSE streaming + approval logic preserved byte-for-byte.
+
+Plan 09-04 complete: Dashboard Components. All 8 dashboard panel components migrated to Tailwind + shadcn/ui with all business logic preserved. DashboardPanel uses shadcn Tabs with lucide icons. AlertFeed uses shadcn Table with 5s polling + SeverityBadge. AlertFilters uses 3× shadcn Select. AuditLogViewer uses shadcn Table + "Export Report" Button + Input filter. SubscriptionSelector uses Popover+Command+Checkbox multiselect with auto-select onLoad and fetch('/api/subscriptions'). TraceTree uses shadcn Collapsible with JSON payload expand per event. TopologyTab uses Collapsible tree with subscription→RG→resource hierarchy + search + Skeleton. ResourcesTab uses shadcn Table + type Select filter + search Input.
+
+Plan 09-05 complete: Observability Components. All 7 observability files migrated to Tailwind + shadcn/ui. MetricCard uses border-l-[3px] health borders (green/yellow/red-500) with shadcn Badge. TimeRangeSelector uses shadcn Select with 4 time range options. ObservabilityTab preserves POLL_INTERVAL_MS=30000 polling, uses shadcn Skeleton + Alert, Activity lucide empty state. AgentLatencyCard, PipelineLagCard, ApprovalQueueCard, ActiveErrorsCard all use MetricCard wrapper with font-mono text-[13px] values and health calculations intact. Zero Fluent remnants.
+
+Plan 09-06 complete: Cleanup + Verification. Zero Fluent remnants, tsc --noEmit exits 0, npm run build exits 0. Fixed 4 issues: Tailwind v4 PostCSS (@tailwindcss/postcss), @apply removal in globals.css, jest.MockedFunction<typeof fetch> typing, jest-globals-setup.ts for @testing-library/jest-dom matchers. All 8 verification tasks pass.
+
+Phase 9 Web UI Revamp is fully complete (6/6 plans).
 
 Parallel status:
 
 - Phase 8 remains blocked on operator-only findings F-01 (Foundry RBAC) and F-02 (prod runbook search 500).
-- Phase 9 has six authored plans and remains pending implementation.
 
 Recent completed context retained below for continuity:
 
-Plan 08-01 complete: Fix Provisioning Gaps — Foundry Orchestrator Agent created, ORCHESTRATOR_AGENT_ID set on ca-api-gateway-prod, Azure Bot Service registered, 3 GitHub secrets added.
+**Phase 12 COMPLETE:** EOL Domain Agent with multi-source internet search and PostgreSQL caching.
 
 Plan 08-02 complete: Critical-Path Validation — test.skip() removed from E2E tests, E2E suite run against prod (22/30 pass), 7 smoke tests executed, VALIDATION-REPORT.md initialized with 2 BLOCKING + 6 DEGRADED findings.
 
@@ -92,9 +123,10 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
-| 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
+| 9 | Web UI Revamp | ✅ Complete (2026-03-31) — all 6 plans, Tailwind v4 + shadcn/ui, tsc passes, build passes, zero Fluent remnants |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
+| 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
 
 ---
 
@@ -213,6 +245,11 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260329-315 | Review and clean up 65 uncommitted changes — gitignore coverage/build artifacts, commit real files | 2026-03-29 | 3b53ff1 | [260329-315-review-uncommitted-changes](./quick/260329-315-review-uncommitted-changes/) |
 | 260329-qro | validate 08-01 provisioning gaps are done | 2026-03-29 | — | [260329-qro-validate-08-01-provisioning-gaps-are-don](./quick/260329-qro-validate-08-01-provisioning-gaps-are-don/) |
 | 260330-p8d | Fix critical bugs in GitHub Actions workflows | 2026-03-30 | 3758e75 | [260330-p8d-fix-critical-bugs-in-github-actions-work](./quick/260330-p8d-fix-critical-bugs-in-github-actions-work/) |
+| 260331-chg | Deploy Arc MCP Server to Container Apps and wire ARC_MCP_SERVER_URL to ca-arc-prod | 2026-03-31 | 06a2ae0 | [260331-chg-deploy-arc-mcp-server-to-container-apps-](./quick/260331-chg-deploy-arc-mcp-server-to-container-apps-/) |
+| 260331-ghg | Provision EOL agent in Foundry by adding it to provision-domain-agents.py and running provisioning | 2026-03-31 | a100a28 | [260331-ghg-provision-eol-agent-in-foundry-by-adding](./quick/260331-ghg-provision-eol-agent-in-foundry-by-adding/) |
+| 260331-ize | Fix orchestrator domain agent routing — register all 8 connected_agent tools on Foundry orchestrator (asst_NeBVjCA5isNrIERoGYzRpBTu), set *_AGENT_ID + ORCHESTRATOR_AGENT_ID env vars on ca-orchestrator-prod | 2026-03-31 | d9a58b5 | [260331-ize-fix-orchestrator-domain-agent-routing-re](./quick/260331-ize-fix-orchestrator-domain-agent-routing-re/) |
+| 260331-k6y | Fix API gateway prod blockers: set ORCHESTRATOR_AGENT_ID on ca-api-gateway-prod (revision 0000030) + grant Azure AI Developer RBAC to gateway MI on Foundry scope. Phase 8 F-01 CLOSED. | 2026-03-31 | dc3930a | [260331-k6y-fix-api-gateway-prod-blocker-set-orchest](./quick/260331-k6y-fix-api-gateway-prod-blocker-set-orchest/) |
+| 260331-krz | Fix broken api-gateway image: expand Docker build context to repo root so agents/shared is accessible, fix ModuleNotFoundError. Operator must rebuild+push to ACR and update ca-api-gateway-prod. | 2026-03-31 | 13f2b78 | [260331-krz-fix-broken-api-gateway-image-diagnose-mo](./quick/260331-krz-fix-broken-api-gateway-image-diagnose-mo/) |
 
 ---
 

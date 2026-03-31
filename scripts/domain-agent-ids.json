@@ -1,0 +1,10 @@
+{
+  "COMPUTE_AGENT_ID": "asst_LRwIRuuMi0vxzfe0sN6Gl7ro",
+  "NETWORK_AGENT_ID": "asst_xgfrgpYy3t0tHMz6XtuZSfkt",
+  "STORAGE_AGENT_ID": "asst_eyJ5bKQLMpuC17sfeZZmwOkI",
+  "SECURITY_AGENT_ID": "asst_E3zcct7P9mKHlqcRzU5CGbp4",
+  "SRE_AGENT_ID": "asst_nSWrfRFyGhMqmtgzuWF4GgKH",
+  "ARC_AGENT_ID": "asst_xTN3oTWku0R5Cbxsf56WkEdP",
+  "PATCH_AGENT_ID": "asst_XxAMxgwC9NAlKqqN7FLRiA3O",
+  "EOL_AGENT_ID": "asst_s1TancOQbpIjltYQ0oGgfTDD"
+}

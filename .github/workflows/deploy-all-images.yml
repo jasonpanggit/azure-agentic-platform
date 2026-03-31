@@ -248,6 +248,23 @@ jobs:
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+  build-eol:
+    name: Build EOL Agent
+    needs: build-agent-base
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/eol
+      dockerfile_path: agents/eol/Dockerfile
+      build_context: agents/eol/
+      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
   # ---------------------------------------------------------------------------
   # Phase 2b: Service images (independent, parallel with agent builds)
   # ---------------------------------------------------------------------------
@@ -258,7 +275,7 @@ jobs:
     with:
       image_name: services/api-gateway
       dockerfile_path: services/api-gateway/Dockerfile
-      build_context: services/api-gateway/
+      build_context: .
       image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -343,6 +360,7 @@ jobs:
       - build-sre
       - build-arc
       - build-patch
+      - build-eol
       - build-api-gateway
       - build-arc-mcp-server
       - build-teams-bot
@@ -377,6 +395,7 @@ jobs:
           echo "| agents/sre | ${{ needs.build-sre.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| agents/arc | ${{ needs.build-arc.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| agents/patch | ${{ needs.build-patch.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/eol | ${{ needs.build-eol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Service Images" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

@@ -16,12 +16,10 @@ export function AppLayout() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {/* Top Bar — stronger visual identity with primary accent */}
-      <div className="flex items-center justify-between px-6 py-2.5 border-b bg-card shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          {/* Azure blue accent dot */}
-          <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
-          <h1 className="text-lg font-semibold tracking-tight">Azure AIOps</h1>
+      {/* Top Bar */}
+      <div className="flex items-center justify-between px-6 py-2 border-b bg-background shadow-sm z-10">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold">Azure AIOps</h1>
         </div>
         <div className="flex items-center gap-6">
           <SubscriptionSelector
@@ -39,18 +37,16 @@ export function AppLayout() {
           autoSaveId="aap-main-layout"
           className="h-full"
         >
-          {/* Chat panel — slightly blue-tinted so it reads as distinct from dashboard */}
           <Panel
             defaultSize={35}
             minSize={25}
-            className="relative overflow-hidden h-full bg-secondary"
+            className="relative overflow-hidden h-full bg-background"
           >
             <ChatPanel subscriptions={selectedSubscriptions} />
           </Panel>
 
-          <PanelResizeHandle className="w-1.5 bg-border/60 cursor-col-resize hover:bg-primary/40 transition-colors" />
+          <PanelResizeHandle className="w-2 bg-transparent border-l border-border cursor-col-resize hover:border-primary transition-colors" />
 
-          {/* Dashboard panel */}
           <Panel
             defaultSize={65}
             minSize={40}

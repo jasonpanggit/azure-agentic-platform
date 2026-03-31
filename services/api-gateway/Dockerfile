@@ -16,11 +16,13 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY services/api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . ./services/api_gateway/
+# Copy package roots so Python can resolve `services.api_gateway.*` and `agents.shared.*`
+COPY services/__init__.py ./services/__init__.py
+COPY services/api-gateway/ ./services/api_gateway/
+COPY agents/ ./agents/
 
 # Non-root user for security — must be created after npm install
 # so /usr/local/lib/node_modules is readable by all
