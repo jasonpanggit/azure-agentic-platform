@@ -44,6 +44,23 @@ QUERY_DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "eol",
+        (
+            "end of life",
+            "end-of-life",
+            "eol",
+            "outdated software",
+            "software lifecycle",
+            "unsupported version",
+            "lifecycle status",
+            "deprecated version",
+            "software expiry",
+            "version support",
+            "eol status",
+            "lifecycle check",
+        ),
+    ),
+    (
         "compute",
         (
             "virtual machine",

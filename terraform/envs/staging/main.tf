@@ -184,6 +184,7 @@ module "agent_apps" {
   sre_agent_id                   = var.sre_agent_id
   arc_agent_id                   = var.arc_agent_id
   patch_agent_id                 = var.patch_agent_id
+  eol_agent_id                   = var.eol_agent_id
 }
 
 # --- RBAC (depends on: agent-apps) ---

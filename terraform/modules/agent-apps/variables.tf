@@ -173,3 +173,16 @@ variable "log_analytics_workspace_customer_id" {
   type        = string
   default     = ""
 }
+
+variable "eol_agent_id" {
+  description = "Foundry Agent ID for the EOL domain agent"
+  type        = string
+  default     = ""
+}
+
+variable "postgres_dsn" {
+  description = "PostgreSQL DSN for agents that need direct DB access (e.g., eol-agent eol_cache)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -8,6 +8,7 @@ locals {
     arc          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     sre          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     patch        = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    eol          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
   }
 
   # services excludes teams-bot (managed separately for bot-specific env vars)
@@ -161,6 +162,21 @@ resource "azurerm_container_app" "agents" {
         content {
           name  = "PATCH_AGENT_ID"
           value = var.patch_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "orchestrator" && var.eol_agent_id != "" ? [1] : []
+        content {
+          name  = "EOL_AGENT_ID"
+          value = var.eol_agent_id
+        }
+      }
+      # EOL agent needs PostgreSQL DSN for eol_cache table
+      dynamic "env" {
+        for_each = each.key == "eol" && var.postgres_dsn != "" ? [1] : []
+        content {
+          name  = "POSTGRES_DSN"
+          value = var.postgres_dsn
         }
       }
       # Inject Arc MCP Server URL into the arc agent

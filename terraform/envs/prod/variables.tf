@@ -151,3 +151,9 @@ variable "patch_agent_id" {
   type    = string
   default = ""
 }
+
+variable "eol_agent_id" {
+  description = "Foundry Agent ID for the EOL domain agent"
+  type        = string
+  default     = ""
+}
