@@ -8,12 +8,14 @@ progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 41
-  completed_plans: 32
+  completed_plans: 33
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
 > Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
+
+> Last updated: 2026-03-31 — Plan 09-02 COMPLETE: Layout Foundation. Root layout (Inter font, globals.css), providers.tsx (FluentProvider removed, MSAL 100% preserved), next.config.ts (transpilePackages removed), DesktopOnlyGate (shadcn Alert + Monitor icon), AuthenticatedApp (shadcn Button + Tailwind login), AppLayout (react-resizable-panels + exact UI-SPEC classes: bg-background top bar, bg-background chat panel, w-2 border-l resize handle). All 7 tasks verified against acceptance criteria.
 
 > Last updated: 2026-03-31 — Plan 09-01 COMPLETE: Tailwind + shadcn/ui Foundation. Fluent UI fully removed. Tailwind CSS v4.2.2 installed, 18 shadcn/ui components scaffolded in components/ui/, cn() utility, CSS custom property design system with Azure Blue --primary: 207 90% 42%, PostCSS config, tailwind.config.ts with blink-cursor + pulse-dot animations. globals.css aligned to UI-SPEC (pure white background, standard shadcn variable values, .prose table styles added).
 
@@ -35,11 +37,13 @@ progress:
 
 ## Current Phase
 
-**Phase 9: Web UI Revamp — In Progress (1/6 plans complete)**
+**Phase 9: Web UI Revamp — In Progress (2/6 plans complete)**
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
-Plans 09-02 through 09-06 remain pending.
+Plan 09-02 complete: Layout Foundation. Root layout uses Inter font via `next/font/google` with `--font-inter` CSS variable. `FluentProvider` fully removed from `providers.tsx` — all MSAL logic preserved (initialize, handleRedirectPromise, 5000ms timeout race). `next.config.ts` cleaned of transpilePackages. `DesktopOnlyGate` rebuilt with shadcn `Alert` + lucide `Monitor` icon. `AuthenticatedApp` rebuilt with shadcn `Button` + Tailwind login page. `AppLayout` rebuilt with `react-resizable-panels` and exact UI-SPEC Tailwind classes (bg-background top bar, bg-background chat panel, w-2 border-l resize handle).
+
+Plans 09-03 through 09-06 remain pending.
 
 Parallel status:
 
@@ -95,7 +99,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
-| 9 | Web UI Revamp | In Progress (1/6 plans) |
+| 9 | Web UI Revamp | In Progress (2/6 plans) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
