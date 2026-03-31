@@ -208,27 +208,20 @@ async def _submit_mcp_approval(
     return False
 
 
-async def _approve_pending_subrun_mcp_calls(
+def _approve_pending_subrun_mcp_calls(
     client: Any,
     endpoint: str,
     thread_id: str,
     run_id: str,
 ) -> None:
-    """Find and approve pending MCP tool approval gates on domain-agent sub-runs.
+    """Synchronous — safe to run in asyncio.to_thread.
 
-    When the orchestrator calls a domain agent via connected_agent, Foundry creates
-    an internal sub-run on a new thread. The sub-run's MCP tool calls fire a
-    submit_tool_approval gate that nobody approves unless we explicitly handle it.
-
-    Strategy: list the most recent threads and find any runs from domain agents
-    that have requires_action: submit_tool_approval. These are the sub-runs
-    created by connected_agent calls from our orchestrator.
-
-    The orchestrator run's step tool_calls are empty while in_progress (they only
-    populate after the connected_agent call completes), so we cannot use run_steps
-    to find sub-runs during execution.
+    Find domain-agent sub-runs with pending MCP approval gates and approve them.
+    All Foundry SDK calls here are synchronous (no await).
     """
-    # Known domain agent IDs — only approve runs from these agents
+    import requests as _requests
+    from azure.identity import DefaultAzureCredential
+
     domain_agent_ids = {
         "asst_rPDw83BXGrmNDE73xMy6IFE5",  # compute-agent
         "asst_ynlfwck70rb2olLGohZSWoKz",  # network-agent
@@ -241,17 +234,17 @@ async def _approve_pending_subrun_mcp_calls(
     }
 
     try:
-        # Get the main run's creation time to filter recent sub-threads
         main_run = client.runs.get(thread_id=thread_id, run_id=run_id)
         main_run_created_at = getattr(main_run, "created_at", 0)
         if hasattr(main_run_created_at, "timestamp"):
             main_run_created_at = int(main_run_created_at.timestamp())
+        else:
+            main_run_created_at = int(main_run_created_at) if main_run_created_at else 0
     except Exception as exc:
-        logger.debug("Could not get main run %s/%s: %s", thread_id, run_id, exc)
+        logger.debug("Could not get main run: %s", exc)
         return
 
     try:
-        # List the most recent 20 threads — sub-threads are created right after the main run
         recent_threads = list(client.threads.list(limit=20))
     except Exception as exc:
         logger.debug("Could not list threads: %s", exc)
@@ -260,16 +253,17 @@ async def _approve_pending_subrun_mcp_calls(
     for t in recent_threads:
         t_id = getattr(t, "id", None)
         if not t_id or t_id == thread_id:
-            continue  # Skip the main orchestrator thread
+            continue
 
-        # Only check threads created around the same time as the main run (within 5 min)
         t_created = getattr(t, "created_at", 0)
         if hasattr(t_created, "timestamp"):
             t_created = int(t_created.timestamp())
-        if main_run_created_at and t_created < main_run_created_at - 5:
-            break  # Threads are ordered newest-first; stop if older than run
+        else:
+            t_created = int(t_created) if t_created else 0
 
-        # Check runs on this thread for pending approval from domain agents
+        if main_run_created_at and t_created < main_run_created_at - 5:
+            break
+
         try:
             runs = list(client.runs.list(thread_id=t_id))
         except Exception:
@@ -281,7 +275,6 @@ async def _approve_pending_subrun_mcp_calls(
             if sub_status != "requires_action":
                 continue
 
-            # Only handle runs from known domain agents
             sub_agent_id = getattr(sub_run, "assistant_id", "")
             if sub_agent_id not in domain_agent_ids:
                 continue
@@ -291,17 +284,42 @@ async def _approve_pending_subrun_mcp_calls(
                 continue
 
             ra_type = str(getattr(required_action, "type", ""))
-            if ra_type == "submit_tool_approval":
-                tool_calls_to_approve = getattr(
-                    required_action.submit_tool_approval, "tool_calls", []  # type: ignore
+            if ra_type != "submit_tool_approval":
+                continue
+
+            tool_calls_to_approve = getattr(
+                required_action.submit_tool_approval, "tool_calls", []  # type: ignore
+            )
+            approvals = [{"tool_call_id": tc.id, "approve": True} for tc in tool_calls_to_approve]
+            logger.info(
+                "Approving %d MCP tool call(s) for sub-run %s/%s (agent=%s)",
+                len(approvals), t_id, sub_run.id, sub_agent_id,
+            )
+            try:
+                _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
+                _url = (
+                    f"{endpoint}/threads/{t_id}/runs/{sub_run.id}"
+                    "/submit_tool_outputs?api-version=2025-05-15-preview"
                 )
-                logger.info(
-                    "Approving %d MCP tool call(s) for domain sub-run %s/%s (agent=%s)",
-                    len(tool_calls_to_approve), t_id, sub_run.id, sub_agent_id,
+                _resp = _requests.post(
+                    _url,
+                    headers={
+                        "Authorization": f"Bearer {_token.token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"tool_approvals": approvals},
+                    timeout=10,
                 )
-                await _submit_mcp_approval(
-                    endpoint, t_id, sub_run.id, tool_calls_to_approve
-                )
+                if _resp.status_code in (200, 201):
+                    logger.info("✅ Approved MCP call for sub-run %s", sub_run.id)
+                else:
+                    logger.warning(
+                        "Failed to approve sub-run %s: %s %s",
+                        sub_run.id, _resp.status_code, _resp.text[:200],
+                    )
+            except Exception as exc:
+                logger.warning("Exception approving sub-run %s: %s", sub_run.id, exc)
+
 
 
 async def get_chat_result(
@@ -406,16 +424,9 @@ async def get_chat_result(
                 logger.warning("Failed to submit tool outputs: %s", exc)
 
     # Return non-terminal status immediately — caller polls again.
-    # But first: if in_progress, check for domain-agent sub-runs needing
-    # MCP tool approval (submit_tool_approval on connected_agent sub-runs).
+    # Sub-run MCP approval is handled by the endpoint in main.py via
+    # FastAPI background_tasks (runs after response, never blocks here).
     if run_status not in terminal:
-        endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
-            "FOUNDRY_ACCOUNT_ENDPOINT", ""
-        )
-        try:
-            await _approve_pending_subrun_mcp_calls(client, endpoint, thread_id, latest_run.id)
-        except Exception as exc:
-            logger.warning("Failed to handle sub-run approvals: %s", exc)
         return {"thread_id": thread_id, "run_status": run_status, "reply": None}
 
     reply = None
