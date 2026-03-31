@@ -21,6 +21,8 @@ progress:
 
 > Last updated: 2026-03-31 — Plan 09-03 COMPLETE: Chat Components. ChatBubble (prose prose-sm prose-zinc, bg-primary/10 badge, bg-foreground cursor, mt-1 timestamp), UserBubble (rounded-lg p-3 mb-2 opacity-70 mt-1), ThinkingIndicator (already spec-exact), ChatInput (already spec-exact), ProposalCard (Dialog import consolidated to single line, all timer/approval logic preserved), ChatPanel (removed w-full from messages div, critical scroll layout intact: absolute inset-0 outer + ScrollArea flex-1 min-h-0 + shrink-0 grow-0 input, all SSE streaming + approval logic preserved byte-for-byte). All 6 tasks verified.
 
+> Last updated: 2026-03-31 — Completed quick task 260331-k6y: Resolved both chat blockers. ORCHESTRATOR_AGENT_ID=asst_NeBVjCA5isNrIERoGYzRpBTu set on ca-api-gateway-prod (revision 0000030, healthy). Azure AI Developer RBAC granted to gateway MI 69e05934-... on Foundry scope (role assignment 6a001d6b-...). Both fixes wired in Terraform (terraform.tfvars + rbac module). Phase 8 F-01 CLOSED. Gateway /health returns 200 ok, startup logs clean.
+
 > Last updated: 2026-03-31 — Completed quick task 260331-ize: Fixed orchestrator domain agent routing. All 8 connected_agent tools registered on Foundry orchestrator (asst_NeBVjCA5isNrIERoGYzRpBTu): compute, network, storage, security, sre, arc, patch, eol. All 8 *_AGENT_ID + ORCHESTRATOR_AGENT_ID env vars set on ca-orchestrator-prod. EOL entry added to update-domain-agent-prompts.py AGENT_MAP.
 
 > Last updated: 2026-03-31 — Completed quick task 260331-ghg: Provision EOL agent in Foundry (asst_s1TancOQbpIjltYQ0oGgfTDD), EOL_AGENT_ID set on ca-orchestrator-prod
@@ -244,6 +246,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260331-chg | Deploy Arc MCP Server to Container Apps and wire ARC_MCP_SERVER_URL to ca-arc-prod | 2026-03-31 | 06a2ae0 | [260331-chg-deploy-arc-mcp-server-to-container-apps-](./quick/260331-chg-deploy-arc-mcp-server-to-container-apps-/) |
 | 260331-ghg | Provision EOL agent in Foundry by adding it to provision-domain-agents.py and running provisioning | 2026-03-31 | a100a28 | [260331-ghg-provision-eol-agent-in-foundry-by-adding](./quick/260331-ghg-provision-eol-agent-in-foundry-by-adding/) |
 | 260331-ize | Fix orchestrator domain agent routing — register all 8 connected_agent tools on Foundry orchestrator (asst_NeBVjCA5isNrIERoGYzRpBTu), set *_AGENT_ID + ORCHESTRATOR_AGENT_ID env vars on ca-orchestrator-prod | 2026-03-31 | d9a58b5 | [260331-ize-fix-orchestrator-domain-agent-routing-re](./quick/260331-ize-fix-orchestrator-domain-agent-routing-re/) |
+| 260331-k6y | Fix API gateway prod blockers: set ORCHESTRATOR_AGENT_ID on ca-api-gateway-prod (revision 0000030) + grant Azure AI Developer RBAC to gateway MI on Foundry scope. Phase 8 F-01 CLOSED. | 2026-03-31 | dc3930a | [260331-k6y-fix-api-gateway-prod-blocker-set-orchest](./quick/260331-k6y-fix-api-gateway-prod-blocker-set-orchest/) |
 
 ---
 
