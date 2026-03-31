@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-03-31 — Plan 09-04 COMPLETE: Dashboard Components. All 8 dashboard components migrated to Tailwind + shadcn/ui: DashboardPanel (shadcn Tabs + Bell/ClipboardList/Network/Server/Activity lucide icons), AlertFeed (shadcn Table + 5s polling, SeverityBadge destructive/outline), AlertFilters (3× shadcn Select, flex gap-2 items-center flex-wrap), AuditLogViewer (shadcn Table + "Export Report" Button + Input filter, flex flex-col gap-2 h-full), SubscriptionSelector (Popover+Command+Checkbox multiselect, w-[280px], fetch('/api/subscriptions'), onLoad auto-select, "Showing results for"), TraceTree (shadcn Collapsible, border-t border-border max-h-[200px], font-mono text-[12px] JSON block), TopologyTab (Collapsible tree hierarchy, Skeleton, Search input), ResourcesTab (shadcn Table + Select type filter + Input search, 30+ type labels). Zero @fluentui/makeStyles/tokens/DataGrid/Dropdown/Combobox/TabList remnants. All business logic preserved.
+
 > Last updated: 2026-03-31 — Plan 09-05 COMPLETE: Observability Components. All 7 files migrated to Tailwind + shadcn/ui: MetricCard (health-colored left border border-l-green/yellow/red-500, shadcn Badge), TimeRangeSelector (shadcn Select, 1h/6h/24h/7d, w-[120px]), ObservabilityTab (POLL_INTERVAL_MS=30000 polling preserved, shadcn Skeleton + Alert, Activity lucide empty state), AgentLatencyCard + PipelineLagCard + ApprovalQueueCard + ActiveErrorsCard (all using MetricCard wrapper, font-mono text-[13px] values, health calculations intact). Zero @fluentui/makeStyles/tokens/MessageBar/Dropdown remnants.
 
 > Last updated: 2026-03-31 — Plan 09-03 COMPLETE: Chat Components. ChatBubble (prose prose-sm prose-zinc, bg-primary/10 badge, bg-foreground cursor, mt-1 timestamp), UserBubble (rounded-lg p-3 mb-2 opacity-70 mt-1), ThinkingIndicator (already spec-exact), ChatInput (already spec-exact), ProposalCard (Dialog import consolidated to single line, all timer/approval logic preserved), ChatPanel (removed w-full from messages div, critical scroll layout intact: absolute inset-0 outer + ScrollArea flex-1 min-h-0 + shrink-0 grow-0 input, all SSE streaming + approval logic preserved byte-for-byte). All 6 tasks verified.
@@ -41,7 +43,7 @@ progress:
 
 ## Current Phase
 
-**Phase 9: Web UI Revamp — In Progress (4/6 plans complete)**
+**Phase 9: Web UI Revamp — In Progress (5/6 plans complete)**
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
@@ -49,9 +51,11 @@ Plan 09-02 complete: Layout Foundation. Root layout uses Inter font via `next/fo
 
 Plan 09-03 complete: Chat Components. ChatBubble rebuilt with `prose prose-sm prose-zinc max-w-none` content, `bg-primary/10` agent badge, `bg-foreground` blink cursor, `mt-1` timestamp. UserBubble aligned to `rounded-lg p-3 mb-2 shadow-sm`, `opacity-70 mt-1`. ThinkingIndicator and ChatInput were already spec-exact. ProposalCard Dialog import consolidated to single line, all timer/approval logic preserved. ChatPanel: removed `w-full` from messages container div — critical scroll layout intact (`absolute inset-0` outer, `ScrollArea flex-1 min-h-0`, `shrink-0 grow-0` input footer). All SSE streaming + approval logic preserved byte-for-byte.
 
+Plan 09-04 complete: Dashboard Components. All 8 dashboard panel components migrated to Tailwind + shadcn/ui with all business logic preserved. DashboardPanel uses shadcn Tabs with lucide icons. AlertFeed uses shadcn Table with 5s polling + SeverityBadge. AlertFilters uses 3× shadcn Select. AuditLogViewer uses shadcn Table + "Export Report" Button + Input filter. SubscriptionSelector uses Popover+Command+Checkbox multiselect with auto-select onLoad and fetch('/api/subscriptions'). TraceTree uses shadcn Collapsible with JSON payload expand per event. TopologyTab uses Collapsible tree with subscription→RG→resource hierarchy + search + Skeleton. ResourcesTab uses shadcn Table + type Select filter + search Input.
+
 Plan 09-05 complete: Observability Components. All 7 observability files migrated to Tailwind + shadcn/ui. MetricCard uses border-l-[3px] health borders (green/yellow/red-500) with shadcn Badge. TimeRangeSelector uses shadcn Select with 4 time range options. ObservabilityTab preserves POLL_INTERVAL_MS=30000 polling, uses shadcn Skeleton + Alert, Activity lucide empty state. AgentLatencyCard, PipelineLagCard, ApprovalQueueCard, ActiveErrorsCard all use MetricCard wrapper with font-mono text-[13px] values and health calculations intact. Zero Fluent remnants.
 
-Plans 09-04 and 09-06 remain pending.
+Plans 09-06 remains pending.
 
 Parallel status:
 
@@ -107,7 +111,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
-| 9 | Web UI Revamp | In Progress (2/6 plans) |
+| 9 | Web UI Revamp | In Progress (5/6 plans) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
