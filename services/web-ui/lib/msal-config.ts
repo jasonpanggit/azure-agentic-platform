@@ -25,8 +25,13 @@ export const msalConfig: Configuration = {
 };
 
 // Standard OIDC scopes — no custom api:// scopes required for login.
-// To call the API gateway with a token, acquire a token silently with
-// api://<gateway-client-id>/incidents.read after login.
 export const loginRequest = {
   scopes: ['openid', 'profile', 'email'],
+};
+
+// Scope for acquiring a token to call the API gateway.
+// The gateway validates tokens issued for this scope.
+const gatewayClientId = process.env.NEXT_PUBLIC_AZURE_CLIENT_ID || '';
+export const gatewayTokenRequest = {
+  scopes: [`api://${gatewayClientId}/incidents.write`],
 };
