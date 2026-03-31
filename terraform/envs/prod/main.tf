@@ -293,8 +293,6 @@ module "entra_apps" {
   keyvault_id       = module.keyvault.keyvault_id
 }
 
-<<<<<<< Updated upstream
-=======
 # --- Teams Bot (depends on: keyvault, agent-apps) ---
 # Creates the Azure Bot service resource and bot app registration.
 # The teams-bot Container App stays in module.agent_apps.
@@ -318,7 +316,6 @@ module "teams_bot" {
   teams_bot_fqdn      = module.agent_apps.teams_bot_fqdn
 }
 
->>>>>>> Stashed changes
 # --- Activity Log Export (depends on: monitoring) ---
 # AUDIT-003: Export Activity Log from all subscriptions to Log Analytics.
 
