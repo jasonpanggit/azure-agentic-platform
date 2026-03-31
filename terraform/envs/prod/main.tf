@@ -56,6 +56,35 @@ module "foundry" {
   model_capacity = 100
 }
 
+# --- Agent Managed Identity Principal IDs (for Cosmos data-plane RBAC) ---
+# Cannot use module.agent_apps.agent_principal_ids here — that would create a circular
+# dependency (agent_apps depends on databases). Data sources also fail because the
+# container apps are managed resources in this same root (identity = known after apply).
+#
+# Instead, use a static map of principal IDs sourced from:
+#   az containerapp show --name <app> --resource-group rg-aap-prod --query identity.principalId
+# These GUIDs are stable for the lifetime of each Container App (tied to system-assigned MI).
+# Update this map only if a Container App is destroyed and recreated.
+locals {
+  # System-assigned managed identity principal IDs for each agent Container App.
+  # Sourced on 2026-03-31 via: az containerapp show --name ca-<agent>-prod \
+  #   --resource-group rg-aap-prod --query identity.principalId -o tsv
+  # These GUIDs are stable for the lifetime of each Container App (tied to system-assigned MI).
+  # Update this map only if a Container App is destroyed and recreated.
+  agent_cosmos_principal_ids = {
+    "orchestrator" = "f4d7eea6-a1c9-4681-b2a2-08e32f9fe0da"
+    "compute"      = "d8265243-d45a-4eda-a53f-56d201778536"
+    "network"      = "c33a0182-a482-4842-8342-d1f7eab40e55"
+    "storage"      = "9dd99cd2-45ba-47b4-aa27-3999bc85421c"
+    "security"     = "f88d69e6-59b1-4d38-b0c8-4b5f890dc1dd"
+    "arc"          = "7649f118-c7ee-42f1-8508-428e301ccb07"
+    "sre"          = "cfb2fa91-678f-4b87-8250-617a8cc78ce8"
+    "patch"        = "705c97ae-c77b-4f6f-ac28-05d432b09547"
+    "eol"          = "76e4e593-861c-4c6c-b3f8-511269b4e893"
+    "api-gateway"  = "69e05934-1feb-44d4-8fd2-30373f83ccec"
+  }
+}
+
 # --- Databases (depends on: networking) ---
 
 module "databases" {
@@ -82,6 +111,8 @@ module "databases" {
 
   # NOTE (ISSUE-01): No private_endpoint_subnet_id or private_dns_zone_cosmos_id
   # passed here. Cosmos DB PE is created by module.private_endpoints below.
+
+  agent_principal_ids = local.agent_cosmos_principal_ids
 }
 
 # --- Compute Environment (depends on: networking, monitoring) ---

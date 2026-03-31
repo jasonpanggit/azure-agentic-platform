@@ -147,3 +147,20 @@ resource "azurerm_cosmosdb_sql_container" "sessions" {
 
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
+
+# Cosmos DB data-plane RBAC — Built-in Data Contributor for all agent MIs
+# local_authentication_disabled = true means all data access requires data-plane RBAC.
+# ARM role "Cosmos DB Operator" (assigned by rbac module) is control-plane only.
+# This resource manages the data-plane role assignments that allow document read/write.
+#
+# Built-in role ID 00000000-0000-0000-0000-000000000002 = Cosmos DB Built-in Data Contributor
+# Scope = Cosmos account (not database or container level, matching what was done manually)
+resource "azurerm_cosmosdb_sql_role_assignment" "data_contributor" {
+  for_each = var.agent_principal_ids
+
+  resource_group_name = var.resource_group_name
+  account_name        = azurerm_cosmosdb_account.main.name
+  role_definition_id  = "${azurerm_cosmosdb_account.main.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
+  principal_id        = each.value
+  scope               = azurerm_cosmosdb_account.main.id
+}

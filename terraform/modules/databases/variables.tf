@@ -87,3 +87,9 @@ variable "tenant_id" {
   description = "Entra tenant ID for PostgreSQL Entra auth"
   type        = string
 }
+
+variable "agent_principal_ids" {
+  description = "Map of agent name to managed identity principal ID for Cosmos data-plane RBAC"
+  type        = map(string)
+  default     = {}
+}
