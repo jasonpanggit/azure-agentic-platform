@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { MessageSquare, X } from 'lucide-react'
+import { useMsal } from '@azure/msal-react'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useSSE, SSEEvent } from '@/lib/use-sse'
 import { useAppState } from '@/lib/app-state-context'
+import { gatewayTokenRequest } from '@/lib/msal-config'
 import type { ApprovalGateTracePayload } from '@/types/sse'
 import { ChatBubble } from './ChatBubble'
 import { UserBubble } from './UserBubble'
@@ -23,6 +26,7 @@ const QUICK_EXAMPLES = [
 ]
 
 export function ChatDrawer() {
+  const { instance, accounts } = useMsal()
   const {
     drawerOpen, setDrawerOpen,
     messages, setMessages,
@@ -34,6 +38,21 @@ export function ChatDrawer() {
     input, setInput,
     selectedSubscriptions,
   } = useAppState()
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const account = accounts[0]
+    if (!account) return null
+    try {
+      const result = await instance.acquireTokenSilent({ ...gatewayTokenRequest, account })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        // Token expired or consent needed — redirect to login
+        await instance.acquireTokenRedirect({ ...gatewayTokenRequest, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -120,9 +139,13 @@ export function ChatDrawer() {
     }])
     setIsStreaming(true)
     try {
+      const token = await getAccessToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/proxy/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ message, thread_id: threadId, subscription_ids: selectedSubscriptions }),
       })
       if (res.ok) {
@@ -154,7 +177,7 @@ export function ChatDrawer() {
         timestamp: new Date().toLocaleTimeString(),
       }])
     }
-  }, [input, isStreaming, threadId, selectedSubscriptions, setInput, setMessages, setIsStreaming, setRunId, setThreadId, setRunKey])
+  }, [input, isStreaming, threadId, selectedSubscriptions, getAccessToken, setInput, setMessages, setIsStreaming, setRunId, setThreadId, setRunKey])
 
   // ── Approvals ──
   const handleApprove = useCallback(async (approvalId: string) => {
