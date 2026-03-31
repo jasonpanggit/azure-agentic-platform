@@ -30,16 +30,16 @@
   /* Animations */
   --animate-blink-cursor: blink-cursor 1.06s step-end infinite;
   --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+}
 
-  @keyframes blink-cursor {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
-  @keyframes pulse-dot {
-    0%, 80%, 100% { opacity: 0; }
-    40% { opacity: 1; }
-  }
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0; }
+  40% { opacity: 1; }
 }
 
 @layer base {
