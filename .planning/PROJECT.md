@@ -15,7 +15,7 @@
 
 ## What This Is
 
-An enterprise-grade AI operations platform that uses a domain-specialist multi-agent architecture to perform continuous monitoring, auditing, alerting, triage, troubleshooting, and automated remediation across all Azure subscriptions and Arc-enabled resources (servers, Kubernetes, data services). The platform exposes a hybrid web UI (Fluent UI 2 + Next.js) with co-equal conversational chat and live operational dashboards, and integrates with Microsoft Teams for two-way agent interaction, alert delivery, and human-in-the-loop remediation approvals.
+An enterprise-grade AI operations platform that uses a domain-specialist multi-agent architecture to perform continuous monitoring, auditing, alerting, triage, troubleshooting, and automated remediation across all Azure subscriptions and Arc-enabled resources (servers, Kubernetes, data services). The platform exposes a hybrid web UI (Tailwind CSS + shadcn/ui + Next.js) with co-equal conversational chat and live operational dashboards, and integrates with Microsoft Teams for two-way agent interaction, alert delivery, and human-in-the-loop remediation approvals.
 
 ## Core Value
 
@@ -58,15 +58,16 @@ Operators can understand, investigate, and resolve any Azure infrastructure issu
 - [ ] OneLake as the central store for audit logs, alert history, and resource inventory snapshots
 - [ ] Fabric Real-Time Intelligence pipeline: Event Hub → Eventhouse → Activator → Agent Platform
 
-**Web UI (Fluent UI 2 + Next.js)**
-- [ ] Hybrid split-pane: left = conversational agent chat, right = live resource topology/dashboard
-- [ ] Full token streaming for conversational responses (sub-second first token)
-- [ ] Parallel structured event stream for agent trace: shows every agent-to-agent message, tool call, and response in JSON
-- [ ] Agent communication visualizer: expandable JSON tree showing input/output between agents
-- [ ] Multi-subscription resource topology map with health status overlays
-- [ ] Alert/incident feed with triage status and assigned agent
-- [ ] Remediation proposal cards: proposed action + estimated impact + approve/reject buttons
-- [ ] Audit log viewer with full agent decision trail
+**Web UI (Tailwind CSS + shadcn/ui + Next.js)** — Validated in Phase 9: Web UI Revamp
+- [x] Hybrid split-pane: left = conversational agent chat, right = live resource topology/dashboard — Validated in Phase 9
+- [x] Full token streaming for conversational responses (sub-second first token) — SSE logic preserved in Phase 9
+- [x] Parallel structured event stream for agent trace: shows every agent-to-agent message, tool call, and response in JSON — Validated in Phase 9
+- [x] Agent communication visualizer: expandable JSON tree showing input/output between agents — Validated in Phase 9
+- [x] Multi-subscription resource topology map with health status overlays — Validated in Phase 9
+- [x] Alert/incident feed with triage status and assigned agent — Validated in Phase 9
+- [x] Remediation proposal cards: proposed action + estimated impact + approve/reject buttons — Validated in Phase 9
+- [x] Audit log viewer with full agent decision trail — Validated in Phase 9
+- [x] Fluent UI / Griffel fully replaced with Tailwind CSS v4 + shadcn/ui — Validated in Phase 9
 
 **Teams Integration** — Validated in Phase 6: Teams Integration
 - [x] Full two-way Teams bot: users can chat with agents, run investigations, approve/reject remediation
