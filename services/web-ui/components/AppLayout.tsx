@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   PanelGroup,
   Panel,
@@ -9,10 +9,10 @@ import {
 import { SubscriptionSelector } from './SubscriptionSelector';
 import { ChatPanel } from './ChatPanel';
 import { DashboardPanel } from './DashboardPanel';
+import { useAppState } from '@/lib/app-state-context';
 
 export function AppLayout() {
-  const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([]);
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
+  const { selectedSubscriptions, setSelectedSubscriptions } = useAppState();
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -52,10 +52,7 @@ export function AppLayout() {
             minSize={40}
             className="overflow-hidden flex flex-col bg-muted h-full"
           >
-            <DashboardPanel
-              subscriptions={selectedSubscriptions}
-              selectedIncidentId={selectedIncidentId}
-            />
+            <DashboardPanel />
           </Panel>
         </PanelGroup>
       </div>
