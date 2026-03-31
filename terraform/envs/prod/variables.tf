@@ -169,3 +169,9 @@ variable "enable_entra_apps" {
   type        = bool
   default     = false
 }
+
+variable "enable_teams_bot" {
+  description = "Enable Teams Bot module (creates Azure Bot resource + Entra app registration). Requires Microsoft Graph Application.ReadWrite.All on the Terraform SP and import blocks for the existing aap-teams-bot-prod bot resource."
+  type        = bool
+  default     = false
+}

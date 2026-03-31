@@ -244,8 +244,10 @@ module "agent_apps" {
   image_tag             = "latest"
 
   # Teams Bot specific configuration
-  teams_bot_id             = var.teams_bot_id
-  teams_bot_password       = var.teams_bot_password
+  # When enable_teams_bot = true, bot credentials flow from module.teams_bot[0].
+  # When enable_teams_bot = false (default), fall back to manual var.teams_bot_id / var.teams_bot_password.
+  teams_bot_id             = var.enable_teams_bot ? module.teams_bot[0].bot_id : var.teams_bot_id
+  teams_bot_password       = var.enable_teams_bot ? module.teams_bot[0].bot_password : var.teams_bot_password
   teams_bot_tenant_id      = var.teams_bot_tenant_id != "" ? var.teams_bot_tenant_id : var.tenant_id
   api_gateway_internal_url = "https://${module.compute_env.acr_login_server != "" ? "ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io" : ""}"
   web_ui_public_url        = var.web_ui_public_url
@@ -322,6 +324,30 @@ module "entra_apps" {
   environment       = var.environment
   web_ui_public_url = var.web_ui_public_url
   keyvault_id       = module.keyvault.keyvault_id
+}
+
+# --- Teams Bot (depends on: keyvault, agent-apps) ---
+# Creates the Azure Bot service resource and bot app registration.
+# The teams-bot Container App stays in module.agent_apps.
+# Gate behind enable_teams_bot until bot registration credentials are ready
+# and import blocks for the existing aap-teams-bot-prod resource are in place.
+#
+# Pre-requisites before enabling:
+#   1. Grant Terraform SP: Microsoft Graph Application.ReadWrite.All
+#   2. Uncomment import blocks in terraform/modules/teams-bot/main.tf
+#   3. Set enable_teams_bot = true in terraform.tfvars
+
+module "teams_bot" {
+  count  = var.enable_teams_bot ? 1 : 0
+  source = "../../modules/teams-bot"
+
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+  environment         = var.environment
+  required_tags       = local.required_tags
+  tenant_id           = var.tenant_id
+  keyvault_id         = module.keyvault.keyvault_id
+  teams_bot_fqdn      = module.agent_apps.teams_bot_fqdn
 }
 
 # --- Activity Log Export (depends on: monitoring) ---
