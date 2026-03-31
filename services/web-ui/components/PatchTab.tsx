@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MetricCard, HealthStatus } from './MetricCard';
 import { ShieldCheck, RefreshCw, Search } from 'lucide-react';
+import { formatRelativeTime } from '@/lib/format-relative-time';
 
 // ---------------------------------------------------------------------------
 // Types (per 13-UI-SPEC.md Data Flow section)
@@ -92,23 +93,6 @@ function extractMachineName(resourceId: string): string {
   return parts[parts.length - 1] ?? resourceId;
 }
 
-function formatRelativeTime(isoStr: string): string {
-  const now = Date.now();
-  const then = new Date(isoStr).getTime();
-  const diffMs = now - then;
-
-  if (isNaN(then)) return isoStr;
-
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 function complianceHealth(compliantPct: number): HealthStatus {
   if (compliantPct >= 90) return 'healthy';
