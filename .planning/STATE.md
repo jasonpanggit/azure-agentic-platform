@@ -3,15 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-31T01:00:13.571Z"
+last_updated: "2026-03-31T02:00:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 41
-  completed_plans: 33
+  completed_plans: 34
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-03-31 — Plan 09-05 COMPLETE: Observability Components. All 7 files migrated to Tailwind + shadcn/ui: MetricCard (health-colored left border border-l-green/yellow/red-500, shadcn Badge), TimeRangeSelector (shadcn Select, 1h/6h/24h/7d, w-[120px]), ObservabilityTab (POLL_INTERVAL_MS=30000 polling preserved, shadcn Skeleton + Alert, Activity lucide empty state), AgentLatencyCard + PipelineLagCard + ApprovalQueueCard + ActiveErrorsCard (all using MetricCard wrapper, font-mono text-[13px] values, health calculations intact). Zero @fluentui/makeStyles/tokens/MessageBar/Dropdown remnants.
 
 > Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
 
@@ -37,13 +39,15 @@ progress:
 
 ## Current Phase
 
-**Phase 9: Web UI Revamp — In Progress (2/6 plans complete)**
+**Phase 9: Web UI Revamp — In Progress (3/6 plans complete)**
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
 Plan 09-02 complete: Layout Foundation. Root layout uses Inter font via `next/font/google` with `--font-inter` CSS variable. `FluentProvider` fully removed from `providers.tsx` — all MSAL logic preserved (initialize, handleRedirectPromise, 5000ms timeout race). `next.config.ts` cleaned of transpilePackages. `DesktopOnlyGate` rebuilt with shadcn `Alert` + lucide `Monitor` icon. `AuthenticatedApp` rebuilt with shadcn `Button` + Tailwind login page. `AppLayout` rebuilt with `react-resizable-panels` and exact UI-SPEC Tailwind classes (bg-background top bar, bg-background chat panel, w-2 border-l resize handle).
 
-Plans 09-03 through 09-06 remain pending.
+Plan 09-05 complete: Observability Components. All 7 observability files migrated to Tailwind + shadcn/ui. MetricCard uses border-l-[3px] health borders (green/yellow/red-500) with shadcn Badge. TimeRangeSelector uses shadcn Select with 4 time range options. ObservabilityTab preserves POLL_INTERVAL_MS=30000 polling, uses shadcn Skeleton + Alert, Activity lucide empty state. AgentLatencyCard, PipelineLagCard, ApprovalQueueCard, ActiveErrorsCard all use MetricCard wrapper with font-mono text-[13px] values and health calculations intact. Zero Fluent remnants.
+
+Plans 09-03, 09-04, and 09-06 remain pending.
 
 Parallel status:
 
