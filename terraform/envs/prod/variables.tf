@@ -99,6 +99,12 @@ variable "teams_bot_password" {
   default     = ""
 }
 
+variable "teams_bot_tenant_id" {
+  description = "Entra tenant ID for SingleTenant bot authentication (BOT_TENANT_ID)"
+  type        = string
+  default     = ""
+}
+
 variable "web_ui_public_url" {
   description = "Public URL of the web UI for deep links in Teams Adaptive Cards"
   type        = string

@@ -17,6 +17,7 @@
     "short": "AI-powered infrastructure operations assistant",
     "full": "Investigate incidents, approve remediations, and monitor Azure infrastructure health across all subscriptions and Arc-enabled resources. Part of the Azure Agentic Platform."
   },
+  "accentColor": "#0078D4",
   "icons": {
     "outline": "outline.png",
     "color": "color.png"

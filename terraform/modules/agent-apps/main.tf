@@ -313,6 +313,10 @@ resource "azurerm_container_app" "teams_bot" {
         value = var.teams_bot_id
       }
       env {
+        name  = "BOT_TENANT_ID"
+        value = var.teams_bot_tenant_id
+      }
+      env {
         name        = "BOT_PASSWORD"
         secret_name = "teams-bot-password"
       }
@@ -366,8 +370,8 @@ resource "azurerm_container_app" "teams_bot" {
   # AGENT_ENTRA_ID is no longer set inline (was causing self-referential error) — agents
   # now auto-discover their own principal_id at runtime from the IMDS token.
   # Secret values (BOT_PASSWORD) are managed out-of-band via `az containerapp secret set`.
-  # ⚠️  IMPORTANT: Manually-set env vars (e.g. BOT_ID, BOT_TENANT_ID) will be wiped on
-  # `terraform apply` unless also set in terraform.tfvars (var.bot_id etc.).
+  # BOT_ID, BOT_TENANT_ID, and TEAMS_CHANNEL_ID are managed via Terraform variables
+  # (teams_bot_id, teams_bot_tenant_id, teams_channel_id) in credentials.tfvars.
   # Runtime image revisions are still ignored — CI/CD owns the image tag.
   lifecycle {
     ignore_changes = [

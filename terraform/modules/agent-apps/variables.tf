@@ -150,6 +150,12 @@ variable "teams_bot_password" {
   default     = ""
 }
 
+variable "teams_bot_tenant_id" {
+  description = "Entra tenant ID for SingleTenant bot authentication (BOT_TENANT_ID)"
+  type        = string
+  default     = ""
+}
+
 variable "api_gateway_internal_url" {
   description = "Internal URL for the api-gateway service used by the teams-bot (API_GATEWAY_INTERNAL_URL)"
   type        = string

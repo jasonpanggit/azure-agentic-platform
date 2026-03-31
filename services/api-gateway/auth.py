@@ -32,8 +32,11 @@ class EntraTokenValidator:
 
     def __init__(self) -> None:
         self._auth_mode = _read_auth_mode()
-        self._client_id = os.environ.get("AZURE_CLIENT_ID")
-        self._tenant_id = os.environ.get("AZURE_TENANT_ID")
+        # Use API_GATEWAY_CLIENT_ID to avoid conflicting with DefaultAzureCredential,
+        # which reserves AZURE_CLIENT_ID for user-assigned managed identity selection.
+        # Falls back to AZURE_CLIENT_ID for backward compatibility.
+        self._client_id = os.environ.get("API_GATEWAY_CLIENT_ID") or os.environ.get("AZURE_CLIENT_ID")
+        self._tenant_id = os.environ.get("API_GATEWAY_TENANT_ID") or os.environ.get("AZURE_TENANT_ID")
         self._validator = None
         self._configuration_error: Optional[str] = None
 
