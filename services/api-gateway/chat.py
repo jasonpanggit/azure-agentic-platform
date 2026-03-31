@@ -38,8 +38,15 @@ def _build_operator_query_envelope(
         "classification_reason": classification["reason"],
     }
 
-    if request.subscription_ids:
-        payload["subscription_ids"] = request.subscription_ids
+    # Use provided subscription IDs, or fall back to the platform default subscription
+    # so the orchestrator always has subscription context without asking the operator.
+    subscription_ids = request.subscription_ids or []
+    if not subscription_ids:
+        default_sub = os.environ.get("DEFAULT_SUBSCRIPTION_ID")
+        if default_sub:
+            subscription_ids = [default_sub]
+    if subscription_ids:
+        payload["subscription_ids"] = subscription_ids
 
     envelope = {
         "correlation_id": request.incident_id or thread_id,
