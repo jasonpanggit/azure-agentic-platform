@@ -109,7 +109,29 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
 
     if thread_id:
         # Continue existing thread (TEAMS-004)
+        # Cancel any active runs first — Foundry rejects new messages on a thread
+        # that has an in-progress run (raises HttpResponseError).
         logger.info("Continuing thread %s for user %s", thread_id, effective_user_id)
+        try:
+            runs = list(client.runs.list(thread_id=thread_id))
+            active_statuses = {"queued", "in_progress", "requires_action", "cancelling"}
+            for run in runs:
+                if run.status in active_statuses:
+                    logger.info(
+                        "Cancelling active run %s (status=%s) on thread %s",
+                        run.id,
+                        run.status,
+                        thread_id,
+                    )
+                    try:
+                        client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                    except Exception as cancel_exc:
+                        logger.warning("Failed to cancel run %s: %s", run.id, cancel_exc)
+            # Brief wait for cancellation to propagate
+            if runs and any(r.status in active_statuses for r in runs):
+                await asyncio.sleep(1)
+        except Exception as list_exc:
+            logger.warning("Failed to list/cancel runs for thread %s: %s", thread_id, list_exc)
     else:
         # Create new thread
         with foundry_span("create_thread") as span:
