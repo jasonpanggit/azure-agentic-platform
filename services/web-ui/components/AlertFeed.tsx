@@ -46,8 +46,10 @@ function SeverityBadge({ severity }: { severity: string }) {
 export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchIncidents = useCallback(async () => {
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (subscriptions.length > 0) {
@@ -60,14 +62,20 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
       const res = await fetch(`/api/proxy/incidents?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setIncidents(data);
+        if (Array.isArray(data)) {
+          setIncidents(data);
+        } else {
+          setError('Unexpected response format from server');
+        }
+      } else {
+        setError(`Failed to fetch alerts: ${res.status}`);
       }
     } catch {
       // Polling failure — retry on next interval
     } finally {
       setLoading(false);
     }
-  }, [subscriptions, filters]);
+  }, [subscriptions, filters.severity, filters.domain, filters.status]);
 
   useEffect(() => {
     fetchIncidents();
@@ -81,6 +89,15 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-6 text-sm" style={{ color: 'var(--accent-red)' }}>
+        <span>⚠</span>
+        <span>{error}</span>
       </div>
     );
   }
