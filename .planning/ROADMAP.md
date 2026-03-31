@@ -462,15 +462,15 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd:plan-phase 12 to break down)
 
-### Phase 13: add a new patch management tab and show all the patch related information
+### Phase 13: Patch Management Tab
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 12
-**Plans:** 0 plans
+**Goal:** Add a Patch Management tab to the web UI dashboard showing per-machine compliance data and installation history from Azure Update Manager via Azure Resource Graph.
+**Requirements**: UI-002 (extended), D-01 through D-16 (phase-specific)
+**Depends on:** Phase 11 (Patch Domain Agent), Phase 9 (Web UI Revamp)
+**Status:** ✅ Complete (2026-03-31) — 1/1 plan, 5 tasks, 15 unit tests, tsc passes
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 13 to break down)
+- [x] 13-01 Patch Management Tab — Full Stack Implementation
 
 ---
 

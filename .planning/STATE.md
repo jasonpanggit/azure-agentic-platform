@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-31T01:40:47.007Z"
+last_updated: "2026-03-31T17:00:00.000Z"
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 41
-  completed_plans: 34
+  total_phases: 13
+  completed_phases: 9
+  total_plans: 42
+  completed_plans: 38
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-31 — Plan 09-06 COMPLETE: Cleanup + Verification. Phase 9 Web UI Revamp fully complete (6/6 plans). Zero @fluentui/makeStyles/FluentProvider/tokens. in app/components/lib. npx tsc --noEmit exits 0 (fixed 16 TS errors: jest.MockedFunction<typeof fetch> typing + jest-globals-setup.ts for @testing-library/jest-dom @jest/globals augmentation). npm run build exits 0 (fixed Tailwind v4 PostCSS — installed @tailwindcss/postcss, replaced @apply border-border/bg-background/text-foreground with direct CSS hsl(var(--border)) in globals.css). All 8 acceptance criteria verified: scroll layout (absolute inset-0 + ScrollArea flex-1 min-h-0 + shrink-0 grow-0), CSS vars (--primary: 207 90% 42%), SSE business logic (useSSE/handleTokenEvent/handleTraceEvent/handleSubmit/handleApprove/handleReject/currentAgentRef), all 5 unchanged lib files exist.
+> Last updated: 2026-03-31 — Plan 13-01 COMPLETE (Phase 13 COMPLETE): Patch Management Tab. Full-stack implementation: 2 new API gateway endpoints (GET /api/v1/patch/assessment, GET /api/v1/patch/installations) porting KQL from agents/patch/tools.py, 15 unit tests passing, 2 Next.js proxy routes, PatchTab component (5 MetricCard summary cards, 13-column assessment table with compliance/machine filters, 8-column installation history table, empty/loading/error states), wired into DashboardPanel as 6th tab (ShieldCheck icon). npx tsc --noEmit passes, all 15 pytest tests pass. azure-mgmt-resourcegraph added to gateway requirements.
 
 > Last updated: 2026-03-31 — Plan 09-04 COMPLETE: Dashboard Components. All 8 dashboard components migrated to Tailwind + shadcn/ui: DashboardPanel (shadcn Tabs + Bell/ClipboardList/Network/Server/Activity lucide icons), AlertFeed (shadcn Table + 5s polling, SeverityBadge destructive/outline), AlertFilters (3× shadcn Select, flex gap-2 items-center flex-wrap), AuditLogViewer (shadcn Table + "Export Report" Button + Input filter, flex flex-col gap-2 h-full), SubscriptionSelector (Popover+Command+Checkbox multiselect, w-[280px], fetch('/api/subscriptions'), onLoad auto-select, "Showing results for"), TraceTree (shadcn Collapsible, border-t border-border max-h-[200px], font-mono text-[12px] JSON block), TopologyTab (Collapsible tree hierarchy, Skeleton, Search input), ResourcesTab (shadcn Table + Select type filter + Input search, 30+ type labels). Zero @fluentui/makeStyles/tokens/DataGrid/Dropdown/Combobox/TabList remnants. All business logic preserved.
 
@@ -127,6 +127,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
+| 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan, 15 unit tests, full-stack: gateway endpoints + proxy routes + PatchTab component + DashboardPanel wiring |
 
 ---
 
@@ -262,6 +263,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 - Phase 11 added: Patch Domain Agent — ARG-based patch assessment/installation agent using Azure Update Manager query-logs, wired into orchestrator routing
 - Phase 12 added: EOL Domain Agent with multi-source internet search and PostgreSQL caching
 - Phase 13 added: add a new patch management tab and show all the patch related information
+- Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
 
 ---
 
