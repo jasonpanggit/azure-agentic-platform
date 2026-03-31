@@ -106,13 +106,6 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
 
     # Determine user identity -- request.user_id takes precedence (D-07)
     effective_user_id = request.user_id or user_id
-    logger.info(
-        "create_chat_thread: user=%s thread_id=%s incident_id=%s message=%.120s",
-        effective_user_id,
-        request.thread_id or "<new>",
-        request.incident_id or "<none>",
-        request.message,
-    )
 
     # Resolve thread_id (TEAMS-004)
     thread_id = request.thread_id
@@ -177,12 +170,6 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             )
             span.set_attribute("foundry.run_id", run.id)
 
-    logger.info(
-        "create_chat_thread: dispatched | thread_id=%s run_id=%s agent_id=%s",
-        thread_id,
-        run.id,
-        orchestrator_agent_id,
-    )
     return {"thread_id": thread_id, "run_id": run.id}
 
 
@@ -255,25 +242,63 @@ async def get_chat_result(
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
         latest_run = run_list[-1]
 
-    # Status may be a string (SDK 1.2.x) or an enum with .value (older SDK)
-    _s = latest_run.status
-    run_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
-    logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+    run_status = latest_run.status
+
+    logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
     # If requires_action, auto-approve MCP tool calls so run can proceed
     if run_status == "requires_action":
         required_action = latest_run.required_action
-        if required_action is not None and hasattr(required_action, "type"):
-            endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
-                "FOUNDRY_ACCOUNT_ENDPOINT", ""
+        if (
+            required_action is not None
+            and hasattr(required_action, "type")
+            and required_action.type == "submit_tool_outputs"
+        ):
+            tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore[attr-defined]
+            tool_outputs = []
+            for tc in tool_calls:
+                fn_name = getattr(tc.function, "name", "") if hasattr(tc, "function") else ""
+                fn_args_raw = getattr(tc.function, "arguments", "{}") if hasattr(tc, "function") else "{}"
+                logger.info("Executing function tool call: %s (id=%s)", fn_name, tc.id)
+
+                if fn_name == "azure_tools":
+                    # The orchestrator MUST NOT execute Azure tools directly.
+                    # It is only allowed to classify incidents and route to domain
+                    # agents via HandoffOrchestrator. Returning an error here
+                    # forces the LLM to route to the correct domain agent instead
+                    # of answering from raw Azure data.
+                    fn_args = {}
+                    try:
+                        fn_args = json.loads(fn_args_raw)
+                    except Exception:
+                        pass
+                    tool_name = fn_args.get("tool_name", "unknown")
+                    logger.warning(
+                        "Orchestrator attempted to call azure_tools(%s) directly — blocked. "
+                        "Route to the appropriate domain agent instead.",
+                        tool_name,
+                    )
+                    output = (
+                        "ERROR: The orchestrator is not permitted to call Azure tools directly. "
+                        "You MUST route this request to the appropriate domain agent "
+                        "(compute-agent, network-agent, storage-agent, security-agent, "
+                        "arc-agent, or sre-agent) via HandoffOrchestrator. "
+                        "Do NOT answer from your own knowledge or tool calls."
+                    )
+                else:
+                    output = f"Unknown function: {fn_name}"
+
+                tool_outputs.append({"tool_call_id": tc.id, "output": output})
+
+            logger.info(
+                "Submitting %d tool output(s) for thread %s run %s",
+                len(tool_outputs),
+                thread_id,
+                latest_run.id,
             )
-            if required_action.type == "submit_tool_approval":
-                tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore
-                await _submit_mcp_approval(endpoint, thread_id, latest_run.id, tool_calls)
-            elif required_action.type == "submit_tool_outputs":
-                tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore
-                outputs = [{"tool_call_id": tc.id, "output": "Not supported"} for tc in tool_calls]
-                try:
+            try:
+                with mcp_span("tool_approval", thread_id=thread_id) as mspan:
+                    mspan.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
                     client.runs.submit_tool_outputs(
                         thread_id=thread_id,
                         run_id=latest_run.id,
