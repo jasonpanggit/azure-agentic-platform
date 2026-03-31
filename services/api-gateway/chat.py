@@ -224,11 +224,11 @@ async def _submit_mcp_approval(
 async def get_chat_result(
     thread_id: str, run_id: Optional[str] = None
 ) -> dict[str, str]:
-    """Poll Foundry until the run reaches a terminal state, handling approval gates.
+    """Return the current status of a Foundry run (single-shot, non-blocking).
 
-    Runs an internal polling loop (up to 90 seconds) so that MCP tool approval
-    gates — which appear and must be handled within ~2s — are never missed by the
-    external UI poller. Returns a terminal result to the caller.
+    Called repeatedly by the SSE stream route which owns the polling loop.
+    This function fetches the run once and returns immediately — it does NOT
+    block waiting for completion.
 
     Args:
         thread_id: Foundry thread ID.
@@ -237,66 +237,48 @@ async def get_chat_result(
     Returns:
         Dict with "thread_id", "run_status", and optionally "reply".
     """
-    import time as _time
-
     client = _get_foundry_client()
-    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
-        "FOUNDRY_ACCOUNT_ENDPOINT", ""
-    )
     terminal = {"completed", "failed", "cancelled", "expired"}
-    deadline = _time.monotonic() + 90  # 90s internal timeout
 
-    # Wait for run to become visible (Foundry propagation delay ~1-2s)
-    latest_run = None
-    for attempt in range(5):
-        try:
-            latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
-            break
-        except Exception:
-            if attempt < 4:
-                await asyncio.sleep(1)
-
-    if latest_run is None:
-        logger.warning("Run %s not found after 5 attempts", run_id)
+    # Fetch run status — try once, return not_found if unavailable
+    try:
+        latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
+    except Exception as exc:
+        logger.warning("Run %s not found: %s", run_id, exc)
         return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
 
-    while _time.monotonic() < deadline:
-        run_status = str(latest_run.status.value if hasattr(latest_run.status, 'value') else latest_run.status)
-        logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+    run_status = str(
+        latest_run.status.value
+        if hasattr(latest_run.status, "value")
+        else latest_run.status
+    )
+    logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
-        if run_status in terminal:
-            break
+    # If requires_action, auto-approve MCP tool calls so run can proceed
+    if run_status == "requires_action":
+        required_action = latest_run.required_action
+        if required_action is not None and hasattr(required_action, "type"):
+            endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+                "FOUNDRY_ACCOUNT_ENDPOINT", ""
+            )
+            if required_action.type == "submit_tool_approval":
+                tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore
+                await _submit_mcp_approval(endpoint, thread_id, latest_run.id, tool_calls)
+            elif required_action.type == "submit_tool_outputs":
+                tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore
+                outputs = [{"tool_call_id": tc.id, "output": "Not supported"} for tc in tool_calls]
+                try:
+                    client.runs.submit_tool_outputs(
+                        thread_id=thread_id,
+                        run_id=latest_run.id,
+                        tool_outputs=outputs,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to submit tool outputs: %s", exc)
 
-        if run_status == "requires_action":
-            required_action = latest_run.required_action
-            if required_action is not None and hasattr(required_action, "type"):
-                if required_action.type == "submit_tool_approval":
-                    tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore
-                    await _submit_mcp_approval(endpoint, thread_id, latest_run.id, tool_calls)
-                elif required_action.type == "submit_tool_outputs":
-                    # Should not happen with MCP-only orchestrator, but handle defensively
-                    tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore
-                    outputs = [{"tool_call_id": tc.id, "output": "Not supported"} for tc in tool_calls]
-                    try:
-                        client.runs.submit_tool_outputs(
-                            thread_id=thread_id,
-                            run_id=latest_run.id,
-                            tool_outputs=outputs,
-                        )
-                    except Exception as exc:
-                        logger.warning("Failed to submit tool outputs: %s", exc)
-
-        await asyncio.sleep(1)
-        try:
-            latest_run = client.runs.get(thread_id=thread_id, run_id=latest_run.id)
-        except Exception as exc:
-            logger.warning("Failed to refresh run %s: %s", run_id, exc)
-            break
-
-    run_status = str(latest_run.status.value if hasattr(latest_run.status, 'value') else latest_run.status)
+    # Return non-terminal status immediately — caller polls again
     if run_status not in terminal:
-        logger.warning("Run %s timed out at status %s", run_id, run_status)
-        return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
+        return {"thread_id": thread_id, "run_status": run_status, "reply": None}
 
     reply = None
     if run_status == "completed":
