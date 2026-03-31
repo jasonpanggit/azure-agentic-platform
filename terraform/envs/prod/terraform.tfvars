@@ -14,9 +14,15 @@ cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azur
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 
 # Entra app registration management.
-# Requires CI SP (65cf695c-1def-48ba-96af-d968218c90ba) to have Application.ReadWrite.All
-# admin-consented on the Entra tenant. See docs/BOOTSTRAP.md for the one-time grant step.
-enable_entra_apps = true
+# BLOCKED: CI SP (65cf695c-1def-48ba-96af-d968218c90ba) needs Application.ReadWrite.All
+# admin-consented on the Entra tenant before this can be enabled.
+# To enable:
+#   1. Run: az ad app permission admin-consent --id 65cf695c-1def-48ba-96af-d968218c90ba
+#   2. Set enable_entra_apps = true (below)
+#   3. Uncomment the import blocks in imports.tf
+#   4. Run: terraform apply -var-file="credentials.tfvars"
+#   See docs/BOOTSTRAP.md Step 1 for the full grant procedure.
+enable_entra_apps = false
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
