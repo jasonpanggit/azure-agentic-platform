@@ -240,18 +240,24 @@ async def get_chat_result(
     client = _get_foundry_client()
     terminal = {"completed", "failed", "cancelled", "expired"}
 
-    # Fetch run status — try once, return not_found if unavailable
-    try:
-        latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
-    except Exception as exc:
-        logger.warning("Run %s not found: %s", run_id, exc)
-        return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+    # Fetch the target run
+    if run_id:
+        # Specific run requested — fetch directly
+        try:
+            latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
+        except Exception as exc:
+            logger.warning("Run %s not found: %s", run_id, exc)
+            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+    else:
+        # No run_id — list all runs and pick the most recent (last in list)
+        run_list = list(client.runs.list(thread_id=thread_id))
+        if not run_list:
+            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+        latest_run = run_list[-1]
 
-    run_status = str(
-        latest_run.status.value
-        if hasattr(latest_run.status, "value")
-        else latest_run.status
-    )
+    # Status may be a string (SDK 1.2.x) or an enum with .value (older SDK)
+    _s = latest_run.status
+    run_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
     logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
     # If requires_action, auto-approve MCP tool calls so run can proceed
