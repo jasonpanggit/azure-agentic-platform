@@ -1,61 +1,24 @@
-'use client';
+'use client'
 
-import React from 'react';
-import {
-  PanelGroup,
-  Panel,
-  PanelResizeHandle,
-} from 'react-resizable-panels';
-import { SubscriptionSelector } from './SubscriptionSelector';
-import { ChatPanel } from './ChatPanel';
-import { DashboardPanel } from './DashboardPanel';
-import { useAppState } from '@/lib/app-state-context';
+import { useState } from 'react'
+import { TopNav } from './TopNav'
+import { DashboardPanel } from './DashboardPanel'
+import { ChatDrawer } from './ChatDrawer'
+import { ChatFAB } from './ChatFAB'
 
 export function AppLayout() {
-  const { selectedSubscriptions, setSelectedSubscriptions } = useAppState();
+  const [activeTab, setActiveTab] = useState('Alerts')
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-2 border-b bg-background shadow-sm z-10">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">Azure AIOps</h1>
-        </div>
-        <div className="flex items-center gap-6">
-          <SubscriptionSelector
-            selected={selectedSubscriptions}
-            onChange={setSelectedSubscriptions}
-            onLoad={setSelectedSubscriptions}
-          />
-        </div>
+      <TopNav activeTab={activeTab} />
+      <div className="flex-1 overflow-hidden">
+        <DashboardPanel
+          onTabChange={(tab) => setActiveTab(tab.charAt(0).toUpperCase() + tab.slice(1))}
+        />
       </div>
-
-      {/* Split-Pane Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <PanelGroup
-          direction="horizontal"
-          autoSaveId="aap-main-layout"
-          className="h-full"
-        >
-          <Panel
-            defaultSize={35}
-            minSize={25}
-            className="relative overflow-hidden h-full bg-background"
-          >
-            <ChatPanel subscriptions={selectedSubscriptions} />
-          </Panel>
-
-          <PanelResizeHandle className="w-2 bg-transparent border-l border-border cursor-col-resize hover:border-primary transition-colors" />
-
-          <Panel
-            defaultSize={65}
-            minSize={40}
-            className="overflow-hidden flex flex-col bg-muted h-full"
-          >
-            <DashboardPanel />
-          </Panel>
-        </PanelGroup>
-      </div>
+      <ChatDrawer />
+      <ChatFAB />
     </div>
-  );
+  )
 }
