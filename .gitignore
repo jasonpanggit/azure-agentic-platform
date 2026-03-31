@@ -55,5 +55,8 @@ coverage/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 
+# Generated per-CI-run — contains Foundry agent IDs, do not commit
+scripts/agents.tfvars
+
 # Claude Code runtime
 .claude/checkpoints.log

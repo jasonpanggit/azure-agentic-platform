@@ -227,9 +227,21 @@ jobs:
         working-directory: terraform/envs/prod
         run: terraform init -input=false
 
+      - name: Setup Python for Agent Provisioning
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Provision Foundry Agents
+        env:
+          AZURE_PROJECT_ENDPOINT: ${{ secrets.FOUNDRY_PROJECT_ENDPOINT }}
+        run: |
+          pip install --quiet "azure-ai-projects>=2.0.1" "azure-ai-agents" "azure-identity"
+          python scripts/provision-foundry-agents.py --no-deploy
+
       - name: Terraform Apply
         working-directory: terraform/envs/prod
-        run: terraform apply -auto-approve -input=false
+        run: terraform apply -auto-approve -input=false -var-file ../../../scripts/agents.tfvars
 
       - name: Get Runner Egress IP
         id: runner_ip
