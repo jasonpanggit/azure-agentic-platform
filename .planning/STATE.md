@@ -261,6 +261,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 - Phase 10 added: API Gateway Auth Audit Hardening
 - Phase 11 added: Patch Domain Agent — ARG-based patch assessment/installation agent using Azure Update Manager query-logs, wired into orchestrator routing
 - Phase 12 added: EOL Domain Agent with multi-source internet search and PostgreSQL caching
+- Phase 13 added: add a new patch management tab and show all the patch related information
 
 ---
 

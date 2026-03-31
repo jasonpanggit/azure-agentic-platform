@@ -452,6 +452,26 @@ Plans:
 - [x] 11-02 Orchestrator Routing + Integration
 - [x] 11-03 Terraform + CI/CD
 
+### Phase 12: add a new patch management tab and show all the patch related information
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 12 to break down)
+
+### Phase 13: add a new patch management tab and show all the patch related information
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 13 to break down)
+
 ---
 
 ## Requirement Coverage Matrix
