@@ -1,232 +1,132 @@
 @import "tailwindcss";
 
-/* Tailwind v4: design tokens declared via @theme */
 @theme {
-  /* Colors — mapped from CSS variables set in :root below */
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  /* shadcn token bridge — no hsl() wrappers, hex values pass through var() directly */
+  --color-background: var(--bg-canvas);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-surface);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-surface-raised);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent-blue);
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: var(--bg-subtle);
+  --color-secondary-foreground: var(--text-secondary);
+  --color-muted: var(--bg-subtle);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--bg-subtle);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: var(--accent-red);
+  --color-destructive-foreground: #FFFFFF;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent-blue);
+  --radius: 0.5rem;
 
-  /* Border radius */
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
-
-  /* Fonts */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Font families */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "JetBrains Mono", monospace;
 
   /* Animations */
   --animate-blink-cursor: blink-cursor 1.06s step-end infinite;
   --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+}
 
-  @keyframes blink-cursor {
-    50% { opacity: 0; }
-  }
-  @keyframes pulse-dot {
-    0%, 80%, 100% { opacity: 0; }
-    40% { opacity: 1; }
-  }
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0; }
+  40% { opacity: 1; }
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 207 90% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 207 90% 42%;
-    --radius: 0.5rem;
+    --bg-canvas: #F4F5F7;
+    --bg-surface: #FFFFFF;
+    --bg-surface-raised: #FFFFFF;
+    --bg-subtle: #F0F2F5;
+    --bg-nav: #0D1117;
+    --bg-nav-pill: #1C2333;
+    --border-nav: #30363D;
+    --text-nav: #E6EDF3;
+    --border: #DDE1E7;
+    --border-subtle: #EBEDF0;
+    --text-primary: #0D1117;
+    --text-secondary: #57606A;
+    --text-muted: #8C959F;
+    --accent-blue: #0969DA;
+    --accent-green: #1A7F37;
+    --accent-yellow: #9A6700;
+    --accent-red: #CF222E;
+    --accent-orange: #BC4C00;
+    --accent-purple: #8250DF;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 207 90% 54%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 207 90% 54%;
-    --radius: 0.5rem;
+    --bg-canvas: #0D1117;
+    --bg-surface: #161B22;
+    --bg-surface-raised: #1C2333;
+    --bg-subtle: #21262D;
+    --border: #30363D;
+    --border-subtle: #21262D;
+    --text-primary: #E6EDF3;
+    --text-secondary: #8B949E;
+    --text-muted: #6E7681;
+    --accent-blue: #388BFD;
+    --accent-green: #3FB950;
+    --accent-yellow: #D29922;
+    --accent-red: #F85149;
+    --accent-orange: #DB6D28;
+    --accent-purple: #A371F7;
+    /* Nav tokens unchanged — always dark */
   }
+
+  * { border-color: var(--border); }
+  body { background-color: var(--bg-canvas); color: var(--text-primary); }
 }
 
-@layer base {
-  * {
-    border-color: hsl(var(--border));
-  }
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-/* Markdown table styling for agent chat bubbles */
-.prose table {
-  width: 100%;
-  font-size: 13px;
-  line-height: 1.375;
-}
-.prose th {
-  padding: 0.375rem 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid hsl(var(--border));
-  white-space: nowrap;
-}
-.prose td {
-  padding: 0.25rem 0.75rem;
-  border-bottom: 1px solid hsl(var(--border));
-  white-space: nowrap;
-}
-.prose table div {
-  overflow-x: auto;
-  margin: 0.5rem 0;
-}
-
-/* Custom prose for agent chat responses */
-/* Provides 14px body text matching UserBubble text-sm exactly */
-.chat-prose {
-  font-size: 0.875rem;   /* 14px = text-sm */
-  line-height: 1.625;
-  color: hsl(var(--foreground));
-}
-
-.chat-prose p {
-  margin: 0 0 0.5em;
-}
-.chat-prose p:last-child {
-  margin-bottom: 0;
-}
-
-.chat-prose ul,
-.chat-prose ol {
-  margin: 0.25em 0 0.5em 1.375em;
-}
-.chat-prose li {
-  margin-bottom: 0.15em;
-}
-
-.chat-prose strong {
-  font-weight: 600;
-}
-.chat-prose a {
-  color: hsl(var(--primary));
-  text-decoration: underline;
-}
-
+/* Chat prose — used by ChatBubble for agent markdown */
+.chat-prose { font-size: 0.875rem; line-height: 1.6; color: var(--text-primary); }
+.chat-prose p { margin-top: 0; margin-bottom: 0.5rem; }
+.chat-prose p:last-child { margin-bottom: 0; }
+.chat-prose ul, .chat-prose ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.chat-prose li { margin-bottom: 0.25rem; }
+.chat-prose strong { font-weight: 600; color: var(--text-primary); }
+.chat-prose a { color: var(--accent-blue); text-decoration: underline; text-underline-offset: 2px; }
+.chat-prose a:hover { opacity: 0.8; }
 .chat-prose code {
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: hsl(var(--muted));
-  border-radius: 0.25rem;
-  padding: 0.1em 0.35em;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  color: var(--text-primary);
 }
-
 .chat-prose pre {
-  background: hsl(222 47% 13%);
-  color: hsl(210 40% 90%);
-  border-radius: 0.375rem;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   padding: 0.75rem 1rem;
   overflow-x: auto;
+  margin-bottom: 0.75rem;
   font-size: 0.8125rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  margin: 0.5em 0;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
 }
-.chat-prose pre code {
-  background: transparent;
-  padding: 0;
-  color: inherit;
-}
+.chat-prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
+.chat-prose table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.75rem; }
+.chat-prose th { text-align: left; padding: 0.375rem 0.75rem; background-color: var(--bg-subtle); border: 1px solid var(--border); font-weight: 600; color: var(--text-primary); }
+.chat-prose td { padding: 0.375rem 0.75rem; border: 1px solid var(--border); color: var(--text-secondary); }
+.chat-prose tr:nth-child(even) td { background-color: var(--bg-subtle); }
+.chat-prose h1, .chat-prose h2, .chat-prose h3 { font-weight: 600; color: var(--text-primary); margin-top: 1rem; margin-bottom: 0.375rem; line-height: 1.4; }
+.chat-prose h1 { font-size: 1rem; }
+.chat-prose h2 { font-size: 0.9375rem; }
+.chat-prose h3 { font-size: 0.875rem; }
 
-/* Tables in chat responses */
-.chat-prose table {
-  width: 100%;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  border-collapse: collapse;
-  margin: 0.5em 0;
-}
-.chat-prose thead tr {
-  background: hsl(var(--muted));
-}
-.chat-prose th {
-  padding: 0.375rem 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid hsl(var(--border));
-  white-space: nowrap;
-  color: hsl(var(--muted-foreground));
-}
-.chat-prose td {
-  padding: 0.3rem 0.75rem;
-  border-bottom: 1px solid hsl(var(--border));
-}
-.chat-prose tr:last-child td {
-  border-bottom: none;
-}
-.chat-prose tbody tr:hover {
-  background: hsl(var(--muted) / 0.5);
-}
-
-/* Headings inside chat responses */
-.chat-prose h1, .chat-prose h2, .chat-prose h3 {
-  font-weight: 600;
-  margin: 0.75em 0 0.25em;
-  line-height: 1.3;
-  color: hsl(var(--foreground));
-}
-.chat-prose h1 { font-size: 1.125rem; }
-.chat-prose h2 { font-size: 1rem; }
-.chat-prose h3 { font-size: 0.9375rem; }
-
-/* Reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
-  .animate-blink-cursor,
-  .animate-pulse-dot {
-    animation: none !important;
-  }
+  .animate-blink-cursor, .animate-pulse-dot { animation: none; }
 }

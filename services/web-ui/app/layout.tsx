@@ -1,30 +1,31 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import { Providers } from './providers';
-import './globals.css';
+import type { Metadata } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
+import './globals.css'
+import { Providers } from './providers'
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
   title: 'Azure AIOps',
   description: 'Azure Agentic Platform — AI Operations Dashboard',
-};
+}
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('aap-theme');if(t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+        }}
+      />
       <body className="min-h-screen font-sans antialiased">
-        <Providers>
-          {children}
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
-  );
+  )
 }

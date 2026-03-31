@@ -1,55 +1,70 @@
-'use client';
+'use client'
 
-import React, { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send } from 'lucide-react';
+import { useRef, useEffect } from 'react'
+import { SendHorizonal } from 'lucide-react'
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
-  disabled: boolean;
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  disabled?: boolean
+  placeholder?: string
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
-  const [value, setValue] = useState('');
+export function ChatInput({
+  value, onChange, onSubmit, disabled = false,
+  placeholder = 'Ask about any Azure resource...',
+}: ChatInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleSend = useCallback(() => {
-    const trimmed = value.trim();
-    if (trimmed) {
-      onSend(trimmed);
-      setValue('');
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+  }, [value])
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (!disabled && value.trim()) onSubmit()
     }
-  }, [value, onSend]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend]
-  );
+  }
 
   return (
-    <div className="flex items-end gap-2 px-4 py-3 border-t border-border">
-      <Textarea
+    <div
+      className="flex items-end gap-2 px-3 py-3"
+      style={{ background: 'var(--bg-surface-raised)', borderTop: '1px solid var(--border)' }}
+    >
+      <textarea
+        ref={textareaRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Ask about any Azure resource..."
         disabled={disabled}
-        className="flex-1 min-h-[40px] max-h-[120px] resize-none"
+        placeholder={placeholder}
         rows={1}
+        className="flex-1 resize-none text-sm rounded-lg px-3 py-2 outline-none transition-colors min-h-[36px] max-h-[120px]"
+        style={{
+          background: 'var(--bg-subtle)',
+          border: '1px solid var(--border)',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-sans)',
+        }}
       />
-      <Button
-        onClick={handleSend}
+      <button
+        onClick={() => { if (!disabled && value.trim()) onSubmit() }}
         disabled={disabled || !value.trim()}
-        className="h-10 px-4"
+        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+        style={{
+          background: disabled || !value.trim() ? 'var(--bg-subtle)' : 'var(--accent-blue)',
+          color: disabled || !value.trim() ? 'var(--text-muted)' : '#FFFFFF',
+          border: '1px solid var(--border)',
+        }}
+        aria-label="Send message"
       >
-        <Send className="h-4 w-4 mr-2" />
-        Send Message
-      </Button>
+        <SendHorizonal className="h-3.5 w-3.5" />
+      </button>
     </div>
-  );
+  )
 }

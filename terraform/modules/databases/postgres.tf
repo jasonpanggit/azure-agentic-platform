@@ -49,3 +49,18 @@ resource "azurerm_postgresql_flexible_server_configuration" "extensions" {
 #
 # For manual bootstrap, run from a VNet-connected machine:
 #   PGPASSWORD="..." psql -h <fqdn> -U aap_admin -d aap -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# PostgreSQL Entra auth administrator
+# The server already has active_directory_auth_enabled = true.
+# This assigns the API gateway managed identity as an Entra administrator,
+# enabling token-based auth in addition to existing password auth.
+resource "azurerm_postgresql_flexible_server_active_directory_administrator" "api_gateway" {
+  count = var.enable_postgres_entra_auth && var.api_gateway_principal_id != "" ? 1 : 0
+
+  server_name         = azurerm_postgresql_flexible_server.main.name
+  resource_group_name = var.resource_group_name
+  tenant_id           = var.tenant_id
+  object_id           = var.api_gateway_principal_id
+  principal_name      = "ca-api-gateway-${var.environment}"
+  principal_type      = "ServicePrincipal"
+}

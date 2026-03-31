@@ -46,10 +46,16 @@ export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProp
     return () => clearInterval(interval);
   }, [isPending, approval.expires_at]);
 
-  const borderClass = approval.risk_level === 'critical' ? 'border-l-destructive' : 'border-l-orange-500';
-
   return (
-    <Card className={`max-w-[90%] self-start rounded-lg border-l-4 ${borderClass} p-4 mb-2 shadow-md bg-card`}>
+    <Card
+      className="max-w-[90%] self-start p-4 mb-2"
+      style={{
+        border: '1px solid var(--border)',
+        borderLeft: `4px solid ${approval.risk_level === 'critical' ? 'var(--accent-red)' : 'var(--accent-orange)'}`,
+        background: 'var(--bg-subtle)',
+        borderRadius: '8px',
+      }}
+    >
       <CardContent className="p-0">
         <div className="flex items-center gap-2 mb-2">
           <Badge variant={approval.risk_level === 'critical' ? 'destructive' : 'outline'}>
@@ -74,7 +80,7 @@ export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProp
             </p>
             <div className="flex gap-2 mt-2">
               <Dialog>
-                <DialogTrigger asChild><Button>Approve Action</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ background: 'var(--accent-green)', color: '#FFFFFF', border: 'none' }}>Approve Action</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Approve Action</DialogTitle>
@@ -84,12 +90,12 @@ export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProp
                   </DialogHeader>
                   <DialogFooter>
                     <DialogTrigger asChild><Button variant="secondary">Cancel</Button></DialogTrigger>
-                    <Button onClick={onApprove}>Confirm Approval</Button>
+                    <Button onClick={onApprove} style={{ background: 'var(--accent-green)', color: '#FFFFFF', border: 'none' }}>Confirm Approval</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               <Dialog>
-                <DialogTrigger asChild><Button variant="destructive">Reject Action</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ background: 'var(--accent-red)', color: '#FFFFFF', border: 'none' }}>Reject Action</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Reject Action</DialogTitle>
@@ -97,7 +103,7 @@ export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProp
                   </DialogHeader>
                   <DialogFooter>
                     <DialogTrigger asChild><Button variant="secondary">Cancel</Button></DialogTrigger>
-                    <Button variant="destructive" onClick={onReject}>Confirm Rejection</Button>
+                    <Button onClick={onReject} style={{ background: 'var(--accent-red)', color: '#FFFFFF', border: 'none' }}>Confirm Rejection</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

@@ -10,5 +10,13 @@ location    = "eastus2"
 # Committed here so terraform apply does not wipe manually-set env vars.
 orchestrator_agent_id = "asst_NeBVjCA5isNrIERoGYzRpBTu"
 
+cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
+
+# Entra app registration management.
+# Requires CI SP (65cf695c-1def-48ba-96af-d968218c90ba) to have Application.ReadWrite.All
+# admin-consented on the Entra tenant. See docs/BOOTSTRAP.md for the one-time grant step.
 enable_entra_apps = true
+
+# Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"

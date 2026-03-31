@@ -27,16 +27,21 @@ interface SubscriptionSelectorProps {
   selected: string[];
   onChange: (ids: string[]) => void;
   onLoad?: (ids: string[]) => void;
+  trigger?: React.ReactNode;
 }
 
-export function SubscriptionSelector({ selected, onChange, onLoad }: SubscriptionSelectorProps) {
+export function SubscriptionSelector({ selected, onChange, onLoad, trigger }: SubscriptionSelectorProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch('/api/subscriptions')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
       .then((data: { subscriptions?: Subscription[]; error?: string }) => {
         if (data.subscriptions) {
           setSubscriptions(data.subscriptions);
@@ -47,7 +52,7 @@ export function SubscriptionSelector({ selected, onChange, onLoad }: Subscriptio
         }
       })
       .catch(() => {
-        // Silently fail — selector stays empty
+        setError(true)
       })
       .finally(() => setLoading(false));
   // onLoad intentionally excluded — only run once on mount
@@ -67,6 +72,12 @@ export function SubscriptionSelector({ selected, onChange, onLoad }: Subscriptio
         Showing results for {selected.length > 0 ? selected.length : 'all'} subscription(s)
       </span>
 
+      {error && (
+        <span className="text-xs" style={{ color: 'var(--accent-red)' }}>
+          Failed to load subscriptions
+        </span>
+      )}
+
       {loading ? (
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -75,10 +86,12 @@ export function SubscriptionSelector({ selected, onChange, onLoad }: Subscriptio
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <button className="flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm bg-background hover:bg-accent">
-              Filter subscriptions...
-              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-            </button>
+            {trigger ?? (
+              <button className="flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm bg-background hover:bg-accent">
+                Filter subscriptions...
+                <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+              </button>
+            )}
           </PopoverTrigger>
           <PopoverContent className="w-[280px] p-0">
             <Command>

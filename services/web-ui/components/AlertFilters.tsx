@@ -31,7 +31,10 @@ export function AlertFilters({ filters, onChange }: AlertFiltersProps) {
         value={toSelectValue(filters.severity)}
         onValueChange={(value) => onChange({ ...filters, severity: fromSelectValue(value) })}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger
+          className="h-8 text-xs px-3 gap-1 rounded-md w-[140px]"
+          style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+        >
           <SelectValue placeholder="Severity" />
         </SelectTrigger>
         <SelectContent>
@@ -47,7 +50,10 @@ export function AlertFilters({ filters, onChange }: AlertFiltersProps) {
         value={toSelectValue(filters.domain)}
         onValueChange={(value) => onChange({ ...filters, domain: fromSelectValue(value) })}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger
+          className="h-8 text-xs px-3 gap-1 rounded-md w-[140px]"
+          style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+        >
           <SelectValue placeholder="Domain" />
         </SelectTrigger>
         <SelectContent>
@@ -65,7 +71,10 @@ export function AlertFilters({ filters, onChange }: AlertFiltersProps) {
         value={toSelectValue(filters.status)}
         onValueChange={(value) => onChange({ ...filters, status: fromSelectValue(value) })}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger
+          className="h-8 text-xs px-3 gap-1 rounded-md w-[140px]"
+          style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+        >
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>

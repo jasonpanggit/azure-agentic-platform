@@ -22,5 +22,5 @@ http.createServer((req, res) => {
   });
   req.pipe(p);
 }).listen(PROXY_PORT, '0.0.0.0', () => {
-  console.log('MCP proxy listening on ' + PROXY_PORT);
+  console.log(`MCP proxy listening on ${PROXY_PORT}`);
 });

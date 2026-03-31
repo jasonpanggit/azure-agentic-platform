@@ -1,39 +1,38 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { MsalProvider } from '@azure/msal-react';
-import { getMsalInstance } from '@/lib/msal-instance';
+import { useEffect, useState } from 'react'
+import { MsalProvider } from '@azure/msal-react'
+import { getMsalInstance } from '@/lib/msal-instance'
+import { IPublicClientApplication } from '@azure/msal-browser'
+import { ThemeProvider } from '@/lib/theme-context'
+import { AppStateProvider } from '@/lib/app-state-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [msalReady, setMsalReady] = useState(false);
-
-  const msalInstance = useMemo(() => getMsalInstance(), []);
+  const [msalInstance, setMsalInstance] = useState<IPublicClientApplication | null>(null)
 
   useEffect(() => {
-    msalInstance.initialize().then(() => {
-      const redirectPromise = msalInstance.handleRedirectPromise();
-      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000));
-      Promise.race([redirectPromise, timeout]).then(() => {
-        setMsalReady(true);
-      }).catch(() => {
-        setMsalReady(true);
-      });
-    }).catch(() => {
-      setMsalReady(true);
-    });
-  }, [msalInstance]);
+    let cancelled = false
+    getMsalInstance().then((i) => {
+      if (!cancelled) setMsalInstance(i)
+    })
+    return () => { cancelled = true }
+  }, [])
 
-  if (!msalReady) {
+  if (!msalInstance) {
     return (
-      <div className="flex items-center justify-center h-screen text-sm text-muted-foreground">
-        Loading...
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading...</p>
       </div>
-    );
+    )
   }
 
   return (
-    <MsalProvider instance={msalInstance}>
-      {children}
-    </MsalProvider>
-  );
+    <ThemeProvider>
+      <AppStateProvider>
+        <MsalProvider instance={msalInstance}>
+          {children}
+        </MsalProvider>
+      </AppStateProvider>
+    </ThemeProvider>
+  )
 }
