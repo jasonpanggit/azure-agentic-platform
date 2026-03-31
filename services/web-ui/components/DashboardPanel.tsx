@@ -1,16 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
 import { TopologyTab } from './TopologyTab'
 import { ResourcesTab } from './ResourcesTab'
 import { ObservabilityTab } from './ObservabilityTab'
+import { PatchTab } from './PatchTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability'
+type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability' | 'patch'
 
 interface FilterState {
   severity?: string
@@ -24,6 +25,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'topology', label: 'Topology', Icon: Network },
   { id: 'resources', label: 'Resources', Icon: Server },
   { id: 'observability', label: 'Observability', Icon: Activity },
+  { id: 'patch', label: 'Patch', Icon: ShieldCheck },
 ]
 
 interface DashboardPanelProps {
@@ -124,6 +126,12 @@ export function DashboardPanel({ onTabChange }: DashboardPanelProps) {
         <div id="tabpanel-observability" role="tabpanel" aria-labelledby="tab-observability" hidden={activeTab !== 'observability'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <ObservabilityTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
+
+        <div id="tabpanel-patch" role="tabpanel" aria-labelledby="tab-patch" hidden={activeTab !== 'patch'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <PatchTab subscriptions={selectedSubscriptions} />
           </div>
         </div>
       </div>
