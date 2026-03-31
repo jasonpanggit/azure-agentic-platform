@@ -3,17 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-31T02:00:00.000Z"
+last_updated: "2026-03-31T03:00:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 41
-  completed_plans: 34
+  completed_plans: 35
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
 > Last updated: 2026-03-31 — Plan 09-05 COMPLETE: Observability Components. All 7 files migrated to Tailwind + shadcn/ui: MetricCard (health-colored left border border-l-green/yellow/red-500, shadcn Badge), TimeRangeSelector (shadcn Select, 1h/6h/24h/7d, w-[120px]), ObservabilityTab (POLL_INTERVAL_MS=30000 polling preserved, shadcn Skeleton + Alert, Activity lucide empty state), AgentLatencyCard + PipelineLagCard + ApprovalQueueCard + ActiveErrorsCard (all using MetricCard wrapper, font-mono text-[13px] values, health calculations intact). Zero @fluentui/makeStyles/tokens/MessageBar/Dropdown remnants.
+
+> Last updated: 2026-03-31 — Plan 09-03 COMPLETE: Chat Components. ChatBubble (prose prose-sm prose-zinc, bg-primary/10 badge, bg-foreground cursor, mt-1 timestamp), UserBubble (rounded-lg p-3 mb-2 opacity-70 mt-1), ThinkingIndicator (already spec-exact), ChatInput (already spec-exact), ProposalCard (Dialog import consolidated to single line, all timer/approval logic preserved), ChatPanel (removed w-full from messages div, critical scroll layout intact: absolute inset-0 outer + ScrollArea flex-1 min-h-0 + shrink-0 grow-0 input, all SSE streaming + approval logic preserved byte-for-byte). All 6 tasks verified.
 
 > Last updated: 2026-03-31 — Completed quick task 260331-chg: Deploy Arc MCP Server — Terraform infra code complete (enable_arc_mcp_server=true, ACR registry block + AcrPull RBAC added to module). Operator steps pending: build+push image, terraform apply, verify ca-arc-mcp-server-prod running.
 
@@ -39,15 +41,17 @@ progress:
 
 ## Current Phase
 
-**Phase 9: Web UI Revamp — In Progress (3/6 plans complete)**
+**Phase 9: Web UI Revamp — In Progress (4/6 plans complete)**
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
 Plan 09-02 complete: Layout Foundation. Root layout uses Inter font via `next/font/google` with `--font-inter` CSS variable. `FluentProvider` fully removed from `providers.tsx` — all MSAL logic preserved (initialize, handleRedirectPromise, 5000ms timeout race). `next.config.ts` cleaned of transpilePackages. `DesktopOnlyGate` rebuilt with shadcn `Alert` + lucide `Monitor` icon. `AuthenticatedApp` rebuilt with shadcn `Button` + Tailwind login page. `AppLayout` rebuilt with `react-resizable-panels` and exact UI-SPEC Tailwind classes (bg-background top bar, bg-background chat panel, w-2 border-l resize handle).
 
+Plan 09-03 complete: Chat Components. ChatBubble rebuilt with `prose prose-sm prose-zinc max-w-none` content, `bg-primary/10` agent badge, `bg-foreground` blink cursor, `mt-1` timestamp. UserBubble aligned to `rounded-lg p-3 mb-2 shadow-sm`, `opacity-70 mt-1`. ThinkingIndicator and ChatInput were already spec-exact. ProposalCard Dialog import consolidated to single line, all timer/approval logic preserved. ChatPanel: removed `w-full` from messages container div — critical scroll layout intact (`absolute inset-0` outer, `ScrollArea flex-1 min-h-0`, `shrink-0 grow-0` input footer). All SSE streaming + approval logic preserved byte-for-byte.
+
 Plan 09-05 complete: Observability Components. All 7 observability files migrated to Tailwind + shadcn/ui. MetricCard uses border-l-[3px] health borders (green/yellow/red-500) with shadcn Badge. TimeRangeSelector uses shadcn Select with 4 time range options. ObservabilityTab preserves POLL_INTERVAL_MS=30000 polling, uses shadcn Skeleton + Alert, Activity lucide empty state. AgentLatencyCard, PipelineLagCard, ApprovalQueueCard, ActiveErrorsCard all use MetricCard wrapper with font-mono text-[13px] values and health calculations intact. Zero Fluent remnants.
 
-Plans 09-03, 09-04, and 09-06 remain pending.
+Plans 09-04 and 09-06 remain pending.
 
 Parallel status:
 
