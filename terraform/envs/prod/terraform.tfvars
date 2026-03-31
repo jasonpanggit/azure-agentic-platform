@@ -9,3 +9,6 @@ location    = "eastus2"
 # Foundry agent IDs — provisioned via scripts/provision-domain-agents.py
 # Committed here so terraform apply does not wipe manually-set env vars.
 orchestrator_agent_id = "asst_NeBVjCA5isNrIERoGYzRpBTu"
+
+cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]

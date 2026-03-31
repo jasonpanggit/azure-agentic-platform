@@ -175,3 +175,10 @@ variable "enable_teams_bot" {
   type        = bool
   default     = false
 }
+
+variable "postgres_dsn" {
+  description = "PostgreSQL DSN for agents that need direct DB access (e.g., eol-agent eol_cache table)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

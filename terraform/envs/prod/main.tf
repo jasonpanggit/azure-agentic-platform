@@ -113,6 +113,11 @@ module "databases" {
   # passed here. Cosmos DB PE is created by module.private_endpoints below.
 
   agent_principal_ids = local.agent_cosmos_principal_ids
+
+  # PostgreSQL Entra auth: assign API gateway managed identity as Entra administrator
+  # Principal ID sourced from: az containerapp show --name ca-api-gateway-prod \
+  #   --resource-group rg-aap-prod --query identity.principalId -o tsv
+  api_gateway_principal_id = "69e05934-1feb-44d4-8fd2-30373f83ccec"
 }
 
 # --- Compute Environment (depends on: networking, monitoring) ---
@@ -255,6 +260,9 @@ module "agent_apps" {
 
   # Web UI Observability tab
   log_analytics_workspace_customer_id = module.monitoring.log_analytics_workspace_customer_id
+
+  # PostgreSQL DSN for agents that need direct DB access (e.g., eol-agent eol_cache table)
+  postgres_dsn = var.postgres_dsn
 }
 
 # --- RBAC (depends on: agent-apps) ---

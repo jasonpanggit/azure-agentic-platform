@@ -93,3 +93,15 @@ variable "agent_principal_ids" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_postgres_entra_auth" {
+  description = "Add Entra auth administrator for PostgreSQL (server already has active_directory_auth_enabled = true)"
+  type        = bool
+  default     = true
+}
+
+variable "api_gateway_principal_id" {
+  description = "Managed identity principal ID of the API gateway for PostgreSQL Entra auth"
+  type        = string
+  default     = ""
+}
