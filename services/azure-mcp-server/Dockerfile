@@ -25,5 +25,9 @@ USER mcp
 
 EXPOSE 5000
 
+# Bind to all interfaces (not just localhost) so Container Apps ingress can reach the server.
+# azmcp (ASP.NET Core / Kestrel) defaults to http://localhost:5000; this overrides it.
+ENV ASPNETCORE_URLS="http://+:5000"
+
 # Start Azure MCP Server in HTTP transport mode
 CMD ["azmcp", "server", "start", "--transport", "http"]
