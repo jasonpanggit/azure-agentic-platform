@@ -58,6 +58,7 @@ from services.api_gateway.approvals import (
 from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
 from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse, call_azure_tool
 from services.api_gateway.health import router as health_router
+from services.api_gateway.patch_endpoints import router as patch_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -173,6 +174,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+app.include_router(patch_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
