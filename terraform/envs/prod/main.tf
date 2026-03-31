@@ -167,6 +167,13 @@ module "arc_mcp_server" {
   arc_subscription_ids = var.all_subscription_ids != [] ? var.all_subscription_ids : [var.subscription_id]
 
   arc_disconnect_alert_hours = 1
+
+  # First apply: use placeholder image to break the chicken-and-egg cycle.
+  # The Container App needs AcrPull role to pull from ACR, but the role can only
+  # be assigned after the app (and its managed identity) exists. Placeholder image
+  # lets the app provision; CI/CD deploys the real image once AcrPull is in place.
+  # lifecycle { ignore_changes = [template[0].container[0].image] } prevents drift.
+  use_placeholder_image = true
 }
 
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
@@ -199,8 +206,10 @@ module "agent_apps" {
   patch_agent_id                 = var.patch_agent_id
   eol_agent_id                   = var.eol_agent_id
 
-  # Deploy real agent images from ACR (not placeholder)
-  use_placeholder_image = false
+  # Use placeholder image on first deploy — ACR images don't exist yet.
+  # CI/CD pipeline deploys real images after initial infra provisioning.
+  # lifecycle.ignore_changes on image prevents Terraform from reverting CI/CD deploys.
+  use_placeholder_image = true
   image_tag             = "latest"
 
   # Teams Bot specific configuration
@@ -228,6 +237,10 @@ module "rbac" {
   compute_subscription_id = var.compute_subscription_id
   network_subscription_id = var.network_subscription_id
   storage_subscription_id = var.storage_subscription_id
+
+  # F-01 fix: grant Azure AI Developer to gateway MI on Foundry account
+  resource_group_name  = azurerm_resource_group.main.name
+  foundry_account_name = module.foundry.foundry_account_name
 }
 
 # --- Event Hub (depends on: networking) ---

@@ -127,6 +127,16 @@ locals {
       }
     },
 
+    # API Gateway: Azure AI Developer on Foundry account (agent/thread/run APIs — F-01 fix)
+    # Only provisioned when foundry_account_name is set (not empty).
+    var.foundry_account_name != "" && var.resource_group_name != "" ? {
+      "api-gateway-aidev-foundry" = {
+        principal_id         = var.agent_principal_ids["api-gateway"]
+        role_definition_name = "Azure AI Developer"
+        scope                = "/subscriptions/${var.platform_subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.CognitiveServices/accounts/${var.foundry_account_name}"
+      }
+    } : {},
+
     # All agents: Cosmos DB Operator on platform subscription
     {
       for name, principal_id in var.agent_principal_ids :
