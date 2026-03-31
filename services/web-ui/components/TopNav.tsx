@@ -57,9 +57,10 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
       {/* Right: controls */}
       <div className="flex items-center gap-1">
         <button
-          className="w-8 h-8 flex items-center justify-center rounded"
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
           style={{ color: 'var(--text-muted)' }}
-          disabled
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
           aria-label="Refresh status"
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -69,7 +70,7 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
           onClick={toggleTheme}
           className="w-8 h-8 flex items-center justify-center rounded transition-colors"
           style={{ color: 'var(--text-muted)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
         >

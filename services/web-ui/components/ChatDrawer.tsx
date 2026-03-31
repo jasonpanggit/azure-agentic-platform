@@ -113,7 +113,7 @@ export function ChatDrawer() {
     if (!message || isStreaming) return
     setInput('')
     setMessages((prev) => [...prev, {
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: message,
       timestamp: new Date().toLocaleTimeString(),
@@ -135,7 +135,7 @@ export function ChatDrawer() {
         const errorMsg = (data as { error?: string }).error ?? `Request failed (${res.status})`
         setIsStreaming(false)
         setMessages((prev) => [...prev, {
-          id: `error-${Date.now()}`,
+          id: crypto.randomUUID(),
           role: 'assistant',
           agentName: 'System',
           content: errorMsg,
@@ -146,7 +146,7 @@ export function ChatDrawer() {
     } catch {
       setIsStreaming(false)
       setMessages((prev) => [...prev, {
-        id: `error-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: 'assistant',
         agentName: 'System',
         content: 'Network error. Please check your connection.',
