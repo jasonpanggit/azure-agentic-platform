@@ -118,7 +118,7 @@
   color: var(--text-primary);
 }
 .chat-prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
-.chat-prose table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.75rem; }
+.chat-prose table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.75rem; }
 .chat-prose th { text-align: left; padding: 0.375rem 0.75rem; background-color: var(--bg-subtle); border: 1px solid var(--border); font-weight: 600; color: var(--text-primary); }
 .chat-prose td { padding: 0.375rem 0.75rem; border: 1px solid var(--border); color: var(--text-secondary); }
 .chat-prose tr:nth-child(even) td { background-color: var(--bg-subtle); }

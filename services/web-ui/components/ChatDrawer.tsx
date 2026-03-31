@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
+import { useResizable } from '@/lib/use-resizable'
 import { MessageSquare, X } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
@@ -27,6 +28,7 @@ const QUICK_EXAMPLES = [
 
 export function ChatDrawer() {
   const { instance, accounts } = useMsal()
+  const { width, onMouseDown } = useResizable()
   const {
     drawerOpen, setDrawerOpen,
     messages, setMessages,
@@ -216,7 +218,7 @@ export function ChatDrawer() {
         className="fixed right-0 flex flex-col transition-transform duration-300 ease-out"
         style={{
           top: '48px',
-          width: '420px',
+          width: `${width}px`,
           height: 'calc(100vh - 48px)',
           zIndex: 45,
           background: 'var(--bg-surface)',
@@ -225,6 +227,13 @@ export function ChatDrawer() {
           transform: drawerOpen ? 'translateX(0)' : 'translateX(100%)',
         }}
       >
+        {/* Resize handle */}
+        <div
+          onMouseDown={onMouseDown}
+          className="absolute left-0 top-0 h-full w-2 cursor-col-resize group z-10 hover:bg-blue-500/20 transition-colors"
+          title="Drag to resize"
+        />
+
         {/* Header */}
         <div
           className="flex items-center justify-between px-4 flex-shrink-0"
