@@ -9,7 +9,15 @@ and CI/CD can fully function. All other platform setup is automated.
 
 ---
 
-## Step 1: Grant CI SP `Application.ReadWrite.All` (Entra)
+## Step 1: Grant CI SP `Application.ReadWrite.All` (Entra) — DEFERRED
+
+> **Status: Deferred.** The web-UI app registration (`aap-web-ui-prod`) already exists and
+> works in production. `enable_entra_apps` is intentionally set to `false` in
+> `terraform/envs/prod/terraform.tfvars` until this grant is done. The platform runs fully
+> without it. This step is only required when Terraform needs to own the app registration
+> lifecycle (e.g. rebuilding from scratch in a new tenant, or rotating the client secret via TF).
+>
+> **Future work:** When ready to enable, follow the steps below. Tracked in `TODO.md`.
 
 **Why:** The `azuread` Terraform provider requires the Terraform service principal to have
 Microsoft Graph `Application.ReadWrite.All` admin-consented on the Entra tenant to manage

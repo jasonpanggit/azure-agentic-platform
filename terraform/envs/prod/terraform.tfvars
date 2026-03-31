@@ -13,15 +13,10 @@ orchestrator_agent_id = "asst_NeBVjCA5isNrIERoGYzRpBTu"
 cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 
-# Entra app registration management.
-# BLOCKED: CI SP (65cf695c-1def-48ba-96af-d968218c90ba) needs Application.ReadWrite.All
-# admin-consented on the Entra tenant before this can be enabled.
-# To enable:
-#   1. Run: az ad app permission admin-consent --id 65cf695c-1def-48ba-96af-d968218c90ba
-#   2. Set enable_entra_apps = true (below)
-#   3. Uncomment the import blocks in imports.tf
-#   4. Run: terraform apply -var-file="credentials.tfvars"
-#   See docs/BOOTSTRAP.md Step 1 for the full grant procedure.
+# Entra app registration management — DEFERRED.
+# The aap-web-ui-prod app registration exists and works; Terraform does not need to own it today.
+# Enabling this requires a Global Administrator to grant Application.ReadWrite.All to the CI SP.
+# See docs/BOOTSTRAP.md Step 1 for the full procedure when ready to enable.
 enable_entra_apps = false
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
