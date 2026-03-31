@@ -9,9 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Bell } from 'lucide-react';
+import { useAppState } from '@/lib/app-state-context';
 
 interface Incident {
   incident_id: string;
@@ -34,18 +34,29 @@ interface AlertFeedProps {
 
 const POLL_INTERVAL_MS = 5000;
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const isCritical = severity === 'Sev0' || severity === 'Sev1';
-  return (
-    <Badge variant={isCritical ? 'destructive' : 'outline'}>
-      {severity}
-    </Badge>
-  );
+function getSeverityColor(severity: string): string {
+  const s = (severity ?? '').toLowerCase()
+  if (s.includes('sev0') || s.includes('critical')) return 'var(--accent-red)'
+  if (s.includes('sev1') || s.includes('high')) return 'var(--accent-orange)'
+  if (s.includes('sev2') || s.includes('medium')) return 'var(--accent-yellow)'
+  if (s.includes('sev3') || s.includes('low')) return 'var(--accent-purple)'
+  return 'var(--text-muted)'
+}
+
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const { setAlertCount } = useAppState();
 
   const fetchIncidents = useCallback(async () => {
     try {
@@ -75,12 +86,37 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
     return () => clearInterval(interval);
   }, [fetchIncidents]);
 
+  useEffect(() => {
+    setAlertCount(incidents.length);
+  }, [incidents.length, setAlertCount]);
+
   if (loading) {
     return (
-      <div className="flex flex-col gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
+      <div className="rounded-md border overflow-hidden">
+        <Table className="w-full text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Severity</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Domain</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <TableRow key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <TableCell className="py-3 pr-2" style={{ borderLeft: '4px solid var(--bg-subtle)', paddingLeft: '12px' }}>
+                  <Skeleton className="h-4 w-14" />
+                </TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-32" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-14" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-10" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     );
   }
@@ -88,9 +124,9 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   if (incidents.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Bell className="h-8 w-8 text-muted-foreground" />
-        <p className="font-semibold text-base">No alerts</p>
-        <p className="text-sm text-muted-foreground text-center">
+        <Bell className="h-8 w-8" style={{ color: 'var(--text-muted)' }} />
+        <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>No alerts</p>
+        <p className="text-sm text-center" style={{ color: 'var(--text-muted)' }}>
           No alerts match your current filters. Adjust the filters above or check back later.
         </p>
       </div>
@@ -102,28 +138,49 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
       <Table className="w-full text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Severity</TableHead>
-            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Domain</TableHead>
-            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Resource</TableHead>
-            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Status</TableHead>
-            <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground">Time</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Severity</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Domain</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {incidents.map((item) => (
-            <TableRow key={item.incident_id} className="border-b hover:bg-muted/30 transition-colors">
-              <TableCell className="h-10 px-3 align-middle">
-                <SeverityBadge severity={item.severity} />
+          {incidents.map((incident) => (
+            <TableRow
+              key={incident.incident_id}
+              className="transition-colors cursor-pointer"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--bg-subtle)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'transparent' }}
+            >
+              <TableCell className="py-3 pr-2" style={{ borderLeft: `4px solid ${getSeverityColor(incident.severity)}`, paddingLeft: '12px' }}>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: getSeverityColor(incident.severity) }} />
+                  <span className="text-[11px] font-medium" style={{ color: getSeverityColor(incident.severity) }}>
+                    {incident.severity}
+                  </span>
+                </div>
               </TableCell>
-              <TableCell className="h-10 px-3 align-middle">{item.domain}</TableCell>
-              <TableCell className="h-10 px-3 align-middle truncate max-w-[200px]">
-                {item.title || item.resource_id || item.incident_id}
+              <TableCell className="py-3 px-2">
+                <span className="text-[11px] px-2 py-0.5 rounded font-medium" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+                  {incident.domain}
+                </span>
               </TableCell>
-              <TableCell className="h-10 px-3 align-middle">
-                <Badge variant="outline">{item.status}</Badge>
+              <TableCell className="py-3 px-2 max-w-[180px]">
+                <span className="text-[12px] font-semibold font-mono truncate block" style={{ color: 'var(--text-primary)' }}>
+                  {incident.title || incident.resource_id || incident.incident_id}
+                </span>
               </TableCell>
-              <TableCell className="h-10 px-3 align-middle">
-                {new Date(item.created_at).toLocaleTimeString()}
+              <TableCell className="py-3 px-2">
+                <span className="text-[11px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+                  {incident.status}
+                </span>
+              </TableCell>
+              <TableCell className="py-3 px-2 text-right">
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {formatRelativeTime(incident.created_at)}
+                </span>
               </TableCell>
             </TableRow>
           ))}
