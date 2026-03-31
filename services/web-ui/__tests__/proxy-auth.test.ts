@@ -14,11 +14,11 @@ describe('Chat proxy: Authorization header pass-through', () => {
   });
 
   it('forwards Authorization header from incoming request to upstream fetch', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ thread_id: 'th_123', run_id: 'run_456', status: 'created' }),
-    } as Response);
+    } as unknown as Response);
 
     const { POST } = await import('../app/api/proxy/chat/route');
 
@@ -47,11 +47,11 @@ describe('Chat proxy: Authorization header pass-through', () => {
     process.env.NEXT_PUBLIC_DEV_MODE = 'true';
     jest.resetModules();
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ thread_id: 'th_123', run_id: 'run_456', status: 'created' }),
-    } as Response);
+    } as unknown as Response);
 
     const { POST } = await import('../app/api/proxy/chat/route');
 
@@ -97,11 +97,11 @@ describe('Chat proxy: API_GATEWAY_URL validation', () => {
     process.env.NEXT_PUBLIC_DEV_MODE = 'true';
     jest.resetModules();
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ thread_id: 'th_123' }),
-    } as Response);
+    } as unknown as Response);
 
     const { POST } = await import('../app/api/proxy/chat/route');
     const incomingRequest = new Request('http://localhost:3000/api/proxy/chat', {

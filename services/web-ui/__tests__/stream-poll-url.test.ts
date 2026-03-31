@@ -29,14 +29,14 @@ describe('SSE stream route: internal poll URL', () => {
     process.env.NEXT_PUBLIC_SITE_URL = 'https://ca-web-ui-prod.example.azurecontainerapps.io';
 
     // Mock fetch to return a completed result — causes the polling loop to exit and close the stream
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
       ok: true,
       json: async () => ({
         thread_id: 'th_123',
         run_status: 'completed',
         reply: 'Done',
       }),
-    } as Response);
+    } as unknown as Response);
 
     const { GET } = await import('../app/api/stream/route');
     const url = new URL('http://localhost:3000/api/stream?thread_id=th_123&type=token');
@@ -59,10 +59,10 @@ describe('SSE stream route: internal poll URL', () => {
   it('falls back to localhost:3000 when NEXT_PUBLIC_SITE_URL is not set', async () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
 
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
       ok: true,
       json: async () => ({ thread_id: 'th_123', run_status: 'completed', reply: 'Done' }),
-    } as Response);
+    } as unknown as Response);
 
     const { GET } = await import('../app/api/stream/route');
     const url = new URL('http://localhost:3000/api/stream?thread_id=th_123&type=token');

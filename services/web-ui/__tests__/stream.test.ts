@@ -23,10 +23,10 @@ describe('SSE stream route: heartbeat (UI-008)', () => {
     global.fetch = jest.fn() as any;
     // Mock fetch to return in_progress — keeps the polling loop alive
     // so the stream stays open long enough to observe the heartbeat.
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as jest.MockedFunction<typeof fetch>).mockResolvedValue({
       ok: true,
       json: async () => ({ thread_id: 'th_123', run_status: 'in_progress', reply: null }),
-    } as Response);
+    } as unknown as Response);
   });
 
   afterEach(() => {
