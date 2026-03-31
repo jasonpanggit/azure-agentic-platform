@@ -59,6 +59,13 @@ from services.api_gateway.runbook_rag import generate_query_embedding, search_ru
 from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse, call_azure_tool
 from services.api_gateway.health import router as health_router
 
+# Configure root logger so all INFO+ messages appear in Container Apps log stream.
+# Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 

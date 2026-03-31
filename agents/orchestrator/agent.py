@@ -18,6 +18,7 @@ Safety constraints:
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import List, Optional
 
@@ -30,6 +31,8 @@ from shared.routing import classify_query_text
 
 # Telemetry tracer for the orchestrator service
 tracer = setup_telemetry("aiops-orchestrator-agent")
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -173,6 +176,10 @@ def classify_incident_domain(
             reason (str): Short explanation of classification decision.
     """
     if not affected_resources:
+        logger.info(
+            "classify_incident_domain: no resources provided, falling back to rule keyword match | rule=%s",
+            detection_rule,
+        )
         return classify_query_text(detection_rule)
 
     domain_votes: dict = {}
@@ -185,6 +192,11 @@ def classify_incident_domain(
 
     if not domain_votes:
         # Fall back to detection rule keyword matching
+        logger.info(
+            "classify_incident_domain: no resource type match, falling back to rule keyword match | rule=%s resources=%s",
+            detection_rule,
+            affected_resources,
+        )
         return classify_query_text(detection_rule)
 
     top_domain = max(domain_votes, key=lambda d: domain_votes[d])
@@ -196,7 +208,7 @@ def classify_incident_domain(
         else ("medium" if top_votes / total_votes >= 0.5 else "low")
     )
 
-    return {
+    result = {
         "domain": top_domain,
         "confidence": confidence,
         "reason": (
@@ -204,6 +216,14 @@ def classify_incident_domain(
             f"classified as '{top_domain}'."
         ),
     }
+    logger.info(
+        "classify_incident_domain: classified | domain=%s confidence=%s votes=%s rule=%s",
+        top_domain,
+        confidence,
+        domain_votes,
+        detection_rule,
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -221,15 +241,26 @@ def create_orchestrator() -> ChatAgent:
     Returns:
         ChatAgent configured with the orchestrator system prompt and classification tool.
     """
+    logger.info("create_orchestrator: initialising Foundry client")
     client = get_foundry_client()
 
-    return ChatAgent(
+    agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID", "<not set>")
+    project_endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT", "<not set>")
+    logger.info(
+        "create_orchestrator: config | agent_id=%s project_endpoint=%s",
+        agent_id,
+        project_endpoint,
+    )
+
+    agent = ChatAgent(
         chat_client=client,
         instructions=ORCHESTRATOR_SYSTEM_PROMPT,
         name="orchestrator-agent",
         description="Central incident dispatcher — classifies and routes to domain agents.",
         tools=[classify_incident_domain],
     )
+    logger.info("create_orchestrator: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +268,13 @@ def create_orchestrator() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    logger.info("orchestrator: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
 
+    logger.info("orchestrator: creating agent and binding to agentserver")
     from_agent_framework(create_orchestrator()).run()
+    logger.info("orchestrator: agentserver exited")

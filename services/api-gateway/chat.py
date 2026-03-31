@@ -99,6 +99,13 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
 
     # Determine user identity -- request.user_id takes precedence (D-07)
     effective_user_id = request.user_id or user_id
+    logger.info(
+        "create_chat_thread: user=%s thread_id=%s incident_id=%s message=%.120s",
+        effective_user_id,
+        request.thread_id or "<new>",
+        request.incident_id or "<none>",
+        request.message,
+    )
 
     # Resolve thread_id (TEAMS-004)
     thread_id = request.thread_id
@@ -163,6 +170,12 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
             )
             span.set_attribute("foundry.run_id", run.id)
 
+    logger.info(
+        "create_chat_thread: dispatched | thread_id=%s run_id=%s agent_id=%s",
+        thread_id,
+        run.id,
+        orchestrator_agent_id,
+    )
     return {"thread_id": thread_id, "run_id": run.id}
 
 
@@ -220,7 +233,7 @@ async def get_chat_result(
 
     run_status = latest_run.status
 
-    logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+    logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
     if run_status == "requires_action":
         required_action = latest_run.required_action
