@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-30T16:03:50.389Z"
+last_updated: "2026-03-31T01:00:13.571Z"
 progress:
-  total_phases: 9
-  completed_phases: 9
+  total_phases: 10
+  completed_phases: 7
   total_plans: 41
-  completed_plans: 33
+  completed_plans: 32
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-03-31 — Phase 12 COMPLETE: EOL Domain Agent with multi-source internet search and PostgreSQL caching. 3/3 plans, 86 unit tests green (59 tools + 15 agent + 12 routing). endoflife.date + MS Product Lifecycle APIs with 24h PostgreSQL cache (eol_cache table). 9 @tool functions (query_activity_log, query_os_inventory, query_software_inventory, query_k8s_versions, query_endoflife_date, query_ms_lifecycle, query_resource_health, search_runbooks, scan_estate_eol). Orchestrator routing wired (DOMAIN_AGENT_MAP 8 entries, RESOURCE_TYPE_TO_DOMAIN 13 entries, QUERY_DOMAIN_KEYWORDS 7 entries). EOL_AGENT_ID Terraform env block, build-eol CI job added.
+> Last updated: 2026-03-31 — Plan 09-01 COMPLETE: Tailwind + shadcn/ui Foundation. Fluent UI fully removed. Tailwind CSS v4.2.2 installed, 18 shadcn/ui components scaffolded in components/ui/, cn() utility, CSS custom property design system with Azure Blue --primary: 207 90% 42%, PostCSS config, tailwind.config.ts with blink-cursor + pulse-dot animations. globals.css aligned to UI-SPEC (pure white background, standard shadcn variable values, .prose table styles added).
 
 > Last updated: 2026-03-30 — Plan 11-03 COMPLETE (Phase 11 COMPLETE): Terraform + CI/CD for Patch Agent. patch added to local.agents (8 agents), PATCH_AGENT_ID dynamic env block for orchestrator, patch_agent_id variable declared. RBAC: Reader + Monitoring Reader on all subscriptions (ARG cross-sub). Staging/prod explicitly wire patch_agent_id. build-patch CI job added (14 jobs in summary). All 5 terraform dirs pass fmt -check. Phase 11 fully complete: 3/3 plans, 49 unit tests + 47 integration/routing tests passing.
 
@@ -33,20 +33,19 @@ progress:
 
 ## Current Phase
 
-**Phase 10: API Gateway Hardening — ✅ COMPLETE (2/2 plans)**
+**Phase 9: Web UI Revamp — In Progress (1/6 plans complete)**
 
-Plan 10-01 complete: API gateway auth now fails closed by default; explicit local bypass requires `API_GATEWAY_AUTH_MODE=disabled`. Audit filters are validated before KQL construction, invalid audit requests now return HTTP 400, and the focused gateway security test run passed (`11 passed`).
+Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
-Plan 10-02 complete: runbook search now resolves `PGVECTOR_CONNECTION_STRING`, `POSTGRES_DSN`, or explicit `POSTGRES_*` settings, startup migrations reuse the same resolver, and `/api/v1/runbooks/search` returns HTTP 503 instead of HTTP 500 when the runbook DB is unavailable. Combined gateway regression run passed (`19 passed`).
+Plans 09-02 through 09-06 remain pending.
 
 Parallel status:
 
 - Phase 8 remains blocked on operator-only findings F-01 (Foundry RBAC) and F-02 (prod runbook search 500).
-- Phase 9 has six authored plans and remains pending implementation.
 
 Recent completed context retained below for continuity:
 
-Plan 08-01 complete: Fix Provisioning Gaps — Foundry Orchestrator Agent created, ORCHESTRATOR_AGENT_ID set on ca-api-gateway-prod, Azure Bot Service registered, 3 GitHub secrets added.
+**Phase 12 COMPLETE:** EOL Domain Agent with multi-source internet search and PostgreSQL caching.
 
 Plan 08-02 complete: Critical-Path Validation — test.skip() removed from E2E tests, E2E suite run against prod (22/30 pass), 7 smoke tests executed, VALIDATION-REPORT.md initialized with 2 BLOCKING + 6 DEGRADED findings.
 
@@ -94,7 +93,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
 | 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
 | 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
-| 9 | Web UI Revamp | Planned (6 plans authored, 0 completed) |
+| 9 | Web UI Revamp | In Progress (1/6 plans) |
 | 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
