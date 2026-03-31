@@ -6,6 +6,8 @@ import { useAppState } from '@/lib/app-state-context'
 export function ChatFAB() {
   const { drawerOpen, setDrawerOpen, isStreaming } = useAppState()
 
+  if (drawerOpen) return null
+
   return (
     <button
       onClick={() => setDrawerOpen(!drawerOpen)}
