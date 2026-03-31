@@ -254,7 +254,7 @@ module "agent_apps" {
   teams_bot_id             = var.enable_teams_bot ? module.teams_bot[0].bot_id : var.teams_bot_id
   teams_bot_password       = var.enable_teams_bot ? module.teams_bot[0].bot_password : var.teams_bot_password
   teams_bot_tenant_id      = var.teams_bot_tenant_id != "" ? var.teams_bot_tenant_id : var.tenant_id
-  api_gateway_internal_url = "https://${module.compute_env.acr_login_server != "" ? "ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io" : ""}"
+  api_gateway_internal_url = "https://ca-api-gateway-${var.environment}.internal.${module.compute_env.container_apps_environment_default_domain}"
   web_ui_public_url        = var.web_ui_public_url
   teams_channel_id         = var.teams_channel_id
 
