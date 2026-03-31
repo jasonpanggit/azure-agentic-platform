@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision all 7 domain agents in Foundry and wire their IDs to the orchestrator Container App.
+"""Provision all 8 domain agents in Foundry and wire their IDs to the orchestrator Container App.
 
 Usage:
     # Dry run — prints what would be created
@@ -61,6 +61,7 @@ def _build_agents() -> list[DomainAgentSpec]:
         ("SRE_AGENT_ID",      "sre-agent",      "SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",    "sre"),
         ("ARC_AGENT_ID",      "arc-agent",      "Azure Arc domain specialist — Arc Servers, Arc K8s, Arc Data Services.",            "arc"),
         ("PATCH_AGENT_ID",    "patch-agent",    "Azure patch management specialist — Update Manager compliance, KB-to-CVE mapping.", "patch"),
+        ("EOL_AGENT_ID",      "eol-agent",      "End-of-Life lifecycle specialist — EOL detection, software lifecycle status, upgrade planning across Azure VMs, Arc servers, and Arc K8s.", "eol"),
     ]
     return [
         DomainAgentSpec(
