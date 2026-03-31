@@ -186,162 +186,124 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
     return {"thread_id": thread_id, "run_id": run.id}
 
 
+async def _submit_mcp_approval(
+    endpoint: str,
+    thread_id: str,
+    run_id: str,
+    tool_calls: list,
+) -> bool:
+    """Submit auto-approval for Foundry MCP tool calls via REST.
+
+    The SDK doesn't expose submit_tool_approval; call the REST endpoint directly.
+    Returns True on success.
+    """
+    import requests as _requests
+    from azure.identity import DefaultAzureCredential
+
+    approvals = [{"tool_call_id": tc.id, "approve": True} for tc in tool_calls]
+    logger.info(
+        "Auto-approving %d MCP tool call(s) for thread %s run %s",
+        len(approvals), thread_id, run_id,
+    )
+    try:
+        _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
+        _headers = {
+            "Authorization": f"Bearer {_token.token}",
+            "Content-Type": "application/json",
+        }
+        _url = f"{endpoint}/threads/{thread_id}/runs/{run_id}/submit_tool_outputs?api-version=2025-05-15-preview"
+        _resp = _requests.post(_url, headers=_headers, json={"tool_approvals": approvals})
+        if _resp.status_code in (200, 201):
+            return True
+        logger.warning("Failed to submit tool approvals: %s %s", _resp.status_code, _resp.text[:200])
+    except Exception as exc:
+        logger.warning("Exception submitting tool approvals: %s", exc)
+    return False
+
+
 async def get_chat_result(
     thread_id: str, run_id: Optional[str] = None
 ) -> dict[str, str]:
-    """Poll Foundry for the latest run status on a thread.
+    """Poll Foundry until the run reaches a terminal state, handling approval gates.
 
-    Handles the `requires_action / submit_tool_outputs` flow for the
-    azure_tools function: when the orchestrator calls azure_tools, Foundry
-    pauses the run. We execute the tool locally via stdio MCP and submit
-    the output back to Foundry.
-
-    Returns the run status and, when completed, the assistant's reply text.
-    The caller (stream route) should poll until run_status is terminal
-    (completed | failed | cancelled | expired).
+    Runs an internal polling loop (up to 90 seconds) so that MCP tool approval
+    gates — which appear and must be handled within ~2s — are never missed by the
+    external UI poller. Returns a terminal result to the caller.
 
     Args:
         thread_id: Foundry thread ID.
-        run_id: Optional specific run ID to poll. When provided, targets
-            exactly this run instead of guessing which is latest.
+        run_id: Specific run ID to poll.
 
     Returns:
         Dict with "thread_id", "run_status", and optionally "reply".
     """
+    import time as _time
+
     client = _get_foundry_client()
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+        "FOUNDRY_ACCOUNT_ENDPOINT", ""
+    )
+    terminal = {"completed", "failed", "cancelled", "expired"}
+    deadline = _time.monotonic() + 90  # 90s internal timeout
 
-    # If a specific run_id was provided, retrieve it directly.
-    # Retry up to 3 times with a short delay — Foundry may not expose the run
-    # immediately after creation (propagation delay of ~1-2 seconds).
-    if run_id:
-        latest_run = None
-        for attempt in range(3):
-            try:
-                latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
-                break
-            except Exception as exc:
-                if attempt < 2:
-                    await asyncio.sleep(1)
-                else:
-                    logger.warning("Failed to retrieve run %s after 3 attempts: %s", run_id, exc)
-                    return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
-        if latest_run is None:
-            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
-    else:
-        # Fallback: list runs and pick the most recent one.
-        # Foundry runs.list() returns chronological order (oldest first),
-        # so the LAST element is the most recent run.
-        runs = client.runs.list(thread_id=thread_id)
-        run_list = list(runs)
-        if not run_list:
-            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
+    # Wait for run to become visible (Foundry propagation delay ~1-2s)
+    latest_run = None
+    for attempt in range(5):
+        try:
+            latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
+            break
+        except Exception:
+            if attempt < 4:
+                await asyncio.sleep(1)
 
-        latest_run = run_list[-1]
+    if latest_run is None:
+        logger.warning("Run %s not found after 5 attempts", run_id)
+        return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
 
-    run_status = latest_run.status
+    while _time.monotonic() < deadline:
+        run_status = str(latest_run.status.value if hasattr(latest_run.status, 'value') else latest_run.status)
+        logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
 
-    logger.info("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+        if run_status in terminal:
+            break
 
-    if run_status == "requires_action":
-        required_action = latest_run.required_action
-        if required_action is None or not hasattr(required_action, "type"):
-            pass
-        elif required_action.type == "submit_tool_approval":
-            # Foundry MCP tool calls require explicit approval before execution.
-            # Auto-approve all MCP tool calls — the human-in-the-loop gate for
-            # destructive actions is handled separately at the proposal/approval
-            # layer (approval_gate), not at the MCP tool level.
-            tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore[attr-defined]
-            approvals = [{"tool_call_id": tc.id, "approve": True} for tc in tool_calls]
-            logger.info(
-                "Auto-approving %d MCP tool call(s) for thread %s run %s",
-                len(approvals),
-                thread_id,
-                latest_run.id,
-            )
-            try:
-                import requests as _requests
-                endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
-                    "FOUNDRY_ACCOUNT_ENDPOINT", ""
-                )
-                from azure.identity import DefaultAzureCredential
-                _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
-                _headers = {
-                    "Authorization": f"Bearer {_token.token}",
-                    "Content-Type": "application/json",
-                }
-                _url = f"{endpoint}/threads/{thread_id}/runs/{latest_run.id}/submit_tool_outputs?api-version=2025-05-15-preview"
-                _resp = _requests.post(_url, headers=_headers, json={"tool_approvals": approvals})
-                if _resp.status_code in (200, 201):
-                    return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
-                else:
-                    logger.warning("Failed to submit tool approvals: %s %s", _resp.status_code, _resp.text[:200])
-            except Exception as exc:
-                logger.warning("Exception submitting tool approvals: %s", exc)
-
-        elif required_action.type == "submit_tool_outputs":
-            tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore[attr-defined]
-            tool_outputs = []
-            for tc in tool_calls:
-                fn_name = getattr(tc.function, "name", "") if hasattr(tc, "function") else ""
-                fn_args_raw = getattr(tc.function, "arguments", "{}") if hasattr(tc, "function") else "{}"
-                logger.info("Executing function tool call: %s (id=%s)", fn_name, tc.id)
-
-                if fn_name == "azure_tools":
-                    # The orchestrator MUST NOT execute Azure tools directly.
-                    # It is only allowed to classify incidents and route to domain
-                    # agents via HandoffOrchestrator. Returning an error here
-                    # forces the LLM to route to the correct domain agent instead
-                    # of answering from raw Azure data.
-                    fn_args = {}
+        if run_status == "requires_action":
+            required_action = latest_run.required_action
+            if required_action is not None and hasattr(required_action, "type"):
+                if required_action.type == "submit_tool_approval":
+                    tool_calls = required_action.submit_tool_approval.tool_calls  # type: ignore
+                    await _submit_mcp_approval(endpoint, thread_id, latest_run.id, tool_calls)
+                elif required_action.type == "submit_tool_outputs":
+                    # Should not happen with MCP-only orchestrator, but handle defensively
+                    tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore
+                    outputs = [{"tool_call_id": tc.id, "output": "Not supported"} for tc in tool_calls]
                     try:
-                        fn_args = json.loads(fn_args_raw)
-                    except Exception:
-                        pass
-                    tool_name = fn_args.get("tool_name", "unknown")
-                    logger.warning(
-                        "Orchestrator attempted to call azure_tools(%s) directly — blocked. "
-                        "Route to the appropriate domain agent instead.",
-                        tool_name,
-                    )
-                    output = (
-                        "ERROR: The orchestrator is not permitted to call Azure tools directly. "
-                        "You MUST route this request to the appropriate domain agent "
-                        "(compute-agent, network-agent, storage-agent, security-agent, "
-                        "arc-agent, or sre-agent) via HandoffOrchestrator. "
-                        "Do NOT answer from your own knowledge or tool calls."
-                    )
-                else:
-                    output = f"Unknown function: {fn_name}"
+                        client.runs.submit_tool_outputs(
+                            thread_id=thread_id,
+                            run_id=latest_run.id,
+                            tool_outputs=outputs,
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to submit tool outputs: %s", exc)
 
-                tool_outputs.append({"tool_call_id": tc.id, "output": output})
+        await asyncio.sleep(1)
+        try:
+            latest_run = client.runs.get(thread_id=thread_id, run_id=latest_run.id)
+        except Exception as exc:
+            logger.warning("Failed to refresh run %s: %s", run_id, exc)
+            break
 
-            logger.info(
-                "Submitting %d tool output(s) for thread %s run %s",
-                len(tool_outputs),
-                thread_id,
-                latest_run.id,
-            )
-            try:
-                with mcp_span("tool_approval", thread_id=thread_id) as mspan:
-                    mspan.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
-                    client.runs.submit_tool_outputs(
-                        thread_id=thread_id,
-                        run_id=latest_run.id,
-                        tool_outputs=tool_outputs,
-                    )
-                return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
-            except Exception as exc:
-                logger.warning("Failed to submit tool outputs: %s", exc)
+    run_status = str(latest_run.status.value if hasattr(latest_run.status, 'value') else latest_run.status)
+    if run_status not in terminal:
+        logger.warning("Run %s timed out at status %s", run_id, run_status)
+        return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
 
     reply = None
     if run_status == "completed":
-        # Fetch the last assistant message
         with foundry_span("list_messages", thread_id=thread_id):
             messages = client.messages.list(thread_id=thread_id)
         for msg in messages:
             if msg.role == "assistant":
-                # Extract text from the first text content block
                 for block in msg.content:
                     if hasattr(block, "text") and hasattr(block.text, "value"):
                         reply = block.text.value
