@@ -52,26 +52,36 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 /* Markdown table styling for agent chat bubbles */
 .prose table {
-  @apply w-full text-[13px] leading-snug;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.375;
 }
 .prose th {
-  @apply px-3 py-1.5 text-left font-semibold border-b-2 border-border whitespace-nowrap;
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid hsl(var(--border));
+  white-space: nowrap;
 }
 .prose td {
-  @apply px-3 py-1 border-b border-border whitespace-nowrap;
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  white-space: nowrap;
 }
 .prose table div {
-  @apply overflow-x-auto my-2;
+  overflow-x: auto;
+  margin: 0.5rem 0;
 }
 
 /* Custom prose for agent chat responses */
