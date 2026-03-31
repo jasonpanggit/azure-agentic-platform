@@ -100,12 +100,11 @@ resource "azurerm_container_app" "agents" {
         value = var.cors_allowed_origins
       }
       # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
-      # Value is this Container App's own system-assigned managed identity principal_id.
-      # agents/shared/auth.py raises ValueError if this is missing at runtime.
-      env {
-        name  = "AGENT_ENTRA_ID"
-        value = azurerm_container_app.agents[each.key].identity[0].principal_id
-      }
+      # Value is injected post-creation via azurerm_container_app_custom_domain or
+      # read at runtime from IMDS / DefaultAzureCredential JWT `oid` claim.
+      # Cannot be set inline — self-reference creates a Terraform dependency cycle
+      # (each for_each instance depends on the entire resource block).
+      # See .planning/debug/terraform-plan-errors.md for details.
       # Orchestrator Agent ID — required by api-gateway and orchestrator for Foundry dispatch
       dynamic "env" {
         for_each = var.orchestrator_agent_id != "" ? [1] : []
@@ -219,7 +218,9 @@ resource "azurerm_container_app" "agents" {
   tags = var.required_tags
 
   # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
-  # AGENT_ENTRA_ID (and other required env vars) must propagate on every `terraform apply`.
+  # Required env vars (agent IDs, endpoints) must propagate on every `terraform apply`.
+  # AGENT_ENTRA_ID is no longer set inline (was causing dependency cycle) — agents
+  # now auto-discover their own principal_id at runtime from the IMDS token.
   #
   # ⚠️  IMPORTANT: Any env vars set manually via `az containerapp update --set-env-vars`
   # (e.g. ORCHESTRATOR_AGENT_ID, domain agent IDs) will be WIPED on the next `terraform apply`
@@ -335,10 +336,10 @@ resource "azurerm_container_app" "teams_bot" {
         value = "3978"
       }
       # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
-      env {
-        name  = "AGENT_ENTRA_ID"
-        value = azurerm_container_app.teams_bot.identity[0].principal_id
-      }
+      # Cannot be set inline — self-reference on azurerm_container_app.teams_bot
+      # causes Terraform error "Configuration may not refer to itself."
+      # Injected post-creation or read at runtime from IMDS / JWT `oid` claim.
+      # See .planning/debug/terraform-plan-errors.md for details.
     }
   }
 
@@ -365,8 +366,9 @@ resource "azurerm_container_app" "teams_bot" {
   tags = var.required_tags
 
   # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
-  # AGENT_ENTRA_ID must propagate on apply. Secret values (BOT_PASSWORD) are managed
-  # out-of-band via `az containerapp secret set` — those are in the secret block, not env.
+  # AGENT_ENTRA_ID is no longer set inline (was causing self-referential error) — agents
+  # now auto-discover their own principal_id at runtime from the IMDS token.
+  # Secret values (BOT_PASSWORD) are managed out-of-band via `az containerapp secret set`.
   # ⚠️  IMPORTANT: Manually-set env vars (e.g. BOT_ID, BOT_TENANT_ID) will be wiped on
   # `terraform apply` unless also set in terraform.tfvars (var.bot_id etc.).
   # Runtime image revisions are still ignored — CI/CD owns the image tag.

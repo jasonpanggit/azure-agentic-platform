@@ -157,3 +157,9 @@ variable "eol_agent_id" {
   type        = string
   default     = ""
 }
+
+variable "enable_entra_apps" {
+  description = "Enable Entra ID app registration management. Requires the Terraform SP to have Microsoft Graph Application.ReadWrite.All permission. Set false to skip Entra resources when the SP lacks Graph API permissions."
+  type        = bool
+  default     = false
+}

@@ -40,11 +40,10 @@ resource "azurerm_eventhub_namespace" "main" {
 # Single ingest point for all Azure Monitor alert payloads.
 
 resource "azurerm_eventhub" "raw_alerts" {
-  name                = "raw-alerts"
-  namespace_name      = azurerm_eventhub_namespace.main.name
-  resource_group_name = var.resource_group_name
-  partition_count     = var.eventhub_partition_count
-  message_retention   = 7
+  name              = "raw-alerts"
+  namespace_id      = azurerm_eventhub_namespace.main.id
+  partition_count   = var.eventhub_partition_count
+  message_retention = 7
 }
 
 # --- Consumer Group: eventhouse-consumer ---

@@ -265,8 +265,13 @@ module "fabric" {
 # Web UI app registration for MSAL browser auth (SPA flow).
 # The client_id output is also stored in Key Vault and referenced by CI/CD
 # as a GitHub Actions variable (NEXT_PUBLIC_AZURE_CLIENT_ID) for the web-ui image build.
+#
+# Gated behind var.enable_entra_apps because the azuread provider requires
+# Microsoft Graph Application.ReadWrite.All permission on the Terraform SP.
+# When disabled, manage app registrations manually via `az ad app` CLI.
 
 module "entra_apps" {
+  count  = var.enable_entra_apps ? 1 : 0
   source = "../../modules/entra-apps"
 
   environment       = var.environment
@@ -288,10 +293,10 @@ module "activity_log" {
 # --- Fabric Service Principal (D-08, D-09) ---
 # App registration for the Fabric User Data Function to authenticate
 # to the API gateway's POST /api/v1/incidents endpoint.
-# Only provisioned when gateway_app_client_id is set.
+# Only provisioned when both enable_entra_apps AND gateway_app_client_id are set.
 
 resource "azuread_application" "fabric_sp" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   display_name = "aap-fabric-detection-${var.environment}"
 
   required_resource_access {
@@ -305,7 +310,7 @@ resource "azuread_application" "fabric_sp" {
 }
 
 resource "azuread_service_principal" "fabric_sp" {
-  count     = var.gateway_app_client_id != "" ? 1 : 0
+  count     = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   client_id = azuread_application.fabric_sp[0].client_id
 }
 
@@ -313,21 +318,21 @@ resource "azuread_service_principal" "fabric_sp" {
 # timestamp() returns a new value on every plan/apply, causing perpetual diff.
 # See WARN-D4a in 04-01-PLAN.md. Update this date during scheduled secret rotation.
 resource "azuread_application_password" "fabric_sp" {
-  count          = var.gateway_app_client_id != "" ? 1 : 0
+  count          = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   application_id = azuread_application.fabric_sp[0].id
   display_name   = "fabric-detection-secret"
   end_date       = "2027-03-26T00:00:00Z" # Fixed 1-year expiry — rotate before this date
 }
 
 resource "azurerm_key_vault_secret" "fabric_sp_client_id" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   name         = "fabric-sp-client-id"
   value        = azuread_application.fabric_sp[0].client_id
   key_vault_id = module.keyvault.keyvault_id
 }
 
 resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
-  count        = var.gateway_app_client_id != "" ? 1 : 0
+  count        = var.enable_entra_apps && var.gateway_app_client_id != "" ? 1 : 0
   name         = "fabric-sp-client-secret"
   value        = azuread_application_password.fabric_sp[0].value
   key_vault_id = module.keyvault.keyvault_id
