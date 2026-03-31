@@ -1,10 +1,11 @@
 ---
 phase: 13
 slug: add-a-new-patch-management-tab-and-show-all-the-patch-related-information
-status: draft
+status: approved
 shadcn_initialized: true
 preset: new-york
 created: 2026-03-31
+reviewed_at: 2026-03-31
 ---
 
 # Phase 13 — UI Design Contract
@@ -35,6 +36,7 @@ Declared values (must be multiples of 4):
 |-------|-------|-------|
 | xs | 4px | Icon gaps, inline badge padding (`gap-1`, `px-1`) |
 | sm | 8px | Compact element spacing, table cell padding (`gap-2`, `px-2`) |
+| xs-plus | 12px | Inner section gaps between heading and filter bar/table (`gap-3`) |
 | md | 16px | Default section padding, card content gaps (`gap-4`, `p-4`) |
 | lg | 24px | Section vertical gaps between summary cards and tables (`gap-6`, `p-6`) |
 | xl | 32px | Not used in this phase |
@@ -49,6 +51,8 @@ Exceptions: none
 
 ## Typography
 
+**Weights used in this phase: 2 (400 regular, 600 semibold)**
+
 | Role | Size | Weight | Line Height | Tailwind Class |
 |------|------|--------|-------------|----------------|
 | Body | 14px | 400 (regular) | 1.5 | `text-sm` (default) |
@@ -58,9 +62,9 @@ Exceptions: none
 | Table cell text | 13px | 400 (regular) | 1.5 | `text-[13px]` |
 | Badge text | 12px | 600 (semibold) | 1.0 | `text-xs font-semibold` (Badge default) |
 | Muted / secondary text | 12px | 400 (regular) | 1.5 | `text-xs text-muted-foreground` |
-| Mono values (counts) | 13px | 500 (medium) | 1.2 | `font-mono text-[13px] font-medium` |
+| Mono values (counts) | 13px | 400 (regular) | 1.2 | `font-mono text-[13px]` |
 
-> Source: `MetricCard.tsx` (text-xs title, font-mono text-2xl value), `AlertFeed.tsx` (text-[11px]..text-[13px]), `ResourcesTab.tsx` (text-sm table). Note: this phase standardizes table cell text at 13px to match AlertFeed and DashboardPanel tab labels.
+> Source: `MetricCard.tsx` (text-xs title, font-mono text-2xl value), `AlertFeed.tsx` (text-[11px]..text-[13px]), `ResourcesTab.tsx` (text-sm table). Note: this phase standardizes table cell text at 13px to match AlertFeed and DashboardPanel tab labels. Mono values use weight 400 — the JetBrains Mono typeface is visually distinct from Inter body text regardless of weight, so regular (400) is sufficient for numeric data.
 
 ---
 
@@ -152,6 +156,10 @@ Exceptions: none
 ---
 
 ## Layout Specification
+
+### Focal Point
+
+Primary focal point: the 5 MetricCard summary cards (Section 2), whose health-colored left borders draw the eye before either table.
 
 ### Tab Bar Entry (in DashboardPanel.tsx)
 
