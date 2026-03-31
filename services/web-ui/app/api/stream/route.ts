@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { globalEventBuffer } from '@/lib/sse-buffer';
+import { getApiGatewayUrl } from '@/lib/api-gateway';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -105,21 +106,25 @@ export async function GET(request: NextRequest) {
 
       // Poll the API gateway for run completion
       const deadline = Date.now() + POLL_TIMEOUT_MS;
-      const runIdParam = runId ? `&run_id=${encodeURIComponent(runId)}` : '';
+      const runIdParam = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
       // Allow up to 5 consecutive not_found responses (~10s) before treating as terminal.
       // This absorbs Foundry's ~1-2s propagation delay without polling forever on genuinely missing runs.
       const NOT_FOUND_LIMIT = 5;
       let notFoundCount = 0;
+
+      // Call the API gateway directly (server-to-server) to avoid the self-referencing
+      // proxy pattern. Auth is currently disabled on the gateway for internal polling.
+      const apiGatewayUrl = getApiGatewayUrl();
+      const pollHeaders: Record<string, string> = {};
 
       while (!aborted && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
         if (aborted) break;
 
         try {
-          const siteBase = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
           const res = await fetch(
-            `${siteBase}/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}${runIdParam}`,
-            { signal: AbortSignal.timeout(8000) }
+            `${apiGatewayUrl}/api/v1/chat/${encodeURIComponent(threadId)}/result${runIdParam}`,
+            { headers: pollHeaders, signal: AbortSignal.timeout(8000) }
           );
 
           if (!res.ok) continue; // transient error — keep polling
