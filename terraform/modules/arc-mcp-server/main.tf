@@ -20,10 +20,17 @@ resource "azurerm_container_app" "arc_mcp_server" {
     type = "SystemAssigned"
   }
 
+  # ACR registry configuration — uses managed identity for image pull (no admin credentials)
+  # Matches the agent-apps pattern: system-assigned MI authenticates to ACR.
+  registry {
+    server   = var.acr_login_server
+    identity = "system"
+  }
+
   # INTERNAL INGRESS — not publicly accessible, reachable within Container Apps env
   ingress {
-    external_enabled = false   # Internal only — AGENT-005 success criteria SC-1
-    target_port      = 8080    # FastMCP streamable-http port
+    external_enabled = false # Internal only — AGENT-005 success criteria SC-1
+    target_port      = 8080  # FastMCP streamable-http port
     transport        = "http"
     traffic_weight {
       percentage      = 100
@@ -61,6 +68,13 @@ resource "azurerm_container_app" "arc_mcp_server" {
   }
 
   tags = var.required_tags
+
+  # Runtime image revisions are owned by CI/CD — ignore drift from manual deploys.
+  lifecycle {
+    ignore_changes = [
+      template[0].container[0].image,
+    ]
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -78,6 +92,22 @@ resource "azurerm_role_assignment" "arc_mcp_reader" {
   principal_id         = azurerm_container_app.arc_mcp_server.identity[0].principal_id
   role_definition_name = "Reader"
   scope                = "/subscriptions/${each.value}"
+
+  depends_on = [azurerm_container_app.arc_mcp_server]
+}
+
+# ---------------------------------------------------------------------------
+# RBAC: AcrPull on ACR for image pull via system-assigned managed identity
+# ---------------------------------------------------------------------------
+# The registry block above uses identity = "system", which requires the
+# Container App's managed identity to have AcrPull on the ACR.
+
+resource "azurerm_role_assignment" "arc_mcp_acr_pull" {
+  count = var.acr_id != "" ? 1 : 0
+
+  principal_id         = azurerm_container_app.arc_mcp_server.identity[0].principal_id
+  role_definition_name = "AcrPull"
+  scope                = var.acr_id
 
   depends_on = [azurerm_container_app.arc_mcp_server]
 }

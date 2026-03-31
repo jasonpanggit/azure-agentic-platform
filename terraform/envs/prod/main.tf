@@ -5,8 +5,8 @@ locals {
     project     = "aap"
   }
 
-  # Prod currently uses the platform Azure MCP sidecar, not the custom Arc MCP server module.
-  enable_arc_mcp_server = false
+  # Prod deploys the Arc MCP Server for Arc-specific tools (arc_servers_list, etc.)
+  enable_arc_mcp_server = true
 }
 
 resource "azurerm_resource_group" "main" {
@@ -159,6 +159,7 @@ module "arc_mcp_server" {
   container_apps_environment_id  = module.compute_env.container_apps_environment_id
   container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
   acr_login_server               = module.compute_env.acr_login_server
+  acr_id                         = module.compute_env.acr_id
   app_insights_connection_string = module.monitoring.app_insights_connection_string
 
   # Prod: Arc resources may span multiple subscriptions.

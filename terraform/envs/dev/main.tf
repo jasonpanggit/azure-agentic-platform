@@ -184,6 +184,7 @@ module "arc_mcp_server" {
   container_apps_environment_id  = module.compute_env.container_apps_environment_id
   container_apps_env_domain      = module.compute_env.container_apps_environment_default_domain
   acr_login_server               = module.compute_env.acr_login_server
+  acr_id                         = module.compute_env.acr_id
   app_insights_connection_string = module.monitoring.app_insights_connection_string
 
   # In dev, Arc resources live in the same subscription as the platform.
