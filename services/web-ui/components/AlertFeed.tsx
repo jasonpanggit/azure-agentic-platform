@@ -56,29 +56,37 @@ function formatRelativeTime(isoString: string): string {
 export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { setAlertCount } = useAppState();
 
   const fetchIncidents = useCallback(async () => {
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (subscriptions.length > 0) {
         params.set('subscription', subscriptions.join(','));
       }
-      if (filters.severity) params.set('severity', filters.severity);
-      if (filters.domain) params.set('domain', filters.domain);
-      if (filters.status) params.set('status', filters.status);
+      if (filters.severity && filters.severity !== 'all') params.set('severity', filters.severity);
+      if (filters.domain && filters.domain !== 'all') params.set('domain', filters.domain);
+      if (filters.status && filters.status !== 'all') params.set('status', filters.status);
 
       const res = await fetch(`/api/proxy/incidents?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setIncidents(data);
+        if (Array.isArray(data)) {
+          setIncidents(data);
+        } else {
+          setError('Unexpected response format from server');
+        }
+      } else {
+        setError(`Failed to fetch alerts: ${res.status}`);
       }
     } catch {
       // Polling failure — retry on next interval
     } finally {
       setLoading(false);
     }
-  }, [subscriptions, filters]);
+  }, [subscriptions, filters.severity, filters.domain, filters.status]);
 
   useEffect(() => {
     fetchIncidents();
@@ -121,7 +129,16 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
     );
   }
 
-  if (incidents.length === 0) {
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-6 text-sm" style={{ color: 'var(--accent-red)' }}>
+        <span>⚠</span>
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (incidents.length === 0 && !error) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
         <Bell className="h-8 w-8" style={{ color: 'var(--text-muted)' }} />
