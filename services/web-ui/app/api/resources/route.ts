@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DefaultAzureCredential } from '@azure/identity';
+import { logger } from '@/lib/logger';
+
+const log = logger.child({ route: '/api/resources' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,6 +32,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const typeFilter = searchParams.get('type') || '';
 
   try {
+    log.info('request start', { subscriptions: subsParam, type_filter: typeFilter || undefined });
     const credential = new DefaultAzureCredential();
     const tokenResponse = await credential.getToken(
       'https://management.azure.com/.default'
@@ -85,9 +89,11 @@ export async function GET(request: Request): Promise<NextResponse> {
     // Collect distinct resource types sorted alphabetically
     const resourceTypes = [...new Set(resources.map((r) => r.type))].sort();
 
+    log.debug('request success', { count: resources.length });
     return NextResponse.json({ resources, total: resources.length, resourceTypes });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    log.error('arm error', { error: message });
     return NextResponse.json(
       { error: `Failed to list resources: ${message}` },
       { status: 500 }

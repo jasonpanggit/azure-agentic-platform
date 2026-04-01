@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DefaultAzureCredential } from '@azure/identity';
+import { logger } from '@/lib/logger';
+
+const log = logger.child({ route: '/api/topology' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,6 +54,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const subsParam = searchParams.get('subscriptions') || '';
 
   try {
+    log.info('request start', { subscriptions: subsParam });
     const credential = new DefaultAzureCredential();
     const tokenResponse = await credential.getToken(
       'https://management.azure.com/.default'
@@ -162,9 +166,11 @@ export async function GET(request: Request): Promise<NextResponse> {
       }
     }
 
+    log.debug('request success', { node_count: nodes.length, edge_count: edges.length });
     return NextResponse.json({ nodes, edges } satisfies TopologyData);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    log.error('arm error', { error: message });
     return NextResponse.json(
       { error: `Failed to build topology: ${message}` },
       { status: 500 }
