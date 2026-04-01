@@ -77,8 +77,12 @@ class TestRunbookRAG:
         assert len(results) == 3
 
     @pytest.mark.anyio
-    async def test_similarity_above_075_threshold(self, pre_seeded_embeddings):
-        """Only results with similarity >= 0.75 are returned."""
+    async def test_similarity_above_075_threshold(self, pre_seeded_embeddings, monkeypatch):
+        """Only results with similarity >= 0.75 are returned when threshold is set to 0.75."""
+        monkeypatch.setenv("RUNBOOK_SIMILARITY_THRESHOLD", "0.75")
+        # Re-import to pick up the new env var value
+        if "services.api_gateway.runbook_rag" in sys.modules:
+            del sys.modules["services.api_gateway.runbook_rag"]
         rows = [
             _make_row("1", "High Match", "compute", "v1.0", "content1", 0.92),
             _make_row("2", "Good Match", "compute", "v1.0", "content2", 0.85),
@@ -93,9 +97,6 @@ class TestRunbookRAG:
         asyncpg_mod, pgvector_mod = _install_asyncpg_stub(mock_conn)
         asyncpg_mod.connect = AsyncMock(return_value=mock_conn)
         pgvector_mod.register_vector = AsyncMock()
-
-        if "services.api_gateway.runbook_rag" in sys.modules:
-            del sys.modules["services.api_gateway.runbook_rag"]
 
         from services.api_gateway.runbook_rag import search_runbooks
         results = await search_runbooks(pre_seeded_embeddings[0], limit=4)
