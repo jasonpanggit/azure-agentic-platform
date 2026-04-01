@@ -215,6 +215,16 @@ resource "azurerm_container_app" "agents" {
           value = var.arc_mcp_server_url
         }
       }
+      # Inject Azure MCP Server URL into patch and EOL agents
+      # Both agents mount MCPTool / MCPStreamableHTTPTool only when this URL is non-empty,
+      # so leaving it empty preserves graceful degradation (MCP tools silently skipped).
+      dynamic "env" {
+        for_each = contains(["patch", "eol"], each.key) && var.azure_mcp_server_url != "" ? [1] : []
+        content {
+          name  = "AZURE_MCP_SERVER_URL"
+          value = var.azure_mcp_server_url
+        }
+      }
       # Web UI specific: Log Analytics workspace for Observability tab
       dynamic "env" {
         for_each = each.key == "web-ui" && var.log_analytics_workspace_customer_id != "" ? [1] : []

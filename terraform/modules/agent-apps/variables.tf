@@ -136,6 +136,12 @@ variable "arc_mcp_server_url" {
   default     = ""
 }
 
+variable "azure_mcp_server_url" {
+  description = "Public or internal URL of the Azure MCP Server (npx @azure/mcp@latest) for patch and EOL agents (AZURE_MCP_SERVER_URL)"
+  type        = string
+  default     = ""
+}
+
 # Teams Bot specific variables
 variable "teams_bot_id" {
   description = "Azure AD app registration client ID for the Teams bot (BOT_ID)"

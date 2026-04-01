@@ -21,3 +21,7 @@ enable_entra_apps = false
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+
+# Azure MCP Server URL — set to the Container App / external URL where @azure/mcp runs
+# Example: https://ca-azure-mcp-server-prod.<env>.azurecontainerapps.io
+# azure_mcp_server_url = ""
