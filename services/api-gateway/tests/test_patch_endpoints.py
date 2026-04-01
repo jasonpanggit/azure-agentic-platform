@@ -20,9 +20,11 @@ SAMPLE_ASSESSMENT_DATA = [
     {
         "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01/patchAssessmentResults/latest",
         "name": "latest",
+        "machineName": "vm-prod-01",
         "resourceGroup": "rg-1",
         "subscriptionId": "sub-1",
         "osType": "Windows",
+        "osVersion": "Windows Server 2022 Datacenter",
         "rebootPending": True,
         "lastAssessment": "2026-03-31T10:00:00Z",
         "criticalCount": 2,
@@ -37,9 +39,11 @@ SAMPLE_ASSESSMENT_DATA = [
     {
         "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.HybridCompute/machines/arc-srv-01/patchAssessmentResults/latest",
         "name": "latest",
+        "machineName": "arc-srv-01",
         "resourceGroup": "rg-1",
         "subscriptionId": "sub-1",
         "osType": "Linux",
+        "osVersion": "Ubuntu 22.04 LTS",
         "rebootPending": False,
         "lastAssessment": "2026-03-31T09:30:00Z",
         "criticalCount": 0,
@@ -132,10 +136,18 @@ class TestGetPatchAssessment:
 
         # Verify first machine fields
         m0 = body["machines"][0]
+        assert m0["machineName"] == "vm-prod-01"
         assert m0["osType"] == "Windows"
+        assert m0["osVersion"] == "Windows Server 2022 Datacenter"
         assert m0["rebootPending"] is True
         assert m0["criticalCount"] == 2
         assert m0["securityCount"] == 5
+
+        # Verify second machine (Arc) fields
+        m1 = body["machines"][1]
+        assert m1["machineName"] == "arc-srv-01"
+        assert m1["osType"] == "Linux"
+        assert m1["osVersion"] == "Ubuntu 22.04 LTS"
 
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_returns_empty_when_no_machines(self, mock_query, client):

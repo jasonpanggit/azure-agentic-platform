@@ -86,11 +86,15 @@ async def get_patch_assessment(
             detail="subscriptions query parameter is required",
         )
 
-    # KQL ported from agents/patch/tools.py::query_patch_assessment (lines 141-166)
+    # KQL: join patchassessmentresources with resources to get machine name and OS version.
+    # The patchassessmentresources `name` field is always "latest" and `id` is the assessment
+    # resource path, so we extract the parent machine ID and join with the resources table
+    # to get human-readable machine names and full OS version info.
     kql = (
         "patchassessmentresources\n"
         '| where type =~ "microsoft.compute/virtualmachines/patchassessmentresults"\n'
         '    or type =~ "microsoft.hybridcompute/machines/patchassessmentresults"\n'
+        "| extend machineIdLower = tolower(tostring(split(id, '/patchAssessmentResults/')[0]))\n"
         "| extend rebootPending = tobool(properties.rebootPending),\n"
         "         osType = tostring(properties.osType),\n"
         "         lastAssessment = todatetime(properties.lastModifiedDateTime),\n"
@@ -102,9 +106,26 @@ async def get_patch_assessment(
         "         definitionCount = toint(properties.availablePatchCountByClassification.Definition),\n"
         "         toolsCount = toint(properties.availablePatchCountByClassification.Tools),\n"
         "         updatesCount = toint(properties.availablePatchCountByClassification.Updates)\n"
-        "| project id, name, resourceGroup, subscriptionId, osType, rebootPending,\n"
-        "          lastAssessment, criticalCount, securityCount, updateRollupCount,\n"
-        "          featurePackCount, servicePackCount, definitionCount, toolsCount, updatesCount"
+        "| join kind=leftouter (\n"
+        "    resources\n"
+        '    | where type =~ "microsoft.compute/virtualmachines"\n'
+        '        or type =~ "microsoft.hybridcompute/machines"\n'
+        "    | extend\n"
+        "        osVersion = coalesce(\n"
+        "            tostring(properties.extended.instanceView.osName),\n"
+        "            strcat(tostring(properties.storageProfile.imageReference.offer),\n"
+        '                   " ", tostring(properties.storageProfile.imageReference.sku)),\n'
+        "            tostring(properties.osName),\n"
+        "            tostring(properties.osSku)\n"
+        "        )\n"
+        "    | project machineIdLower = tolower(id), machineName = name, osVersion\n"
+        "  ) on machineIdLower\n"
+        "| extend machineName = coalesce(machineName, tostring(split(machineIdLower, '/')[-1]))\n"
+        "| extend osVersion = iff(isempty(osVersion) or osVersion == ' ', osType, osVersion)\n"
+        "| project id, name, machineName, resourceGroup, subscriptionId, osType, osVersion,\n"
+        "          rebootPending, lastAssessment, criticalCount, securityCount,\n"
+        "          updateRollupCount, featurePackCount, servicePackCount,\n"
+        "          definitionCount, toolsCount, updatesCount"
     )
 
     try:

@@ -32,9 +32,11 @@ import { formatRelativeTime } from '@/lib/format-relative-time';
 interface AssessmentMachine {
   id: string;
   name: string;
+  machineName: string;
   resourceGroup: string;
   subscriptionId: string;
   osType: string;
+  osVersion: string;
   rebootPending: boolean;
   lastAssessment: string;
   criticalCount: number;
@@ -239,7 +241,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
 
   const assessmentWithCompliance = (assessmentData ?? []).map((m) => ({
     ...m,
-    machineName: m.name !== 'latest' ? m.name : extractMachineName(m.id),
+    machineName: m.machineName || (m.name !== 'latest' ? m.name : extractMachineName(m.id)),
     compliance: deriveCompliance(m),
   }));
 
@@ -434,7 +436,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle">
                         <Badge variant="secondary" className="text-xs">
-                          {m.osType}
+                          {m.osVersion || m.osType}
                         </Badge>
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle">
