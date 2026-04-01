@@ -273,11 +273,11 @@ async def get_patch_assessment(
     #   → strip '/patchAssessmentResults/...' suffix to derive the parent machine ID.
     #
     # osVersion coalesce priority:
-    #   1. properties.osName — Arc machines have the friendly name here
-    #   2. properties.extended.instanceView.osName — Azure VMs with instance view
+    #   1. properties.osSku  — Arc: "Windows Server 2016 Standard" (friendly, confirmed via ARG)
+    #                          Azure VMs: raw SKU like "WindowsServer2022-datacenter-g2" (normalized in Python)
+    #   2. properties.extended.instanceView.osName — Azure VMs with instance view populated
     #   3. imageReference offer+sku concat — Azure VMs marketplace image
-    #   4. properties.osSku — Arc fallback (raw SKU, normalized in Python)
-    #   5. properties.osType — last resort ("Windows" / "Linux")
+    #   4. properties.osType — last resort ("Windows" / "Linux")
     kql = (
         "resources\n"
         '| where type =~ "microsoft.compute/virtualmachines"\n'
@@ -286,8 +286,11 @@ async def get_patch_assessment(
         "| extend machineName = name,\n"
         "         osType = tostring(properties.osType),\n"
         "         osVersion = coalesce(\n"
-        "             tostring(properties.osName),\n"
+        "             // Arc machines: osSku has the friendly name e.g. 'Windows Server 2016 Standard'\n"
+        "             tostring(properties.osSku),\n"
+        "             // Azure VMs with instance view populated\n"
         "             tostring(properties.extended.instanceView.osName),\n"
+        "             // Azure VMs: construct from marketplace image reference\n"
         "             iff(\n"
         "                 isnotempty(tostring(properties.storageProfile.imageReference.offer)),\n"
         "                 strcat(\n"
@@ -297,7 +300,6 @@ async def get_patch_assessment(
         "                 ),\n"
         '                 ""\n'
         "             ),\n"
-        "             tostring(properties.osSku),\n"
         "             tostring(properties.osType)\n"
         "         ),\n"
         '         vmType = iff(type =~ "microsoft.hybridcompute/machines", "Arc VM", "Azure VM")\n'
