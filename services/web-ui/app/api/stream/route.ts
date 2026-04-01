@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { globalEventBuffer } from '@/lib/sse-buffer';
 import { getApiGatewayUrl } from '@/lib/api-gateway';
+import { logger } from '@/lib/logger';
+
+const log = logger.child({ route: '/api/stream' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,8 +40,11 @@ export async function GET(request: NextRequest) {
   const runId = searchParams.get('run_id');
 
   if (!threadId) {
+    log.warn('missing thread_id parameter');
     return new Response('Missing thread_id parameter', { status: 400 });
   }
+
+  log.info('sse connect', { thread_id: threadId, run_id: runId, stream_type: streamType });
 
   let seq = 0;
   const lastEventId = request.headers.get('Last-Event-ID');
@@ -95,6 +101,7 @@ export async function GET(request: NextRequest) {
 
       request.signal.addEventListener('abort', () => {
         aborted = true;
+        log.info('sse abort', { thread_id: threadId, seq });
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         try { controller.close(); } catch { /* already closed */ }
       });
@@ -127,9 +134,13 @@ export async function GET(request: NextRequest) {
             { headers: pollHeaders, signal: AbortSignal.timeout(8000) }
           );
 
-          if (!res.ok) continue; // transient error — keep polling
+          if (!res.ok) {
+            log.debug('poll transient error', { thread_id: threadId, status: res.status });
+            continue; // transient error — keep polling
+          }
 
           const result = (await res.json()) as RunResultPayload;
+          log.debug('poll status', { thread_id: threadId, run_status: result.run_status, not_found_count: notFoundCount });
 
           if (result.run_status === 'not_found') {
             notFoundCount++;
@@ -157,14 +168,19 @@ export async function GET(request: NextRequest) {
 
           // Emit done and close
           pushEvent(controller, 'done', { type: 'done' });
+          log.info('sse close', { thread_id: threadId, final_status: result.run_status, seq });
           break;
-        } catch {
+        } catch (pollErr) {
+          const errMsg = pollErr instanceof Error ? pollErr.message : 'Unknown error';
+          log.error('poll error', { thread_id: threadId, error: errMsg });
           // Network error during poll — continue
         }
       }
 
       // Timeout — emit a friendly done so the spinner clears
       if (!aborted && Date.now() >= deadline) {
+        const elapsed_ms = POLL_TIMEOUT_MS;
+        log.warn('poll timeout', { thread_id: threadId, elapsed_ms });
         pushEvent(controller, 'token', {
           type: 'token',
           delta: 'Agent response timed out. Please try again.',

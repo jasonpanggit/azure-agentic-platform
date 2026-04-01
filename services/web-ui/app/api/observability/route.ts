@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { DefaultAzureCredential } from "@azure/identity";
 import { LogsQueryClient, LogsQueryResultStatus } from "@azure/monitor-query";
 import { CosmosClient } from "@azure/cosmos";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "/api/observability" });
 
 const WORKSPACE_ID = process.env.LOG_ANALYTICS_WORKSPACE_ID || "";
 const COSMOS_ENDPOINT = process.env.COSMOS_ENDPOINT || "";
@@ -52,6 +55,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const isoDuration = TIME_RANGE_MAP[timeRange] || "PT1H";
 
   if (!WORKSPACE_ID) {
+    log.warn("LOG_ANALYTICS_WORKSPACE_ID not configured");
     return NextResponse.json(
       { error: "LOG_ANALYTICS_WORKSPACE_ID not configured" },
       { status: 503 }
@@ -59,6 +63,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   try {
+    log.info("query start", { timeRange, isoDuration });
     const credential = new DefaultAzureCredential();
     const logsClient = new LogsQueryClient(credential);
 
@@ -79,9 +84,11 @@ export async function GET(request: Request): Promise<NextResponse> {
       lastUpdated: new Date().toISOString(),
     };
 
+    log.debug("query success", { timeRange });
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    log.error("query failed", { timeRange, error: message });
     return NextResponse.json(
       { error: `Failed to fetch observability data: ${message}` },
       { status: 500 }
