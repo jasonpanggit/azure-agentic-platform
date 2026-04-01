@@ -1,18 +1,20 @@
 """Patch assessment and installation endpoints for the Web UI Patch tab.
 
 Exposes ARG PatchAssessmentResources and PatchInstallationResources data
-via two GET endpoints. The KQL queries are ported from agents/patch/tools.py
-(query_patch_assessment and query_patch_installations) — the gateway serves
-as the data layer for the UI, not the agent's LLM-callable tools.
+via GET endpoints. Also enriches assessment data with ConfigurationData
+from Log Analytics, and exposes a per-VM installed patch detail endpoint.
 
 Decisions: D-01, D-02 (from 13-CONTEXT.md)
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential
@@ -65,6 +67,174 @@ def _run_arg_query(
     return all_rows
 
 
+# ---------------------------------------------------------------------------
+# LAW (Log Analytics Workspace) helpers
+# ---------------------------------------------------------------------------
+
+
+def _query_law_installed_summary_sync(
+    credential: Any,
+    workspace_id: str,
+    resource_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Query LAW for installed software summary per VM (synchronous).
+
+    Returns dict keyed by lowercase resource_id with:
+        { "installedCount": int, "lastInstalled": str | None }
+    """
+    if not workspace_id or not resource_ids:
+        return {}
+
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+
+    # Build comma-separated, quoted, lowered resource ID list for KQL
+    escaped_ids = ", ".join(
+        f"'{rid.lower()}'" for rid in resource_ids
+    )
+
+    kql = (
+        "ConfigurationData\n"
+        "| where TimeGenerated > ago(90d)\n"
+        f"| where tolower(_ResourceId) in~ ({escaped_ids})\n"
+        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix")\n'
+        "| summarize\n"
+        "    InstalledCount = count(),\n"
+        "    LastInstalled = max(TimeGenerated)\n"
+        "  by ResourceId = tolower(_ResourceId)"
+    )
+
+    client = LogsQueryClient(credential)
+    response = client.query_workspace(
+        workspace_id=workspace_id,
+        query=kql,
+        timespan=timedelta(days=90),
+    )
+
+    result: Dict[str, Dict[str, Any]] = {}
+    if response.status == LogsQueryStatus.SUCCESS and response.tables:
+        for row in response.tables[0].rows:
+            resource_id_lower = str(row[2]) if len(row) > 2 else ""
+            installed_count = int(row[0]) if row[0] is not None else 0
+            last_installed = str(row[1]) if row[1] is not None else None
+            if resource_id_lower:
+                result[resource_id_lower] = {
+                    "installedCount": installed_count,
+                    "lastInstalled": last_installed,
+                }
+    return result
+
+
+async def _query_law_installed_summary(
+    credential: Any,
+    workspace_id: str,
+    resource_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Async wrapper for LAW installed summary query.
+
+    Returns empty dict on any failure (graceful degradation).
+    """
+    if not workspace_id or not resource_ids:
+        return {}
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            _query_law_installed_summary_sync,
+            credential,
+            workspace_id,
+            resource_ids,
+        )
+    except Exception as exc:
+        logger.warning("LAW installed summary query failed (degraded): %s", exc)
+        return {}
+
+
+def _query_law_installed_detail_sync(
+    credential: Any,
+    workspace_id: str,
+    resource_id: str,
+    days: int,
+) -> List[Dict[str, Any]]:
+    """Query LAW for per-VM installed patch detail (synchronous).
+
+    Returns list of dicts with patch detail fields.
+    """
+    if not workspace_id or not resource_id:
+        return []
+
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+
+    escaped_resource_id = resource_id.replace("'", "''")
+
+    kql = (
+        "ConfigurationData\n"
+        f"| where TimeGenerated > ago({days}d)\n"
+        f"| where _ResourceId =~ '{escaped_resource_id}'\n"
+        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix")\n'
+        "| project\n"
+        "    SoftwareName,\n"
+        "    SoftwareType,\n"
+        "    CurrentVersion,\n"
+        "    Publisher,\n"
+        "    Category = SoftwareClassification,\n"
+        "    InstalledDate = TimeGenerated\n"
+        "| order by InstalledDate desc"
+    )
+
+    client = LogsQueryClient(credential)
+    response = client.query_workspace(
+        workspace_id=workspace_id,
+        query=kql,
+        timespan=timedelta(days=days),
+    )
+
+    results: List[Dict[str, Any]] = []
+    if response.status == LogsQueryStatus.SUCCESS and response.tables:
+        columns = [col.name for col in response.tables[0].columns]
+        for row in response.tables[0].rows:
+            record = dict(zip(columns, row))
+            # Stringify datetime values
+            for key in ("InstalledDate",):
+                if record.get(key) is not None:
+                    record[key] = str(record[key])
+            results.append(record)
+    return results
+
+
+async def _query_law_installed_detail(
+    credential: Any,
+    workspace_id: str,
+    resource_id: str,
+    days: int,
+) -> List[Dict[str, Any]]:
+    """Async wrapper for LAW installed detail query.
+
+    Returns empty list on any failure (graceful degradation).
+    """
+    if not workspace_id or not resource_id:
+        return []
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            _query_law_installed_detail_sync,
+            credential,
+            workspace_id,
+            resource_id,
+            days,
+        )
+    except Exception as exc:
+        logger.warning("LAW installed detail query failed (degraded): %s", exc)
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
 @router.get("/assessment")
 async def get_patch_assessment(
     subscriptions: str,
@@ -72,6 +242,11 @@ async def get_patch_assessment(
     credential: Any = Depends(get_credential),
 ) -> Dict[str, Any]:
     """Return per-machine patch compliance data from ARG.
+
+    Enriches each machine with installed patch counts from Log Analytics
+    (ConfigurationData table) when LOG_ANALYTICS_WORKSPACE_ID is configured.
+    LAW enrichment is gracefully degraded — assessment data is always returned
+    even if LAW is unavailable.
 
     Query param:
         subscriptions: Comma-separated subscription IDs.
@@ -150,11 +325,6 @@ async def get_patch_assessment(
 
     try:
         machines = _run_arg_query(credential, subscription_ids, kql)
-        return {
-            "machines": machines,
-            "total_count": len(machines),
-            "query_status": "success",
-        }
     except ImportError:
         logger.error("azure-mgmt-resourcegraph is not installed")
         raise HTTPException(
@@ -167,6 +337,24 @@ async def get_patch_assessment(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"ARG query failed: {exc}",
         )
+
+    # Enrich with LAW ConfigurationData (gracefully degraded)
+    resource_ids = [m["id"] for m in machines if m.get("id")]
+    workspace_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+    law_summary = await _query_law_installed_summary(
+        credential, workspace_id, resource_ids
+    )
+
+    for m in machines:
+        law_data = law_summary.get(m.get("id", "").lower(), {})
+        m["installedCount"] = law_data.get("installedCount", 0)
+        m["lastInstalled"] = law_data.get("lastInstalled")
+
+    return {
+        "machines": machines,
+        "total_count": len(machines),
+        "query_status": "success",
+    }
 
 
 @router.get("/installations")
@@ -229,3 +417,74 @@ async def get_patch_installations(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"ARG query failed: {exc}",
         )
+
+
+@router.get("/installed")
+async def get_installed_patches(
+    resource_id: str = Query(...),
+    days: int = Query(default=90, ge=1, le=365),
+    token: dict[str, Any] = Depends(verify_token),
+    credential: Any = Depends(get_credential),
+) -> Dict[str, Any]:
+    """Return installed patch detail for a specific VM from Log Analytics.
+
+    For Windows patches (SoftwareType Hotfix or Security category), enriches
+    each entry with CVE identifiers from the MSRC API.
+
+    Query params:
+        resource_id: Full ARM resource ID of the VM.
+        days: Look-back window in days (default: 90, max: 365).
+
+    Returns:
+        { patches: [...], total_count: int, resource_id: str, days: int }
+    """
+    workspace_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+    if not workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LOG_ANALYTICS_WORKSPACE_ID not configured",
+        )
+
+    patches = await _query_law_installed_detail(
+        credential, workspace_id, resource_id, days
+    )
+
+    # Extract KB IDs from Windows patches for MSRC enrichment
+    kb_ids_to_lookup: list[str] = []
+    patch_kb_map: dict[int, str] = {}  # patch index -> kb_id
+
+    for idx, patch in enumerate(patches):
+        software_type = patch.get("SoftwareType", "")
+        software_name = patch.get("SoftwareName", "")
+        category = patch.get("Category", "")
+
+        # Only look up CVEs for Windows hotfixes and security patches
+        if software_type == "Hotfix" or "Security" in (category or ""):
+            # Try to extract KB ID from software name (e.g. "KB5034441" or "Update for KB5034441")
+            import re
+            kb_match = re.search(r"KB(\d+)", software_name, re.IGNORECASE)
+            if kb_match:
+                kb_id = f"KB{kb_match.group(1)}"
+                kb_ids_to_lookup.append(kb_id)
+                patch_kb_map[idx] = kb_id
+
+    # Enrich with CVEs (gracefully degraded)
+    cve_map: dict[str, list[str]] = {}
+    if kb_ids_to_lookup:
+        try:
+            from services.api_gateway.msrc_client import get_cves_for_kbs
+            cve_map = await get_cves_for_kbs(list(set(kb_ids_to_lookup)))
+        except Exception as exc:
+            logger.warning("MSRC CVE enrichment failed (degraded): %s", exc)
+
+    # Attach CVEs to patches
+    for idx, patch in enumerate(patches):
+        kb_id = patch_kb_map.get(idx, "")
+        patch["cves"] = cve_map.get(kb_id, [])
+
+    return {
+        "patches": patches,
+        "total_count": len(patches),
+        "resource_id": resource_id,
+        "days": days,
+    }

@@ -47,6 +47,8 @@ interface AssessmentMachine {
   definitionCount: number;
   toolsCount: number;
   updatesCount: number;
+  installedCount: number;
+  lastInstalled: string | null;
 }
 
 interface Installation {
@@ -411,7 +413,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
 
           {assessmentData !== null && filteredAssessment.length > 0 && (
             <div className="rounded-md border overflow-hidden overflow-x-auto">
-              <Table className="w-full min-w-[1000px] text-sm">
+              <Table className="w-full min-w-[1200px] text-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground min-w-[140px]">Machine</TableHead>
@@ -427,6 +429,8 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                     <TableHead className="h-10 px-3 text-right font-semibold text-muted-foreground w-[70px]">Updates</TableHead>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground w-[120px]">Reboot</TableHead>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground min-w-[120px]">Last Assessed</TableHead>
+                    <TableHead className="h-10 px-3 text-right font-semibold text-muted-foreground w-[80px]">Installed</TableHead>
+                    <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground min-w-[120px]">Last Installed</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -478,6 +482,12 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle text-[13px] text-muted-foreground">
                         {m.lastAssessment ? formatRelativeTime(m.lastAssessment) : '\u2014'}
+                      </TableCell>
+                      <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">
+                        {m.installedCount > 0 ? m.installedCount : '\u2014'}
+                      </TableCell>
+                      <TableCell className="h-10 px-3 align-middle text-[13px] text-muted-foreground">
+                        {m.lastInstalled ? formatRelativeTime(m.lastInstalled) : 'Never'}
                       </TableCell>
                     </TableRow>
                   ))}

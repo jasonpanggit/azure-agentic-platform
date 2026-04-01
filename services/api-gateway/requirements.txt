@@ -31,3 +31,6 @@ pgvector>=0.3.0
 
 # Azure Resource Graph — patch assessment + installation queries (Phase 13)
 azure-mgmt-resourcegraph>=8.0.0
+
+# Azure Monitor Query — Log Analytics workspace queries (ConfigurationData enrichment)
+azure-monitor-query>=1.4.0

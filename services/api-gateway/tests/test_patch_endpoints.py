@@ -1,13 +1,15 @@
 """Unit tests for the Patch Management API gateway endpoints.
 
-Tests both GET /api/v1/patch/assessment and GET /api/v1/patch/installations
-with mocked Azure Resource Graph client. Follows existing api-gateway test
-patterns (conftest.py client fixture, mock credentials).
+Tests GET /api/v1/patch/assessment, GET /api/v1/patch/installations,
+and GET /api/v1/patch/installed with mocked Azure Resource Graph client
+and Log Analytics workspace. Follows existing api-gateway test patterns
+(conftest.py client fixture, mock credentials).
 
 Task: 13-01-02
 """
+import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -120,8 +122,9 @@ def _mock_arg_response(data, skip_token=None):
 class TestGetPatchAssessment:
     """Tests for GET /api/v1/patch/assessment."""
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_returns_503_when_sdk_not_installed(self, mock_query, client):
+    def test_returns_503_when_sdk_not_installed(self, mock_query, mock_law, client):
         """If azure-mgmt-resourcegraph is not importable, return 503."""
         mock_query.side_effect = ImportError("No module named 'azure.mgmt.resourcegraph'")
 
@@ -140,10 +143,11 @@ class TestGetPatchAssessment:
         resp = client.get("/api/v1/patch/assessment")
         assert resp.status_code == 422
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_returns_assessment_data(self, mock_query, client):
+    def test_returns_assessment_data(self, mock_query, mock_law, client):
         """Successful response returns machines array and total_count."""
-        mock_query.return_value = SAMPLE_ASSESSMENT_DATA
+        mock_query.return_value = [dict(m) for m in SAMPLE_ASSESSMENT_DATA]
 
         resp = client.get("/api/v1/patch/assessment?subscriptions=sub-1")
         assert resp.status_code == 200
@@ -179,8 +183,9 @@ class TestGetPatchAssessment:
         assert m2["criticalCount"] == 0
         assert m2["securityCount"] == 0
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_returns_empty_when_no_machines(self, mock_query, client):
+    def test_returns_empty_when_no_machines(self, mock_query, mock_law, client):
         """Empty result returns zero-count response."""
         mock_query.return_value = []
 
@@ -191,8 +196,9 @@ class TestGetPatchAssessment:
         assert body["total_count"] == 0
         assert body["machines"] == []
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_unassessed_machines_have_zeroed_patch_counts(self, mock_query, client):
+    def test_unassessed_machines_have_zeroed_patch_counts(self, mock_query, mock_law, client):
         """Machines with no AUM assessment data have all counts zeroed and null lastAssessment."""
         unassessed_only = [
             {
@@ -231,8 +237,9 @@ class TestGetPatchAssessment:
         assert m["securityCount"] == 0
         assert m["updateRollupCount"] == 0
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_splits_comma_subscriptions(self, mock_query, client):
+    def test_splits_comma_subscriptions(self, mock_query, mock_law, client):
         """Comma-separated subscriptions are passed as a list."""
         mock_query.return_value = []
 
@@ -242,8 +249,9 @@ class TestGetPatchAssessment:
         sub_ids = call_args[0][1]  # second positional arg
         assert sub_ids == ["sub-1", "sub-2", "sub-3"]
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_kql_starts_from_resources_table(self, mock_query, client):
+    def test_kql_starts_from_resources_table(self, mock_query, mock_law, client):
         """KQL query uses resources as source of truth, not patchassessmentresources."""
         mock_query.return_value = []
 
@@ -259,14 +267,57 @@ class TestGetPatchAssessment:
         # Must project hasAssessmentData
         assert "hasAssessmentData" in kql
 
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_returns_502_on_arg_failure(self, mock_query, client):
+    def test_returns_502_on_arg_failure(self, mock_query, mock_law, client):
         """ARG query failure returns 502."""
         mock_query.side_effect = Exception("ARG timeout")
 
         resp = client.get("/api/v1/patch/assessment?subscriptions=sub-1")
         assert resp.status_code == 502
         assert "ARG query failed" in resp.json()["detail"]
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock)
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_assessment_includes_law_enrichment(self, mock_query, mock_law, client):
+        """Assessment response includes installedCount and lastInstalled from LAW."""
+        mock_query.return_value = [dict(m) for m in SAMPLE_ASSESSMENT_DATA]
+        mock_law.return_value = {
+            "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm-prod-01": {
+                "installedCount": 42,
+                "lastInstalled": "2026-03-30T12:00:00Z",
+            },
+        }
+
+        resp = client.get("/api/v1/patch/assessment?subscriptions=sub-1")
+        assert resp.status_code == 200
+
+        body = resp.json()
+        m0 = body["machines"][0]
+        assert m0["installedCount"] == 42
+        assert m0["lastInstalled"] == "2026-03-30T12:00:00Z"
+
+        # Machine without LAW data gets defaults
+        m1 = body["machines"][1]
+        assert m1["installedCount"] == 0
+        assert m1["lastInstalled"] is None
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock)
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_assessment_graceful_degradation_when_law_fails(self, mock_query, mock_law, client):
+        """Assessment still returns data when LAW enrichment fails."""
+        mock_query.return_value = [dict(m) for m in SAMPLE_ASSESSMENT_DATA]
+        mock_law.return_value = {}  # LAW failure returns empty dict
+
+        resp = client.get("/api/v1/patch/assessment?subscriptions=sub-1")
+        assert resp.status_code == 200
+
+        body = resp.json()
+        assert body["total_count"] == 3
+        # All machines get default LAW values
+        for m in body["machines"]:
+            assert m["installedCount"] == 0
+            assert m["lastInstalled"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +390,127 @@ class TestGetPatchInstallations:
         body = resp.json()
         assert body["total_count"] == 0
         assert body["installations"] == []
+
+
+# ---------------------------------------------------------------------------
+# Installed patches endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetInstalledPatches:
+    """Tests for GET /api/v1/patch/installed."""
+
+    def test_returns_503_when_workspace_not_configured(self, client):
+        """Returns 503 when LOG_ANALYTICS_WORKSPACE_ID is not set."""
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": ""}, clear=False):
+            resp = client.get("/api/v1/patch/installed?resource_id=/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01")
+            assert resp.status_code == 503
+            assert "LOG_ANALYTICS_WORKSPACE_ID" in resp.json()["detail"]
+
+    def test_returns_422_when_resource_id_missing(self, client):
+        """Missing resource_id returns 422."""
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
+            resp = client.get("/api/v1/patch/installed")
+            assert resp.status_code == 422
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_returns_installed_patches(self, mock_detail, client):
+        """Successful response returns patches array and metadata."""
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "KB5034441 - Security Update",
+                "SoftwareType": "Hotfix",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Security",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+            {
+                "SoftwareName": "nginx",
+                "SoftwareType": "Package",
+                "CurrentVersion": "1.24.0",
+                "Publisher": "Ubuntu",
+                "Category": None,
+                "InstalledDate": "2026-03-29T12:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
+            with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+                mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+                resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=30")
+
+        assert resp.status_code == 200
+
+        body = resp.json()
+        assert body["total_count"] == 2
+        assert body["resource_id"] == resource_id
+        assert body["days"] == 30
+
+        # First patch (Hotfix) should have CVEs enriched
+        p0 = body["patches"][0]
+        assert p0["SoftwareName"] == "KB5034441 - Security Update"
+        assert p0["cves"] == ["CVE-2024-21302"]
+
+        # Second patch (Package) should have empty CVEs
+        p1 = body["patches"][1]
+        assert p1["cves"] == []
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_empty_when_no_patches(self, mock_detail, client):
+        """Returns empty list when LAW has no patch data."""
+        mock_detail.return_value = []
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 0
+        assert body["patches"] == []
+        assert body["days"] == 90  # default
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_cve_enrichment_graceful_degradation(self, mock_detail, client):
+        """CVE enrichment failure still returns patches with empty cves."""
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "KB5034441 - Security Update",
+                "SoftwareType": "Hotfix",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Security",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
+            with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+                mock_cves.side_effect = Exception("MSRC API down")
+                resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 1
+        # CVE enrichment failed but patch data is still returned
+        assert body["patches"][0]["cves"] == []
+
+    def test_installed_days_validation(self, client):
+        """Days parameter must be between 1 and 365."""
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=0")
+            assert resp.status_code == 422
+
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=400")
+            assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

@@ -175,3 +175,89 @@ that are offline, newly provisioned, or never had AUM configured are invisible.
 - [x] `hasAssessmentData` field distinguishes assessed vs unassessed
 - [x] Frontend `deriveCompliance` returns "Unknown" for unassessed machines
 - [x] Response shape preserved (machines array + summary counts)
+
+---
+
+## Iteration 3 — LAW Enrichment + MSRC CVE Mapper + Installed Patches Endpoint
+
+### Objective
+
+Enrich the patch assessment tab with installed patch counts from Log Analytics
+(ConfigurationData), add a per-VM installed patch detail endpoint, and build
+a MSRC KB→CVE mapper for security enrichment.
+
+### Changes Made
+
+#### New File: `services/api-gateway/msrc_client.py`
+- MSRC Security Update Guide API client (no auth required)
+- `get_cves_for_kb(kb_id)` — maps a single KB article ID to CVE identifiers
+- `get_cves_for_kbs(kb_ids)` — batch parallel lookup via `asyncio.gather`
+- In-process cache with 24h TTL to avoid redundant API calls
+- Uses `urllib.request` (stdlib) — no new dependencies added
+- Graceful degradation: returns `[]` on HTTP error, timeout, or parse failure
+
+#### Updated: `services/api-gateway/patch_endpoints.py`
+1. **LAW helpers added:**
+   - `_query_law_installed_summary()` — queries ConfigurationData for installed
+     software count and last install date per VM (90d window)
+   - `_query_law_installed_detail()` — queries ConfigurationData for per-VM
+     installed patch detail with software name, type, version, publisher
+   - Both use `LogsQueryClient` from `azure.monitor.query`, wrapped in
+     `run_in_executor()` for async compatibility
+   - Both gracefully degrade to empty results on any failure
+
+2. **Assessment endpoint enriched:**
+   - After ARG query, calls `_query_law_installed_summary()` with resource IDs
+   - Merges `installedCount` and `lastInstalled` onto each machine record
+   - Defaults: `installedCount=0`, `lastInstalled=null` when LAW unavailable
+
+3. **New endpoint: `GET /api/v1/patch/installed`**
+   - Query params: `resource_id` (required), `days` (1-365, default 90)
+   - Queries LAW ConfigurationData for per-VM installed patch detail
+   - Extracts KB IDs from Windows hotfixes and security patches
+   - Enriches with CVE identifiers via MSRC client (gracefully degraded)
+   - Response: `{ patches: [...], total_count, resource_id, days }`
+
+#### Updated: `services/api-gateway/requirements.txt`
+- Added `azure-monitor-query>=1.4.0` for `LogsQueryClient`
+
+#### New File: `services/web-ui/app/api/proxy/patch/installed/route.ts`
+- Next.js proxy route for `/api/proxy/patch/installed`
+- Follows same pattern as existing `assessment/route.ts`
+- Forwards `resource_id` and `days` query params + auth header
+
+#### Updated: `services/web-ui/components/PatchTab.tsx`
+1. `AssessmentMachine` interface — added `installedCount: number` and
+   `lastInstalled: string | null`
+2. Assessment table — added 2 new columns after "Last Assessed":
+   - **Installed** — count from LAW (shows "—" when 0)
+   - **Last Installed** — relative time or "Never"
+3. Table min-width increased from 1000px to 1200px for new columns
+
+#### New File: `services/api-gateway/tests/test_msrc_client.py`
+- 14 tests covering normalisation, async lookup, caching, error handling,
+  deduplication, batch lookup, and empty inputs
+
+#### Updated: `services/api-gateway/tests/test_patch_endpoints.py`
+- Assessment tests now mock `_query_law_installed_summary` (AsyncMock)
+- Added `test_assessment_includes_law_enrichment` — verifies LAW data merged
+- Added `test_assessment_graceful_degradation_when_law_fails` — verifies
+  assessment still works when LAW returns empty
+- Added 6 tests for `GET /api/v1/patch/installed`:
+  - 503 when workspace not configured
+  - 422 when resource_id missing
+  - Successful response with CVE enrichment
+  - Empty result
+  - CVE enrichment graceful degradation
+  - Days parameter validation (0 and 400 rejected)
+- Total: 39 tests in patch endpoints + MSRC client files
+
+### Verification
+
+- [x] 39 new/updated tests pass (test_patch_endpoints.py + test_msrc_client.py)
+- [x] Full API gateway test suite: 192 passed, 1 pre-existing failure (runbook_rag), 2 skipped
+- [x] TypeScript type check passes (`npx tsc --noEmit` — no errors)
+- [x] LAW enrichment gracefully degrades when LOG_ANALYTICS_WORKSPACE_ID not set
+- [x] MSRC CVE mapper gracefully degrades on API failure
+- [x] No new pip dependencies beyond `azure-monitor-query` (MSRC uses stdlib `urllib.request`)
+- [x] Immutable patterns used (new dicts created, not mutating originals in tests)
