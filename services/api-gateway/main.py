@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -165,6 +166,12 @@ async def _run_startup_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: initialize shared clients, run migrations, then yield."""
+    logger.info("startup: api-gateway starting | version=1.0.0")
+    logger.info("startup: COSMOS_ENDPOINT=%s", "set" if os.environ.get("COSMOS_ENDPOINT") else "not_set")
+    logger.info("startup: APPLICATIONINSIGHTS_CONNECTION_STRING=%s", "set" if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING") else "not_set")
+    logger.info("startup: DIAGNOSTIC_LA_WORKSPACE_ID=%s", "set" if os.environ.get("DIAGNOSTIC_LA_WORKSPACE_ID") else "not_set (log_analytics step will be skipped)")
+    logger.info("startup: LOG_LEVEL=%s", os.environ.get("LOG_LEVEL", "INFO"))
+    logger.info("startup: CORS_ALLOWED_ORIGINS=%s", os.environ.get("CORS_ALLOWED_ORIGINS", "*"))
     # Initialize shared credential and Cosmos client singletons (CONCERNS 4.4)
     app.state.credential = DefaultAzureCredential()
     cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
@@ -255,6 +262,24 @@ async def apply_http_rate_limit(request: Request, call_next):
             )
 
     return await call_next(request)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all HTTP requests with method, path, status, and duration."""
+    start = time.monotonic()
+    correlation_id = getattr(request.state, "correlation_id", "unknown")
+    response = await call_next(request)
+    duration_ms = (time.monotonic() - start) * 1000
+    logger.info(
+        "http: %s %s | status=%d correlation_id=%s duration_ms=%.0f",
+        request.method,
+        request.url.path,
+        response.status_code,
+        correlation_id,
+        duration_ms,
+    )
+    return response
 
 
 @app.get("/health", response_model=HealthResponse)

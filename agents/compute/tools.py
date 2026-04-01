@@ -592,6 +592,12 @@ def query_os_version(
         correlation_id="",
         thread_id="",
     ):
+        start_time = time.monotonic()
+        logger.info(
+            "query_os_version: called | resources=%d subscriptions=%d",
+            len(resource_ids),
+            len(subscription_ids),
+        )
         try:
             if ResourceGraphClient is None:
                 raise ImportError("azure-mgmt-resourcegraph is not installed")
@@ -649,6 +655,12 @@ def query_os_version(
                     if not skip_token:
                         break
 
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.info(
+                "query_os_version: complete | machines=%d duration_ms=%.0f",
+                len(all_machines),
+                duration_ms,
+            )
             return {
                 "resource_ids": resource_ids,
                 "machines": all_machines,
@@ -656,6 +668,14 @@ def query_os_version(
                 "query_status": "success",
             }
         except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_os_version: failed | resources=%s error=%s duration_ms=%.0f",
+                resource_ids,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
             return {
                 "resource_ids": resource_ids,
                 "machines": [],
