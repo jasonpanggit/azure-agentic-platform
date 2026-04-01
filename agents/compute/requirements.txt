@@ -1,2 +1,2 @@
-# Compute agent — no additional requirements beyond the base image.
-# All shared dependencies are installed in agents/Dockerfile.base.
+# Compute agent — ARG SDK for OS version inventory queries.
+azure-mgmt-resourcegraph>=8.0.1

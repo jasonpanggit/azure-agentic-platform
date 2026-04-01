@@ -23,6 +23,7 @@ from compute.tools import (
     query_activity_log,
     query_log_analytics,
     query_monitor_metrics,
+    query_os_version,
     query_resource_health,
 )
 
@@ -59,7 +60,9 @@ AKS node-level issues, App Service, and Azure Functions.
    and network metrics over the incident window.
 
 5. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause hypothesis
-   with a confidence score between 0.0 and 1.0. You MUST include:
+   with a confidence score between 0.0 and 1.0. If OS version is relevant to the hypothesis
+   (e.g., suspected EOL OS), call `query_os_version` before routing to the EOL domain.
+   You MUST include:
    - `hypothesis`: natural-language root cause description
    - `evidence`: list of supporting evidence items
    - `confidence_score`: float 0.0–1.0
@@ -89,6 +92,7 @@ AKS node-level issues, App Service, and Azure Functions.
     "query_log_analytics",
     "query_resource_health",
     "query_monitor_metrics",
+    "query_os_version",
 ]))
 
 
@@ -115,6 +119,7 @@ def create_compute_agent() -> ChatAgent:
             query_log_analytics,
             query_resource_health,
             query_monitor_metrics,
+            query_os_version,
         ],
     )
 

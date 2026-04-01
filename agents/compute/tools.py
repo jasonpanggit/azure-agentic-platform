@@ -1,7 +1,8 @@
 """Compute Agent tool functions — Azure Monitor and Resource Health wrappers.
 
 Provides @ai_function tools for querying Activity Log, Log Analytics,
-Resource Health, and Azure Monitor metrics for compute resources.
+Resource Health, Azure Monitor metrics, and ARG OS version inventory for
+compute resources.
 
 Allowed MCP tools (explicit allowlist — no wildcards):
     compute.list_vms, compute.get_vm, compute.list_disks,
@@ -16,8 +17,17 @@ from typing import Any, Dict, List, Optional
 
 from agent_framework import ai_function
 
-from shared.auth import get_agent_identity
+from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
+
+# Lazy import — azure-mgmt-resourcegraph may not be installed in all envs
+try:
+    from azure.mgmt.resourcegraph import ResourceGraphClient
+    from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
+except ImportError:
+    ResourceGraphClient = None  # type: ignore[assignment,misc]
+    QueryRequest = None  # type: ignore[assignment,misc]
+    QueryRequestOptions = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-compute-agent")
 
@@ -213,3 +223,117 @@ def query_monitor_metrics(
             "metrics": [],
             "query_status": "success",
         }
+
+
+@ai_function
+def query_os_version(
+    resource_ids: List[str],
+    subscription_ids: List[str],
+) -> Dict[str, Any]:
+    """Query ARG for OS version details for specific compute resources.
+
+    Covers both Azure VMs (microsoft.compute/virtualmachines) using
+    instanceView osName with imageReference sku as fallback, and
+    Arc-enabled servers (microsoft.hybridcompute/machines) using
+    properties.osName and properties.osSku.
+
+    Use this tool when the triage workflow identifies a potential EOL OS
+    issue and the compute agent needs OS version context before routing
+    to the EOL agent.
+
+    Args:
+        resource_ids: List of Azure resource IDs to query (VMs or Arc machines).
+        subscription_ids: List of subscription IDs that contain the resources.
+
+    Returns:
+        Dict with keys:
+            resource_ids (list): Resources queried.
+            machines (list): Per-machine dicts with id, name, resourceGroup,
+                subscriptionId, osName, osVersion, osType, osSku (Arc),
+                imageReferenceSku (VM fallback), resourceType.
+            total_count (int): Number of machines returned.
+            query_status (str): "success" or "error".
+    """
+    agent_id = get_agent_identity()
+    tool_params = {"resource_ids": resource_ids, "subscription_ids": subscription_ids}
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_os_version",
+        tool_parameters=tool_params,
+        correlation_id="",
+        thread_id="",
+    ):
+        try:
+            if ResourceGraphClient is None:
+                raise ImportError("azure-mgmt-resourcegraph is not installed")
+
+            credential = get_credential()
+            client = ResourceGraphClient(credential)
+
+            ids_str = ", ".join(f'"{rid}"' for rid in resource_ids)
+
+            # Azure VMs — instanceView osName + imageReference sku as fallback
+            vm_kql = (
+                'resources | where type == "microsoft.compute/virtualmachines"'
+                " | extend osName = tostring(properties.extended.instanceView.osName),"
+                " osVersion = tostring(properties.extended.instanceView.osVersion),"
+                " osType = tostring(properties.storageProfile.osDisk.osType),"
+                " publisher = tostring(properties.storageProfile.imageReference.publisher),"
+                " offer = tostring(properties.storageProfile.imageReference.offer),"
+                " imageReferenceSku = tostring(properties.storageProfile.imageReference.sku)"
+                f" | where id in~ ({ids_str})"
+                " | project id, name, resourceGroup, subscriptionId, osName, osVersion,"
+                " osType, publisher, offer, imageReferenceSku"
+                ' | extend resourceType = "vm"'
+            )
+
+            # Arc-enabled servers — properties.osName and properties.osSku
+            arc_kql = (
+                'resources | where type == "microsoft.hybridcompute/machines"'
+                " | extend osName = tostring(properties.osName),"
+                " osVersion = tostring(properties.osVersion),"
+                " osType = tostring(properties.osType),"
+                " osSku = tostring(properties.osSku),"
+                " status = tostring(properties.status)"
+                f" | where id in~ ({ids_str})"
+                " | project id, name, resourceGroup, subscriptionId, osName, osVersion,"
+                " osType, osSku, status"
+                ' | extend resourceType = "arc"'
+            )
+
+            all_machines: List[Dict[str, Any]] = []
+
+            for kql in [vm_kql, arc_kql]:
+                skip_token: Optional[str] = None
+                while True:
+                    options = (
+                        QueryRequestOptions(skip_token=skip_token) if skip_token else None
+                    )
+                    request = QueryRequest(
+                        subscriptions=subscription_ids,
+                        query=kql,
+                        options=options,
+                    )
+                    response = client.resources(request)
+                    all_machines.extend(response.data)
+                    skip_token = response.skip_token
+                    if not skip_token:
+                        break
+
+            return {
+                "resource_ids": resource_ids,
+                "machines": all_machines,
+                "total_count": len(all_machines),
+                "query_status": "success",
+            }
+        except Exception as e:
+            return {
+                "resource_ids": resource_ids,
+                "machines": [],
+                "total_count": 0,
+                "query_status": "error",
+                "error": str(e),
+            }
