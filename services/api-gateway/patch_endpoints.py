@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential
+from services.api_gateway.os_normalizer import normalize_os
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +271,13 @@ async def get_patch_assessment(
     #   resources.id = /subscriptions/.../virtualMachines/vm-name
     #   patchassessmentresources.id = .../virtualMachines/vm-name/patchAssessmentResults/latest
     #   → strip '/patchAssessmentResults/...' suffix to derive the parent machine ID.
+    #
+    # osVersion coalesce priority:
+    #   1. properties.osName — Arc machines have the friendly name here
+    #   2. properties.extended.instanceView.osName — Azure VMs with instance view
+    #   3. imageReference offer+sku concat — Azure VMs marketplace image
+    #   4. properties.osSku — Arc fallback (raw SKU, normalized in Python)
+    #   5. properties.osType — last resort ("Windows" / "Linux")
     kql = (
         "resources\n"
         '| where type =~ "microsoft.compute/virtualmachines"\n'
@@ -278,13 +286,21 @@ async def get_patch_assessment(
         "| extend machineName = name,\n"
         "         osType = tostring(properties.osType),\n"
         "         osVersion = coalesce(\n"
-        "             tostring(properties.extended.instanceView.osName),\n"
-        "             strcat(tostring(properties.storageProfile.imageReference.offer),\n"
-        '                    " ", tostring(properties.storageProfile.imageReference.sku)),\n'
         "             tostring(properties.osName),\n"
+        "             tostring(properties.extended.instanceView.osName),\n"
+        "             iff(\n"
+        "                 isnotempty(tostring(properties.storageProfile.imageReference.offer)),\n"
+        "                 strcat(\n"
+        "                     tostring(properties.storageProfile.imageReference.offer),\n"
+        '                     " ",\n'
+        "                     tostring(properties.storageProfile.imageReference.sku)\n"
+        "                 ),\n"
+        '                 ""\n'
+        "             ),\n"
         "             tostring(properties.osSku),\n"
         "             tostring(properties.osType)\n"
-        "         )\n"
+        "         ),\n"
+        '         vmType = iff(type =~ "microsoft.hybridcompute/machines", "Arc VM", "Azure VM")\n'
         "| join kind=leftouter (\n"
         "    patchassessmentresources\n"
         '    | where type =~ "microsoft.compute/virtualmachines/patchassessmentresults"\n'
@@ -318,7 +334,7 @@ async def get_patch_assessment(
         "         updatesCount = iff(hasAssessmentData, updatesCount, 0)\n"
         "| extend osVersion = iff(isempty(osVersion) or osVersion == ' ', osType, osVersion)\n"
         "| project id, machineName, resourceGroup, subscriptionId, osType, osVersion,\n"
-        "          hasAssessmentData, rebootPending, lastAssessment, criticalCount,\n"
+        "          vmType, hasAssessmentData, rebootPending, lastAssessment, criticalCount,\n"
         "          securityCount, updateRollupCount, featurePackCount, servicePackCount,\n"
         "          definitionCount, toolsCount, updatesCount"
     )
@@ -349,6 +365,8 @@ async def get_patch_assessment(
         law_data = law_summary.get(m.get("id", "").lower(), {})
         m["installedCount"] = law_data.get("installedCount", 0)
         m["lastInstalled"] = law_data.get("lastInstalled")
+        # Normalize raw OS SKU strings into human-readable names
+        m["osVersion"] = normalize_os(m.get("osVersion"), m.get("osType"))
 
     return {
         "machines": machines,

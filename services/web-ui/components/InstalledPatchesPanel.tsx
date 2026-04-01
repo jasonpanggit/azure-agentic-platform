@@ -41,6 +41,7 @@ export interface PanelMachine {
   readonly resourceGroup: string;
   readonly osType: string;
   readonly osVersion: string;
+  readonly vmType: 'Azure VM' | 'Arc VM';
   readonly rebootPending: boolean;
   readonly criticalCount: number;
   readonly securityCount: number;
@@ -278,6 +279,15 @@ export function InstalledPatchesPanel({
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="secondary" className="text-xs">
                     {machine.osVersion || machine.osType}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={machine.vmType === 'Arc VM'
+                      ? 'text-xs border-purple-500/50 text-purple-400'
+                      : 'text-xs border-blue-500/50 text-blue-400'
+                    }
+                  >
+                    {machine.vmType}
                   </Badge>
                   <span className="text-xs text-zinc-500">
                     {machine.resourceGroup}

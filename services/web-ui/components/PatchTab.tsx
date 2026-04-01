@@ -37,6 +37,7 @@ interface AssessmentMachine {
   subscriptionId: string;
   osType: string;
   osVersion: string;
+  vmType: 'Azure VM' | 'Arc VM';
   hasAssessmentData: boolean;
   rebootPending: boolean;
   lastAssessment: string | null;
@@ -183,6 +184,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
       resourceGroup: m.resourceGroup,
       osType: m.osType,
       osVersion: m.osVersion,
+      vmType: m.vmType,
       rebootPending: m.rebootPending,
       criticalCount: m.criticalCount,
       securityCount: m.securityCount,
@@ -443,6 +445,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground min-w-[140px]">Machine</TableHead>
+                    <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground w-[90px]">Type</TableHead>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground w-[60px]">OS</TableHead>
                     <TableHead className="h-10 px-3 text-left font-semibold text-muted-foreground w-[120px]">Compliance</TableHead>
                     <TableHead className="h-10 px-3 text-right font-semibold text-muted-foreground w-[70px]">Critical</TableHead>
@@ -468,6 +471,17 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                     >
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] truncate max-w-[200px]">
                         {m.machineName}
+                      </TableCell>
+                      <TableCell className="h-10 px-3 align-middle">
+                        <Badge
+                          variant="outline"
+                          className={m.vmType === 'Arc VM'
+                            ? 'text-xs border-purple-500/50 text-purple-400'
+                            : 'text-xs border-blue-500/50 text-blue-400'
+                          }
+                        >
+                          {m.vmType}
+                        </Badge>
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle">
                         <Badge variant="secondary" className="text-xs">
