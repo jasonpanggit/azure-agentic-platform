@@ -209,7 +209,7 @@ module "arc_mcp_server" {
   # be assigned after the app (and its managed identity) exists. Placeholder image
   # lets the app provision; CI/CD deploys the real image once AcrPull is in place.
   # lifecycle { ignore_changes = [template[0].container[0].image] } prevents drift.
-  use_placeholder_image = true
+  use_placeholder_image = false
 }
 
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
