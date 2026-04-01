@@ -14,6 +14,8 @@ progress:
 # Azure Agentic Platform (AAP) — Project State
 
 
+> Last updated: 2026-04-01 — Completed quick task 260401-e74: Validate orchestrator wiring and routing. Fixed G-01 (AZURE_MCP_SERVER_URL now wired in Terraform for patch+eol agents), wrote agents/orchestrator/README.md (G-03, all 8 domains, routing flow, env var checklist), added G-02 code comment on MCPStreamableHTTPTool vs MCPTool discrepancy in eol/agent.py. 3 atomic commits.
+
 > Last updated: 2026-04-01 — Completed quick task 260401-brt: Added query_os_version ARG tool to compute agent covering Azure VMs (instanceView.osName/osVersion + imageReference.sku fallback) and Arc servers (properties.osName/osSku/osType). 10 unit tests pass. Returns resourceType="vm"/"arc" to distinguish results.
 
 > Last updated: 2026-04-01 — Phase 14 PLANNED: Production Stabilisation. 12 tasks across 6 milestones (M1: Agent Wiring + MCP Tool Groups, M2: Hardcoded ID Removal + Code Fixes, M3: Arc MCP Server Real Deployment, M4: Runbook RAG + Observability, M5: Teams Proactive Alerting, M6: Dependency Pinning + Security Hardening). Resolves Backlog F-02/F-04/F-09/F-10/F-11, CONCERNS BUG-001/BUG-002/DEBT-002/DEP-003/GAP-001-004/GAP-009. Plan at .planning/phases/14-prod-stabilisation/PLAN.md.
@@ -261,6 +263,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260331-k6y | Fix API gateway prod blockers: set ORCHESTRATOR_AGENT_ID on ca-api-gateway-prod (revision 0000030) + grant Azure AI Developer RBAC to gateway MI on Foundry scope. Phase 8 F-01 CLOSED. | 2026-03-31 | dc3930a | [260331-k6y-fix-api-gateway-prod-blocker-set-orchest](./quick/260331-k6y-fix-api-gateway-prod-blocker-set-orchest/) |
 | 260331-krz | Fix broken api-gateway image: expand Docker build context to repo root so agents/shared is accessible, fix ModuleNotFoundError. Operator must rebuild+push to ACR and update ca-api-gateway-prod. | 2026-03-31 | 13f2b78 | [260331-krz-fix-broken-api-gateway-image-diagnose-mo](./quick/260331-krz-fix-broken-api-gateway-image-diagnose-mo/) |
 | 260401-brt | Add query_os_version ARG tool to compute agent covering both Azure VMs and Arc-enabled servers for OS version details and EOL date determination | 2026-04-01 | f0cd530 | [260401-brt-research-whether-azure-resource-graph-ar](./quick/260401-brt-research-whether-azure-resource-graph-ar/) |
+| 260401-e74 | Validate orchestrator wiring and routing — fix AZURE_MCP_SERVER_URL Terraform gap (G-01), write agents/orchestrator/README.md (G-03), add G-02 MCPStreamableHTTPTool comment to eol/agent.py | 2026-04-01 | 689e73b | [260401-e74-validate-orchestrator-wiring-and-routing](./quick/260401-e74-validate-orchestrator-wiring-and-routing/) |
 
 ---
 
