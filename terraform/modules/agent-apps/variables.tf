@@ -192,3 +192,10 @@ variable "postgres_dsn" {
   sensitive   = true
   default     = ""
 }
+
+variable "pgvector_connection_string" {
+  description = "PostgreSQL connection string for pgvector runbook RAG (api-gateway PGVECTOR_CONNECTION_STRING). Format: postgresql://user:pass@host:5432/db?sslmode=require"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

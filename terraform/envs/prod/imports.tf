@@ -78,3 +78,52 @@ import {
   to = module.databases.azurerm_cosmosdb_sql_role_assignment.data_contributor["api-gateway"]
   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.DocumentDB/databaseAccounts/aap-cosmos-prod/sqlRoleAssignments/52969888-4f13-46c9-b48f-4f58ee95d193"
 }
+
+# --- Teams Bot Service imports (F-04) ---
+# The Azure Bot resource (aap-teams-bot-prod) and its Entra app registration were created
+# manually before module.teams_bot existed. Import blocks are required before enabling
+# the module to avoid Terraform trying to create duplicate resources.
+#
+# PRE-REQUISITES before uncommenting:
+#   1. Grant CI SP (65cf695c-1def-48ba-96af-d968218c90ba) Microsoft Graph
+#      Application.ReadWrite.All (admin-consented) on the Entra tenant.
+#   2. Set enable_teams_bot = true in terraform.tfvars.
+#   3. Uncomment the four import blocks below.
+#   4. Run: terraform apply -var-file="credentials.tfvars"
+#   5. Verify: terraform state list | grep teams_bot
+#   6. Delete these import blocks (they are one-shot).
+#
+# Resource details (sourced 2026-04-01):
+#   Bot Service:          aap-teams-bot-prod  (F0 / SingleTenant)
+#   Bot Service ID:       /subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.BotService/botServices/aap-teams-bot-prod
+#   Entra App (client):   d5b074fc-7ca6-4354-8938-046e034d80da  (BOT_ID)
+#   Entra App (object):   670e3ba4-eec6-4889-a7df-545953b5a1df
+#   Service Principal:    4272985e-49e0-40dd-8b36-9e66c80b98f4
+#
+# NOTE: azuread_application_password cannot be imported — Entra does not expose secret
+# values after creation. The existing BOT_PASSWORD secret is already set on the Container
+# App via `az containerapp secret set` (see task F-04). After enabling this module, a NEW
+# secret will be generated and stored in Key Vault; the operator must then run:
+#   az containerapp secret set --name ca-teams-bot-prod --resource-group rg-aap-prod \
+#     --secrets "teams-bot-password=$(az keyvault secret show --vault-name kv-aap-prod \
+#     --name teams-bot-password-kv --query value -o tsv)"
+
+# import {
+#   to = module.teams_bot[0].azurerm_bot_service_azure_bot.main
+#   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.BotService/botServices/aap-teams-bot-prod"
+# }
+#
+# import {
+#   to = module.teams_bot[0].azuread_application.teams_bot
+#   id = "/applications/670e3ba4-eec6-4889-a7df-545953b5a1df"
+# }
+#
+# import {
+#   to = module.teams_bot[0].azuread_service_principal.teams_bot
+#   id = "4272985e-49e0-40dd-8b36-9e66c80b98f4"
+# }
+#
+# import {
+#   to = module.teams_bot[0].azurerm_bot_channel_ms_teams.main
+#   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.BotService/botServices/aap-teams-bot-prod/channels/MsTeamsChannel"
+# }

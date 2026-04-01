@@ -109,6 +109,15 @@ resource "azurerm_container_app" "agents" {
           value = "disabled"
         }
       }
+      # API Gateway: Azure OpenAI endpoint for embedding generation in runbook RAG (TRIAGE-005).
+      # Uses the Foundry account endpoint — same cognitive services resource.
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "AZURE_OPENAI_ENDPOINT"
+          value = var.foundry_account_endpoint
+        }
+      }
       # AGENT_ENTRA_ID — required by agents/shared/auth.py for AUDIT-005 attribution.
       # Value is injected post-creation via azurerm_container_app_custom_domain or
       # read at runtime from IMDS / DefaultAzureCredential JWT `oid` claim.

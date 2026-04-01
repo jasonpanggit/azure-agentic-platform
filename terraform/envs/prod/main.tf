@@ -263,6 +263,9 @@ module "agent_apps" {
 
   # PostgreSQL DSN for agents that need direct DB access (e.g., eol-agent eol_cache table)
   postgres_dsn = var.postgres_dsn
+
+  # PostgreSQL connection string for runbook RAG on the api-gateway (TRIAGE-005 / F-02)
+  pgvector_connection_string = var.pgvector_connection_string
 }
 
 # --- RBAC (depends on: agent-apps) ---
