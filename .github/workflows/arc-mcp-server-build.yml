@@ -46,7 +46,7 @@ jobs:
       - name: Run unit tests
         working-directory: services/arc-mcp-server
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/services/arc-mcp-server
           ARC_DISCONNECT_ALERT_HOURS: "1"
         run: |
           pytest tests/ -m unit \
