@@ -40,3 +40,12 @@ def get_cosmos_client(request: Request) -> CosmosClient:
             detail="Cosmos DB not configured (COSMOS_ENDPOINT not set)",
         )
     return client
+
+
+def get_optional_cosmos_client(request: Request) -> Optional[CosmosClient]:
+    """Return the shared CosmosClient from app.state, or None if not configured.
+
+    Use this dependency when the route can proceed without Cosmos DB
+    (e.g., the diagnostic pipeline which gracefully degrades without persistence).
+    """
+    return request.app.state.cosmos_client
