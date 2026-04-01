@@ -15,6 +15,8 @@ RBAC scope: Reader + Monitoring Reader across all subscriptions (enforced by Ter
 """
 from __future__ import annotations
 
+import logging
+
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
@@ -27,6 +29,7 @@ from sre.tools import (
 )
 
 tracer = setup_telemetry("aiops-sre-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -116,9 +119,10 @@ def create_sre_agent() -> ChatAgent:
     Returns:
         ChatAgent configured with SRE tools and system prompt.
     """
+    logger.info("create_sre_agent: initialising Foundry client")
     client = get_foundry_client()
 
-    return ChatAgent(
+    agent = ChatAgent(
         name="sre-agent",
         description="SRE generalist — cross-domain monitoring, SLA tracking, and incident fallback.",
         instructions=SRE_AGENT_SYSTEM_PROMPT,
@@ -129,6 +133,8 @@ def create_sre_agent() -> ChatAgent:
             propose_remediation,
         ],
     )
+    logger.info("create_sre_agent: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -136,5 +142,12 @@ def create_sre_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("sre")
+    _logger.info("sre: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
+
+    _logger.info("sre: creating agent and binding to agentserver")
     from_agent_framework(create_sre_agent()).run()
+    _logger.info("sre: agentserver exited")

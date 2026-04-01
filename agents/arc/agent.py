@@ -22,6 +22,7 @@ Arc MCP Server: ARC_MCP_SERVER_URL environment variable (required).
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from agent_framework import ChatAgent
@@ -37,6 +38,7 @@ from arc.tools import (
 )
 
 tracer = setup_telemetry("aiops-arc-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt — TRIAGE-006 workflow
@@ -137,6 +139,7 @@ def create_arc_agent() -> ChatAgent:
     """
     arc_mcp_server_url = os.environ.get("ARC_MCP_SERVER_URL")
 
+    logger.info("create_arc_agent: initialising Foundry client")
     client = get_foundry_client()
 
     # Base tools available without Arc MCP Server
@@ -148,14 +151,17 @@ def create_arc_agent() -> ChatAgent:
 
     # Mount the Arc MCP Server via MCPTool when available (AGENT-005)
     if arc_mcp_server_url:
+        logger.info("create_arc_agent: ARC_MCP_SERVER_URL set, mounting Arc MCP Server")
         arc_mcp_tool = MCPTool(
             server_label="arc-mcp",
             server_url=arc_mcp_server_url,
             allowed_tools=ALLOWED_MCP_TOOLS,
         )
         tools.append(arc_mcp_tool)
+    else:
+        logger.warning("create_arc_agent: ARC_MCP_SERVER_URL not set — starting in degraded mode (no Arc MCP tooling)")
 
-    return ChatAgent(
+    agent = ChatAgent(
         name="arc-agent",
         description=(
             "Azure Arc domain specialist — Arc Servers, Arc K8s, Arc Data Services. "
@@ -165,6 +171,8 @@ def create_arc_agent() -> ChatAgent:
         chat_client=client,
         tools=tools,
     )
+    logger.info("create_arc_agent: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -172,5 +180,12 @@ def create_arc_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("arc")
+    _logger.info("arc: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
+
+    _logger.info("arc: creating agent and binding to agentserver")
     from_agent_framework(create_arc_agent()).run()
+    _logger.info("arc: agentserver exited")
