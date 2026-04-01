@@ -19,7 +19,7 @@ from typing import Optional
 
 # Matches "WindowsServer2022-datacenter*" or "windows server 2022*"
 _WIN_SERVER_PATTERN = re.compile(
-    r"(?:windows[\s._-]?server[\s._-]?)(\d{4})\s*(R2)?",
+    r"(?:windows[\s._-]?server[\s._-]?)(\d{4})[\s._-]*(R2)?",
     re.IGNORECASE,
 )
 
@@ -95,6 +95,12 @@ def normalize_os(raw: str | None, os_type: str | None = None) -> str:
     if _ALREADY_CLEAN_PATTERN.match(raw) and " " in raw:
         # Try Linux patterns first — some "clean-looking" strings are actually raw
         normalized = _try_normalize_linux(raw)
+        if normalized:
+            return normalized
+        # Try Windows patterns — KQL strcat(offer, " ", sku) produces
+        # "WindowsServer 2025-datacenter-azure-edition" which looks "clean"
+        # to the regex but still needs normalization.
+        normalized = _try_normalize_windows(raw)
         if normalized:
             return normalized
         return raw

@@ -327,6 +327,44 @@ class TestNormalizeOsScreenshotValues:
 
 
 # ---------------------------------------------------------------------------
+# normalize_os: KQL strcat(offer, " ", sku) values — Azure VMs
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeOsStrcatValues:
+    """Values produced by KQL strcat(imageReference.offer, " ", imageReference.sku).
+
+    These strings have a space between the offer ("WindowsServer") and the
+    SKU year, which triggers the _ALREADY_CLEAN_PATTERN false positive.
+    This was the root cause of Azure VMs showing raw OS names in the Patch tab.
+    """
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("WindowsServer 2025-datacenter-azure-edition", "Windows Server 2025 Datacenter"),
+            ("WindowsServer 2022-datacenter-g2", "Windows Server 2022 Datacenter"),
+            ("WindowsServer 2019-datacenter-gensecond", "Windows Server 2019 Datacenter"),
+            ("WindowsServer 2019-Datacenter", "Windows Server 2019 Datacenter"),
+            ("WindowsServer 2025-datacenter-g2", "Windows Server 2025 Datacenter"),
+            ("WindowsServer 2016-Datacenter", "Windows Server 2016 Datacenter"),
+            ("WindowsServer 2012-R2-Datacenter", "Windows Server 2012 R2 Datacenter"),
+        ],
+        ids=[
+            "strcat-2025-azure-edition",
+            "strcat-2022-g2",
+            "strcat-2019-gensecond",
+            "strcat-2019-datacenter",
+            "strcat-2025-g2",
+            "strcat-2016-datacenter",
+            "strcat-2012-r2-datacenter",
+        ],
+    )
+    def test_strcat_offer_sku_values(self, raw: str, expected: str) -> None:
+        assert normalize_os(raw) == expected
+
+
+# ---------------------------------------------------------------------------
 # get_vm_type
 # ---------------------------------------------------------------------------
 
