@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-04-01T16:25:45.065Z"
+status: in_progress
+last_updated: "2026-04-01T17:00:00.000Z"
 progress:
-  total_phases: 12
+  total_phases: 15
   completed_phases: 8
-  total_plans: 44
-  completed_plans: 39
+  total_plans: 45
+  completed_plans: 40
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-01 — Plan 15-01 COMPLETE: Wire Compute Agent Diagnostic Tools. Replaced 4 stubs in agents/compute/tools.py with real Azure SDK calls (ActivityLogs, LogsQueryClient, ResourceHealth, Monitor Metrics). All tools have structured logging (duration_ms), graceful error handling (query_status=error, never raise), and query_log_analytics returns query_status=skipped for empty workspace_id. Added _log_sdk_availability() at import. Updated requirements.txt (3 new packages). 22 unit tests pass (15 new).
 
 > Last updated: 2026-04-01 — Plan 15-03 COMPLETE: Enrich IncidentSummary Model. Added resource_name, resource_group, resource_type, investigation_status, evidence_collected_at to IncidentSummary. Added _parse_resource_id() helper and updated list_incidents() to populate new fields from Cosmos documents. Updated AlertFeed.tsx with new columns (Resource, Resource Group, Investigation) and green "Evidence Ready" badge. 8 unit tests added. 34/34 tests pass, tsc --noEmit exits 0. Commit 3cfdcf0.
 > Last updated: 2026-04-01 — Completed quick task 260401-e74: Validate orchestrator wiring and routing. Fixed G-01 (AZURE_MCP_SERVER_URL now wired in Terraform for patch+eol agents), wrote agents/orchestrator/README.md (G-03, all 8 domains, routing flow, env var checklist), added G-02 code comment on MCPStreamableHTTPTool vs MCPTool discrepancy in eol/agent.py. 3 atomic commits.
