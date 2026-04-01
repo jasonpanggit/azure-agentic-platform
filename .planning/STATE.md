@@ -2,19 +2,22 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: active
-last_updated: "2026-04-01T09:00:00.000Z"
+status: in_progress
+last_updated: "2026-04-02T00:00:00.000Z"
 progress:
-  total_phases: 14
-  completed_phases: 12
-  total_plans: 43
-  completed_plans: 39
+  total_phases: 15
+  completed_phases: 9
+  total_plans: 45
+  completed_plans: 46
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-02 — Phase 15 COMPLETE: Diagnostic Pipeline (5/5 plans). All 4 compute agent diagnostic tools wired to real Azure SDK (no more stubs). Diagnostic pipeline BackgroundTask pre-fetches evidence on incident ingestion. IncidentSummary enriched with resource_name/resource_group/resource_type/investigation_status/evidence_collected_at. Structured logging standardised across all agents and API gateway (log_azure_call context manager). Frontend: evidence proxy route, vms proxy route, VMTab stub, AlertFeed resource columns + Evidence Ready badge + Investigate button. 578 tests pass. VERIFICATION.md written.
 
-> Last updated: 2026-04-01 — Phase 14 IN PROGRESS: 10/12 tasks complete. Runbook RAG live (60 runbooks, /search 200), Arc MCP Server real image deployed + CI green, App Insights on all 3 containers, BOT_PASSWORD set, all 9 *_AGENT_ID env vars on api-gateway, hardcoded IDs removed from chat.py, Arc MCP auth middleware added (14 tests). Remaining: Teams Bot Service TF import (14-10 partial), stale agent cleanup.
+> Last updated: 2026-04-01 — Plan 15-02 COMPLETE: Diagnostic Pipeline Service. Created services/api-gateway/diagnostic_pipeline.py with 4 Azure SDK collection functions (_collect_activity_log, _collect_resource_health, _collect_metrics, _collect_log_analytics) + run_diagnostic_pipeline orchestrator. Wired POST /api/v1/incidents to queue pipeline as BackgroundTask (logs "pipeline: queued"). Added GET /api/v1/incidents/{id}/evidence endpoint (202+Retry-After:5 when pending, 200 with evidence doc when ready). Added get_optional_cosmos_client dependency for graceful Cosmos degradation. 8 unit tests pass, 290 total api-gateway tests pass with 0 regressions. Commit 5dba5dc.
+
+> Last updated: 2026-04-01 — Plan 15-03 COMPLETE: Enrich IncidentSummary Model. Added resource_name, resource_group, resource_type, investigation_status, evidence_collected_at to IncidentSummary. Added _parse_resource_id() helper and updated list_incidents() to populate new fields from Cosmos documents. Updated AlertFeed.tsx with new columns (Resource, Resource Group, Investigation) and green "Evidence Ready" badge. 8 unit tests added. 34/34 tests pass, tsc --noEmit exits 0. Commit 3cfdcf0.
 > Last updated: 2026-04-01 — Completed quick task 260401-e74: Validate orchestrator wiring and routing. Fixed G-01 (AZURE_MCP_SERVER_URL now wired in Terraform for patch+eol agents), wrote agents/orchestrator/README.md (G-03, all 8 domains, routing flow, env var checklist), added G-02 code comment on MCPStreamableHTTPTool vs MCPTool discrepancy in eol/agent.py. 3 atomic commits.
 
 > Last updated: 2026-04-01 — Completed quick task 260401-brt: Added query_os_version ARG tool to compute agent covering Azure VMs (instanceView.osName/osVersion + imageReference.sku fallback) and Arc servers (properties.osName/osSku/osType). 10 unit tests pass. Returns resourceType="vm"/"arc" to distinguish results.
@@ -138,6 +141,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
 | 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan, 15 unit tests, full-stack: gateway endpoints + proxy routes + PatchTab component + DashboardPanel wiring |
 | 14 | Production Stabilisation | Not started — 12 tasks across 6 milestones: agent wiring, MCP tool groups, Arc MCP deploy, runbook RAG, Teams alerting, dependency pinning |
+| 15 | Diagnostic Pipeline | ✅ Complete (2026-04-02) — 5/5 plans, 578 tests pass, 4 compute tools wired to real Azure SDKs, diagnostic pipeline BackgroundTask, IncidentSummary enriched, structured logging audit, frontend evidence integration |
 
 ---
 

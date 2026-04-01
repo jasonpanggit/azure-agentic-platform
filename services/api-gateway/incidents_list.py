@@ -15,6 +15,50 @@ from azure.identity import DefaultAzureCredential
 logger = logging.getLogger(__name__)
 
 
+def _parse_resource_id(resource_id: Optional[str]) -> dict:
+    """Extract name, resource_group, resource_type, subscription_id from ARM resource ID.
+
+    ARM resource ID format:
+    /subscriptions/{sub}/resourceGroups/{rg}/providers/{namespace}/{type}/{name}
+
+    Returns dict with keys: resource_name, resource_group, resource_type, subscription_id.
+    All values are None if resource_id is None or malformed.
+    """
+    if not resource_id:
+        return {"resource_name": None, "resource_group": None, "resource_type": None, "subscription_id": None}
+
+    parts = resource_id.split("/")
+    # Normalize to lowercase for comparison, but extract original-case values
+    lower = resource_id.lower().split("/")
+
+    result: dict = {"resource_name": None, "resource_group": None, "resource_type": None, "subscription_id": None}
+
+    try:
+        if "subscriptions" in lower:
+            idx = lower.index("subscriptions")
+            result["subscription_id"] = parts[idx + 1]
+        if "resourcegroups" in lower:
+            idx = lower.index("resourcegroups")
+            result["resource_group"] = parts[idx + 1]
+        if "providers" in lower:
+            idx = lower.index("providers")
+            # type = namespace/type, name = parts[idx+3]
+            if idx + 3 < len(parts):
+                result["resource_type"] = f"{lower[idx + 1]}/{lower[idx + 2]}"
+                result["resource_name"] = parts[idx + 3]
+            elif idx + 2 < len(parts):
+                result["resource_type"] = lower[idx + 1]
+        # Fallback: last non-empty segment is the resource name
+        if not result["resource_name"]:
+            non_empty = [p for p in parts if p]
+            if non_empty:
+                result["resource_name"] = non_empty[-1]
+    except (IndexError, ValueError):
+        pass
+
+    return result
+
+
 def _get_incidents_container(cosmos_client: Optional[CosmosClient] = None) -> ContainerProxy:
     """Get the Cosmos DB incidents container.
 
@@ -66,7 +110,8 @@ async def list_incidents(
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     query = (
         f"SELECT c.id, c.incident_id, c.severity, c.domain, c.status, "
-        f"c.created_at, c.title, c.resource_id, c.subscription_id "
+        f"c.created_at, c.title, c.resource_id, c.subscription_id, "
+        f"c.affected_resources, c.investigation_status, c.evidence_collected_at "
         f"FROM c WHERE {where_clause} "
         f"ORDER BY c.created_at DESC "
         f"OFFSET 0 LIMIT @limit"
@@ -85,4 +130,25 @@ async def list_incidents(
     if subscription_ids:
         results = [r for r in results if r.get("subscription_id") in subscription_ids]
 
-    return results
+    # Enrich each result with parsed resource metadata and investigation status
+    enriched = []
+    for doc in results:
+        resource_id = doc.get("resource_id") or (
+            doc.get("affected_resources", [{}])[0].get("resource_id")
+            if doc.get("affected_resources")
+            else None
+        )
+        parsed = _parse_resource_id(resource_id)
+        enriched_doc = {
+            **doc,
+            "resource_id": resource_id,
+            "resource_name": parsed["resource_name"],
+            "resource_group": parsed["resource_group"],
+            "resource_type": parsed["resource_type"],
+            "subscription_id": parsed["subscription_id"] or doc.get("subscription_id"),
+            "investigation_status": doc.get("investigation_status", "pending"),
+            "evidence_collected_at": doc.get("evidence_collected_at"),
+        }
+        enriched.append(enriched_doc)
+
+    return enriched

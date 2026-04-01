@@ -25,8 +25,11 @@ async def write_audit_record(approval_record: dict) -> None:
     Cosmos DB write is assumed to be already done by the caller.
     This function handles the async OneLake write.
     """
+    approval_id = approval_record.get("id", "unknown")
+    logger.info("audit: writing record to OneLake | approval_id=%s", approval_id)
     try:
         await _write_to_onelake(approval_record)
+        logger.info("audit: record written | approval_id=%s", approval_id)
     except Exception as exc:
         logger.error(
             "OneLake audit write failed for approval %s (non-blocking): %s",
@@ -59,6 +62,11 @@ async def _write_to_onelake(record: dict) -> None:
 
     file_client = file_system_client.get_file_client(file_path)
     data = json.dumps(record, default=str).encode("utf-8")
+    logger.info(
+        "onelake: writing audit record | approval_id=%s path=%s",
+        record.get("id"),
+        file_path,
+    )
     file_client.upload_data(data, overwrite=True)
 
     logger.info(

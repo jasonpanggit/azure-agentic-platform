@@ -21,6 +21,12 @@ interface Incident {
   created_at: string;
   title?: string;
   resource_id?: string;
+  resource_name?: string;
+  resource_group?: string;
+  resource_type?: string;
+  subscription_id?: string;
+  investigation_status?: string;
+  evidence_collected_at?: string;
 }
 
 interface AlertFeedProps {
@@ -107,8 +113,11 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Severity</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Domain</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource Group</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Investigation</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -119,8 +128,11 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                 </TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-16" /></TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-32" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-14" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-20" /></TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-10" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-16" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -158,8 +170,11 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Severity</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Domain</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Resource Group</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Investigation</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -185,8 +200,25 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                 </span>
               </TableCell>
               <TableCell className="py-3 px-2 max-w-[180px]">
-                <span className="text-[12px] font-semibold font-mono truncate block" style={{ color: 'var(--text-primary)' }}>
-                  {incident.title || incident.resource_id || incident.incident_id}
+                {incident.resource_name ? (
+                  <span
+                    className="font-mono text-xs truncate block"
+                    style={{ color: 'var(--text-secondary)' }}
+                    title={incident.resource_name}
+                  >
+                    {incident.resource_name.length > 20
+                      ? incident.resource_name.slice(0, 20) + '…'
+                      : incident.resource_name}
+                  </span>
+                ) : (
+                  <span className="text-[12px] font-semibold font-mono truncate block" style={{ color: 'var(--text-primary)' }}>
+                    {incident.title || incident.resource_id || incident.incident_id}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="py-3 px-2">
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {incident.resource_group ?? '—'}
                 </span>
               </TableCell>
               <TableCell className="py-3 px-2">
@@ -194,10 +226,49 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                   {incident.status}
                 </span>
               </TableCell>
+              <TableCell className="py-3 px-2">
+                {incident.investigation_status === 'evidence_ready' ? (
+                  <span
+                    className="text-[11px] px-2 py-0.5 rounded font-medium"
+                    style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a' }}
+                  >
+                    Evidence Ready
+                  </span>
+                ) : incident.investigation_status && incident.investigation_status !== 'pending' ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>
+                    {incident.investigation_status}
+                  </span>
+                ) : (
+                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>—</span>
+                )}
+              </TableCell>
               <TableCell className="py-3 px-2 text-right">
                 <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   {formatRelativeTime(incident.created_at)}
                 </span>
+              </TableCell>
+              <TableCell className="py-3 px-2">
+                {incident.resource_name && (
+                  <button
+                    className="text-xs px-2 py-1 rounded cursor-pointer transition-colors"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
+                      color: 'var(--accent-blue)',
+                      border: '1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 20%, transparent)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 12%, transparent)' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // Phase 2: will open VMDetailPanel
+                      // For now: log so we can verify click works
+                      console.log('[AAP] Investigate clicked:', incident.incident_id, incident.resource_name)
+                    }}
+                    title={`Investigate ${incident.resource_name}`}
+                  >
+                    Investigate
+                  </button>
+                )}
               </TableCell>
             </TableRow>
           ))}

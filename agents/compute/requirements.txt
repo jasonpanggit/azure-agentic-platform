@@ -1,2 +1,5 @@
-# Compute agent — ARG SDK for OS version inventory queries.
+# Compute agent — Azure SDK dependencies for diagnostic tools.
 azure-mgmt-resourcegraph>=8.0.1
+azure-mgmt-monitor>=6.0.0
+azure-monitor-query>=1.3.0
+azure-mgmt-resourcehealth>=1.0.0
