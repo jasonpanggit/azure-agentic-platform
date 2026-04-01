@@ -29,6 +29,13 @@ _WIN_YEAR_DATACENTER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Matches Windows Server edition keywords in a clean string
+# Used to preserve the edition when the input already has a human-readable name
+_WIN_EDITION_PATTERN = re.compile(
+    r"\b(datacenter|standard|essentials|foundation|core)\b",
+    re.IGNORECASE,
+)
+
 # Matches "win10-*" or "win11-*"
 _WIN_CLIENT_PATTERN = re.compile(
     r"^win(\d+)",
@@ -131,11 +138,16 @@ def _try_normalize_windows(raw: str) -> Optional[str]:
     Returns normalized string or None if not a recognized Windows pattern.
     """
     # "WindowsServer2022-datacenter-g2" -> "Windows Server 2022 Datacenter"
+    # "Windows Server 2016 Standard" -> "Windows Server 2016 Standard" (preserve edition)
     match = _WIN_SERVER_PATTERN.search(raw)
     if match:
         year = match.group(1)
         r2_suffix = " R2" if match.group(2) else ""
-        return f"Windows Server {year}{r2_suffix} Datacenter"
+        # Detect edition from the raw string (Standard, Datacenter, Essentials, etc.)
+        # Falls back to Datacenter for raw SKU strings that omit the edition
+        edition_match = _WIN_EDITION_PATTERN.search(raw)
+        edition = edition_match.group(1).title() if edition_match else "Datacenter"
+        return f"Windows Server {year}{r2_suffix} {edition}"
 
     # "2022-datacenter" -> "Windows Server 2022 Datacenter"
     match = _WIN_YEAR_DATACENTER_PATTERN.match(raw)
