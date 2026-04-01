@@ -2,19 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: active
-last_updated: "2026-04-01T09:00:00.000Z"
+status: unknown
+last_updated: "2026-04-01T16:25:45.065Z"
 progress:
-  total_phases: 14
-  completed_phases: 12
-  total_plans: 43
+  total_phases: 12
+  completed_phases: 8
+  total_plans: 44
   completed_plans: 39
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-
-> Last updated: 2026-04-01 — Phase 14 IN PROGRESS: 10/12 tasks complete. Runbook RAG live (60 runbooks, /search 200), Arc MCP Server real image deployed + CI green, App Insights on all 3 containers, BOT_PASSWORD set, all 9 *_AGENT_ID env vars on api-gateway, hardcoded IDs removed from chat.py, Arc MCP auth middleware added (14 tests). Remaining: Teams Bot Service TF import (14-10 partial), stale agent cleanup.
+> Last updated: 2026-04-01 — Plan 15-03 COMPLETE: Enrich IncidentSummary Model. Added resource_name, resource_group, resource_type, investigation_status, evidence_collected_at to IncidentSummary. Added _parse_resource_id() helper and updated list_incidents() to populate new fields from Cosmos documents. Updated AlertFeed.tsx with new columns (Resource, Resource Group, Investigation) and green "Evidence Ready" badge. 8 unit tests added. 34/34 tests pass, tsc --noEmit exits 0. Commit 3cfdcf0.
 > Last updated: 2026-04-01 — Completed quick task 260401-e74: Validate orchestrator wiring and routing. Fixed G-01 (AZURE_MCP_SERVER_URL now wired in Terraform for patch+eol agents), wrote agents/orchestrator/README.md (G-03, all 8 domains, routing flow, env var checklist), added G-02 code comment on MCPStreamableHTTPTool vs MCPTool discrepancy in eol/agent.py. 3 atomic commits.
 
 > Last updated: 2026-04-01 — Completed quick task 260401-brt: Added query_os_version ARG tool to compute agent covering Azure VMs (instanceView.osName/osVersion + imageReference.sku fallback) and Arc servers (properties.osName/osSku/osType). 10 unit tests pass. Returns resourceType="vm"/"arc" to distinguish results.
