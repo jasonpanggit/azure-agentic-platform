@@ -187,6 +187,14 @@ def create_eol_agent() -> Agent:
     ]
 
     if azure_mcp_url:
+        # NOTE (G-02): EOL agent uses MCPStreamableHTTPTool from `agent_framework` here,
+        # while agents/patch/agent.py and agents/arc/agent.py use MCPTool from
+        # `azure.ai.projects.models`. The constructor signatures differ:
+        #   MCPStreamableHTTPTool: name="azure-mcp", url=<url>
+        #   MCPTool:               server_label="azure-mcp", server_url=<url>
+        # TODO: Verify MCPStreamableHTTPTool works correctly with the Azure MCP Server in prod.
+        # If not, switch to MCPTool from azure.ai.projects.models for consistency.
+        # See: .planning/quick/260401-e74-validate-orchestrator-wiring-and-routing/
         azure_mcp_tool = MCPStreamableHTTPTool(
             name="azure-mcp",
             url=azure_mcp_url,
