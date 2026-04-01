@@ -440,3 +440,105 @@ class TestListIncidentsEndpoint:
         item = response.json()[0]
         assert item["title"] == "High CPU on vm-prod-01"
         assert "resource_id" in item
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _parse_resource_id helper
+# ---------------------------------------------------------------------------
+
+
+class TestParseResourceId:
+    """Tests for the _parse_resource_id() ARM resource ID parser."""
+
+    def test_parse_resource_id_vm(self):
+        """Standard VM resource ID parsed correctly."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        rid = "/subscriptions/sub-123/resourceGroups/rg-prod/providers/Microsoft.Compute/virtualMachines/vm-prod-001"
+        result = _parse_resource_id(rid)
+        assert result["subscription_id"] == "sub-123"
+        assert result["resource_group"] == "rg-prod"
+        assert result["resource_type"] == "microsoft.compute/virtualmachines"
+        assert result["resource_name"] == "vm-prod-001"
+
+    def test_parse_resource_id_storage(self):
+        """Storage account resource ID parsed correctly."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        rid = "/subscriptions/abc/resourceGroups/rg-storage/providers/Microsoft.Storage/storageAccounts/stgprod001"
+        result = _parse_resource_id(rid)
+        assert result["resource_name"] == "stgprod001"
+        assert result["resource_type"] == "microsoft.storage/storageaccounts"
+
+    def test_parse_resource_id_none(self):
+        """None input returns all-None dict."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        result = _parse_resource_id(None)
+        assert result == {
+            "resource_name": None,
+            "resource_group": None,
+            "resource_type": None,
+            "subscription_id": None,
+        }
+
+    def test_parse_resource_id_malformed(self):
+        """Malformed path falls back to last segment as resource_name."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        result = _parse_resource_id("/invalid/path")
+        assert result["resource_name"] == "path"  # fallback: last non-empty segment
+
+    def test_parse_resource_id_empty_string(self):
+        """Empty string input returns all-None dict."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        result = _parse_resource_id("")
+        assert result == {
+            "resource_name": None,
+            "resource_group": None,
+            "resource_type": None,
+            "subscription_id": None,
+        }
+
+    def test_parse_resource_id_key_vault(self):
+        """Key Vault resource ID parsed correctly."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        rid = "/subscriptions/sub-999/resourceGroups/rg-security/providers/Microsoft.KeyVault/vaults/kv-prod"
+        result = _parse_resource_id(rid)
+        assert result["subscription_id"] == "sub-999"
+        assert result["resource_group"] == "rg-security"
+        assert result["resource_type"] == "microsoft.keyvault/vaults"
+        assert result["resource_name"] == "kv-prod"
+
+    def test_parse_resource_id_nsg(self):
+        """NSG resource ID parsed correctly (matches SAMPLE_INCIDENTS[1])."""
+        from services.api_gateway.incidents_list import _parse_resource_id
+
+        rid = "/subscriptions/sub-2/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/nsg-1"
+        result = _parse_resource_id(rid)
+        assert result["resource_name"] == "nsg-1"
+        assert result["resource_type"] == "microsoft.network/networksecuritygroups"
+        assert result["resource_group"] == "rg"
+
+    def test_incident_summary_has_new_fields(self):
+        """IncidentSummary model accepts all 5 new optional fields."""
+        from services.api_gateway.models import IncidentSummary
+
+        summary = IncidentSummary(
+            incident_id="inc-001",
+            severity="Sev1",
+            domain="compute",
+            status="open",
+            created_at="2026-04-01T10:00:00Z",
+            resource_name="vm-prod-001",
+            resource_group="rg-prod",
+            resource_type="microsoft.compute/virtualmachines",
+            investigation_status="evidence_ready",
+        )
+        assert summary.resource_name == "vm-prod-001"
+        assert summary.resource_group == "rg-prod"
+        assert summary.resource_type == "microsoft.compute/virtualmachines"
+        assert summary.investigation_status == "evidence_ready"
+        assert summary.evidence_collected_at is None
