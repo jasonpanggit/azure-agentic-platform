@@ -409,7 +409,7 @@ async def get_chat_result(
                     client.runs.submit_tool_outputs(
                         thread_id=thread_id,
                         run_id=latest_run.id,
-                        tool_outputs=outputs,
+                        tool_outputs=tool_outputs,
                     )
             except Exception as exc:
                 logger.warning("Failed to submit tool outputs: %s", exc)
