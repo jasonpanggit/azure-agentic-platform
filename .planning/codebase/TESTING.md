@@ -1,6 +1,6 @@
 # Testing — Azure Agentic Platform
 
-> Extracted from codebase inspection. Last updated: 2026-03-30.
+> Extracted from codebase inspection. Last updated: 2026-04-01.
 
 ---
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Python | **pytest** | latest | `pyproject.toml` `[tool.pytest.ini_options]` |
 | TypeScript (Teams Bot) | **Vitest** | latest | `services/teams-bot/vitest.config.ts` |
-| TypeScript (Web UI) | **Jest** (unit) + **Playwright** (E2E) | Playwright 1.58.x | `e2e/playwright.config.ts` |
+| TypeScript (Web UI) | **Jest** (unit) | latest | `services/web-ui/jest.config.js` |
 | E2E (cross-service) | **Playwright** | 1.58.x | `e2e/playwright.config.ts` |
 
 ---
@@ -34,16 +34,22 @@ agents/tests/
         test_remediation.py
         test_triage.py
 
-services/api-gateway/tests/
+services/api-gateway/tests/           # 166 tests
     conftest.py
     test_approval_lifecycle.py
+    test_approvals_404.py
     test_audit_export.py
     test_audit_trail.py
     test_auth_security.py
     test_chat_endpoint.py
+    test_dependencies.py
     test_gitops_path.py
     test_health.py
+    test_health_ready.py
+    test_http_rate_limiter.py
     test_incidents.py
+    test_incidents_list.py
+    test_patch_endpoints.py
     test_rate_limiting.py
     test_remediation_logger.py
     test_resource_identity.py
@@ -79,9 +85,9 @@ services/detection-plane/tests/
 
 **Naming rule:** `test_<module_or_feature>.py`. Test classes are `Test<Feature>`, test functions are `test_<scenario>`.
 
-### TypeScript (Teams Bot)
+### TypeScript (Teams Bot — Vitest)
 
-Tests are co-located in `__tests__/` subdirectories next to the source files:
+Tests co-located in `__tests__/` subdirectories next to source files:
 
 ```
 services/teams-bot/src/
@@ -106,15 +112,26 @@ services/teams-bot/src/
         proactive.test.ts
 ```
 
-### Web UI
+### TypeScript (Web UI — Jest)
 
 ```
-services/web-ui/__tests__/
-    auth.test.tsx     # (mostly skipped — placeholder)
-    layout.test.tsx   # (mostly skipped — placeholder)
+services/web-ui/
+    __tests__/
+        auth.test.tsx
+        proxy-auth.test.ts
+        stream-poll-url.test.ts
+        stream.test.ts
+        useAuth.test.tsx
+    lib/__tests__/
+        format-relative-time.test.ts
+    __mocks__/
+        next-server.ts         # Manual mock for next/server
 ```
 
-### E2E
+Jest config: `services/web-ui/jest.config.js` — uses `ts-jest` preset, `testEnvironment: 'node'`,
+`@/` path alias mapped to `<rootDir>/`.
+
+### E2E (Playwright)
 
 ```
 e2e/
@@ -136,131 +153,126 @@ e2e/
 
 ---
 
-## 3. Types of Tests
+## 3. Test Count and Coverage
 
-### Unit Tests (Python)
+### Total Test Count
 
-Marked `@pytest.mark.unit`. Fast, no external dependencies. Test individual
-functions, classes, and data transformations in isolation.
+| Scope | Framework | Count |
+|---|---|---|
+| Python (all services + agents) | pytest | **432 tests** (2 collection errors in arc-mcp-server + detection-plane due to path mismatch; 430 run cleanly) |
+| API gateway only | pytest | **166 tests** |
+| Teams Bot | Vitest | ~14 test files |
+| Web UI | Jest | 6 test files (stream, auth, proxy, lib utility) |
+| E2E | Playwright | 10 spec files |
 
-**Examples:**
-- `test_envelope.py` — validates `IncidentMessage` TypedDict structure and `validate_envelope()`
-- `test_classify_domain.py` — parametrized table tests for ARM resource type → domain mapping
-- `test_rate_limiting.py` — sliding window rate limiter logic
-- `test_dedup.py` — deduplication fingerprint and window logic
-- `test_payload_mapper.py` — Event Hubs payload → Cosmos DB model mapping
-- `test_alert_state.py` — state machine transition validation
+### Coverage Enforcement
 
-**Pattern:**
+- **Python:** `--cov-fail-under=80` enforced in CI for `services/api-gateway` + `agents/shared`
+- **TypeScript (Teams Bot):** `--coverage.thresholds.lines=80` in Vitest; integration tests excluded
+- **Web UI:** Coverage not enforced (Jest used for unit tests only; E2E covers critical flows via Playwright)
 
-```python
-class TestClassifyDomainExactMatches:
-    @pytest.mark.parametrize("resource_type,expected_domain", [
-        ("Microsoft.Compute/virtualMachines", "compute"),
-        ...
-    ])
-    def test_exact_match(self, resource_type: str, expected_domain: str) -> None:
-        assert classify_domain(resource_type) == expected_domain
-```
+### Well-Covered Areas
 
-### Integration Tests (Python)
-
-Marked `@pytest.mark.integration`. Test module interactions and data contracts.
-Most run without real Azure services (mocked with `unittest.mock`). A subset
-requires live Azure credentials (runs only on `push` to `main`).
-
-**Examples:**
-- `test_triage.py` — `TriageDiagnosis` and `RemediationProposal` structure validation, including envelope serialisation
-- `test_budget.py` — `BudgetTracker` with mocked Cosmos containers
-- `test_handoff.py` — agent handoff envelope contract
-- `test_remediation.py` — full remediation proposal-to-approval flow
-- `test_chat_endpoint.py` — FastAPI `TestClient` tests with mocked Foundry + Cosmos
-
-### Unit Tests (TypeScript / Vitest)
-
-All TypeScript unit tests use Vitest. Located in `__tests__/` folders co-located with source. Integration tests are explicitly excluded from the default run.
-
-**Examples:**
-- `approval-card.test.ts` — card schema, action types (`Action.Execute` not `Action.Http`), risk colors
-- `gateway-client.test.ts` — HTTP client retry and error handling
-- `bot.test.ts` — bot activity routing
-- `config.test.ts` — env var validation
-
-**Pattern:**
-```typescript
-describe("buildApprovalCard", () => {
-  it("actions use Action.Execute (NOT Action.Http)", () => {
-    const card = buildApprovalCard(basePayload);
-    const actions = card.actions as Record<string, unknown>[];
-    for (const action of actions) {
-      expect(action.type).toBe("Action.Execute");
-    }
-  });
-});
-```
-
-### E2E Tests (Playwright)
-
-Run against real deployed Container Apps. No mocks. Require env vars:
-`E2E_BASE_URL`, `E2E_API_URL`, `E2E_CLIENT_ID`, `E2E_CLIENT_SECRET`, `E2E_TENANT_ID`.
-
-**Timeout:** 120 seconds per test (`timeout: 120_000` in config); agent triage tests use `TRIAGE_TIMEOUT_MS = 90_000`.
-
-**Coverage:**
-- `e2e-incident-flow.spec.ts` — POST incident → thread dispatch → SSE stream
-- `e2e-hitl-approval.spec.ts` — approve/reject flow end-to-end
-- `e2e-rbac.spec.ts` — authentication/authorization enforcement
-- `e2e-sse-reconnect.spec.ts` — SSE reconnect continuity
-- `e2e-audit-export.spec.ts` — audit export endpoint
-- `e2e-teams-roundtrip.spec.ts` — Teams bot → API gateway roundtrip
-- `arc-mcp-server.spec.ts` — Arc MCP tool calls against real Arc resources
-- `sc1/sc2/sc5/sc6.spec.ts` — explicit success criteria validation
+- `services/api-gateway/` — 23 test files, 166 tests covering every endpoint and module
+- `agents/shared/` — envelope, triage, budget, routing all have dedicated unit tests
+- `services/detection-plane/` — 6 unit + 6 integration test modules
+- `services/arc-mcp-server/` — 4 test files covering all 3 tool categories + pagination
+- Web UI streaming — SSE heartbeat and stream format covered by both Python (`test_sse_stream.py`) and Jest (`stream.test.ts`)
 
 ---
 
-## 4. Coverage
+## 4. How to Run Tests
 
-### Python — Enforced at 80%
+### Python — All Tests
 
-Coverage is measured and enforced by CI with `--cov-fail-under=80`:
+```bash
+# From project root
+python3 -m pytest -v --tb=short
+```
+
+### Python — API Gateway Only (with coverage)
 
 ```bash
 pytest services/api-gateway/tests/ agents/shared/ \
     --ignore=tests/integration \
+    -v --tb=short \
     --cov=services/api-gateway --cov=agents/shared \
     --cov-report=xml --cov-report=term-missing \
     --cov-fail-under=80
 ```
 
-Coverage is uploaded as a CI artifact (`coverage.xml`).
-
-**Well-covered areas:**
-- `services/api-gateway/` — comprehensive test suite (17 test files covering every module)
-- `agents/shared/` — envelope, triage, budget, routing all have dedicated tests
-- `services/detection-plane/` — 6 unit test modules + 6 integration test modules
-- `services/arc-mcp-server/` — 4 test files covering all 3 tool categories + pagination
-
-**Under-covered / gaps:**
-- `services/web-ui/` — `__tests__/auth.test.tsx` and `layout.test.tsx` contain only `it.skip()` placeholder tests (TODO: Plan 05-01)
-- `agents/*/agent.py` — agent factory functions are not unit-tested; they require the real `agent_framework` RC package
-- `scripts/` — utility scripts (`configure-orchestrator.py`, `seed.py`, `simulate-incidents/`) have no tests
-- `fabric/user-data-function/` — covered only in detection-plane unit tests via `test_user_data_function.py`
-
-### TypeScript / Vitest — Enforced at 80%
+### Python — Detection Plane (unit only)
 
 ```bash
-npx vitest run --coverage --coverage.thresholds.lines=80 --exclude='**/integration/**'
+pytest services/detection-plane/tests/unit/ -v --tb=short
 ```
 
-Coverage provider: v8. Reporters: text, json, html. Integration tests are excluded from the threshold check.
+### Python — Integration Tests (requires Azure credentials)
+
+```bash
+pytest services/ agents/ -m integration -v --tb=short
+```
+
+### TypeScript — Teams Bot (Vitest)
+
+```bash
+cd services/teams-bot
+npm run test             # vitest run --coverage
+npm run test:watch       # vitest (interactive)
+```
+
+### TypeScript — Web UI (Jest)
+
+```bash
+cd services/web-ui
+npm test                 # jest
+```
+
+### E2E — Playwright
+
+```bash
+# Requires: E2E_BASE_URL, E2E_API_URL, E2E_CLIENT_ID, E2E_CLIENT_SECRET, E2E_TENANT_ID
+cd e2e
+npx playwright test --project=chromium
+```
 
 ---
 
-## 5. Mocking Patterns
+## 5. Test Patterns Used
 
-### Python — `unittest.mock`
+### Python: Class-Based Grouping with Descriptive Methods
 
-**Standard approach:** `unittest.mock.patch()` as context manager or via `@patch` decorator.
+```python
+class TestChatEndpoint:
+    """Tests for POST /api/v1/chat endpoint."""
+
+    def test_valid_chat_creates_thread(self, client):
+        """POST /api/v1/chat returns 202 with thread_id."""
+        ...
+
+    def test_chat_requires_message(self, client):
+        """POST /api/v1/chat without message returns 422."""
+        ...
+```
+
+- Test class names: `Test<Feature>` (e.g., `TestApprovalLifecycle`, `TestChatEndpoint`)
+- Method names describe the **scenario and expected outcome** in plain English
+- Docstrings on every test method — single sentence explaining what is asserted
+
+### Python: FastAPI TestClient + Disabled Auth
+
+```python
+# conftest.py — auth bypassed for all API gateway tests
+os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
+
+@pytest.fixture()
+def client():
+    app.state.credential = MagicMock(name="DefaultAzureCredential")
+    app.state.cosmos_client = MagicMock(name="CosmosClient")
+    return TestClient(app)
+```
+
+### Python: patch() for Dependency Isolation
 
 ```python
 with patch(
@@ -270,40 +282,34 @@ with patch(
     response = client.post("/api/v1/chat", json={"message": "check vm-prod-01"})
 ```
 
-**Async mocks:** `unittest.mock.AsyncMock` for coroutines:
+- `patch()` used as a context manager (preferred over decorator for co-located assertions)
+- `patch.dict("os.environ", {...})` for per-test env var isolation
+- Module path patched is the **consumer's import path** (not the source module path)
+
+### Python: AsyncMock for Coroutines
 
 ```python
 mock_teams_notifier = AsyncMock()
 mock_teams_notifier.post_card.return_value = {"message_id": "teams-msg-001"}
 ```
 
-**Cosmos DB mocking:** `MagicMock` instances with `query_items`, `read_item`, `replace_item`, `create_item` configured in conftest fixtures.
+`unittest.mock.AsyncMock` used for all async function mocks. Sync mocks use `MagicMock`.
 
-**Environment variable mocking:** `patch.dict("os.environ", {...})` for per-test env var isolation.
-
-### Key conftest.py Fixtures (api-gateway)
+### Python: Shared conftest.py Fixtures
 
 | Fixture | Type | Purpose |
 |---|---|---|
 | `client` | `TestClient` | FastAPI test client with `API_GATEWAY_AUTH_MODE=disabled` |
 | `mock_foundry_client` | `MagicMock` | AIProjectClient with `agents.create_thread/message/run` |
-| `mock_cosmos_approvals` | `MagicMock` | Cosmos container with realistic approval record |
+| `mock_cosmos_approvals` | `MagicMock` | Cosmos container with realistic D-12 schema approval record |
 | `mock_cosmos_incidents` | `MagicMock` | Cosmos container with incident records |
 | `mock_teams_notifier` | `AsyncMock` | Teams card poster |
 | `mock_arm_client` | `MagicMock` | ARM resource client for Resource Identity tests |
 | `sample_approval_record` | `dict` | Pre-built D-12 schema approval record |
-| `sample_remediation_proposal` | `RemediationProposal` | Pre-built proposal for approval tests |
-| `pre_seeded_embeddings` | `list[list[float]]` | 3 deterministic 1536-dim unit vectors for RAG tests (no Azure OpenAI call) |
+| `sample_remediation_proposal` | `RemediationProposal` | Pre-built proposal for approval lifecycle tests |
+| `pre_seeded_embeddings` | `list[list[float]]` | 3 deterministic 1536-dim unit vectors (seed=42, no Azure OpenAI call) |
 
-### Arc MCP Server conftest.py Fixtures
-
-| Fixture | Purpose |
-|---|---|
-| `sample_machines_120` | 120 mock `HybridCompute Machine` objects for pagination tests |
-| `sample_clusters_105` | 105 mock `ConnectedCluster` objects for K8s pagination tests |
-| Helper `_make_machine()`, `_make_cluster()`, `_make_extension()` | MagicMock factories with realistic ARM IDs and property shapes |
-
-### Root conftest.py — Agent Framework Stub
+### Python: Root conftest.py — Agent Framework Stub
 
 `conftest.py` at the project root installs a lightweight `agent_framework` stub into
 `sys.modules` so agent source files can be imported during tests without the pre-release
@@ -317,10 +323,82 @@ RC package:
 It also registers hyphenated service paths as importable Python packages:
 `services/api-gateway/` → `services.api_gateway`.
 
-### TypeScript Mocking (Vitest)
+### Python: Parametrize for Table-Driven Tests
 
-Vitest `vi.mock()` and factory functions. Integration tests in `**/integration/**` are
-excluded from the unit test run and coverage gate.
+```python
+@pytest.mark.parametrize("resource_type,expected_domain", [
+    ("Microsoft.Compute/virtualMachines", "compute"),
+    ("Microsoft.Network/virtualNetworks", "network"),
+    ...
+])
+def test_exact_match(self, resource_type: str, expected_domain: str) -> None:
+    assert classify_domain(resource_type) == expected_domain
+```
+
+Used extensively in `test_classify_domain.py` and payload validation tests.
+
+### Python: Async Tests
+
+```python
+@pytest.mark.asyncio
+async def test_get_chat_result_with_run_id_targets_specific_run(self):
+    ...
+    result = await get_chat_result("thread-123", run_id="run-specific")
+    assert result["run_status"] == "queued"
+```
+
+`pytest-asyncio` (or `anyio`) used for async tests. Some older tests use
+`asyncio.get_event_loop().run_until_complete(...)` directly.
+
+### TypeScript: Vitest with vi.mock() (Teams Bot)
+
+```typescript
+vi.mock("../services/gateway-client", () => ({
+  GatewayClient: vi.fn(),
+}));
+
+describe("AapTeamsBot", () => {
+  let bot: AapTeamsBot;
+  let gateway: ReturnType<typeof createMockGateway>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    gateway = createMockGateway();
+    bot = new AapTeamsBot(gateway as any);
+  });
+  ...
+});
+```
+
+- `vi.mock()` at module top, before imports
+- `vi.clearAllMocks()` in `beforeEach` to reset state
+- Factory functions (`createMockContext()`, `createMockGateway()`) for reusable test doubles
+
+### TypeScript: Jest with Fake Timers (Web UI)
+
+```typescript
+describe('SSE stream route: heartbeat', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.resetModules();
+    global.fetch = jest.fn() as any;
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('emits ": heartbeat" after 20-second interval', async () => {
+    await jest.advanceTimersByTimeAsync(21_000);
+    const firstRead = await reader.read();
+    expect(decoder.decode(firstRead.value)).toContain(': heartbeat');
+  });
+});
+```
+
+- `jest.useFakeTimers()` + `jest.advanceTimersByTimeAsync()` for time-dependent SSE tests
+- `jest.resetModules()` ensures fresh module imports per test
+- `global.fetch` manually mocked (no jest-fetch-mock dependency)
 
 ---
 
@@ -341,7 +419,7 @@ Defined in `pyproject.toml`:
 | `sc5` | Success Criterion 5: Resource Identity Certainty |
 | `sc6` | Success Criterion 6: GitOps vs direct-apply path |
 
-**pytest discovery config:**
+**pytest discovery config (`pyproject.toml`):**
 
 ```toml
 [tool.pytest.ini_options]
@@ -365,7 +443,7 @@ pythonpath = ["."]
 | Teams Bot + API Gateway CI | `teams-bot-api-gateway-ci.yml` | Push/PR to `services/teams-bot/**`, `services/api-gateway/**` | Vitest unit (80% gate) + Python unit |
 | Detection Plane CI | `detection-plane-ci.yml` | Push/PR to `services/detection-plane/**`, `fabric/**` | Python unit + ruff lint; integration only on `push` to `main` |
 
-### Python Test Command (all CI)
+### Python Test Command (CI)
 
 ```bash
 pytest services/api-gateway/tests/ agents/shared/ \
@@ -376,24 +454,28 @@ pytest services/api-gateway/tests/ agents/shared/ \
     --cov-fail-under=80
 ```
 
-Python version: 3.12 (API gateway), 3.11 (detection-plane).
+Python versions: 3.12 (API gateway), 3.11 (detection-plane).
 
-### TypeScript Test Command (Teams Bot)
+### TypeScript Test Commands
 
 ```bash
+# Teams Bot (Vitest)
 npm run lint
 npm run typecheck
 npx vitest run --coverage --coverage.thresholds.lines=80 --exclude='**/integration/**'
+
+# Web UI (Jest)
+cd services/web-ui && npm test
 ```
 
-### Playwright E2E Command (Web UI CI)
+### Playwright E2E Command
 
 ```bash
 npx playwright test --project=chromium --reporter=github
 ```
 
-Runs Chromium only in CI. Tests run sequentially (`workers: 1`, `fullyParallel: false`)
-to preserve state isolation. 2 retries on failure in CI.
+Chromium only in CI. Sequential workers (`workers: 1`, `fullyParallel: false`) for state isolation.
+2 retries on failure. Timeout: 120 seconds per test.
 
 ### Integration Test Gating
 
@@ -409,16 +491,16 @@ require the `staging` environment, and need live Azure credentials:
 
 ---
 
-## 8. Missing Test Areas
+## 8. Gaps / Missing Coverage
 
 | Area | Current Status | Gap |
 |---|---|---|
-| Web UI components | `auth.test.tsx`, `layout.test.tsx` contain only `it.skip()` stubs | No component tests exist; marked TODO Plan 05-01 |
-| Agent factory functions | Not tested | `create_compute_agent()`, etc. require real `agent_framework` RC — stub only provides no-ops |
+| Web UI components | `auth.test.tsx`, `useAuth.test.tsx` exist but `proxy-auth`, `stream`, `stream-poll-url` are relatively new | No React component render tests (only route/util logic tested) |
+| Agent factory functions | Not tested | `create_compute_agent()` etc. require real `agent_framework` RC; stub only provides no-ops |
 | `agents/*/agent.py` system prompts | Not validated | Prompt content and `{allowed_tools}` injection not asserted |
-| `services/arc-mcp-server/auth.py` | Not confirmed | Auth module exists but no dedicated auth test file |
+| `services/arc-mcp-server/auth.py` | No dedicated test file | Auth module exists but not independently tested |
 | `scripts/` utilities | No test files | `configure-orchestrator.py`, `seed.py`, `validate.py`, simulation scenarios |
 | Fabric `user-data-function/main.py` | Partially via detection-plane unit tests | Entry point HTTP handler not independently tested |
-| Cross-agent integration | Agent handoff tests use mocked framework | No live multi-agent conversation tests outside E2E |
-| Token budget enforcement under concurrency | Unit tests cover happy path | No concurrent write / ETag conflict tests for `BudgetTracker` |
-| SSE stream format | `test_sse_stream.py` present | Not confirmed what it covers — may be thin |
+| Cross-agent integration | Agent handoff tests use mocked framework | No live multi-agent conversation tests outside Playwright E2E |
+| Token budget concurrency | Unit tests cover happy path | No concurrent write / ETag conflict tests for `BudgetTracker` |
+| arc-mcp-server + detection-plane | `pytest --collect-only` shows 2 `ImportPathMismatchError` errors | These services have separate `pyproject.toml` files causing path conflicts when run from repo root; run from their own directories |

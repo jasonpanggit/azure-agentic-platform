@@ -1,6 +1,6 @@
 # Code Conventions — Azure Agentic Platform
 
-> Extracted from codebase inspection. Last updated: 2026-03-30.
+> Extracted from codebase inspection. Last updated: 2026-04-01.
 
 ---
 
@@ -18,7 +18,7 @@
 | Service directories | `kebab-case/` | `api-gateway/`, `arc-mcp-server/`, `teams-bot/` |
 
 **Note:** Hyphenated service directories (`services/api-gateway/`) are registered as
-underscore-namespaced Python packages (`services.api_gateway`) in `conftest.py`.
+underscore-namespaced Python packages (`services.api_gateway`) in the root `conftest.py`.
 
 ### Python Variables and Functions
 
@@ -58,6 +58,7 @@ services/api-gateway/
     audit.py         # Audit log queries
     rate_limiter.py  # Sliding-window rate limiting
     runbook_rag.py   # pgvector RAG search
+    patch_endpoints.py  # Patch management routes (Phase 13)
     tests/
         conftest.py
         test_*.py
@@ -74,7 +75,7 @@ agents/
     compute/
         agent.py     # ChatAgent factory + COMPUTE_AGENT_SYSTEM_PROMPT
         tools.py     # @ai_function tool definitions + ALLOWED_MCP_TOOLS
-    network/, storage/, security/, sre/, arc/
+    network/, storage/, security/, sre/, arc/, patch/, eol/
         (same pattern)
     shared/
         auth.py      # DefaultAzureCredential + AgentsClient factory
@@ -108,8 +109,7 @@ services/arc-mcp-server/
 ```
 
 Tools in `tools/*.py` expose `*_impl()` async functions. The `server.py` registers
-them as `@mcp.tool()` wrappers that call `*_impl()` and call `.model_dump()` on
-the result.
+them as `@mcp.tool()` wrappers that call `*_impl()` and call `.model_dump()` on the result.
 
 ### TypeScript Services
 
@@ -138,6 +138,21 @@ services/teams-bot/src/
         conversation-state.ts
         escalation.ts
         __tests__/
+```
+
+Web UI follows Next.js App Router conventions:
+
+```
+services/web-ui/
+    app/
+        api/
+            stream/route.ts    # SSE streaming proxy
+            proxy/[...path]/route.ts  # Generic API proxy
+    lib/
+        format-relative-time.ts  # Shared utility (with unit tests)
+        __tests__/
+    __tests__/                 # Top-level Jest tests
+    __mocks__/                 # Manual mocks (next-server.ts)
 ```
 
 ---
@@ -179,7 +194,19 @@ except Exception as exc:
 
 ### Python: Fail-Closed Auth
 
-Auth module defaults to **fail-closed**: missing env vars → 503 with actionable error message. Bypass is opt-in (`API_GATEWAY_AUTH_MODE=disabled`).
+Auth module defaults to **fail-closed**: missing env vars → 503 with actionable error message.
+Bypass is opt-in via `API_GATEWAY_AUTH_MODE=disabled` (test environments only).
+
+### Python: Graceful Degradation for Optional Services
+
+Optional services (Postgres, App Insights, Cosmos) guard with try/except at startup:
+
+```python
+except Exception as exc:  # noqa: BLE001
+    logger.warning("Startup migrations skipped: %s", exc)
+```
+
+Missing env vars → logged as warnings, feature silently skipped (not a fatal error).
 
 ### TypeScript: try/catch with unknown narrowing
 
@@ -197,10 +224,12 @@ Auth module defaults to **fail-closed**: missing env vars → 503 with actionabl
 ### Python
 
 - **Module-level logger** using the standard library: `logger = logging.getLogger(__name__)`
-- **Structured log calls** with format string arguments (not f-strings): `logger.info("Ingesting incident %s (severity=%s)", payload.incident_id, payload.severity)`
+- **Structured log calls** with format string arguments (not f-strings):
+  `logger.info("Ingesting incident %s (severity=%s)", payload.incident_id, payload.severity)`
 - **Error log with full context** before raising: `logger.error("Foundry dispatch failed: %s", exc)`
 - **Warning for degraded paths**: `logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set — OTel disabled")`
 - No `print()` statements in production code
+- Log level configurable via `LOG_LEVEL` env var (default `INFO`)
 
 ### OpenTelemetry Spans (Production Observability)
 
@@ -221,18 +250,147 @@ with instrument_tool_call(
     ...
 ```
 
-The context manager automatically records:
-- `aiops.agent_id`, `aiops.agent_name`, `aiops.tool_name`
-- `aiops.tool_parameters`, `aiops.correlation_id`, `aiops.thread_id`
-- `aiops.outcome` (`success` | `failure`)
-- `aiops.duration_ms` (wall-clock)
-- `aiops.error` (exception string on failure)
+Gateway-layer spans use purpose-specific helpers from `services/api-gateway/instrumentation.py`:
+
+```python
+with foundry_span("create_thread") as span:
+    span.set_attribute("foundry.thread_id", thread_id)
+
+with agent_span("orchestrator", correlation_id="..."):
+    ...
+
+with mcp_span("tool_approval", thread_id=thread_id) as span:
+    span.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
+```
 
 All spans flow to Azure Application Insights via `APPLICATIONINSIGHTS_CONNECTION_STRING`.
 
 ---
 
-## 5. Environment Variable Conventions
+## 5. API Patterns
+
+### Route Registration
+
+- `main.py` is the FastAPI app + route registration hub
+- Sub-routers (`health_router`, `patch_router`) registered via `app.include_router()`
+- All routes use Pydantic `response_model=` for automatic serialization and schema generation
+- Non-idempotent creation routes return `status.HTTP_202_ACCEPTED`
+
+### Middleware Stack (applied in order)
+
+1. **CORS** — origins from `CORS_ALLOWED_ORIGINS` env var (comma-separated; default `*` for dev)
+2. **Correlation ID** — injects `X-Correlation-ID` header on every request/response (generates UUID if absent)
+3. **HTTP Rate Limiter** — per-IP sliding window on `/api/v1/chat` (POST) and `/api/v1/incidents` (GET)
+
+### Authentication Dependency
+
+All protected routes declare `token: dict[str, Any] = Depends(verify_token)`.
+The `verify_token` dependency returns the decoded Entra token claims dict.
+Auth mode controlled by `API_GATEWAY_AUTH_MODE` env var (`"entra"` | `"disabled"`).
+
+### Pydantic Model Pattern
+
+All request/response models inherit from `pydantic.BaseModel` with field-level validation:
+
+```python
+class IncidentPayload(BaseModel):
+    incident_id: str = Field(..., min_length=1)
+    severity: str = Field(..., pattern=r"^Sev[0-3]$")
+    domain: str = Field(..., pattern=r"^(compute|network|storage|security|arc|sre|patch|eol)$")
+    affected_resources: list[AffectedResource] = Field(..., min_length=1)
+    kql_evidence: Optional[str] = Field(default=None, description="...")
+```
+
+All models live in `models.py` — never inline in route handlers.
+
+### Envelope Protocol
+
+Agent-to-agent messages use the `IncidentMessage` TypedDict from `agents/shared/envelope.py`:
+
+```python
+class IncidentMessage(TypedDict):
+    correlation_id: str
+    thread_id: str
+    source_agent: str
+    target_agent: str
+    message_type: Literal["incident_handoff", "diagnosis_complete", "remediation_proposal", ...]
+    payload: dict[str, Any]
+    timestamp: str  # ISO 8601
+```
+
+Raw strings between agents are prohibited (AGENT-002). Every inbound message validated
+with `validate_envelope()` before processing.
+
+---
+
+## 6. Component Patterns (Frontend)
+
+### Next.js App Router
+
+- API proxy routes in `app/api/proxy/[...path]/route.ts` — forwards all methods to the backend API gateway
+- SSE streaming route in `app/api/stream/route.ts` — polls backend, re-emits as SSE with 20s heartbeat
+- `ReadableStream` + `TransformStream` used directly (no Vercel AI SDK dependency)
+- Server components only where no client-side state is required; `"use client"` directive explicit
+
+### SSE Streaming Pattern
+
+```typescript
+// app/api/stream/route.ts
+const stream = new ReadableStream({
+  start(controller) {
+    // Poll backend GET /chat/{thread_id}/result every 2s
+    // Emit "data: <json>\n\n" on each result
+    // Emit ": heartbeat\n\n" every 20s via setInterval
+    // Close stream on terminal run_status (completed/failed/cancelled/expired)
+  }
+});
+return new Response(stream, {
+  headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" }
+});
+```
+
+### Shared Utilities
+
+- `lib/format-relative-time.ts` — pure function, independently unit-tested with Jest
+- All lib utilities are pure functions with no side effects (easily testable)
+
+### Fluent UI v9 + Tailwind
+
+- Uses `@fluentui/react-components` v9 (not legacy v8)
+- Tailwind used for layout; Fluent UI for interactive components
+- `FluentProvider` wraps the entire app in the root layout
+
+---
+
+## 7. Git Conventions (from recent commits)
+
+### Commit Message Format
+
+```
+<type>(<scope>): <description>
+```
+
+**Types observed:**
+- `feat` — new feature (`feat: resizable chat drawer + table overflow fix`)
+- `fix` — bug fix (`fix: use REST API directly for sub-run thread listing (fast path)`)
+- `docs` — documentation/verification (`docs(13): verify phase 13 — all must_haves pass`)
+- `chore` — housekeeping (`chore: update STATE.md with quick task 260401-ata`)
+- `refactor` — code restructuring
+
+**Scope convention:** Phase number in parentheses for phase-scoped commits: `docs(13):`, `feat(12):`.
+
+**Description style:** Imperative present tense, concise summary of the what and why.
+Multi-fix commits use `+` to separate concerns in a single line.
+
+### Branch Strategy
+
+- Main branch: `main` — deployable at all times
+- Feature branches created per task/phase: convention observed from GSD workflow
+- PRs merge to `main` after CI passes; no long-lived feature branches
+
+---
+
+## 8. Environment Variable Conventions
 
 ### Naming Pattern
 
@@ -240,25 +398,25 @@ All env vars are `UPPER_SNAKE_CASE`. Azure SDK env vars use the official names:
 
 | Variable | Where Used | Purpose |
 |---|---|---|
-| `AZURE_PROJECT_ENDPOINT` | `agents/shared/auth.py`, `services/api-gateway/foundry.py` | Foundry project endpoint (preferred) |
+| `AZURE_PROJECT_ENDPOINT` | `agents/shared/auth.py`, `foundry.py` | Foundry project endpoint (preferred) |
 | `FOUNDRY_ACCOUNT_ENDPOINT` | Same | Fallback Foundry endpoint |
 | `AZURE_CLIENT_ID` | `services/api-gateway/auth.py` | Entra app client ID |
 | `AZURE_TENANT_ID` | `services/api-gateway/auth.py` | Entra tenant ID |
-| `AGENT_ENTRA_ID` | `agents/shared/auth.py` | Agent's managed identity principal_id for audit |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | `agents/shared/otel.py`, `services/api-gateway/main.py` | App Insights OTel |
+| `AGENT_ENTRA_ID` | `agents/shared/auth.py` | Agent managed identity principal_id |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | `agents/shared/otel.py`, `main.py` | App Insights OTel |
 | `COSMOS_ENDPOINT` | `agents/shared/budget.py`, detection-plane | Cosmos DB account endpoint |
 | `COSMOS_DATABASE_NAME` | Same | Cosmos DB database |
-| `ORCHESTRATOR_AGENT_ID` | `services/api-gateway/chat.py`, `foundry.py` | Foundry assistant ID for runs |
+| `ORCHESTRATOR_AGENT_ID` | `services/api-gateway/chat.py`, `foundry.py` | Foundry assistant ID |
 | `API_GATEWAY_AUTH_MODE` | `services/api-gateway/auth.py` | `"entra"` (default) or `"disabled"` |
 | `CORS_ALLOWED_ORIGINS` | `services/api-gateway/main.py` | Comma-separated CORS origins |
 | `MAX_ACTIONS_PER_MINUTE` | `services/api-gateway/rate_limiter.py` | Remediation rate limit |
 | `BUDGET_THRESHOLD_USD` | `agents/shared/budget.py` | Per-session cost ceiling |
 | `MAX_ITERATIONS` | `agents/shared/budget.py` | Per-session iteration cap |
-| `INPUT_PRICE_PER_1M` / `OUTPUT_PRICE_PER_1M` | `agents/shared/budget.py` | Token pricing for cost calc |
+| `LOG_LEVEL` | `services/api-gateway/main.py` | Log verbosity (default `INFO`) |
 
 ### Env Var Access Pattern
 
-- **Required vars:** `os.environ["VAR"]` (raises `KeyError`) or explicit `ValueError` with actionable message:
+- **Required vars:** explicit `ValueError` with actionable message:
   ```python
   endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT")
   if not endpoint:
@@ -269,7 +427,7 @@ All env vars are `UPPER_SNAKE_CASE`. Azure SDK env vars use the official names:
 
 ---
 
-## 6. Import / Dependency Patterns
+## 9. Import / Dependency Patterns
 
 ### Python Import Order (PEP 8 + isort)
 
@@ -283,10 +441,10 @@ All env vars are `UPPER_SNAKE_CASE`. Azure SDK env vars use the official names:
 Optional dependencies imported inside functions to avoid startup errors:
 
 ```python
-# In main.py startup:
-from services.api_gateway.dedup_integration import check_dedup   # inside route handler
+# Inside route handler:
+from services.api_gateway.dedup_integration import check_dedup   # deferred
 import asyncpg                                                      # inside lifespan
-from azure.monitor.opentelemetry import configure_azure_monitor   # if env var set
+from azure.monitor.opentelemetry import configure_azure_monitor   # only if env var set
 ```
 
 ### Shared Utilities Import
@@ -301,145 +459,7 @@ from agents.shared.triage import TriageDiagnosis, RemediationProposal
 
 ---
 
-## 7. Agent Framework Patterns
-
-### Agent Declaration (`agent.py`)
-
-Each domain agent follows the same factory function pattern:
-
-```python
-# 1. Module docstring with requirement references (TRIAGE-002, REMEDI-001, etc.)
-# 2. Import ChatAgent from agent_framework
-# 3. Import tools from sibling tools.py
-# 4. Module-level tracer: tracer = setup_telemetry("aiops-<domain>-agent")
-# 5. Module-level SYSTEM_PROMPT constant with {allowed_tools} placeholder
-# 6. Factory function create_<domain>_agent() -> ChatAgent
-# 7. __main__ entry point: agent.serve()
-
-def create_compute_agent() -> ChatAgent:
-    client = get_foundry_client()
-    return ChatAgent(
-        name="compute-agent",
-        description="Azure compute domain specialist — VMs, VMSS, AKS, App Service.",
-        system_prompt=COMPUTE_AGENT_SYSTEM_PROMPT,
-        client=client,
-        tools=[query_activity_log, query_log_analytics, query_resource_health, query_monitor_metrics],
-    )
-
-if __name__ == "__main__":
-    agent = create_compute_agent()
-    agent.serve()
-```
-
-### Tool Declaration (`tools.py`)
-
-All agent tools use the `@ai_function` decorator from `agent_framework`:
-
-```python
-@ai_function
-def query_activity_log(
-    resource_ids: List[str],
-    timespan_hours: int = 2,
-) -> Dict[str, Any]:
-    """Docstring with Args: and Returns: sections.
-
-    MANDATORY first-pass RCA step (TRIAGE-003). ...
-    """
-    agent_id = get_agent_identity()
-    tool_params = {...}
-    with instrument_tool_call(tracer, "compute-agent", agent_id, "query_activity_log", tool_params, ...):
-        return {...}   # Typed dict result
-```
-
-**Rules:**
-- Every `@ai_function` is wrapped with `instrument_tool_call` for OTel tracing
-- Return values are plain `Dict[str, Any]` with consistent key naming
-- Every tools module declares an explicit `ALLOWED_MCP_TOOLS: List[str]` allowlist — no wildcards
-
-### MCP Tool Declaration (Arc MCP Server)
-
-```python
-@mcp.tool()
-async def arc_servers_list(subscription_id: str, resource_group: Optional[str] = None) -> dict:
-    """Docstring with Args: and Returns: sections."""
-    result = await arc_servers_list_impl(subscription_id, resource_group)
-    return result.model_dump()
-```
-
-- Registration thin wrappers in `server.py` delegate to `*_impl()` async functions in `tools/`
-- Return type always `dict` (from `.model_dump()` on a Pydantic model)
-
-### Inter-Agent Message Protocol
-
-All agent-to-agent messages use the `IncidentMessage` TypedDict from `agents/shared/envelope.py`:
-
-```python
-class IncidentMessage(TypedDict):
-    correlation_id: str
-    thread_id: str
-    source_agent: str
-    target_agent: str
-    message_type: Literal["incident_handoff", "diagnosis_complete", "remediation_proposal", ...]
-    payload: dict[str, Any]
-    timestamp: str  # ISO 8601
-```
-
-Raw strings between agents are prohibited (AGENT-002). Every message is validated
-with `validate_envelope()` before processing.
-
----
-
-## 8. Common Utilities and Shared Code
-
-### `agents/shared/`
-
-| Module | Purpose |
-|---|---|
-| `auth.py` | `get_credential()`, `get_foundry_client()`, `get_agent_identity()` — cached via `@lru_cache` |
-| `envelope.py` | `IncidentMessage` TypedDict, `VALID_MESSAGE_TYPES`, `validate_envelope()` |
-| `otel.py` | `setup_telemetry()`, `instrument_tool_call()` context manager, `record_tool_call_span()` |
-| `triage.py` | `TriageDiagnosis`, `RemediationProposal`, `ResourceSnapshot` — typed domain result containers |
-| `budget.py` | `BudgetTracker`, `calculate_cost()`, `BudgetExceededException`, `MaxIterationsExceededException` |
-| `routing.py` | `classify_query_text()` — keyword-based domain classifier for operator chat messages |
-| `approval_manager.py` | HITL approval lifecycle utilities |
-| `gitops.py` | GitOps path execution helpers |
-| `resource_identity.py` | Resource Identity Certainty (REMEDI-004) snapshot + verification |
-| `runbook_tool.py` | Shared `@ai_function` for runbook RAG search |
-
-### `services/api-gateway/` Business Modules
-
-| Module | Purpose |
-|---|---|
-| `models.py` | All Pydantic request/response models (`IncidentPayload`, `ChatRequest`, `ApprovalRecord`, etc.) |
-| `auth.py` | `EntraTokenValidator` class + `verify_token()` FastAPI dependency |
-| `foundry.py` | `_get_foundry_client()` (thread/message/run operations) |
-| `rate_limiter.py` | `RateLimiter` sliding window, `check_protected_tag()`, singleton `rate_limiter` |
-| `audit_trail.py` | Audit trail write path (Cosmos DB) |
-| `audit.py` | Audit log read/query path (Application Insights) |
-| `dedup_integration.py` | `check_dedup()` — incident deduplication against Cosmos |
-
-### Pydantic Models Pattern
-
-All API request/response models inherit from `pydantic.BaseModel` with field-level validation:
-
-```python
-class IncidentPayload(BaseModel):
-    incident_id: str = Field(..., min_length=1)
-    severity: str = Field(..., pattern=r"^Sev[0-3]$")
-    domain: str = Field(..., pattern=r"^(compute|network|storage|security|arc|sre)$")
-    affected_resources: list[AffectedResource] = Field(..., min_length=1)
-```
-
-### Singleton Pattern
-
-Module-level singletons for shared service clients:
-- `rate_limiter = RateLimiter()` in `rate_limiter.py`
-- `_token_validator = EntraTokenValidator()` in `auth.py`
-- `@lru_cache(maxsize=1)` on `get_credential()` for thread-safe caching
-
----
-
-## 9. Code Documentation Style
+## 10. Code Documentation Style
 
 ### Module Docstrings
 
@@ -454,9 +474,6 @@ Every module has a docstring with:
 def setup_telemetry(service_name: str) -> trace.Tracer:
     """Configure OpenTelemetry for an agent container.
 
-    Reads APPLICATIONINSIGHTS_CONNECTION_STRING from environment.
-    Returns a Tracer instance for creating custom spans.
-
     Args:
         service_name: Agent service name (e.g., "aiops-compute-agent").
 
@@ -465,10 +482,10 @@ def setup_telemetry(service_name: str) -> trace.Tracer:
     """
 ```
 
-- Args block always present for non-trivial parameters
-- Returns block describes the return type and structure
+- Args block for non-trivial parameters
+- Returns block describes return type and structure
 - Raises block for functions that raise specific exceptions
-- Inline requirement reference for constraint-carrying code: `# REMEDI-001: All remediation proposals require explicit human approval.`
+- Inline requirement reference: `# REMEDI-001: All remediation proposals require explicit human approval.`
 
 ### Section Separators
 
