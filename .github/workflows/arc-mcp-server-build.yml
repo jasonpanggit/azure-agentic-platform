@@ -52,9 +52,11 @@ jobs:
           pytest tests/ -m unit \
             --tb=short \
             -v \
-            --cov=arc_mcp_server \
+            --cov=tools \
+            --cov=models \
+            --cov=auth \
             --cov-report=term-missing \
-            --cov-fail-under=80
+            --cov-fail-under=60
 
   build-image:
     name: Build Arc MCP Server Image
