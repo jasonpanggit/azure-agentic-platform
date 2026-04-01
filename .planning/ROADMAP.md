@@ -472,6 +472,17 @@ Plans:
 Plans:
 - [x] 13-01 Patch Management Tab — Full Stack Implementation
 
+### Phase 14: Production Stabilisation
+
+**Goal:** Make the production deployment fully functional by resolving all known BLOCKING and HIGH-severity production blockers. Wire agents to MCP-enabled instances, fix MCP tool groups, deploy real Arc MCP Server, fix runbook RAG, remove hardcoded agent IDs, and restore Teams proactive alerting.
+**Requirements**: Stabilisation — resolves Backlog F-02, F-04, F-09, F-10, F-11; CONCERNS BUG-001, BUG-002, DEBT-002, DEP-003, DEP-005, GAP-001, GAP-002, GAP-003, GAP-004, GAP-009
+**Depends on:** Phase 13
+**Status:** Not started
+**Plans:** 1 plan (12 tasks across 6 milestones)
+
+Plans:
+- [ ] 14-01 through 14-12 — see `.planning/phases/14-prod-stabilisation/PLAN.md`
+
 ---
 
 ## Requirement Coverage Matrix

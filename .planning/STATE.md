@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-last_updated: "2026-03-31T23:40:00.000Z"
+last_updated: "2026-04-01T12:00:00.000Z"
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 12
   total_plans: 43
   completed_plans: 39
@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+
+> Last updated: 2026-04-01 — Phase 14 PLANNED: Production Stabilisation. 12 tasks across 6 milestones (M1: Agent Wiring + MCP Tool Groups, M2: Hardcoded ID Removal + Code Fixes, M3: Arc MCP Server Real Deployment, M4: Runbook RAG + Observability, M5: Teams Proactive Alerting, M6: Dependency Pinning + Security Hardening). Resolves Backlog F-02/F-04/F-09/F-10/F-11, CONCERNS BUG-001/BUG-002/DEBT-002/DEP-003/GAP-001-004/GAP-009. Plan at .planning/phases/14-prod-stabilisation/PLAN.md.
 > Last updated: 2026-03-31 — Plan 13-01 COMPLETE (Phase 13 COMPLETE): Patch Management Tab. Full-stack implementation: 2 new API gateway endpoints (GET /api/v1/patch/assessment, GET /api/v1/patch/installations) porting KQL from agents/patch/tools.py, 15 unit tests passing, 2 Next.js proxy routes, PatchTab component (5 MetricCard summary cards, 13-column assessment table with compliance/machine filters, 8-column installation history table, empty/loading/error states), wired into DashboardPanel as 6th tab (ShieldCheck icon). npx tsc --noEmit passes, all 15 pytest tests pass. azure-mgmt-resourcegraph added to gateway requirements.
 
 > Last updated: 2026-03-31 — Phase 13 VERIFIED: VERIFICATION.md updated to `passed`. All 18 must_have checks confirmed. 15/15 pytest tests pass, npx tsc --noEmit exits 0, 5/5 format-relative-time unit tests pass. 16/16 phase requirements D-01 through D-16 met. completed_phases updated to 12, completed_plans to 39.
@@ -130,6 +132,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
 | 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
 | 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan, 15 unit tests, full-stack: gateway endpoints + proxy routes + PatchTab component + DashboardPanel wiring |
+| 14 | Production Stabilisation | Not started — 12 tasks across 6 milestones: agent wiring, MCP tool groups, Arc MCP deploy, runbook RAG, Teams alerting, dependency pinning |
 
 ---
 
