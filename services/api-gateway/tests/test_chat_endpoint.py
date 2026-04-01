@@ -378,3 +378,123 @@ class TestGetChatResult:
 
         resp = ChatResponse(thread_id="t-1", status="created")
         assert resp.run_id is None
+
+
+class TestDomainAgentIds:
+    """Tests for _DOMAIN_AGENT_IDS env-var construction (DEBT-002)."""
+
+    def test_domain_agent_ids_built_from_env_vars(self):
+        """_DOMAIN_AGENT_IDS contains IDs from all *_AGENT_ID env vars."""
+        import importlib
+        import services.api_gateway.chat as chat_module
+
+        env_patch = {
+            "COMPUTE_AGENT_ID": "asst_compute_001",
+            "NETWORK_AGENT_ID": "asst_network_001",
+            "STORAGE_AGENT_ID": "asst_storage_001",
+            "SECURITY_AGENT_ID": "asst_security_001",
+            "SRE_AGENT_ID": "asst_sre_001",
+            "ARC_AGENT_ID": "asst_arc_001",
+            "PATCH_AGENT_ID": "asst_patch_001",
+            "EOL_AGENT_ID": "asst_eol_001",
+        }
+        with patch.dict("os.environ", env_patch, clear=False):
+            importlib.reload(chat_module)
+            ids = chat_module._DOMAIN_AGENT_IDS
+
+        assert "asst_compute_001" in ids
+        assert "asst_network_001" in ids
+        assert "asst_storage_001" in ids
+        assert "asst_security_001" in ids
+        assert "asst_sre_001" in ids
+        assert "asst_arc_001" in ids
+        assert "asst_patch_001" in ids
+        assert "asst_eol_001" in ids
+        assert len(ids) == 8
+
+    def test_domain_agent_ids_empty_when_no_env_vars(self):
+        """_DOMAIN_AGENT_IDS is empty when no *_AGENT_ID env vars are set."""
+        import importlib
+        import services.api_gateway.chat as chat_module
+
+        clear_env = {
+            "COMPUTE_AGENT_ID": "",
+            "NETWORK_AGENT_ID": "",
+            "STORAGE_AGENT_ID": "",
+            "SECURITY_AGENT_ID": "",
+            "SRE_AGENT_ID": "",
+            "ARC_AGENT_ID": "",
+            "PATCH_AGENT_ID": "",
+            "EOL_AGENT_ID": "",
+        }
+        with patch.dict("os.environ", clear_env, clear=False):
+            # Remove the keys entirely so os.environ.get() returns None
+            import os
+            for key in clear_env:
+                os.environ.pop(key, None)
+            importlib.reload(chat_module)
+            ids = chat_module._DOMAIN_AGENT_IDS
+
+        assert ids == frozenset()
+
+    def test_domain_agent_ids_empty_logs_warning(self, caplog):
+        """Warning is logged when _DOMAIN_AGENT_IDS is empty at module load."""
+        import importlib
+        import os
+        import services.api_gateway.chat as chat_module
+
+        for key in (
+            "COMPUTE_AGENT_ID", "NETWORK_AGENT_ID", "STORAGE_AGENT_ID",
+            "SECURITY_AGENT_ID", "SRE_AGENT_ID", "ARC_AGENT_ID",
+            "PATCH_AGENT_ID", "EOL_AGENT_ID",
+        ):
+            os.environ.pop(key, None)
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="services.api_gateway.chat"):
+            importlib.reload(chat_module)
+
+        if not chat_module._DOMAIN_AGENT_IDS:
+            assert any("COMPUTE_AGENT_ID" in r.message for r in caplog.records), (
+                "Expected warning about missing agent IDs was not logged"
+            )
+
+    def test_domain_agent_ids_partial_env_vars(self):
+        """_DOMAIN_AGENT_IDS contains only the IDs that are set."""
+        import importlib
+        import os
+        import services.api_gateway.chat as chat_module
+
+        # Clear all agent ID env vars first
+        for key in (
+            "COMPUTE_AGENT_ID", "NETWORK_AGENT_ID", "STORAGE_AGENT_ID",
+            "SECURITY_AGENT_ID", "SRE_AGENT_ID", "ARC_AGENT_ID",
+            "PATCH_AGENT_ID", "EOL_AGENT_ID",
+        ):
+            os.environ.pop(key, None)
+
+        with patch.dict("os.environ", {"COMPUTE_AGENT_ID": "asst_compute_x", "SRE_AGENT_ID": "asst_sre_x"}, clear=False):
+            importlib.reload(chat_module)
+            ids = chat_module._DOMAIN_AGENT_IDS
+
+        assert ids == frozenset({"asst_compute_x", "asst_sre_x"})
+
+    def test_no_hardcoded_asst_ids_in_chat_module(self):
+        """Verify no hardcoded asst_* IDs remain in chat.py source."""
+        import inspect
+        import services.api_gateway.chat as chat_module
+
+        source = inspect.getsource(chat_module)
+        # None of the 8 original hardcoded IDs should appear
+        hardcoded_ids = [
+            "asst_rPDw83BXGrmNDE73xMy6IFE5",
+            "asst_ynlfwck70rb2olLGohZSWoKz",
+            "asst_BDm56ofymsrQnbdvutNmP7fI",
+            "asst_bHgDk44qPDLoqqMsln4GjPoK",
+            "asst_4JoNlqMcQC3WPq9cTpowFfPe",
+            "asst_YFobGKxsDGo9j1oIrimzWyfL",
+            "asst_AEFTnaxXKMpOUCmjiLWhzlsW",
+            "asst_hUNs2ASp1WsrMvGvuwA5T495",
+        ]
+        for asst_id in hardcoded_ids:
+            assert asst_id not in source, f"Hardcoded agent ID still present: {asst_id}"

@@ -123,58 +123,59 @@ resource "azurerm_container_app" "agents" {
           value = var.orchestrator_agent_id
         }
       }
-      # Inject domain agent IDs into the orchestrator
+      # Inject domain agent IDs into the orchestrator and api-gateway.
+      # Orchestrator uses them for routing; api-gateway uses them for sub-run MCP approval.
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.compute_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.compute_agent_id != "" ? [1] : []
         content {
           name  = "COMPUTE_AGENT_ID"
           value = var.compute_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.network_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.network_agent_id != "" ? [1] : []
         content {
           name  = "NETWORK_AGENT_ID"
           value = var.network_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.storage_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.storage_agent_id != "" ? [1] : []
         content {
           name  = "STORAGE_AGENT_ID"
           value = var.storage_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.security_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.security_agent_id != "" ? [1] : []
         content {
           name  = "SECURITY_AGENT_ID"
           value = var.security_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.sre_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.sre_agent_id != "" ? [1] : []
         content {
           name  = "SRE_AGENT_ID"
           value = var.sre_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.arc_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.arc_agent_id != "" ? [1] : []
         content {
           name  = "ARC_AGENT_ID"
           value = var.arc_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.patch_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.patch_agent_id != "" ? [1] : []
         content {
           name  = "PATCH_AGENT_ID"
           value = var.patch_agent_id
         }
       }
       dynamic "env" {
-        for_each = each.key == "orchestrator" && var.eol_agent_id != "" ? [1] : []
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.eol_agent_id != "" ? [1] : []
         content {
           name  = "EOL_AGENT_ID"
           value = var.eol_agent_id
@@ -186,6 +187,15 @@ resource "azurerm_container_app" "agents" {
         content {
           name  = "POSTGRES_DSN"
           value = var.postgres_dsn
+        }
+      }
+      # API Gateway: pgvector connection string for runbook RAG (TRIAGE-005)
+      # Only injected on api-gateway to avoid leaking credentials to other containers.
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.pgvector_connection_string != "" ? [1] : []
+        content {
+          name  = "PGVECTOR_CONNECTION_STRING"
+          value = var.pgvector_connection_string
         }
       }
       # Inject Arc MCP Server URL into the arc agent

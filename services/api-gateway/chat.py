@@ -21,6 +21,28 @@ from services.api_gateway.models import ChatRequest
 
 logger = logging.getLogger(__name__)
 
+# Build domain agent ID set from environment variables (populated by Terraform).
+# Used by _approve_pending_subrun_mcp_calls to filter runs belonging to domain agents.
+_DOMAIN_AGENT_IDS: frozenset[str] = frozenset(
+    v for v in (
+        os.environ.get("COMPUTE_AGENT_ID"),
+        os.environ.get("NETWORK_AGENT_ID"),
+        os.environ.get("STORAGE_AGENT_ID"),
+        os.environ.get("SECURITY_AGENT_ID"),
+        os.environ.get("SRE_AGENT_ID"),
+        os.environ.get("ARC_AGENT_ID"),
+        os.environ.get("PATCH_AGENT_ID"),
+        os.environ.get("EOL_AGENT_ID"),
+    )
+    if v
+)
+if not _DOMAIN_AGENT_IDS:
+    logger.warning(
+        "No domain agent IDs configured via env vars "
+        "(COMPUTE_AGENT_ID, NETWORK_AGENT_ID, ...). "
+        "Sub-run MCP approval will be skipped."
+    )
+
 
 def _build_operator_query_envelope(
     *,
@@ -226,16 +248,9 @@ def _approve_pending_subrun_mcp_calls(
     import requests as _requests
     from azure.identity import DefaultAzureCredential
 
-    domain_agent_ids = {
-        "asst_rPDw83BXGrmNDE73xMy6IFE5",  # compute-agent
-        "asst_ynlfwck70rb2olLGohZSWoKz",  # network-agent
-        "asst_BDm56ofymsrQnbdvutNmP7fI",  # storage-agent
-        "asst_bHgDk44qPDLoqqMsln4GjPoK",  # security-agent
-        "asst_4JoNlqMcQC3WPq9cTpowFfPe",  # sre-agent
-        "asst_YFobGKxsDGo9j1oIrimzWyfL",  # arc-agent
-        "asst_AEFTnaxXKMpOUCmjiLWhzlsW",  # patch-agent
-        "asst_hUNs2ASp1WsrMvGvuwA5T495",  # eol-agent
-    }
+    if not _DOMAIN_AGENT_IDS:
+        logger.debug("No domain agent IDs configured; skipping sub-run approval scan.")
+        return
 
     try:
         _token = DefaultAzureCredential().get_token("https://ai.azure.com/.default")
@@ -278,7 +293,7 @@ def _approve_pending_subrun_mcp_calls(
         for sub_run_data in runs:
             if sub_run_data.get("status") != "requires_action":
                 continue
-            if sub_run_data.get("assistant_id") not in domain_agent_ids:
+            if sub_run_data.get("assistant_id") not in _DOMAIN_AGENT_IDS:
                 continue
 
             ra = sub_run_data.get("required_action") or {}
