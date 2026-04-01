@@ -17,9 +17,11 @@ import {
 interface TopNavProps {
   activeTab: string
   isRefreshing?: boolean
+  onRefresh?: () => void
+  onAlertsClick?: () => void
 }
 
-export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
+export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsClick }: TopNavProps) {
   const { theme, toggleTheme } = useTheme()
   const { alertCount } = useAppState()
   const { accounts, instance } = useMsal()
@@ -33,6 +35,7 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
     <nav
       className="flex items-center justify-between px-4 h-12 w-full sticky top-0 z-50 flex-shrink-0"
       style={{ background: 'var(--bg-nav)' }}
+      aria-label="Main navigation"
     >
       {/* Left: logo + separator + breadcrumb */}
       <div className="flex items-center gap-3">
@@ -40,13 +43,14 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
           <div
             className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white"
             style={{ background: 'var(--accent-blue)' }}
+            aria-hidden="true"
           >
             A
           </div>
           <span className="text-sm font-semibold text-white">Azure AIOps</span>
         </div>
-        <div className="w-px h-5" style={{ background: 'var(--border-nav)' }} />
-        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+        <div className="w-px h-5" style={{ background: 'var(--border-nav)' }} aria-hidden="true" />
+        <span className="text-sm" style={{ color: 'var(--text-muted)' }} aria-current="page">
           {activeTab}
         </span>
       </div>
@@ -57,18 +61,20 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
       {/* Right: controls */}
       <div className="flex items-center gap-1">
         <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
+          onClick={onRefresh}
+          disabled={isRefreshing || !onRefresh}
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
+          onMouseEnter={(e) => { if (!isRefreshing) e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
-          aria-label="Refresh status"
+          aria-label={isRefreshing ? 'Refreshing data…' : 'Refresh data'}
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
 
         <button
           onClick={toggleTheme}
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
@@ -78,15 +84,19 @@ export function TopNav({ activeTab, isRefreshing = false }: TopNavProps) {
         </button>
 
         <button
-          className="w-8 h-8 flex items-center justify-center rounded relative"
+          onClick={onAlertsClick}
+          className="w-8 h-8 flex items-center justify-center rounded relative transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
-          aria-label={`${alertCount} alerts`}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
+          aria-label={alertCount > 0 ? `View ${alertCount} alert${alertCount !== 1 ? 's' : ''}` : 'No active alerts'}
         >
           <Bell className="h-4 w-4" />
           {alertCount > 0 && (
             <span
               className="absolute top-1 right-1 min-w-[14px] h-3.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5"
               style={{ background: 'var(--accent-red)', lineHeight: 1 }}
+              aria-hidden="true"
             >
               {alertCount > 99 ? '99+' : alertCount}
             </span>

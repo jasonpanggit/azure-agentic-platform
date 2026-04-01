@@ -121,14 +121,28 @@ function countHealth(count: number, warnMax: number): HealthStatus {
 function ComplianceBadge({ state }: { state: ComplianceState }) {
   if (state === 'Compliant') {
     return (
-      <Badge className="bg-green-100 text-green-700 border-green-200 border">
+      <Badge
+        className="border"
+        style={{
+          background: 'color-mix(in srgb, var(--accent-green) 15%, transparent)',
+          color: 'var(--accent-green)',
+          borderColor: 'color-mix(in srgb, var(--accent-green) 35%, transparent)',
+        }}
+      >
         Compliant
       </Badge>
     );
   }
   if (state === 'NonCompliant') {
     return (
-      <Badge className="bg-red-100 text-red-700 border-red-200 border">
+      <Badge
+        className="border"
+        style={{
+          background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
+          color: 'var(--accent-red)',
+          borderColor: 'color-mix(in srgb, var(--accent-red) 35%, transparent)',
+        }}
+      >
         NonCompliant
       </Badge>
     );
@@ -140,7 +154,14 @@ function InstallStatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'Succeeded':
       return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 border">
+        <Badge
+          className="border"
+          style={{
+            background: 'color-mix(in srgb, var(--accent-green) 15%, transparent)',
+            color: 'var(--accent-green)',
+            borderColor: 'color-mix(in srgb, var(--accent-green) 35%, transparent)',
+          }}
+        >
           Succeeded
         </Badge>
       );
@@ -148,13 +169,27 @@ function InstallStatusBadge({ status }: { status: string }) {
       return <Badge variant="destructive">Failed</Badge>;
     case 'InProgress':
       return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 border">
+        <Badge
+          className="border"
+          style={{
+            background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+            color: 'var(--accent-blue)',
+            borderColor: 'color-mix(in srgb, var(--accent-blue) 35%, transparent)',
+          }}
+        >
           InProgress
         </Badge>
       );
     case 'CompletedWithWarnings':
       return (
-        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 border">
+        <Badge
+          className="border"
+          style={{
+            background: 'color-mix(in srgb, var(--accent-yellow) 15%, transparent)',
+            color: 'var(--accent-yellow)',
+            borderColor: 'color-mix(in srgb, var(--accent-yellow) 35%, transparent)',
+          }}
+        >
           Warnings
         </Badge>
       );
@@ -466,8 +501,11 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                   {filteredAssessment.map((m) => (
                     <TableRow
                       key={m.id}
-                      className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
+                      className="border-b hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60"
+                      tabIndex={0}
+                      role="row"
                       onClick={() => handleRowClick(m)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(m) } }}
                     >
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] truncate max-w-[200px]">
                         {m.machineName}
@@ -475,9 +513,10 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       <TableCell className="h-10 px-3 align-middle">
                         <Badge
                           variant="outline"
-                          className={m.vmType === 'Arc VM'
-                            ? 'text-xs border-purple-500/50 text-purple-400'
-                            : 'text-xs border-blue-500/50 text-blue-400'
+                          className="text-xs"
+                          style={m.vmType === 'Arc VM'
+                            ? { borderColor: 'color-mix(in srgb, var(--accent-purple) 50%, transparent)', color: 'var(--accent-purple)' }
+                            : { borderColor: 'color-mix(in srgb, var(--accent-blue) 50%, transparent)', color: 'var(--accent-blue)' }
                           }
                         >
                           {m.vmType}
@@ -491,10 +530,16 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       <TableCell className="h-10 px-3 align-middle">
                         <ComplianceBadge state={m.compliance} />
                       </TableCell>
-                      <TableCell className={`h-10 px-3 align-middle font-mono text-[13px] text-right ${m.criticalCount > 0 ? 'text-red-600' : ''}`}>
+                      <TableCell
+                        className="h-10 px-3 align-middle font-mono text-[13px] text-right"
+                        style={{ color: m.criticalCount > 0 ? 'var(--accent-red)' : undefined }}
+                      >
                         {m.criticalCount ?? 0}
                       </TableCell>
-                      <TableCell className={`h-10 px-3 align-middle font-mono text-[13px] text-right ${m.securityCount > 0 ? 'text-red-600' : ''}`}>
+                      <TableCell
+                        className="h-10 px-3 align-middle font-mono text-[13px] text-right"
+                        style={{ color: m.securityCount > 0 ? 'var(--accent-red)' : undefined }}
+                      >
                         {m.securityCount ?? 0}
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">
@@ -517,7 +562,14 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle">
                         {m.rebootPending ? (
-                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 border">
+                          <Badge
+                            className="border"
+                            style={{
+                              background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
+                              color: 'var(--accent-orange)',
+                              borderColor: 'color-mix(in srgb, var(--accent-orange) 35%, transparent)',
+                            }}
+                          >
                             Reboot Required
                           </Badge>
                         ) : (
@@ -528,7 +580,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                         {m.lastAssessment ? formatRelativeTime(m.lastAssessment) : '\u2014'}
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">
-                        <span className={m.installedCount > 0 ? 'hover:underline text-blue-400' : ''}>
+                        <span style={{ color: m.installedCount > 0 ? 'var(--accent-blue)' : undefined }}>
                           {m.installedCount > 0 ? m.installedCount : '\u2014'}
                         </span>
                       </TableCell>
@@ -598,7 +650,10 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">
                         {inst.installedCount ?? 0}
                       </TableCell>
-                      <TableCell className={`h-10 px-3 align-middle font-mono text-[13px] text-right ${(inst.failedCount ?? 0) > 0 ? 'text-red-600' : ''}`}>
+                      <TableCell
+                        className="h-10 px-3 align-middle font-mono text-[13px] text-right"
+                        style={{ color: (inst.failedCount ?? 0) > 0 ? 'var(--accent-red)' : undefined }}
+                      >
                         {inst.failedCount ?? 0}
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">

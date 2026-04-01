@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
@@ -30,9 +30,11 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
 
 interface DashboardPanelProps {
   onTabChange?: (tab: TabId) => void
+  /** Called once on mount with a function that navigates to the Alerts tab */
+  onRegisterNavToAlerts?: (fn: () => void) => void
 }
 
-export function DashboardPanel({ onTabChange }: DashboardPanelProps) {
+export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: DashboardPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('alerts')
   const [filters, setFilters] = useState<FilterState>({})
   const { selectedSubscriptions, selectedIncidentId } = useAppState()
@@ -41,6 +43,12 @@ export function DashboardPanel({ onTabChange }: DashboardPanelProps) {
     setActiveTab(tab)
     onTabChange?.(tab)
   }
+
+  // Register the navigate-to-alerts function with the parent once on mount
+  useEffect(() => {
+    onRegisterNavToAlerts?.(() => handleTabChange('alerts'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key === 'ArrowRight') {
@@ -76,7 +84,7 @@ export function DashboardPanel({ onTabChange }: DashboardPanelProps) {
               aria-controls={`tabpanel-${id}`}
               onClick={() => handleTabChange(id)}
               onKeyDown={(e) => handleTabKeyDown(e, index)}
-              className="flex items-center gap-1.5 px-4 py-3 text-[13px] transition-colors outline-none relative"
+              className="flex items-center gap-1.5 px-4 py-3 text-[13px] transition-colors outline-none relative focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
               style={{
                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                 fontWeight: isActive ? 600 : 500,

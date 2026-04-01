@@ -75,7 +75,10 @@ export function ProposalCard({ approval, onApprove, onReject }: ProposalCardProp
         </div>
         {isPending && (
           <>
-            <p className={`text-sm mt-2 ${timeRemaining === 'Expired' ? 'text-destructive' : 'text-muted-foreground'}`}>
+            <p
+              className="text-sm mt-2"
+              style={{ color: timeRemaining === 'Expired' ? 'var(--accent-red)' : 'var(--text-muted)' }}
+            >
               {timeRemaining === 'Expired' ? 'Expired' : `This approval expires in ${timeRemaining}`}
             </p>
             <div className="flex gap-2 mt-2">

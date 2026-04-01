@@ -19,5 +19,26 @@ export default function AuthCallbackPage() {
     });
   }, [instance, router]);
 
-  return <div>Completing sign-in...</div>;
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: 'var(--bg-canvas)' }}
+    >
+      <div
+        className="flex flex-col items-center gap-3"
+        role="status"
+        aria-live="polite"
+        aria-label="Completing sign-in"
+      >
+        <div
+          className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+          style={{ borderColor: 'var(--accent-blue)', borderTopColor: 'transparent' }}
+          aria-hidden="true"
+        />
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Completing sign-in&hellip;
+        </p>
+      </div>
+    </div>
+  );
 }
