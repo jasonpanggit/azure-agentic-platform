@@ -17,6 +17,7 @@ RBAC scope: Reader + Monitoring Reader on accessible subscriptions.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from agent_framework import Agent, MCPStreamableHTTPTool
@@ -37,6 +38,7 @@ from agents.eol.tools import (
 )
 
 tracer = setup_telemetry("aiops-eol-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -172,6 +174,7 @@ def create_eol_agent() -> Agent:
         Agent configured with EOL-domain tools and system prompt.
     """
     azure_mcp_url = os.environ.get("AZURE_MCP_SERVER_URL", "")
+    logger.info("create_eol_agent: initialising Foundry client")
     client = get_foundry_client()
 
     tools = [
@@ -187,6 +190,7 @@ def create_eol_agent() -> Agent:
     ]
 
     if azure_mcp_url:
+        logger.info("create_eol_agent: AZURE_MCP_SERVER_URL set, mounting Azure MCP Server (MCPStreamableHTTPTool)")
         # NOTE (G-02): EOL agent uses MCPStreamableHTTPTool from `agent_framework` here,
         # while agents/patch/agent.py and agents/arc/agent.py use MCPTool from
         # `azure.ai.projects.models`. The constructor signatures differ:
@@ -201,8 +205,10 @@ def create_eol_agent() -> Agent:
             allowed_tools=ALLOWED_MCP_TOOLS,
         )
         tools.append(azure_mcp_tool)
+    else:
+        logger.warning("create_eol_agent: AZURE_MCP_SERVER_URL not set — Azure MCP tools unavailable")
 
-    return Agent(
+    agent = Agent(
         client,
         EOL_AGENT_SYSTEM_PROMPT,
         name="eol-agent",
@@ -212,6 +218,8 @@ def create_eol_agent() -> Agent:
         ),
         tools=tools,
     )
+    logger.info("create_eol_agent: Agent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +227,12 @@ def create_eol_agent() -> Agent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("eol")
+    _logger.info("eol: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
 
+    _logger.info("eol: creating agent and binding to agentserver")
     from_agent_framework(create_eol_agent()).run()
+    _logger.info("eol: agentserver exited")

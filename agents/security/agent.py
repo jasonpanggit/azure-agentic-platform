@@ -14,6 +14,8 @@ RBAC scope: Security Reader across all in-scope subscriptions (enforced by Terra
 """
 from __future__ import annotations
 
+import logging
+
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
@@ -26,6 +28,7 @@ from security.tools import (
 )
 
 tracer = setup_telemetry("aiops-security-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -111,9 +114,10 @@ def create_security_agent() -> ChatAgent:
     Returns:
         ChatAgent configured with security-domain tools and system prompt.
     """
+    logger.info("create_security_agent: initialising Foundry client")
     client = get_foundry_client()
 
-    return ChatAgent(
+    agent = ChatAgent(
         name="security-agent",
         description="Azure security domain specialist — Defender, Key Vault, RBAC drift.",
         instructions=SECURITY_AGENT_SYSTEM_PROMPT,
@@ -124,6 +128,8 @@ def create_security_agent() -> ChatAgent:
             query_iam_changes,
         ],
     )
+    logger.info("create_security_agent: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -131,5 +137,12 @@ def create_security_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("security")
+    _logger.info("security: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
+
+    _logger.info("security: creating agent and binding to agentserver")
     from_agent_framework(create_security_agent()).run()
+    _logger.info("security: agentserver exited")

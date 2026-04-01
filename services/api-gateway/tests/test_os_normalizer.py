@@ -105,6 +105,19 @@ class TestNormalizeOsWindowsMisc:
     def test_already_clean_windows_with_prefix(self) -> None:
         assert normalize_os("Windows Server 2019 Datacenter") == "Windows Server 2019 Datacenter"
 
+    def test_arc_vm_standard_edition_preserved(self) -> None:
+        """Arc VMs report 'Windows Server 2016 Standard' — must not be overwritten to Datacenter."""
+        assert normalize_os("Windows Server 2016 Standard") == "Windows Server 2016 Standard"
+
+    def test_arc_vm_standard_2019(self) -> None:
+        assert normalize_os("Windows Server 2019 Standard") == "Windows Server 2019 Standard"
+
+    def test_arc_vm_standard_2022(self) -> None:
+        assert normalize_os("Windows Server 2022 Standard") == "Windows Server 2022 Standard"
+
+    def test_arc_vm_essentials_edition(self) -> None:
+        assert normalize_os("Windows Server 2019 Essentials") == "Windows Server 2019 Essentials"
+
 
 # ---------------------------------------------------------------------------
 # normalize_os: Linux Ubuntu patterns

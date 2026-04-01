@@ -18,6 +18,7 @@ RBAC scope: Reader + Azure Update Manager Reader on accessible subscriptions.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from agent_framework import ChatAgent
@@ -37,6 +38,7 @@ from patch.tools import (
 )
 
 tracer = setup_telemetry("aiops-patch-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -146,6 +148,7 @@ def create_patch_agent() -> ChatAgent:
         ChatAgent configured with patch-domain tools and system prompt.
     """
     azure_mcp_url = os.environ.get("AZURE_MCP_SERVER_URL", "")
+    logger.info("create_patch_agent: initialising Foundry client")
     client = get_foundry_client()
 
     tools = [
@@ -158,14 +161,17 @@ def create_patch_agent() -> ChatAgent:
         search_runbooks,
     ]
     if azure_mcp_url:
+        logger.info("create_patch_agent: AZURE_MCP_SERVER_URL set, mounting Azure MCP Server")
         azure_mcp_tool = MCPTool(
             server_label="azure-mcp",
             server_url=azure_mcp_url,
             allowed_tools=ALLOWED_MCP_TOOLS,
         )
         tools.append(azure_mcp_tool)
+    else:
+        logger.warning("create_patch_agent: AZURE_MCP_SERVER_URL not set — Azure MCP tools unavailable")
 
-    return ChatAgent(
+    agent = ChatAgent(
         name="patch-agent",
         description=(
             "Azure patch management specialist — Update Manager compliance, "
@@ -175,6 +181,8 @@ def create_patch_agent() -> ChatAgent:
         chat_client=client,
         tools=tools,
     )
+    logger.info("create_patch_agent: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -182,5 +190,12 @@ def create_patch_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("patch")
+    _logger.info("patch: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
+
+    _logger.info("patch: creating agent and binding to agentserver")
     from_agent_framework(create_patch_agent()).run()
+    _logger.info("patch: agentserver exited")

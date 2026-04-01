@@ -22,8 +22,8 @@ jobs:
             # Skip if glob returns literal (no agents/ dir yet)
             [ -d "$agent_dir" ] || continue
             agent_name=$(basename "$agent_dir")
-            # Skip shared utilities directory
-            if [ "$agent_name" = "shared" ]; then
+            # Skip shared utilities and test directories
+            if [ "$agent_name" = "shared" ] || [ "$agent_name" = "tests" ]; then
               continue
             fi
             # Check if directory contains Python files (top-level or nested)

@@ -268,13 +268,12 @@ def create_orchestrator() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
-    logger.info("orchestrator: starting up")
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("orchestrator")
+    _logger.info("orchestrator: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
 
-    logger.info("orchestrator: creating agent and binding to agentserver")
+    _logger.info("orchestrator: creating agent and binding to agentserver")
     from_agent_framework(create_orchestrator()).run()
-    logger.info("orchestrator: agentserver exited")
+    _logger.info("orchestrator: agentserver exited")

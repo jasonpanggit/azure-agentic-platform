@@ -17,7 +17,8 @@ all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 # The aap-web-ui-prod app registration exists and works; Terraform does not need to own it today.
 # Enabling this requires a Global Administrator to grant Application.ReadWrite.All to the CI SP.
 # See docs/BOOTSTRAP.md Step 1 for the full procedure when ready to enable.
-enable_entra_apps = false
+enable_entra_apps  = true
+enable_teams_bot   = true
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"

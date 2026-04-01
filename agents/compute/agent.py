@@ -14,6 +14,8 @@ RBAC scope: Virtual Machine Contributor + Monitoring Reader (enforced by Terrafo
 """
 from __future__ import annotations
 
+import logging
+
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
@@ -28,6 +30,7 @@ from compute.tools import (
 )
 
 tracer = setup_telemetry("aiops-compute-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -107,9 +110,10 @@ def create_compute_agent() -> ChatAgent:
     Returns:
         ChatAgent configured with compute-domain tools and system prompt.
     """
+    logger.info("create_compute_agent: initialising Foundry client")
     client = get_foundry_client()
 
-    return ChatAgent(
+    agent = ChatAgent(
         name="compute-agent",
         description="Azure compute domain specialist — VMs, VMSS, AKS, App Service.",
         instructions=COMPUTE_AGENT_SYSTEM_PROMPT,
@@ -122,6 +126,8 @@ def create_compute_agent() -> ChatAgent:
             query_os_version,
         ],
     )
+    logger.info("create_compute_agent: ChatAgent created successfully")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -129,5 +135,12 @@ def create_compute_agent() -> ChatAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from shared.logging_config import setup_logging
+
+    _logger = setup_logging("compute")
+    _logger.info("compute: starting up")
     from azure.ai.agentserver.agentframework import from_agent_framework
+
+    _logger.info("compute: creating agent and binding to agentserver")
     from_agent_framework(create_compute_agent()).run()
+    _logger.info("compute: agentserver exited")

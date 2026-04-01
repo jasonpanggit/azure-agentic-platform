@@ -12,7 +12,7 @@
 #
 # aap-web-ui-prod details:
 #   Object ID:          8176f860-9715-46e3-8875-5939a6b76a69
-#   Service Principal:  505df1d3-3bd3-4151-ae87-6e5974b72a44 (client ID)
+#   Service Principal:  c30c212c-7dc9-4c29-9147-3a22c64ab3c8 (SP object ID; appId = 505df1d3-3bd3-4151-ae87-6e5974b72a44)
 #
 # CLI alternative (once permission is granted):
 #   terraform import -var-file="credentials.tfvars" \
@@ -29,7 +29,7 @@
 #
 # import {
 #   to = module.entra_apps[0].azuread_service_principal.web_ui
-#   id = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
+#   id = "/servicePrincipals/c30c212c-7dc9-4c29-9147-3a22c64ab3c8"
 # }
 
 # --- Cosmos DB data-plane RBAC imports ---
@@ -112,7 +112,7 @@ import {
 #   to = module.teams_bot[0].azurerm_bot_service_azure_bot.main
 #   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.BotService/botServices/aap-teams-bot-prod"
 # }
-#
+
 # import {
 #   to = module.teams_bot[0].azuread_application.teams_bot
 #   id = "/applications/670e3ba4-eec6-4889-a7df-545953b5a1df"
@@ -120,7 +120,7 @@ import {
 #
 # import {
 #   to = module.teams_bot[0].azuread_service_principal.teams_bot
-#   id = "4272985e-49e0-40dd-8b36-9e66c80b98f4"
+#   id = "/servicePrincipals/4272985e-49e0-40dd-8b36-9e66c80b98f4"
 # }
 #
 # import {
