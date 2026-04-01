@@ -15,6 +15,9 @@ azure-mgmt-hybridcompute==9.0.0
 azure-mgmt-hybridkubernetes==1.1.0
 azure-mgmt-azurearcdata==1.0.0
 azure-mgmt-kubernetesconfiguration==3.1.0
+# six is a transitive dependency of msrest (used by azure-mgmt-hybridkubernetes 1.x)
+# Pin explicitly to avoid ModuleNotFoundError on clean pip installs
+six>=1.16.0
 
 # Observability
 azure-monitor-opentelemetry>=1.6.0
