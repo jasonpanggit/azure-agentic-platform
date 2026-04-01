@@ -2,9 +2,23 @@
 agent: orchestrator
 requirements: [AGENT-001, AGENT-002, TRIAGE-001]
 phase: 2
+superseded_by: agents/orchestrator/README.md
 ---
 
-# Orchestrator Agent Spec
+# Orchestrator Agent Spec — SUPERSEDED
+
+> ⚠️ **This document is the Phase 2 design spec and is now out of date.**
+> It references `HandoffOrchestrator` (removed in Phase 5) and a 6-domain routing model (pre-patch/eol domains added in Phases 11–12).
+>
+> **See [`agents/orchestrator/README.md`](../../agents/orchestrator/README.md) for the current implementation reference**, including:
+> - Full 8-domain routing table (compute, network, storage, security, arc, sre, patch, eol)
+> - Connected-agent tool architecture (Foundry-level wiring, not Python HandoffOrchestrator)
+> - MCP server mounting per agent
+> - Operator env var checklist
+>
+> The historical Phase 2 design is preserved below for reference only.
+
+---
 
 ## Persona
 
