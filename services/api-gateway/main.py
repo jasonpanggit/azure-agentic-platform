@@ -99,14 +99,34 @@ async def _run_startup_migrations() -> None:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS runbooks (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    title TEXT NOT NULL,
+                    title TEXT UNIQUE NOT NULL,
                     domain TEXT NOT NULL,
                     content TEXT NOT NULL,
                     embedding vector(1536),
-                    version INTEGER NOT NULL DEFAULT 1,
+                    version TEXT NOT NULL DEFAULT '1',
+                    tags TEXT[] DEFAULT '{}',
                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
+            """)
+            # Idempotent schema migrations: harmonise legacy columns if table pre-existed.
+            await conn.execute(
+                "ALTER TABLE runbooks ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'"
+            )
+            await conn.execute(
+                "ALTER TABLE runbooks ALTER COLUMN version TYPE TEXT USING version::TEXT"
+            )
+            await conn.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conrelid = 'runbooks'::regclass AND conname = 'runbooks_title_key'
+                    ) THEN
+                        ALTER TABLE runbooks ADD CONSTRAINT runbooks_title_key UNIQUE (title);
+                    END IF;
+                END
+                $$
             """)
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS runbooks_embedding_idx "

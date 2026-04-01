@@ -11,7 +11,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-SIMILARITY_THRESHOLD = float(os.environ.get("RUNBOOK_SIMILARITY_THRESHOLD", "0.75"))
+SIMILARITY_THRESHOLD = float(os.environ.get("RUNBOOK_SIMILARITY_THRESHOLD", "0.30"))
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_DEPLOYMENT_NAME", "text-embedding-3-small")
 
 # Content excerpt length

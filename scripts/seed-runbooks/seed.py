@@ -66,6 +66,27 @@ def ensure_table(conn: psycopg.Connection) -> None:
             updated_at TIMESTAMPTZ DEFAULT now()
         )
     """)
+    # Idempotent migrations: harmonise schema between api-gateway startup migration
+    # (older schema: UUID id, INTEGER version, no tags, no UNIQUE title) and seed schema.
+    conn.execute("""
+        ALTER TABLE runbooks ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'
+    """)
+    conn.execute("""
+        ALTER TABLE runbooks ALTER COLUMN version TYPE TEXT USING version::TEXT
+    """)
+    # Add UNIQUE constraint on title if not present (needed for ON CONFLICT upsert).
+    conn.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = 'runbooks'::regclass AND conname = 'runbooks_title_key'
+            ) THEN
+                ALTER TABLE runbooks ADD CONSTRAINT runbooks_title_key UNIQUE (title);
+            END IF;
+        END
+        $$
+    """)
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_runbooks_embedding
         ON runbooks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10)
@@ -145,10 +166,21 @@ def main() -> None:
 
     print(f"Found {len(md_files)} runbook files")
 
-    # Initialize OpenAI client
+    # Initialize OpenAI client — support Entra auth when API key is absent or sentinel.
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+    azure_ad_token_provider = None
+    if not api_key or api_key == "DISABLED_LOCAL_AUTH_USE_MI":
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        credential = DefaultAzureCredential()
+        azure_ad_token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
+        api_key = None
+
     openai_client = AzureOpenAI(
         azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
-        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+        api_key=api_key,
+        azure_ad_token_provider=azure_ad_token_provider,
         api_version="2024-06-01",
     )
 
