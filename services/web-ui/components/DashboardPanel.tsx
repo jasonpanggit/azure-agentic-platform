@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -9,9 +9,10 @@ import { TopologyTab } from './TopologyTab'
 import { ResourcesTab } from './ResourcesTab'
 import { ObservabilityTab } from './ObservabilityTab'
 import { PatchTab } from './PatchTab'
+import { VMTab } from './VMTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'observability' | 'patch'
+type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'observability' | 'patch'
 
 interface FilterState {
   severity?: string
@@ -24,6 +25,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'audit', label: 'Audit', Icon: ClipboardList },
   { id: 'topology', label: 'Topology', Icon: Network },
   { id: 'resources', label: 'Resources', Icon: Server },
+  { id: 'vms', label: 'VMs', Icon: Monitor },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
 ]
@@ -128,6 +130,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         <div id="tabpanel-resources" role="tabpanel" aria-labelledby="tab-resources" hidden={activeTab !== 'resources'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <ResourcesTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
+
+        <div id="tabpanel-vms" role="tabpanel" aria-labelledby="tab-vms" hidden={activeTab !== 'vms'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <VMTab subscriptions={selectedSubscriptions} />
           </div>
         </div>
 

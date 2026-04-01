@@ -117,6 +117,7 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Investigation</TableHead>
               <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
+              <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -131,6 +132,7 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-14" /></TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-20" /></TableCell>
                 <TableCell className="py-3 px-2"><Skeleton className="h-4 w-10" /></TableCell>
+                <TableCell className="py-3 px-2"><Skeleton className="h-4 w-16" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -172,6 +174,7 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Status</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Investigation</TableHead>
             <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Time</TableHead>
+            <TableHead className="h-10 px-3 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -243,6 +246,29 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                 <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   {formatRelativeTime(incident.created_at)}
                 </span>
+              </TableCell>
+              <TableCell className="py-3 px-2">
+                {incident.resource_name && (
+                  <button
+                    className="text-xs px-2 py-1 rounded cursor-pointer transition-colors"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
+                      color: 'var(--accent-blue)',
+                      border: '1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 20%, transparent)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 12%, transparent)' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // Phase 2: will open VMDetailPanel
+                      // For now: log so we can verify click works
+                      console.log('[AAP] Investigate clicked:', incident.incident_id, incident.resource_name)
+                    }}
+                    title={`Investigate ${incident.resource_name}`}
+                  >
+                    Investigate
+                  </button>
+                )}
               </TableCell>
             </TableRow>
           ))}
