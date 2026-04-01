@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-last_updated: "2026-04-01T12:00:00.000Z"
+last_updated: "2026-04-01T09:00:00.000Z"
 progress:
   total_phases: 14
   completed_phases: 12
@@ -265,6 +265,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260331-krz | Fix broken api-gateway image: expand Docker build context to repo root so agents/shared is accessible, fix ModuleNotFoundError. Operator must rebuild+push to ACR and update ca-api-gateway-prod. | 2026-03-31 | 13f2b78 | [260331-krz-fix-broken-api-gateway-image-diagnose-mo](./quick/260331-krz-fix-broken-api-gateway-image-diagnose-mo/) |
 | 260401-brt | Add query_os_version ARG tool to compute agent covering both Azure VMs and Arc-enabled servers for OS version details and EOL date determination | 2026-04-01 | f0cd530 | [260401-brt-research-whether-azure-resource-graph-ar](./quick/260401-brt-research-whether-azure-resource-graph-ar/) |
 | 260401-e74 | Validate orchestrator wiring and routing — fix AZURE_MCP_SERVER_URL Terraform gap (G-01), write agents/orchestrator/README.md (G-03), add G-02 MCPStreamableHTTPTool comment to eol/agent.py | 2026-04-01 | 689e73b | [260401-e74-validate-orchestrator-wiring-and-routing](./quick/260401-e74-validate-orchestrator-wiring-and-routing/) |
+| 260401-nk7 | Add structured logging to all agents for Azure Container App log visibility | 2026-04-01 | 30a2907 | [260401-nk7-add-structured-logging-to-all-agents-for](./quick/260401-nk7-add-structured-logging-to-all-agents-for/) |
 
 ---
 
