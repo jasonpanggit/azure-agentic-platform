@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
-"""Provision all 8 domain agents in Foundry and wire their IDs to the orchestrator Container App.
+"""Provision all 8 domain agents in Foundry and wire their IDs to the orchestrator
+and API gateway Container Apps.
 
 Usage:
-    # Dry run — prints what would be created
+    # Dry run — prints what would be created/updated
     python3 scripts/provision-domain-agents.py --dry-run
 
-    # Create agents and set env vars on orchestrator
+    # Create agents and set env vars on orchestrator + api-gateway (default)
     python3 scripts/provision-domain-agents.py \
         --resource-group rg-aap-prod \
-        --orchestrator-app ca-orchestrator-prod
+        --orchestrator-app ca-orchestrator-prod \
+        --api-gateway-app ca-api-gateway-prod
 
-    # Create agents only (skip Container App update)
+    # Create agents only (skip Container App updates)
     python3 scripts/provision-domain-agents.py --no-deploy
 
     # Re-run safely — skips agents that already exist by name
+
+Agent IDs are distributed to TWO container apps:
+    - ca-orchestrator-prod: needs them for handoff routing decisions
+    - ca-api-gateway-prod:  needs them for sub-run scanner (/api/v1/runs/{run_id})
+      which dispatches directly to domain agents (task 14-01)
 
 Environment variables:
     AZURE_PROJECT_ENDPOINT: Foundry project endpoint URL (required)
@@ -144,6 +151,7 @@ def main() -> None:
     parser.add_argument("--no-deploy", action="store_true", help="Create agents but skip Container App update")
     parser.add_argument("--resource-group", default="rg-aap-prod")
     parser.add_argument("--orchestrator-app", default="ca-orchestrator-prod")
+    parser.add_argument("--api-gateway-app", default="ca-api-gateway-prod")
     parser.add_argument("--model", default="gpt-4o")
     args = parser.parse_args()
 
@@ -173,10 +181,15 @@ def main() -> None:
         print(f"\n  Saved to {output_path}")
 
     if not args.no_deploy:
+        # Wire agent IDs to orchestrator (needs them for handoff routing)
         set_container_app_env_vars(args.resource_group, args.orchestrator_app, agent_ids, args.dry_run)
+        # Also wire agent IDs to api-gateway (14-01: needed for sub-run scanner /api/v1/runs/{run_id})
+        set_container_app_env_vars(args.resource_group, args.api_gateway_app, agent_ids, args.dry_run)
     else:
         print("\n--no-deploy set. To wire manually:")
         print(f"  az containerapp update --name {args.orchestrator_app} --resource-group {args.resource_group} \\")
+        print(f"    --set-env-vars " + " ".join(f"{k}={v}" for k, v in agent_ids.items()))
+        print(f"  az containerapp update --name {args.api_gateway_app} --resource-group {args.resource_group} \\")
         print(f"    --set-env-vars " + " ".join(f"{k}={v}" for k, v in agent_ids.items()))
 
     print("\nDone.")
