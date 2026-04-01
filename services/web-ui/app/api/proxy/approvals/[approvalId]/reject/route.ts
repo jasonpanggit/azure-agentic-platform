@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiGatewayUrl, buildUpstreamHeaders } from '@/lib/api-gateway';
+import { logger } from '@/lib/logger';
+
+const log = logger.child({ route: '/api/proxy/approvals/reject' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +21,7 @@ export async function POST(
     const apiGatewayUrl = getApiGatewayUrl();
     const { approvalId } = await params;
     const body = await request.json();
+    log.info('rejection action', { approvalId, action: 'reject' });
 
     const upstreamHeaders = buildUpstreamHeaders(request.headers.get('Authorization'));
 
@@ -33,6 +37,7 @@ export async function POST(
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      log.error('upstream error', { approvalId, status: res.status, detail: errorData?.detail });
       return NextResponse.json(
         { error: errorData?.detail ?? `Gateway error: ${res.status}` },
         { status: res.status }
@@ -40,9 +45,11 @@ export async function POST(
     }
 
     const data = await res.json();
+    log.debug('proxy response', { approvalId, status: res.status });
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    log.error('gateway unreachable', { error: message });
     return NextResponse.json(
       { error: `Failed to reach API gateway: ${message}` },
       { status: 502 }
