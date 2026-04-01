@@ -32,6 +32,10 @@ ENV PYTHONPATH=/app
 # FastMCP server configuration
 ENV ARC_DISCONNECT_ALERT_HOURS=1
 
+# Entra JWT auth (14-12): enabled by default in the container.
+# Override with ARC_MCP_AUTH_DISABLED=true for local dev / CI.
+ENV ARC_MCP_AUTH_DISABLED=false
+
 # Non-root user for security
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 USER appuser
