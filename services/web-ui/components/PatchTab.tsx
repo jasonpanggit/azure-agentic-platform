@@ -31,14 +31,14 @@ import { formatRelativeTime } from '@/lib/format-relative-time';
 
 interface AssessmentMachine {
   id: string;
-  name: string;
   machineName: string;
   resourceGroup: string;
   subscriptionId: string;
   osType: string;
   osVersion: string;
+  hasAssessmentData: boolean;
   rebootPending: boolean;
-  lastAssessment: string;
+  lastAssessment: string | null;
   criticalCount: number;
   securityCount: number;
   updateRollupCount: number;
@@ -73,6 +73,8 @@ interface PatchTabProps {
 type ComplianceState = 'Compliant' | 'NonCompliant' | 'Unknown';
 
 function deriveCompliance(m: AssessmentMachine): ComplianceState {
+  // Machines with no assessment data are always "Unknown"
+  if (!m.hasAssessmentData) return 'Unknown';
   // Per UI-SPEC: criticalCount + securityCount === 0 and !rebootPending => Compliant
   // criticalCount > 0 or securityCount > 0 => NonCompliant; else Unknown
   if (m.criticalCount > 0 || m.securityCount > 0) return 'NonCompliant';
@@ -241,7 +243,6 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
 
   const assessmentWithCompliance = (assessmentData ?? []).map((m) => ({
     ...m,
-    machineName: m.machineName || (m.name !== 'latest' ? m.name : extractMachineName(m.id)),
     compliance: deriveCompliance(m),
   }));
 

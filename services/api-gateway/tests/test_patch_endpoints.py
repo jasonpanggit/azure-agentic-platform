@@ -18,13 +18,13 @@ import pytest
 
 SAMPLE_ASSESSMENT_DATA = [
     {
-        "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01/patchAssessmentResults/latest",
-        "name": "latest",
+        "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01",
         "machineName": "vm-prod-01",
         "resourceGroup": "rg-1",
         "subscriptionId": "sub-1",
         "osType": "Windows",
         "osVersion": "Windows Server 2022 Datacenter",
+        "hasAssessmentData": True,
         "rebootPending": True,
         "lastAssessment": "2026-03-31T10:00:00Z",
         "criticalCount": 2,
@@ -37,15 +37,34 @@ SAMPLE_ASSESSMENT_DATA = [
         "updatesCount": 1,
     },
     {
-        "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.HybridCompute/machines/arc-srv-01/patchAssessmentResults/latest",
-        "name": "latest",
+        "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.HybridCompute/machines/arc-srv-01",
         "machineName": "arc-srv-01",
         "resourceGroup": "rg-1",
         "subscriptionId": "sub-1",
         "osType": "Linux",
         "osVersion": "Ubuntu 22.04 LTS",
+        "hasAssessmentData": True,
         "rebootPending": False,
         "lastAssessment": "2026-03-31T09:30:00Z",
+        "criticalCount": 0,
+        "securityCount": 0,
+        "updateRollupCount": 0,
+        "featurePackCount": 0,
+        "servicePackCount": 0,
+        "definitionCount": 0,
+        "toolsCount": 0,
+        "updatesCount": 0,
+    },
+    {
+        "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-dev-01",
+        "machineName": "vm-dev-01",
+        "resourceGroup": "rg-1",
+        "subscriptionId": "sub-1",
+        "osType": "Linux",
+        "osVersion": "Ubuntu 24.04 LTS",
+        "hasAssessmentData": False,
+        "rebootPending": False,
+        "lastAssessment": None,
         "criticalCount": 0,
         "securityCount": 0,
         "updateRollupCount": 0,
@@ -131,14 +150,15 @@ class TestGetPatchAssessment:
 
         body = resp.json()
         assert body["query_status"] == "success"
-        assert body["total_count"] == 2
-        assert len(body["machines"]) == 2
+        assert body["total_count"] == 3
+        assert len(body["machines"]) == 3
 
-        # Verify first machine fields
+        # Verify first machine fields (assessed Azure VM)
         m0 = body["machines"][0]
         assert m0["machineName"] == "vm-prod-01"
         assert m0["osType"] == "Windows"
         assert m0["osVersion"] == "Windows Server 2022 Datacenter"
+        assert m0["hasAssessmentData"] is True
         assert m0["rebootPending"] is True
         assert m0["criticalCount"] == 2
         assert m0["securityCount"] == 5
@@ -148,6 +168,16 @@ class TestGetPatchAssessment:
         assert m1["machineName"] == "arc-srv-01"
         assert m1["osType"] == "Linux"
         assert m1["osVersion"] == "Ubuntu 22.04 LTS"
+        assert m1["hasAssessmentData"] is True
+
+        # Verify third machine (unassessed VM)
+        m2 = body["machines"][2]
+        assert m2["machineName"] == "vm-dev-01"
+        assert m2["hasAssessmentData"] is False
+        assert m2["rebootPending"] is False
+        assert m2["lastAssessment"] is None
+        assert m2["criticalCount"] == 0
+        assert m2["securityCount"] == 0
 
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_returns_empty_when_no_machines(self, mock_query, client):
@@ -162,6 +192,46 @@ class TestGetPatchAssessment:
         assert body["machines"] == []
 
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_unassessed_machines_have_zeroed_patch_counts(self, mock_query, client):
+        """Machines with no AUM assessment data have all counts zeroed and null lastAssessment."""
+        unassessed_only = [
+            {
+                "id": "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-new-01",
+                "machineName": "vm-new-01",
+                "resourceGroup": "rg-1",
+                "subscriptionId": "sub-1",
+                "osType": "Windows",
+                "osVersion": "Windows Server 2025",
+                "hasAssessmentData": False,
+                "rebootPending": False,
+                "lastAssessment": None,
+                "criticalCount": 0,
+                "securityCount": 0,
+                "updateRollupCount": 0,
+                "featurePackCount": 0,
+                "servicePackCount": 0,
+                "definitionCount": 0,
+                "toolsCount": 0,
+                "updatesCount": 0,
+            },
+        ]
+        mock_query.return_value = unassessed_only
+
+        resp = client.get("/api/v1/patch/assessment?subscriptions=sub-1")
+        assert resp.status_code == 200
+
+        body = resp.json()
+        assert body["total_count"] == 1
+        m = body["machines"][0]
+        assert m["machineName"] == "vm-new-01"
+        assert m["hasAssessmentData"] is False
+        assert m["rebootPending"] is False
+        assert m["lastAssessment"] is None
+        assert m["criticalCount"] == 0
+        assert m["securityCount"] == 0
+        assert m["updateRollupCount"] == 0
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_splits_comma_subscriptions(self, mock_query, client):
         """Comma-separated subscriptions are passed as a list."""
         mock_query.return_value = []
@@ -171,6 +241,23 @@ class TestGetPatchAssessment:
         call_args = mock_query.call_args
         sub_ids = call_args[0][1]  # second positional arg
         assert sub_ids == ["sub-1", "sub-2", "sub-3"]
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_kql_starts_from_resources_table(self, mock_query, client):
+        """KQL query uses resources as source of truth, not patchassessmentresources."""
+        mock_query.return_value = []
+
+        client.get("/api/v1/patch/assessment?subscriptions=sub-1")
+
+        call_args = mock_query.call_args
+        kql = call_args[0][2]  # third positional arg (KQL string)
+        # Query must start from resources table
+        assert kql.startswith("resources\n"), "KQL must start from resources table"
+        # Must left-join patchassessmentresources
+        assert "join kind=leftouter" in kql
+        assert "patchassessmentresources" in kql
+        # Must project hasAssessmentData
+        assert "hasAssessmentData" in kql
 
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_returns_502_on_arg_failure(self, mock_query, client):

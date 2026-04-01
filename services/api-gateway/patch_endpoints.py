@@ -86,45 +86,65 @@ async def get_patch_assessment(
             detail="subscriptions query parameter is required",
         )
 
-    # KQL: join patchassessmentresources with resources to get machine name and OS version.
-    # The patchassessmentresources `name` field is always "latest" and `id` is the assessment
-    # resource path, so we extract the parent machine ID and join with the resources table
-    # to get human-readable machine names and full OS version info.
+    # KQL: Start from `resources` (the authoritative VM list) and left-join
+    # `patchassessmentresources` onto it.  This guarantees that every Azure VM
+    # and Arc-enabled server appears in the results regardless of whether Azure
+    # Update Manager has ever run an assessment on it.
+    #
+    # Join key:
+    #   resources.id = /subscriptions/.../virtualMachines/vm-name
+    #   patchassessmentresources.id = .../virtualMachines/vm-name/patchAssessmentResults/latest
+    #   → strip '/patchAssessmentResults/...' suffix to derive the parent machine ID.
     kql = (
-        "patchassessmentresources\n"
-        '| where type =~ "microsoft.compute/virtualmachines/patchassessmentresults"\n'
-        '    or type =~ "microsoft.hybridcompute/machines/patchassessmentresults"\n'
-        "| extend machineIdLower = tolower(tostring(split(id, '/patchAssessmentResults/')[0]))\n"
-        "| extend rebootPending = tobool(properties.rebootPending),\n"
+        "resources\n"
+        '| where type =~ "microsoft.compute/virtualmachines"\n'
+        '    or type =~ "microsoft.hybridcompute/machines"\n'
+        "| extend machineIdLower = tolower(id)\n"
+        "| extend machineName = name,\n"
         "         osType = tostring(properties.osType),\n"
-        "         lastAssessment = todatetime(properties.lastModifiedDateTime),\n"
-        "         criticalCount = toint(properties.availablePatchCountByClassification.Critical),\n"
-        "         securityCount = toint(properties.availablePatchCountByClassification.Security),\n"
-        "         updateRollupCount = toint(properties.availablePatchCountByClassification.UpdateRollup),\n"
-        "         featurePackCount = toint(properties.availablePatchCountByClassification.FeaturePack),\n"
-        "         servicePackCount = toint(properties.availablePatchCountByClassification.ServicePack),\n"
-        "         definitionCount = toint(properties.availablePatchCountByClassification.Definition),\n"
-        "         toolsCount = toint(properties.availablePatchCountByClassification.Tools),\n"
-        "         updatesCount = toint(properties.availablePatchCountByClassification.Updates)\n"
+        "         osVersion = coalesce(\n"
+        "             tostring(properties.extended.instanceView.osName),\n"
+        "             strcat(tostring(properties.storageProfile.imageReference.offer),\n"
+        '                    " ", tostring(properties.storageProfile.imageReference.sku)),\n'
+        "             tostring(properties.osName),\n"
+        "             tostring(properties.osSku),\n"
+        "             tostring(properties.osType)\n"
+        "         )\n"
         "| join kind=leftouter (\n"
-        "    resources\n"
-        '    | where type =~ "microsoft.compute/virtualmachines"\n'
-        '        or type =~ "microsoft.hybridcompute/machines"\n'
+        "    patchassessmentresources\n"
+        '    | where type =~ "microsoft.compute/virtualmachines/patchassessmentresults"\n'
+        '        or type =~ "microsoft.hybridcompute/machines/patchassessmentresults"\n'
+        "    | extend patchMachineId = tolower(tostring(split(id, '/patchAssessmentResults/')[0]))\n"
         "    | extend\n"
-        "        osVersion = coalesce(\n"
-        "            tostring(properties.extended.instanceView.osName),\n"
-        "            strcat(tostring(properties.storageProfile.imageReference.offer),\n"
-        '                   " ", tostring(properties.storageProfile.imageReference.sku)),\n'
-        "            tostring(properties.osName),\n"
-        "            tostring(properties.osSku)\n"
-        "        )\n"
-        "    | project machineIdLower = tolower(id), machineName = name, osVersion\n"
-        "  ) on machineIdLower\n"
-        "| extend machineName = coalesce(machineName, tostring(split(machineIdLower, '/')[-1]))\n"
+        "        rebootPending = tobool(properties.rebootPending),\n"
+        "        lastAssessment = todatetime(properties.lastModifiedDateTime),\n"
+        "        criticalCount = toint(properties.availablePatchCountByClassification.Critical),\n"
+        "        securityCount = toint(properties.availablePatchCountByClassification.Security),\n"
+        "        updateRollupCount = toint(properties.availablePatchCountByClassification.UpdateRollup),\n"
+        "        featurePackCount = toint(properties.availablePatchCountByClassification.FeaturePack),\n"
+        "        servicePackCount = toint(properties.availablePatchCountByClassification.ServicePack),\n"
+        "        definitionCount = toint(properties.availablePatchCountByClassification.Definition),\n"
+        "        toolsCount = toint(properties.availablePatchCountByClassification.Tools),\n"
+        "        updatesCount = toint(properties.availablePatchCountByClassification.Updates)\n"
+        "    | project patchMachineId, rebootPending, lastAssessment,\n"
+        "              criticalCount, securityCount, updateRollupCount,\n"
+        "              featurePackCount, servicePackCount, definitionCount,\n"
+        "              toolsCount, updatesCount\n"
+        "  ) on $left.machineIdLower == $right.patchMachineId\n"
+        "| extend hasAssessmentData = isnotnull(patchMachineId)\n"
+        "| extend rebootPending = iff(hasAssessmentData, rebootPending, false),\n"
+        "         criticalCount = iff(hasAssessmentData, criticalCount, 0),\n"
+        "         securityCount = iff(hasAssessmentData, securityCount, 0),\n"
+        "         updateRollupCount = iff(hasAssessmentData, updateRollupCount, 0),\n"
+        "         featurePackCount = iff(hasAssessmentData, featurePackCount, 0),\n"
+        "         servicePackCount = iff(hasAssessmentData, servicePackCount, 0),\n"
+        "         definitionCount = iff(hasAssessmentData, definitionCount, 0),\n"
+        "         toolsCount = iff(hasAssessmentData, toolsCount, 0),\n"
+        "         updatesCount = iff(hasAssessmentData, updatesCount, 0)\n"
         "| extend osVersion = iff(isempty(osVersion) or osVersion == ' ', osType, osVersion)\n"
-        "| project id, name, machineName, resourceGroup, subscriptionId, osType, osVersion,\n"
-        "          rebootPending, lastAssessment, criticalCount, securityCount,\n"
-        "          updateRollupCount, featurePackCount, servicePackCount,\n"
+        "| project id, machineName, resourceGroup, subscriptionId, osType, osVersion,\n"
+        "          hasAssessmentData, rebootPending, lastAssessment, criticalCount,\n"
+        "          securityCount, updateRollupCount, featurePackCount, servicePackCount,\n"
         "          definitionCount, toolsCount, updatesCount"
     )
 
