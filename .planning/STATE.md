@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-04-01T17:00:00.000Z"
+last_updated: "2026-04-01T18:25:00.000Z"
 progress:
   total_phases: 15
   completed_phases: 8
   total_plans: 45
-  completed_plans: 40
+  completed_plans: 41
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-04-01 — Plan 15-01 COMPLETE: Wire Compute Agent Diagnostic Tools. Replaced 4 stubs in agents/compute/tools.py with real Azure SDK calls (ActivityLogs, LogsQueryClient, ResourceHealth, Monitor Metrics). All tools have structured logging (duration_ms), graceful error handling (query_status=error, never raise), and query_log_analytics returns query_status=skipped for empty workspace_id. Added _log_sdk_availability() at import. Updated requirements.txt (3 new packages). 22 unit tests pass (15 new).
+> Last updated: 2026-04-01 — Plan 15-02 COMPLETE: Diagnostic Pipeline Service. Created services/api-gateway/diagnostic_pipeline.py with 4 Azure SDK collection functions (_collect_activity_log, _collect_resource_health, _collect_metrics, _collect_log_analytics) + run_diagnostic_pipeline orchestrator. Wired POST /api/v1/incidents to queue pipeline as BackgroundTask (logs "pipeline: queued"). Added GET /api/v1/incidents/{id}/evidence endpoint (202+Retry-After:5 when pending, 200 with evidence doc when ready). Added get_optional_cosmos_client dependency for graceful Cosmos degradation. 8 unit tests pass, 290 total api-gateway tests pass with 0 regressions. Commit 5dba5dc.
 
 > Last updated: 2026-04-01 — Plan 15-03 COMPLETE: Enrich IncidentSummary Model. Added resource_name, resource_group, resource_type, investigation_status, evidence_collected_at to IncidentSummary. Added _parse_resource_id() helper and updated list_incidents() to populate new fields from Cosmos documents. Updated AlertFeed.tsx with new columns (Resource, Resource Group, Investigation) and green "Evidence Ready" badge. 8 unit tests added. 34/34 tests pass, tsc --noEmit exits 0. Commit 3cfdcf0.
 > Last updated: 2026-04-01 — Completed quick task 260401-e74: Validate orchestrator wiring and routing. Fixed G-01 (AZURE_MCP_SERVER_URL now wired in Terraform for patch+eol agents), wrote agents/orchestrator/README.md (G-03, all 8 domains, routing flow, env var checklist), added G-02 code comment on MCPStreamableHTTPTool vs MCPTool discrepancy in eol/agent.py. 3 atomic commits.
