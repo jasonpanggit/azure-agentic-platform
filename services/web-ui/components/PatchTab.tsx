@@ -22,6 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MetricCard, HealthStatus } from './MetricCard';
+import { InstalledPatchesPanel, PanelMachine } from './InstalledPatchesPanel';
 import { ShieldCheck, RefreshCw, Search } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
@@ -172,6 +173,31 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [complianceFilter, setComplianceFilter] = useState('all');
   const [machineSearch, setMachineSearch] = useState('');
+  const [selectedMachine, setSelectedMachine] = useState<PanelMachine | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  const handleRowClick = useCallback((m: AssessmentMachine) => {
+    const panel: PanelMachine = {
+      id: m.id,
+      machineName: m.machineName,
+      resourceGroup: m.resourceGroup,
+      osType: m.osType,
+      osVersion: m.osVersion,
+      rebootPending: m.rebootPending,
+      criticalCount: m.criticalCount,
+      securityCount: m.securityCount,
+      installedCount: m.installedCount,
+    };
+    setSelectedMachine(panel);
+    setPanelOpen(true);
+  }, []);
+
+  const handlePanelOpenChange = useCallback((open: boolean) => {
+    setPanelOpen(open);
+    if (!open) {
+      setSelectedMachine(null);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (subscriptions.length === 0) {
@@ -435,7 +461,11 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                 </TableHeader>
                 <TableBody>
                   {filteredAssessment.map((m) => (
-                    <TableRow key={m.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <TableRow
+                      key={m.id}
+                      className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => handleRowClick(m)}
+                    >
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] truncate max-w-[200px]">
                         {m.machineName}
                       </TableCell>
@@ -484,7 +514,9 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
                         {m.lastAssessment ? formatRelativeTime(m.lastAssessment) : '\u2014'}
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle font-mono text-[13px] text-right">
-                        {m.installedCount > 0 ? m.installedCount : '\u2014'}
+                        <span className={m.installedCount > 0 ? 'hover:underline text-blue-400' : ''}>
+                          {m.installedCount > 0 ? m.installedCount : '\u2014'}
+                        </span>
                       </TableCell>
                       <TableCell className="h-10 px-3 align-middle text-[13px] text-muted-foreground">
                         {m.lastInstalled ? formatRelativeTime(m.lastInstalled) : 'Never'}
@@ -574,6 +606,12 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
           )}
         </div>
       )}
+      {/* Drill-down panel for installed patches */}
+      <InstalledPatchesPanel
+        machine={selectedMachine}
+        open={panelOpen}
+        onOpenChange={handlePanelOpenChange}
+      />
     </div>
   );
 }
