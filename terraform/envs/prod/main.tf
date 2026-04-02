@@ -252,6 +252,9 @@ module "agent_apps" {
   cosmos_endpoint                = module.databases.cosmos_endpoint
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
+  api_gateway_auth_mode          = var.api_gateway_auth_mode
+  api_gateway_client_id          = var.api_gateway_client_id
+  api_gateway_tenant_id          = var.api_gateway_tenant_id
   orchestrator_agent_id          = var.orchestrator_agent_id
   arc_mcp_server_url             = local.enable_arc_mcp_server ? module.arc_mcp_server[0].arc_mcp_server_url : ""
   azure_mcp_server_url           = "http://${module.azure_mcp_server.internal_fqdn}"

@@ -31,7 +31,7 @@ resource "azurerm_role_assignment" "terraform_sp_foundry_aidev" {
 # Azure MCP Server — primary tool surface (ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health)
 # Replaces the ad-hoc script registration from deploy-azure-mcp-server.sh:L104
 resource "azapi_resource" "mcp_connection_azure" {
-  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-01-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-09-01"
   name      = "azure-mcp-connection"
   parent_id = local.foundry_project_id
 
@@ -58,7 +58,7 @@ resource "azapi_resource" "mcp_connection_azure" {
 resource "azapi_resource" "mcp_connection_arc" {
   count = local.enable_arc_mcp_server ? 1 : 0
 
-  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-01-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-09-01"
   name      = "arc-mcp-connection"
   parent_id = local.foundry_project_id
 
