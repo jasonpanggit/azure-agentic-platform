@@ -179,4 +179,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 — Phase 11: Patch Domain Agent complete (3/3 plans, 12/12 requirements verified, 120 unit+integration tests passing)*
+*Last updated: 2026-04-02 — Phase 19: Production Stabilisation complete (5/5 plans, PROD-001/002/003/005 code-complete). Azure MCP Server secured (internal-only ingress, auth bypass removed), Entra auth enabled in Terraform, MCP tool group connections registered via azapi, runbook seeding script + docs created, Teams alerting operator runbooks created. All changes await operator `terraform apply` + activation steps.*
