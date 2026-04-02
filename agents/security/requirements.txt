@@ -1,2 +1,4 @@
-# Security agent — no additional requirements beyond the base image.
-# All shared dependencies are installed in agents/Dockerfile.base.
+azure-mgmt-security>=4.0.0
+azure-mgmt-authorization>=4.0.0
+azure-mgmt-policyinsights>=1.1.0
+azure-mgmt-network>=27.0.0
