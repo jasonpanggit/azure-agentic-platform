@@ -37,6 +37,7 @@ export ARM_SUBSCRIPTION_ID="$(extract subscription_id)"
 export ARM_TENANT_ID="$(extract tenant_id)"
 export ARM_CLIENT_ID="$(extract client_id)"
 export ARM_CLIENT_SECRET="$(extract client_secret)"
+export ARM_USE_AZUREAD=true   # force Entra auth for backend blob storage (allowSharedKeyAccess=false)
 
 # Verify all vars are set
 for var in ARM_SUBSCRIPTION_ID ARM_TENANT_ID ARM_CLIENT_ID ARM_CLIENT_SECRET; do
