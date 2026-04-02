@@ -517,7 +517,7 @@ Plans:
 **Requirements**: PROD-001, PROD-002, PROD-003, PROD-005
 **Depends on:** Phase 18
 **Status:** In progress
-**Plans:** 5 plans
+**Plans:** 3/5 plans executed
 
 Plans:
 - [x] 19-1: MCP Security Hardening — COMPLETE (2026-04-02): Terraform module azure-mcp-server created, internal-only ingress, Dockerfile auth-bypass flag removed, import block for ca-azure-mcp-prod, azure_mcp_server_url wired from internal FQDN (SEC-001 + DEBT-013 resolved)

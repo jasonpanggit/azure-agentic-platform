@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: in_progress
-last_updated: "2026-04-02T07:45:00.000Z"
+status: unknown
+last_updated: "2026-04-02T06:08:32.960Z"
 progress:
   total_phases: 22
   completed_phases: 8
   total_plans: 49
-  completed_plans: 41
+  completed_plans: 42
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-02 — Plan 19-3 COMPLETE: MCP Tool Group Registration. PROD-003 resolved (code complete, operator must run terraform apply): Created terraform/envs/prod/mcp-connections.tf with azapi_resource blocks for azure-mcp-connection and arc-mcp-connection on Foundry project. Added internal_fqdn output alias to arc-mcp-server module. Created scripts/ops/19-3-register-mcp-connections.sh operator runbook. All 4 domain agents (Network/Security/Arc/SRE) will resolve "tool group was not found" after terraform apply.
 
 > Last updated: 2026-04-02 — Plan 19-1 COMPLETE: Azure MCP Server Security Hardening. SEC-001 (CRITICAL) resolved: Terraform module `terraform/modules/azure-mcp-server/` created (3 files: main.tf, variables.tf, outputs.tf), internal-only ingress (`external_enabled = false`), `--dangerously-disable-http-incoming-auth` removed from Dockerfile, import block for `ca-azure-mcp-prod` in `terraform/envs/prod/imports.tf`, `azure_mcp_server_url` wired from `module.azure_mcp_server.internal_fqdn` into agent_apps. Operator runbook at `scripts/ops/19-1-azure-mcp-security.sh`. Operator must run terraform apply to activate in prod.
 
