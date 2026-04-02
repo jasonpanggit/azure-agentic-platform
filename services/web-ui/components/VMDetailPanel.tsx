@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -60,6 +60,12 @@ interface MetricSeries {
   name: string | null
   unit: string | null
   timeseries: { timestamp: string; average: number | null; maximum: number | null }[]
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  approval_id?: string
 }
 
 interface VMDetailPanelProps {
@@ -162,6 +168,16 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [timeRange, setTimeRange] = useState<'PT1H' | 'PT6H' | 'PT24H' | 'P7D'>('PT24H')
   const [pollingEvidence, setPollingEvidence] = useState(false)
 
+  // ── Chat state ──────────────────────────────────────────────────────────────
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatStreaming, setChatStreaming] = useState(false)
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null)
+  // chatRunId is stored for future use (Phase 18 ProposalCard) and reset on panel close
+  const [, setChatRunId] = useState<string | null>(null)
+  const chatPollRef = useRef<NodeJS.Timeout | null>(null)
+
   // Fetch VM detail
   const fetchVM = useCallback(async () => {
     if (!resourceId) return
@@ -219,6 +235,108 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       setMetricsLoading(false)
     }
   }, [resourceId, timeRange])
+
+  // ── Chat functions ──────────────────────────────────────────────────────────
+
+  function startChatPolling(threadId: string, runId: string) {
+    if (chatPollRef.current) clearInterval(chatPollRef.current)
+
+    chatPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}&run_id=${encodeURIComponent(runId)}`
+        )
+        if (!res.ok) {
+          clearInterval(chatPollRef.current!)
+          setChatStreaming(false)
+          return
+        }
+        const data = await res.json()
+
+        const terminal = ['completed', 'failed', 'cancelled', 'expired']
+        if (terminal.includes(data.run_status)) {
+          clearInterval(chatPollRef.current!)
+          setChatStreaming(false)
+          if (data.run_status === 'completed' && data.messages?.length) {
+            const assistantMsgs = (data.messages as Array<{ role: string; content: unknown }>)
+              .filter(m => m.role === 'assistant')
+            if (assistantMsgs.length) {
+              const last = assistantMsgs[assistantMsgs.length - 1]
+              const content = Array.isArray(last.content)
+                ? (last.content as Array<{ text?: { value?: string } }>)
+                    .map(c => c.text?.value ?? '')
+                    .join('')
+                : String(last.content)
+              setChatMessages(prev => [
+                ...prev,
+                { role: 'assistant', content, approval_id: data.approval_id },
+              ])
+            }
+          }
+        }
+      } catch {
+        clearInterval(chatPollRef.current!)
+        setChatStreaming(false)
+      }
+    }, 2000)
+  }
+
+  async function sendChatMessage(text: string) {
+    if (!resourceId || !text.trim() || chatStreaming) return
+
+    const encoded = encodeResourceId(resourceId)
+    setChatMessages(prev => [...prev, { role: 'user', content: text }])
+    setChatInput('')
+    setChatStreaming(true)
+
+    try {
+      const res = await fetch(`/api/proxy/vms/${encoded}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          thread_id: chatThreadId,
+          incident_id: incidentId,
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setChatThreadId(data.thread_id)
+      setChatRunId(data.run_id)
+      startChatPolling(data.thread_id, data.run_id)
+    } catch {
+      setChatStreaming(false)
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'Error: could not reach the AI agent.' },
+      ])
+    }
+  }
+
+  async function openChat() {
+    setChatOpen(true)
+    if (chatMessages.length === 0) {
+      await sendChatMessage(
+        'Summarize what you know about this VM and suggest the next investigation steps.'
+      )
+    }
+  }
+
+  // Reset chat when a different VM is opened
+  useEffect(() => {
+    setChatOpen(false)
+    setChatMessages([])
+    setChatInput('')
+    setChatThreadId(null)
+    setChatRunId(null)
+  }, [resourceId])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (chatPollRef.current) clearInterval(chatPollRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -488,23 +606,115 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
               </div>
             )}
 
-            {/* Resource-scoped chat placeholder (Phase 3) */}
+            {/* AI Investigation */}
             <div className="px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
                 AI Investigation
               </div>
-              <button
-                className="w-full text-sm py-2 px-3 rounded-md cursor-not-allowed text-center"
-                style={{
-                  background: 'var(--bg-subtle)',
-                  color: 'var(--text-muted)',
-                  border: '1px dashed var(--border)',
-                }}
-                disabled
-                title="Resource-scoped chat coming in Phase 3"
-              >
-                Investigate with AI — coming in Phase 3
-              </button>
+
+              {!chatOpen ? (
+                <button
+                  className="w-full text-sm py-2 px-3 rounded-md cursor-pointer text-center transition-colors"
+                  style={{
+                    background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
+                    color: 'var(--accent-blue)',
+                    border: '1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)',
+                  }}
+                  onClick={openChat}
+                >
+                  Investigate with AI
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {/* Message history */}
+                  <div
+                    className="overflow-y-auto rounded-md p-2 space-y-2"
+                    style={{
+                      maxHeight: '320px',
+                      background: 'var(--bg-canvas)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    {chatMessages.length === 0 && chatStreaming && (
+                      <div className="space-y-1 animate-pulse p-2">
+                        {[...Array(3)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="h-3 rounded"
+                            style={{ background: 'var(--bg-subtle)', width: i === 2 ? '60%' : '100%' }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.approval_id ? (
+                          <div
+                            className="text-xs p-2 rounded-md max-w-[85%]"
+                            style={{
+                              background: 'color-mix(in srgb, var(--accent-orange) 10%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--accent-orange) 30%, transparent)',
+                              color: 'var(--text-primary)',
+                            }}
+                          >
+                            ⚠️ Remediation proposal — open full chat to approve
+                          </div>
+                        ) : (
+                          <div
+                            className="text-xs p-2 rounded-md max-w-[85%] whitespace-pre-wrap"
+                            style={{
+                              background: msg.role === 'user'
+                                ? 'color-mix(in srgb, var(--accent-blue) 15%, transparent)'
+                                : 'var(--bg-subtle)',
+                              color: 'var(--text-primary)',
+                            }}
+                          >
+                            {msg.content}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {chatStreaming && chatMessages.length > 0 && (
+                      <div className="flex justify-start">
+                        <div className="text-xs px-2 py-1 rounded-md animate-pulse" style={{ color: 'var(--text-muted)' }}>
+                          Thinking…
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          sendChatMessage(chatInput)
+                        }
+                      }}
+                      placeholder="Ask about this VM…"
+                      disabled={chatStreaming}
+                      className="flex-1 text-xs px-2 py-1.5 rounded-md outline-none"
+                      style={{
+                        background: 'var(--bg-canvas)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)',
+                      }}
+                    />
+                    <button
+                      onClick={() => sendChatMessage(chatInput)}
+                      disabled={chatStreaming || !chatInput.trim()}
+                      className="text-xs px-2 py-1.5 rounded-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: 'var(--accent-blue)', color: 'white' }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
