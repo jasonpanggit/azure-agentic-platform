@@ -1,2 +1,4 @@
-# SRE agent — no additional requirements beyond the base image.
-# All shared dependencies are installed in agents/Dockerfile.base.
+azure-mgmt-servicehealth==1.0.0b4
+azure-mgmt-advisor>=9.0.0
+azure-mgmt-changeanalysis==1.0.0b2
+azure-mgmt-monitor>=6.0.0
