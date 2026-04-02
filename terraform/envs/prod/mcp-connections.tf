@@ -1,0 +1,59 @@
+# MCP Connections — Foundry Project Tool Surfaces (PROD-003)
+#
+# Each connection registers an MCP server on the Foundry project.
+# All agents in the project can then invoke tools from that server.
+# api-version 2026-01-01-preview is confirmed working (scripts/deploy-azure-mcp-server.sh:104)
+#
+# Dependency: Plan 19-1 must be applied first (Azure MCP Server internal ingress).
+# The MCP connections point to internal FQDNs — public ingress is disabled after Plan 19-1.
+
+locals {
+  foundry_project_id = module.foundry.foundry_project_id
+}
+
+# Azure MCP Server — primary tool surface (ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health)
+# Replaces the ad-hoc script registration from deploy-azure-mcp-server.sh:L104
+resource "azapi_resource" "mcp_connection_azure" {
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-01-01-preview"
+  name      = "azure-mcp-connection"
+  parent_id = local.foundry_project_id
+
+  body = {
+    properties = {
+      category = "MCP"
+      target   = "http://${module.azure_mcp_server.internal_fqdn}"
+      authType = "None" # Internal VNet — network boundary is sufficient; no token needed
+      metadata = {
+        description = "Azure MCP Server — ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health"
+      }
+    }
+  }
+
+  response_export_values  = ["*"]
+  ignore_missing_property = true
+}
+
+# Arc MCP Server — custom Arc tool surface (AGENT-005)
+# Covers Arc-enabled servers, Arc Kubernetes, and Arc data services
+# (gap not covered by the Azure MCP Server)
+resource "azapi_resource" "mcp_connection_arc" {
+  count = local.enable_arc_mcp_server ? 1 : 0
+
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-01-01-preview"
+  name      = "arc-mcp-connection"
+  parent_id = local.foundry_project_id
+
+  body = {
+    properties = {
+      category = "MCP"
+      target   = "http://${module.arc_mcp_server[0].internal_fqdn}"
+      authType = "None" # Internal VNet — Arc MCP server uses ARC_MCP_AUTH_DISABLED=false for Entra JWT validation
+      metadata = {
+        description = "Arc MCP Server — Arc Servers, Arc K8s, Arc Data Services"
+      }
+    }
+  }
+
+  response_export_values  = ["*"]
+  ignore_missing_property = true
+}
