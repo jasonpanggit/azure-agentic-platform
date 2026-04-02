@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -28,7 +29,7 @@ from services.api_gateway.http_rate_limiter import (
 )
 
 from services.api_gateway.audit import query_audit_log
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential, get_optional_cosmos_client
 from services.api_gateway.audit_export import generate_remediation_report
 from services.api_gateway.auth import verify_token
 from services.api_gateway.chat import (
@@ -61,8 +62,12 @@ from services.api_gateway.approvals import (
 )
 from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
 from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse, call_azure_tool
+from services.api_gateway.diagnostic_pipeline import run_diagnostic_pipeline
 from services.api_gateway.health import router as health_router
 from services.api_gateway.patch_endpoints import router as patch_router
+from services.api_gateway.vm_inventory import router as vm_inventory_router
+from services.api_gateway.vm_detail import router as vm_detail_router
+from services.api_gateway.vm_chat import router as vm_chat_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -164,6 +169,12 @@ async def _run_startup_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: initialize shared clients, run migrations, then yield."""
+    logger.info("startup: api-gateway starting | version=1.0.0")
+    logger.info("startup: COSMOS_ENDPOINT=%s", "set" if os.environ.get("COSMOS_ENDPOINT") else "not_set")
+    logger.info("startup: APPLICATIONINSIGHTS_CONNECTION_STRING=%s", "set" if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING") else "not_set")
+    logger.info("startup: DIAGNOSTIC_LA_WORKSPACE_ID=%s", "set" if os.environ.get("DIAGNOSTIC_LA_WORKSPACE_ID") else "not_set (log_analytics step will be skipped)")
+    logger.info("startup: LOG_LEVEL=%s", os.environ.get("LOG_LEVEL", "INFO"))
+    logger.info("startup: CORS_ALLOWED_ORIGINS=%s", os.environ.get("CORS_ALLOWED_ORIGINS", "*"))
     # Initialize shared credential and Cosmos client singletons (CONCERNS 4.4)
     app.state.credential = DefaultAzureCredential()
     cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
@@ -199,6 +210,9 @@ app = FastAPI(
 
 app.include_router(health_router)
 app.include_router(patch_router)
+app.include_router(vm_inventory_router)
+app.include_router(vm_detail_router)
+app.include_router(vm_chat_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
@@ -256,6 +270,24 @@ async def apply_http_rate_limit(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all HTTP requests with method, path, status, and duration."""
+    start = time.monotonic()
+    correlation_id = getattr(request.state, "correlation_id", "unknown")
+    response = await call_next(request)
+    duration_ms = (time.monotonic() - start) * 1000
+    logger.info(
+        "http: %s %s | status=%d correlation_id=%s duration_ms=%.0f",
+        request.method,
+        request.url.path,
+        response.status_code,
+        correlation_id,
+        duration_ms,
+    )
+    return response
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Health check endpoint — no authentication required."""
@@ -269,12 +301,16 @@ async def health() -> HealthResponse:
 )
 async def ingest_incident(
     payload: IncidentPayload,
+    background_tasks: BackgroundTasks,
     token: dict[str, Any] = Depends(verify_token),
+    credential: Any = Depends(get_credential),
+    cosmos: Any = Depends(get_optional_cosmos_client),
 ) -> IncidentResponse:
     """Ingest an incident and dispatch to the Orchestrator agent.
 
     Accepts the DETECT-004 incident payload, creates a Foundry
     conversation thread, and returns 202 Accepted with the thread ID.
+    Queues the diagnostic pipeline as a BackgroundTask.
 
     Authentication: Entra ID Bearer token required.
     """
@@ -325,10 +361,61 @@ async def ingest_incident(
             detail="Internal error dispatching incident",
         ) from exc
 
+    # Queue diagnostic pipeline as background task (never blocks 202 response)
+    if payload.affected_resources:
+        primary_resource = payload.affected_resources[0].resource_id
+        background_tasks.add_task(
+            run_diagnostic_pipeline,
+            incident_id=payload.incident_id,
+            resource_id=primary_resource,
+            domain=payload.domain,
+            credential=credential,
+            cosmos_client=cosmos,
+        )
+        logger.info(
+            "pipeline: queued | incident_id=%s resource=%s",
+            payload.incident_id, primary_resource,
+        )
+
     return IncidentResponse(
         thread_id=result["thread_id"],
         status="dispatched",
     )
+
+
+@app.get("/api/v1/incidents/{incident_id}/evidence")
+async def get_incident_evidence(
+    incident_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> dict:
+    """Get pre-fetched diagnostic evidence for an incident.
+
+    Returns 202 with retry_after=5 if pipeline is still running.
+    Returns 404 if no evidence document exists yet.
+    Returns 200 with full evidence document when available.
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Evidence store not configured")
+    try:
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DB_NAME", "aap"))
+        container = db.get_container_client("evidence")
+        doc = container.read_item(incident_id, partition_key=incident_id)
+        return doc
+    except Exception as e:
+        if "404" in str(e) or "NotFound" in type(e).__name__:
+            # Evidence not yet written — pipeline may still be running
+            return JSONResponse(
+                content={"incident_id": incident_id, "pipeline_status": "pending"},
+                status_code=202,
+                headers={"Retry-After": "5"},
+            )
+        logger.error(
+            "get_incident_evidence: error | incident_id=%s error=%s", incident_id, e, exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Evidence retrieval failed")
 
 
 @app.get(

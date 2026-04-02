@@ -1,8 +1,10 @@
 # Terraform
 **/.terraform/
+**/.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan
 crash.log
 crash.*.log
 override.tf
@@ -59,4 +61,8 @@ tsconfig.tsbuildinfo
 scripts/agents.tfvars
 
 # Claude Code runtime
-.claude/checkpoints.log
+.claude/
+.planning/debug/
+tasks/
+.github/prompts/
+.dockerignore

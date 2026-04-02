@@ -52,8 +52,11 @@ def _is_expired(record: dict) -> bool:
 async def get_approval(approval_id: str, thread_id: str, cosmos_client: Optional[CosmosClient] = None) -> dict:
     """Read an approval record from Cosmos DB."""
     container = _get_approvals_container(cosmos_client=cosmos_client)
+    logger.info("cosmos: reading approval | approval_id=%s thread_id=%s", approval_id, thread_id)
     try:
-        return container.read_item(item=approval_id, partition_key=thread_id)
+        doc = container.read_item(item=approval_id, partition_key=thread_id)
+        logger.info("cosmos: approval read | approval_id=%s status=%s", approval_id, doc.get("status"))
+        return doc
     except CosmosResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Approval not found")
 
@@ -107,6 +110,12 @@ async def process_approval_decision(
     except CosmosResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Approval not found")
     etag = record["_etag"]
+    logger.info(
+        "cosmos: approval fetched for decision | approval_id=%s status=%s decision=%s",
+        approval_id,
+        record.get("status"),
+        decision,
+    )
 
     # Check expiry (D-13)
     if _is_expired(record):
@@ -160,6 +169,12 @@ async def process_approval_decision(
         body=updated_record,
         etag=etag,
         match_condition="IfMatch",
+    )
+    logger.info(
+        "cosmos: approval updated | approval_id=%s status=%s decided_by=%s",
+        approval_id,
+        decision,
+        decided_by,
     )
 
     # REMEDI-007: Log remediation event to OneLake (fire-and-forget)

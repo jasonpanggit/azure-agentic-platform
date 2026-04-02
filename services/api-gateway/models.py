@@ -182,7 +182,12 @@ class IncidentSummary(BaseModel):
     created_at: str
     title: Optional[str] = None
     resource_id: Optional[str] = None
+    resource_name: Optional[str] = None        # last segment of resource_id
+    resource_group: Optional[str] = None       # resource group from resource_id
+    resource_type: Optional[str] = None        # e.g. "microsoft.compute/virtualmachines"
     subscription_id: Optional[str] = None
+    investigation_status: Optional[str] = None  # pending | evidence_ready | investigating | resolved
+    evidence_collected_at: Optional[str] = None
 
 
 class AuditEntry(BaseModel):

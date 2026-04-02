@@ -8,15 +8,26 @@ import { AgentLatencyCard } from './AgentLatencyCard';
 import { PipelineLagCard } from './PipelineLagCard';
 import { ApprovalQueueCard } from './ApprovalQueueCard';
 import { ActiveErrorsCard } from './ActiveErrorsCard';
+import { IncidentThroughputCard } from './IncidentThroughputCard';
 import { TimeRangeSelector } from './TimeRangeSelector';
 
 const POLL_INTERVAL_MS = 30_000;
 
 interface ObservabilityData {
   agentLatency: { agent: string; p50: number; p95: number }[];
-  pipelineLag: { alertToIncidentMs: number; incidentToTriageMs: number; totalE2EMs: number };
+  pipelineLag: {
+    alertToIncidentMs: number;
+    incidentToTriageMs: number;
+    totalE2EMs: number;
+  };
   approvalQueue: { pending: number; oldestPendingMinutes: number | null };
-  activeErrors: { timestamp: string; agent: string; error: string; detail: string }[];
+  activeErrors: {
+    timestamp: string;
+    agent: string;
+    error: string;
+    detail: string;
+  }[];
+  incidentThroughput: { hour: string; count: number }[];
   lastUpdated: string;
 }
 
@@ -74,7 +85,10 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex flex-col gap-2 p-4 bg-card rounded-md shadow-sm">
+            <div
+              key={i}
+              className="flex flex-col gap-2 p-4 bg-card rounded-md shadow-sm"
+            >
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-full" />
@@ -89,7 +103,8 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
     <div className="flex flex-col gap-6 h-full">
       <div className="flex justify-between items-center">
         <span className="text-sm text-muted-foreground" aria-live="polite">
-          Last updated: {data ? new Date(data.lastUpdated).toLocaleString() : 'n/a'}
+          Last updated:{' '}
+          {data ? new Date(data.lastUpdated).toLocaleString() : 'n/a'}
         </span>
         <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
       </div>
@@ -100,7 +115,9 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
         </Alert>
       )}
 
-      {data && data.agentLatency.length === 0 && data.activeErrors.length === 0 ? (
+      {data &&
+      data.agentLatency.length === 0 &&
+      data.activeErrors.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <Activity className="h-8 w-8 text-muted-foreground" />
           <span className="font-semibold text-base">No observability data</span>
@@ -110,12 +127,17 @@ export function ObservabilityTab({ subscriptions }: ObservabilityTabProps) {
           </span>
         </div>
       ) : data ? (
-        <div className="grid grid-cols-2 gap-4">
-          <AgentLatencyCard data={data.agentLatency} />
-          <PipelineLagCard data={data.pipelineLag} />
-          <ActiveErrorsCard data={data.activeErrors} />
-          <ApprovalQueueCard data={data.approvalQueue} />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <AgentLatencyCard data={data.agentLatency} />
+            <PipelineLagCard data={data.pipelineLag} />
+            <IncidentThroughputCard data={data.incidentThroughput ?? []} />
+            <ApprovalQueueCard data={data.approvalQueue} />
+          </div>
+          <div className="mt-4">
+            <ActiveErrorsCard data={data.activeErrors} />
+          </div>
+        </>
       ) : null}
     </div>
   );

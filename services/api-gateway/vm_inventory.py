@@ -1,0 +1,405 @@
+"""VM inventory endpoint — fleet-level VM listing with health and alert enrichment.
+
+GET /api/v1/vms
+  ?subscriptions=sub1,sub2   (required, comma-separated)
+  ?status=all|running|stopped|deallocated  (default: all)
+  ?search=<text>             (optional VM name contains-filter)
+  ?limit=100                 (default 100, max 500)
+  ?offset=0
+
+Response: { vms: [...], total: int, has_more: bool }
+
+Each VM record contains:
+  id, name, resource_group, subscription_id, location, size,
+  os_type, os_name, power_state, health_state, ama_status,
+  active_alert_count, tags
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, Query
+
+from services.api_gateway.auth import verify_token
+from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1", tags=["vms"])
+
+
+# ---------------------------------------------------------------------------
+# ARG query helper (same pattern as patch_endpoints.py)
+# ---------------------------------------------------------------------------
+
+
+def _run_arg_query(
+    credential: Any,
+    subscription_ids: List[str],
+    kql: str,
+) -> List[Dict[str, Any]]:
+    """Execute an Azure Resource Graph query with pagination.
+
+    Args:
+        credential: Azure credential (DefaultAzureCredential).
+        subscription_ids: Subscriptions to scope the query.
+        kql: KQL query string.
+
+    Returns:
+        List of result rows from ARG.
+    """
+    from azure.mgmt.resourcegraph import ResourceGraphClient
+    from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
+
+    client = ResourceGraphClient(credential)
+    all_rows: List[Dict[str, Any]] = []
+    skip_token: Optional[str] = None
+
+    while True:
+        options = QueryRequestOptions(skip_token=skip_token) if skip_token else None
+        request = QueryRequest(
+            subscriptions=subscription_ids,
+            query=kql,
+            options=options,
+        )
+        response = client.resources(request)
+        all_rows.extend(response.data)
+
+        skip_token = response.skip_token
+        if not skip_token:
+            break
+
+    return all_rows
+
+
+def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
+    """Build ARG KQL query for VM inventory.
+
+    Args:
+        status_filter: "all", "running", "stopped", or "deallocated".
+        search: Optional name substring filter.
+
+    Returns:
+        KQL query string ready to submit to ARG.
+    """
+    kql = """Resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| extend powerState = tostring(properties.extended.instanceView.powerState.displayStatus)
+| extend osType = tostring(properties.storageProfile.osDisk.osType)
+| extend osName = tostring(properties.storageProfile.imageReference.offer)
+| extend vmSize = tostring(properties.hardwareProfile.vmSize)
+| project
+    id,
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    vmSize,
+    osType,
+    osName,
+    powerState,
+    tags
+"""
+    if status_filter != "all":
+        power_map = {
+            "running": "VM running",
+            "stopped": "VM stopped",
+            "deallocated": "VM deallocated",
+        }
+        display = power_map.get(status_filter)
+        if display:
+            kql += f"| where powerState =~ '{display}'\n"
+
+    if search:
+        # Escape single quotes to prevent KQL injection
+        safe = search.replace("'", "''")
+        kql += f"| where name contains '{safe}'\n"
+
+    kql += "| order by name asc"
+    return kql.strip()
+
+
+# ---------------------------------------------------------------------------
+# Resource Health join (sync SDK wrapped in executor)
+# ---------------------------------------------------------------------------
+
+
+def _get_health_states_sync(
+    credential: Any,
+    resource_ids: List[str],
+) -> Dict[str, str]:
+    """Fetch availability health state for a list of VM resource IDs.
+
+    Uses the sync azure-mgmt-resourcehealth SDK. Runs in a thread-pool
+    executor from the async route handler.
+
+    Args:
+        credential: Azure credential.
+        resource_ids: List of ARM VM resource IDs.
+
+    Returns:
+        Dict mapping resource_id → availability_state string.
+        Unknown on any failure.
+    """
+    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+
+    results: Dict[str, str] = {}
+    for rid in resource_ids:
+        # Extract subscription ID from the resource ID path
+        parts = rid.split("/")
+        try:
+            idx = [p.lower() for p in parts].index("subscriptions")
+            sub_id = parts[idx + 1]
+        except (ValueError, IndexError):
+            results[rid] = "Unknown"
+            continue
+
+        try:
+            client = MicrosoftResourceHealth(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=rid,
+                expand="recommendedActions",
+            )
+            state = (
+                status.properties.availability_state.value
+                if status.properties and status.properties.availability_state
+                else "Unknown"
+            )
+            results[rid] = state
+        except Exception as exc:
+            logger.debug(
+                "health_state: failed | resource=%s error=%s", rid[:80], exc
+            )
+            results[rid] = "Unknown"
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Cosmos alert count join
+# ---------------------------------------------------------------------------
+
+
+def _get_alert_counts(
+    cosmos_client: Any,
+    resource_ids: List[str],
+) -> Dict[str, int]:
+    """Count active incidents per resource_id from Cosmos incidents container.
+
+    Args:
+        cosmos_client: Initialized CosmosClient.
+        resource_ids: List of ARM resource IDs to look up.
+
+    Returns:
+        Dict mapping resource_id_lower → active incident count.
+        Defaults to 0 for any resource not found. Returns empty dict on error.
+    """
+    db_name = os.environ.get("COSMOS_DATABASE", "aap")
+    container = cosmos_client.get_database_client(db_name).get_container_client(
+        "incidents"
+    )
+
+    counts: Dict[str, int] = {rid.lower(): 0 for rid in resource_ids}
+
+    try:
+        query = """
+            SELECT c.resource_id, COUNT(1) as cnt
+            FROM c
+            WHERE c.status IN ('open', 'dispatched', 'investigating')
+            AND c.investigation_status != 'resolved'
+            GROUP BY c.resource_id
+        """
+        for item in container.query_items(
+            query=query, enable_cross_partition_query=True
+        ):
+            rid = (item.get("resource_id") or "").lower()
+            if rid in counts:
+                counts[rid] = item.get("cnt", 0)
+    except Exception as exc:
+        logger.warning("alert_count_join: failed | error=%s", exc)
+
+    return counts
+
+
+# ---------------------------------------------------------------------------
+# Power state normalizer
+# ---------------------------------------------------------------------------
+
+
+def _normalize_power_state(raw: str) -> str:
+    """Normalize ARG power state display string to a short canonical form.
+
+    Args:
+        raw: Raw display string from ARG, e.g. "VM running".
+
+    Returns:
+        One of: "running", "deallocated", "stopped", "starting",
+        "deallocating", or "unknown".
+    """
+    raw_lower = raw.lower()
+    if "running" in raw_lower:
+        return "running"
+    if "deallocated" in raw_lower:
+        return "deallocated"
+    if "stopped" in raw_lower:
+        return "stopped"
+    if "starting" in raw_lower:
+        return "starting"
+    if "deallocating" in raw_lower:
+        return "deallocating"
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Route handler
+# ---------------------------------------------------------------------------
+
+
+@router.get("/vms")
+async def list_vms(
+    subscriptions: str = Query(..., description="Comma-separated subscription IDs"),
+    status: str = Query(
+        "all",
+        description="Power state filter: all|running|stopped|deallocated",
+    ),
+    search: Optional[str] = Query(None, description="Filter by VM name (contains)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    credential: Any = Depends(get_credential),
+    cosmos_client: Any = Depends(get_optional_cosmos_client),
+    _user: Any = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Return VM fleet inventory with power state, health, and active alert count.
+
+    Joins three data sources:
+    1. Azure Resource Graph — base VM list with power state
+    2. Resource Health API — availability_state per VM
+    3. Cosmos incidents container — active alert count per VM
+
+    Resource Health and Cosmos joins are gracefully degraded: if either
+    fails, VMs are still returned with "Unknown" / 0 defaults.
+    """
+    start = time.monotonic()
+
+    sub_list = [s.strip() for s in subscriptions.split(",") if s.strip()]
+    if not sub_list:
+        return {"vms": [], "total": 0, "has_more": False}
+
+    logger.info(
+        "vm_inventory: request | subscriptions=%d status=%s search=%s limit=%d offset=%d",
+        len(sub_list),
+        status,
+        search or "",
+        limit,
+        offset,
+    )
+
+    # Step 1: ARG query for VM list
+    arg_start = time.monotonic()
+    try:
+        kql = _build_vm_kql(status, search)
+        loop = asyncio.get_running_loop()
+        rows: List[Dict[str, Any]] = await loop.run_in_executor(
+            None, _run_arg_query, credential, sub_list, kql
+        )
+    except Exception as exc:
+        logger.error(
+            "vm_inventory: arg_query failed | error=%s", exc, exc_info=True
+        )
+        rows = []
+
+    arg_ms = (time.monotonic() - arg_start) * 1000
+    logger.info(
+        "vm_inventory: arg_query complete | total=%d duration_ms=%.0f",
+        len(rows),
+        arg_ms,
+    )
+
+    total = len(rows)
+    page_rows = rows[offset : offset + limit]
+
+    if not page_rows:
+        return {"vms": [], "total": total, "has_more": total > offset + limit}
+
+    resource_ids = [row.get("id", "") for row in page_rows if row.get("id")]
+
+    # Step 2: Resource Health join (sync SDK in thread pool)
+    health_start = time.monotonic()
+    try:
+        loop = asyncio.get_running_loop()
+        health_map: Dict[str, str] = await loop.run_in_executor(
+            None, _get_health_states_sync, credential, resource_ids
+        )
+    except Exception as exc:
+        logger.warning(
+            "vm_inventory: resource_health_join failed (degraded) | error=%s", exc
+        )
+        health_map = {}
+
+    health_ms = (time.monotonic() - health_start) * 1000
+    logger.info(
+        "vm_inventory: resource_health_join | vms_checked=%d duration_ms=%.0f",
+        len(resource_ids),
+        health_ms,
+    )
+
+    # Step 3: Cosmos alert count join (optional — skip if Cosmos not configured)
+    alert_map: Dict[str, int] = {}
+    if cosmos_client is not None:
+        cosmos_start = time.monotonic()
+        try:
+            loop = asyncio.get_running_loop()
+            alert_map = await loop.run_in_executor(
+                None, _get_alert_counts, cosmos_client, resource_ids
+            )
+        except Exception as exc:
+            logger.warning(
+                "vm_inventory: cosmos_alert_join failed (degraded) | error=%s", exc
+            )
+        cosmos_ms = (time.monotonic() - cosmos_start) * 1000
+        logger.info(
+            "vm_inventory: cosmos_alert_join | vms_enriched=%d duration_ms=%.0f",
+            len(resource_ids),
+            cosmos_ms,
+        )
+
+    # Step 4: Build response
+    vms: List[Dict[str, Any]] = []
+    for row in page_rows:
+        rid = row.get("id", "")
+        power_raw = row.get("powerState", "")
+        power_state = _normalize_power_state(power_raw)
+        health_state = health_map.get(rid, "Unknown")
+        alert_count = alert_map.get(rid.lower(), 0)
+
+        vms.append(
+            {
+                "id": rid,
+                "name": row.get("name", ""),
+                "resource_group": row.get("resourceGroup", ""),
+                "subscription_id": row.get("subscriptionId", ""),
+                "location": row.get("location", ""),
+                "size": row.get("vmSize", ""),
+                "os_type": row.get("osType", ""),
+                "os_name": row.get("osName", ""),
+                "power_state": power_state,
+                "health_state": health_state,
+                "ama_status": "unknown",  # Phase 17: AMA extension check
+                "active_alert_count": alert_count,
+                "tags": row.get("tags") or {},
+            }
+        )
+
+    total_ms = (time.monotonic() - start) * 1000
+    logger.info(
+        "vm_inventory: response | total=%d returned=%d duration_ms=%.0f",
+        total,
+        len(vms),
+        total_ms,
+    )
+
+    return {"vms": vms, "total": total, "has_more": total > offset + limit}

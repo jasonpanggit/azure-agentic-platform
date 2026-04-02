@@ -1,6 +1,15 @@
 'use client';
 
 import React from 'react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { MetricCard, HealthStatus } from './MetricCard';
 
 interface AgentLatencyRow {
@@ -9,14 +18,14 @@ interface AgentLatencyRow {
   p95: number;
 }
 
+interface AgentLatencyCardProps {
+  data: AgentLatencyRow[];
+}
+
 function getP95Health(p95: number): HealthStatus {
   if (p95 > 5000) return 'critical';
   if (p95 > 3000) return 'warning';
   return 'healthy';
-}
-
-interface AgentLatencyCardProps {
-  data: AgentLatencyRow[];
 }
 
 export function AgentLatencyCard({ data }: AgentLatencyCardProps) {
@@ -30,25 +39,48 @@ export function AgentLatencyCard({ data }: AgentLatencyCardProps) {
     'healthy'
   );
 
+  if (data.length === 0) {
+    return (
+      <MetricCard title="Agent Latency" health="healthy">
+        <span className="text-sm text-muted-foreground">No data</span>
+      </MetricCard>
+    );
+  }
+
   return (
     <MetricCard title="Agent Latency" health={worstHealth}>
-      <div className="flex flex-col gap-1">
-        {data.map((row) => (
-          <div key={row.agent} className="flex justify-between items-center py-1">
-            <span className="text-sm">{row.agent}</span>
-            <div className="flex gap-4">
-              <div className="flex flex-col items-end">
-                <span className="text-xs text-muted-foreground">P50</span>
-                <span className="font-mono text-[13px]">{row.p50}ms</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-xs text-muted-foreground">P95</span>
-                <span className="font-mono text-[13px]">{row.p95}ms</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <XAxis
+            dataKey="agent"
+            tick={{ fontSize: 10 }}
+            tickFormatter={(v: string) =>
+              v.length > 8 ? v.slice(0, 8) + '\u2026' : v
+            }
+          />
+          <YAxis tick={{ fontSize: 10 }} unit="ms" />
+          <Tooltip
+            formatter={(value: unknown, name: unknown) => [
+              `${Number(value)}ms`,
+              String(name).toUpperCase(),
+            ]}
+            contentStyle={{ fontSize: 11 }}
+          />
+          <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+          <Bar
+            dataKey="p50"
+            name="P50"
+            fill="var(--accent-blue)"
+            radius={[2, 2, 0, 0]}
+          />
+          <Bar
+            dataKey="p95"
+            name="P95"
+            fill="var(--accent-yellow)"
+            radius={[2, 2, 0, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
     </MetricCard>
   );
 }
