@@ -523,7 +523,7 @@ Plans:
 - [x] 19-1: MCP Security Hardening — COMPLETE (2026-04-02): Terraform module azure-mcp-server created, internal-only ingress, Dockerfile auth-bypass flag removed, import block for ca-azure-mcp-prod, azure_mcp_server_url wired from internal FQDN (SEC-001 + DEBT-013 resolved)
 - [x] 19-2: Authentication Enablement — COMPLETE (2026-04-02): Terraform wired Entra auth, staging validation script, E2E service principal docs
 - [x] 19-3: MCP Tool Registration — COMPLETE (2026-04-02): azapi_resource MCP connection blocks for Azure MCP + Arc MCP, operator runbook (PROD-003 code complete; operator must run terraform apply)
-- [x] 19-4: Runbook RAG Seeding — COMPLETE (see 19-4 SUMMARY)
+- [x] 19-4: Runbook RAG Seeding — COMPLETE (2026-04-02): scripts/ops/19-4-seed-runbooks.sh (60 runbook upsert with temp firewall rule + validate.py post-check), docs/ops/runbook-seeding.md (full operator guide), pgvector_connection_string placeholder in terraform.tfvars (BUG-002 / F-02 code complete; operator must run seeding script)
 - [x] 19-5: Teams Proactive Alerting — COMPLETE (2026-04-02): manifest packaging script, E2E test script, teams_channel_id tfvars placeholder (PROD-005 code complete; operator must install bot and set channel ID)
 
 ---
