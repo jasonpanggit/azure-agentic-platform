@@ -21,6 +21,14 @@ export function getApiGatewayUrl(): string {
 /**
  * Build upstream headers for proxy requests.
  * Forwards Authorization from the incoming request if present.
+ *
+ * Expected Authorization format: "Bearer <entra-id-token>"
+ * The token must be acquired for scope: api://{API_GATEWAY_CLIENT_ID}/incidents.write
+ * (see lib/msal-config.ts gatewayTokenRequest — used by ChatDrawer and other components
+ * that call acquireTokenSilent before making API requests).
+ *
+ * The API gateway EntraTokenValidator (services/api-gateway/auth.py) validates the
+ * audience (api://{client_id}) and the tenant, then returns decoded claims.
  */
 export function buildUpstreamHeaders(
   authHeader: string | null,
