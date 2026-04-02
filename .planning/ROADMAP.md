@@ -539,7 +539,7 @@ Plans:
 Plans:
 - [x] 20-1 Network Agent Depth — 7 tools (4 stubs→real + 3 new incl. run_connectivity_check LRO), 39 tests passing ✅
 - [x] 20-2 Security Agent Depth — 7 tools (3 stubs→real + 4 new), 4 packages, 28 tests passing ✅
-- [ ] 20-3 SRE Agent Depth — 6 tools (2 stubs→real + 4 new incl. cross-domain correlation), 4 new requirements packages, ~22 tests
+- [x] 20-3 SRE Agent Depth — 6 tools (2 stubs→real + 4 new incl. cross-domain correlation), 4 packages (2 preview pinned), 22 tests passing ✅
 
 ---
 
