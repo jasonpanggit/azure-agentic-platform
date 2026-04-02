@@ -520,7 +520,7 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 19-1: MCP Security Hardening
+- [x] 19-1: MCP Security Hardening — COMPLETE (2026-04-02): Terraform module azure-mcp-server created, internal-only ingress, Dockerfile auth-bypass flag removed, import block for ca-azure-mcp-prod, azure_mcp_server_url wired from internal FQDN (SEC-001 + DEBT-013 resolved)
 - [x] 19-2: Authentication Enablement — COMPLETE (2026-04-02): Terraform wired Entra auth, staging validation script, E2E service principal docs
 - [ ] 19-3: MCP Tool Registration
 - [ ] 19-4: Runbook RAG Seeding

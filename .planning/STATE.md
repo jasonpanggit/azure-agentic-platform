@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-02T07:30:00.000Z"
+status: in_progress
+last_updated: "2026-04-02T07:45:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 8
   total_plans: 49
-  completed_plans: 40
+  completed_plans: 41
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-02 — Plan 19-1 COMPLETE: Azure MCP Server Security Hardening. SEC-001 (CRITICAL) resolved: Terraform module `terraform/modules/azure-mcp-server/` created (3 files: main.tf, variables.tf, outputs.tf), internal-only ingress (`external_enabled = false`), `--dangerously-disable-http-incoming-auth` removed from Dockerfile, import block for `ca-azure-mcp-prod` in `terraform/envs/prod/imports.tf`, `azure_mcp_server_url` wired from `module.azure_mcp_server.internal_fqdn` into agent_apps. Operator runbook at `scripts/ops/19-1-azure-mcp-security.sh`. Operator must run terraform apply to activate in prod.
 
 > Last updated: 2026-04-02 — Plan 19-2 COMPLETE: Authentication Enablement. Replaced hardcoded API_GATEWAY_AUTH_MODE=disabled with variable-driven Entra auth in Terraform agent-apps module. Added api_gateway_auth_mode/client_id/tenant_id variables. Set prod+staging tfvars to entra mode with client 505df1d3/tenant abbdca26. Documented health endpoint exclusion in auth.py. Added buildUpstreamHeaders token format JSDoc. Created staging validation script (scripts/auth-validation/validate-staging-auth.sh). Created docs/ops/e2e-service-principal.md. Operator must run terraform apply + staging validation script before prod auth is live. MSAL config and CORS already correct — no web-ui changes needed.
 
