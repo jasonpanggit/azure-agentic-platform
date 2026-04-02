@@ -2,16 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-02T07:07:46.771Z"
+status: in_progress
+last_updated: "2026-04-02T12:00:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 9
-  total_plans: 49
-  completed_plans: 44
+  total_plans: 52
+  completed_plans: 45
+current_phase: 20
+current_plan: "20-1"
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-02 — Plan 20-1 COMPLETE: Network Agent Depth. All 7 network tools fully implemented with real azure-mgmt-network SDK calls (replacing 4 no-op stubs). New tools added: query_flow_logs, query_expressroute_circuit, run_connectivity_check (LRO poller with 60s timeout). Module scaffold added: lazy imports, logger, _log_sdk_availability(), _extract_subscription_id(). All tools accept subscription_id parameter. Created agents/tests/network/__init__.py and agents/tests/network/test_network_tools.py with 39 unit tests — all passing. PROD-003 dependency satisfied.
 
 > Last updated: 2026-04-02 — Plan 19-4 COMPLETE: Runbook RAG Seeding. BUG-002 (F-02) code complete — operator must run seeding script. Created scripts/ops/19-4-seed-runbooks.sh (prod seeding with temporary firewall rule pattern, auto Key Vault password retrieval, row count verification, validate.py post-seed check), created docs/ops/runbook-seeding.md (full operator guide: prerequisites, when to re-seed, step-by-step procedure, troubleshooting), added pgvector_connection_string placeholder to terraform/envs/prod/terraform.tfvars. pgvector_connection_string already in credentials.tfvars and wired end-to-end through agent-apps module. Operator must run bash scripts/ops/19-4-seed-runbooks.sh to seed 60 runbooks and resolve 500 error.
 
