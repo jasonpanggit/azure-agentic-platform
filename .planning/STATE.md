@@ -15,6 +15,8 @@ progress:
 
 > Last updated: 2026-04-02 — Plan 18-01 COMPLETE: Recharts Charts in ObservabilityTab. recharts ^3.8.1 installed; incident_throughput KQL query added to /api/observability; AgentLatencyCard rebuilt with P50/P95 BarChart; PipelineLagCard improved to prominent metric display; IncidentThroughputCard (new) with hourly bar chart; ObservabilityTab updated to 2×2 grid + full-width ActiveErrorsCard. npm run build zero TypeScript errors.
 
+> Last updated: 2026-04-02 — Completed quick task 260402-gcx: Azure Monitor validation scripts created (KQL queries, validate.sh CLI script, VALIDATION-REPORT.md template) covering all 12 containers.
+
 > Last updated: 2026-04-02 — Completed quick task 260402-fvo: Arc MCP Server OTel init added; all 12 containers now wired to App Insights. docs/observability-wiring.md created.
 
 > Last updated: 2026-04-02 — Phase 17 COMPLETE: Resource-Scoped Chat (2/2 plans). POST /api/v1/vms/{id}/chat routes directly to COMPUTE_AGENT_ID (bypasses orchestrator), injects pre-fetched Cosmos evidence as context on new threads. VMDetailPanel "Investigate with AI" button replaced with fully functional inline chat: auto-sends initial summary, polls for results every 2s, shows user/assistant bubbles, streaming skeleton, approval redirect card. 329 API gateway tests passing. npm run build zero TypeScript errors. Merged to main.
@@ -282,6 +284,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260401-nk7 | Add structured logging to all agents for Azure Container App log visibility | 2026-04-01 | 30a2907 | [260401-nk7-add-structured-logging-to-all-agents-for](./quick/260401-nk7-add-structured-logging-to-all-agents-for/) |
 | 260401-o1l | Add structured logging to web-ui Next.js API routes for Azure Container App log streaming | 2026-04-01 | fa798e2 | [260401-o1l-add-structured-logging-to-web-ui-next-js](./quick/260401-o1l-add-structured-logging-to-web-ui-next-js/) |
 | 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
+| 260402-gcx | Validate Azure Monitor is receiving logs from all agent containers | 2026-04-02 | d9aa6e1 | [260402-gcx-validate-azure-monitor-is-receiving-logs](./quick/260402-gcx-validate-azure-monitor-is-receiving-logs/) |
 
 ---
 
