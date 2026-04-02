@@ -35,3 +35,10 @@ azure_mcp_image_tag = "latest"
 api_gateway_auth_mode  = "entra"
 api_gateway_client_id  = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
 api_gateway_tenant_id  = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
+
+# Teams channel ID for proactive alert delivery (PROD-005 / F-04)
+# Set after installing the bot in the target channel.
+# Retrieve via: bash scripts/ops/19-5-package-manifest.sh (shows instructions)
+# or: az containerapp logs show --name ca-teams-bot-prod --resource-group rg-aap-prod --tail 50
+# Once set, run: terraform apply -var-file=credentials.tfvars -target=module.agent_apps
+teams_channel_id = ""
