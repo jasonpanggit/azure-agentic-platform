@@ -42,3 +42,10 @@ api_gateway_tenant_id  = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 # or: az containerapp logs show --name ca-teams-bot-prod --resource-group rg-aap-prod --tail 50
 # Once set, run: terraform apply -var-file=credentials.tfvars -target=module.agent_apps
 teams_channel_id = ""
+
+# PostgreSQL pgvector connection string for runbook RAG (BUG-002 / F-02 fix — Plan 19-4)
+# The actual value with the admin password is in credentials.tfvars (not committed to git).
+# Format: postgresql://aap_admin:<password>@aap-postgres-prod.postgres.database.azure.com:5432/aap?sslmode=require
+# To set: bash scripts/ops/19-4-seed-runbooks.sh  (also seeds the 60 runbooks)
+# See: docs/ops/runbook-seeding.md for full procedure
+pgvector_connection_string = ""
