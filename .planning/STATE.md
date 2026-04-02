@@ -3,15 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-04-02T00:00:00.000Z"
+last_updated: "2026-04-02T11:15:00.000Z"
 progress:
-  total_phases: 15
-  completed_phases: 9
-  total_plans: 45
-  completed_plans: 46
+  total_phases: 17
+  completed_phases: 11
+  total_plans: 49
+  completed_plans: 51
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-02 — Phase 17 COMPLETE: Resource-Scoped Chat (2/2 plans). POST /api/v1/vms/{id}/chat routes directly to COMPUTE_AGENT_ID (bypasses orchestrator), injects pre-fetched Cosmos evidence as context on new threads. VMDetailPanel "Investigate with AI" button replaced with fully functional inline chat: auto-sends initial summary, polls for results every 2s, shows user/assistant bubbles, streaming skeleton, approval redirect card. 329 API gateway tests passing. npm run build zero TypeScript errors. Merged to main.
+
+> Last updated: 2026-04-02 — Phase 16 COMPLETE: VM Triage Path (3/3 plans). GET /api/v1/vms (ARG + Resource Health + Cosmos alert counts), GET /api/v1/vms/{id} (full profile), GET /api/v1/vms/{id}/metrics (azure-mgmt-monitor time-series). VMDetailPanel slide-over drawer with health badge, evidence summary, sparkline charts (4 metrics), active incidents. AlertFeed and VMTab rows wire to openVMDetail(). npm run build and 310 pytest tests passing.
 
 > Last updated: 2026-04-02 — Phase 15 COMPLETE: Diagnostic Pipeline (5/5 plans). All 4 compute agent diagnostic tools wired to real Azure SDK (no more stubs). Diagnostic pipeline BackgroundTask pre-fetches evidence on incident ingestion. IncidentSummary enriched with resource_name/resource_group/resource_type/investigation_status/evidence_collected_at. Structured logging standardised across all agents and API gateway (log_azure_call context manager). Frontend: evidence proxy route, vms proxy route, VMTab stub, AlertFeed resource columns + Evidence Ready badge + Investigate button. 578 tests pass. VERIFICATION.md written.
 
@@ -142,6 +146,8 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan, 15 unit tests, full-stack: gateway endpoints + proxy routes + PatchTab component + DashboardPanel wiring |
 | 14 | Production Stabilisation | Not started — 12 tasks across 6 milestones: agent wiring, MCP tool groups, Arc MCP deploy, runbook RAG, Teams alerting, dependency pinning |
 | 15 | Diagnostic Pipeline | ✅ Complete (2026-04-02) — 5/5 plans, 578 tests pass, 4 compute tools wired to real Azure SDKs, diagnostic pipeline BackgroundTask, IncidentSummary enriched, structured logging audit, frontend evidence integration |
+| 16 | VM Triage Path | ✅ Complete (2026-04-02) — 3/3 plans, GET /api/v1/vms inventory + detail + metrics, VMDetailPanel slide-over with health/evidence/sparklines/incidents, AlertFeed + VMTab wired to openVMDetail |
+| 17 | Resource-Scoped Chat | ✅ Complete (2026-04-02) — 2/2 plans, 329 api-gateway tests, POST /api/v1/vms/{id}/chat routes to COMPUTE_AGENT_ID with evidence context injection, VMDetailPanel inline chat with auto-summary + polling |
 
 ---
 
