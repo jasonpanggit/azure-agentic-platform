@@ -34,11 +34,17 @@ interface ActiveError {
   detail: string;
 }
 
+interface IncidentThroughputPoint {
+  hour: string;
+  count: number;
+}
+
 interface ObservabilityResponse {
   agentLatency: AgentLatencyRow[];
   pipelineLag: PipelineLagData;
   approvalQueue: ApprovalQueueData;
   activeErrors: ActiveError[];
+  incidentThroughput: IncidentThroughputPoint[];
   lastUpdated: string;
 }
 
@@ -68,12 +74,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     const logsClient = new LogsQueryClient(credential);
 
     // Execute all queries in parallel
-    const [latencyResult, lagResult, errorsResult, approvalQueue] =
+    const [latencyResult, lagResult, errorsResult, approvalQueue, throughputResult] =
       await Promise.all([
         queryAgentLatency(logsClient, isoDuration),
         queryPipelineLag(logsClient, isoDuration),
         queryActiveErrors(logsClient, isoDuration),
         queryApprovalQueue(),
+        queryIncidentThroughput(logsClient, isoDuration),
       ]);
 
     const response: ObservabilityResponse = {
@@ -81,6 +88,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       pipelineLag: lagResult,
       approvalQueue: approvalQueue,
       activeErrors: errorsResult,
+      incidentThroughput: throughputResult,
       lastUpdated: new Date().toISOString(),
     };
 
@@ -177,10 +185,11 @@ async function queryApprovalQueue(): Promise<ApprovalQueueData> {
   }
   try {
     const credential = new DefaultAzureCredential();
-    const cosmos = new CosmosClient({ endpoint: COSMOS_ENDPOINT, aadCredentials: credential });
-    const container = cosmos
-      .database(COSMOS_DATABASE)
-      .container("approvals");
+    const cosmos = new CosmosClient({
+      endpoint: COSMOS_ENDPOINT,
+      aadCredentials: credential,
+    });
+    const container = cosmos.database(COSMOS_DATABASE).container("approvals");
 
     const { resources } = await container.items
       .query({
@@ -201,5 +210,34 @@ async function queryApprovalQueue(): Promise<ApprovalQueueData> {
     return { pending, oldestPendingMinutes };
   } catch {
     return { pending: 0, oldestPendingMinutes: null };
+  }
+}
+
+async function queryIncidentThroughput(
+  client: LogsQueryClient,
+  duration: string
+): Promise<IncidentThroughputPoint[]> {
+  const kql = `AppRequests
+| where AppRoleName == "api-gateway" and Name == "POST /api/v1/incidents" and Success == true
+| summarize count=count() by bin(TimeGenerated, 1h)
+| order by TimeGenerated asc
+| project hour=TimeGenerated, count`;
+
+  try {
+    const result = await client.queryWorkspace(WORKSPACE_ID, kql, {
+      duration,
+    });
+    if (
+      result.status !== LogsQueryResultStatus.Success ||
+      !result.tables?.[0]
+    ) {
+      return [];
+    }
+    return result.tables[0].rows.map((row: unknown[]) => ({
+      hour: String(row[0]),
+      count: Number(row[1]),
+    }));
+  } catch {
+    return [];
   }
 }
