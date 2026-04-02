@@ -6,6 +6,12 @@ Authorization header. No API keys or shared secrets.
 
 Local bypass is available only when explicitly enabled with
 API_GATEWAY_AUTH_MODE=disabled.
+
+Unauthenticated paths (no verify_token dependency):
+  - GET /health          — Container Apps liveness probe
+  - GET /health/ready    — Container Apps readiness probe
+
+All /api/v1/* endpoints require a valid Bearer token via Depends(verify_token).
 """
 from __future__ import annotations
 
