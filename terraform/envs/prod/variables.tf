@@ -189,3 +189,9 @@ variable "pgvector_connection_string" {
   sensitive   = true
   default     = ""
 }
+
+variable "azure_mcp_image_tag" {
+  description = "Docker image tag for the Azure MCP Server Container App (services/azure-mcp-server)"
+  type        = string
+  default     = "latest"
+}
