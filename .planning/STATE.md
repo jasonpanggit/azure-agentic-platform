@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-02 — Completed quick task 260402-fvo: Arc MCP Server OTel init added; all 12 containers now wired to App Insights. docs/observability-wiring.md created.
+
 > Last updated: 2026-04-02 — Phase 17 COMPLETE: Resource-Scoped Chat (2/2 plans). POST /api/v1/vms/{id}/chat routes directly to COMPUTE_AGENT_ID (bypasses orchestrator), injects pre-fetched Cosmos evidence as context on new threads. VMDetailPanel "Investigate with AI" button replaced with fully functional inline chat: auto-sends initial summary, polls for results every 2s, shows user/assistant bubbles, streaming skeleton, approval redirect card. 329 API gateway tests passing. npm run build zero TypeScript errors. Merged to main.
 
 > Last updated: 2026-04-02 — Phase 16 COMPLETE: VM Triage Path (3/3 plans). GET /api/v1/vms (ARG + Resource Health + Cosmos alert counts), GET /api/v1/vms/{id} (full profile), GET /api/v1/vms/{id}/metrics (azure-mgmt-monitor time-series). VMDetailPanel slide-over drawer with health badge, evidence summary, sparkline charts (4 metrics), active incidents. AlertFeed and VMTab rows wire to openVMDetail(). npm run build and 310 pytest tests passing.
@@ -277,6 +279,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260401-e74 | Validate orchestrator wiring and routing — fix AZURE_MCP_SERVER_URL Terraform gap (G-01), write agents/orchestrator/README.md (G-03), add G-02 MCPStreamableHTTPTool comment to eol/agent.py | 2026-04-01 | 689e73b | [260401-e74-validate-orchestrator-wiring-and-routing](./quick/260401-e74-validate-orchestrator-wiring-and-routing/) |
 | 260401-nk7 | Add structured logging to all agents for Azure Container App log visibility | 2026-04-01 | 30a2907 | [260401-nk7-add-structured-logging-to-all-agents-for](./quick/260401-nk7-add-structured-logging-to-all-agents-for/) |
 | 260401-o1l | Add structured logging to web-ui Next.js API routes for Azure Container App log streaming | 2026-04-01 | fa798e2 | [260401-o1l-add-structured-logging-to-web-ui-next-js](./quick/260401-o1l-add-structured-logging-to-web-ui-next-js/) |
+| 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
 
 ---
 
