@@ -67,6 +67,7 @@ from services.api_gateway.health import router as health_router
 from services.api_gateway.patch_endpoints import router as patch_router
 from services.api_gateway.vm_inventory import router as vm_inventory_router
 from services.api_gateway.vm_detail import router as vm_detail_router
+from services.api_gateway.vm_chat import router as vm_chat_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -211,6 +212,7 @@ app.include_router(health_router)
 app.include_router(patch_router)
 app.include_router(vm_inventory_router)
 app.include_router(vm_detail_router)
+app.include_router(vm_chat_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
