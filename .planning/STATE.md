@@ -5,7 +5,9 @@ milestone_name: milestone
 status: in_progress
 last_updated: "2026-04-02T11:40:00.000Z"
 progress:
-  total_phases: 18
+
+> Last updated: 2026-04-02 — v2.0 Roadmap defined: Phases 19–28 added. Track 1 (19–21): production stabilisation + agent depth + detection plane activation. Track 2 (22–25): topology graph + change correlation + alert intelligence + institutional memory. Track 3 (26–28): predictive ops + closed-loop remediation + platform intelligence. Design spec: docs/superpowers/specs/2026-04-02-world-class-aiops-roadmap-design.md
+
   completed_phases: 11
   total_plans: 50
   completed_plans: 52
