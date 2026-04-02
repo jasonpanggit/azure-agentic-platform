@@ -10,7 +10,7 @@
 
 import {
   to = module.azure_mcp_server.azurerm_container_app.azure_mcp_server
-  id = "/subscriptions/4c727b88-e6f3-4c73-8d8a-e73ff8d3b91c/resourceGroups/rg-aap-prod/providers/Microsoft.App/containerApps/ca-azure-mcp-prod"
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.App/containerApps/ca-azure-mcp-prod"
 }
 
 # --- Entra App Registration imports ---
