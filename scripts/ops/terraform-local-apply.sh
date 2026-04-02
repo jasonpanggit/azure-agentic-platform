@@ -55,7 +55,7 @@ echo ""
 cd "$ENV_DIR"
 
 echo "==> terraform init"
-terraform init -upgrade
+terraform init -upgrade -reconfigure
 
 echo ""
 echo "==> terraform apply -var-file=credentials.tfvars $*"
