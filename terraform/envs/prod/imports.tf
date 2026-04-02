@@ -1,3 +1,18 @@
+# --- Azure MCP Server Container App import (DEBT-013 / SEC-001) ---
+# ca-azure-mcp-prod was created ad-hoc via scripts/deploy-azure-mcp-server.sh.
+# This import block lets Terraform take ownership without destroying and recreating it.
+#
+# Resource ID sourced on 2026-04-02 from:
+#   az containerapp show --name ca-azure-mcp-prod --resource-group rg-aap-prod \
+#     --query id -o tsv
+#
+# After running terraform apply, delete these import blocks (they are one-shot).
+
+import {
+  to = module.azure_mcp_server.azurerm_container_app.azure_mcp_server
+  id = "/subscriptions/4c727b88-e6f3-4c73-8d8a-e73ff8d3b91c/resourceGroups/rg-aap-prod/providers/Microsoft.App/containerApps/ca-azure-mcp-prod"
+}
+
 # --- Entra App Registration imports ---
 # Imports the web-UI app registration (aap-web-ui-prod) created manually on 2026-03-28.
 #
