@@ -533,12 +533,12 @@ Plans:
 **Goal:** Give the Network, Security, and SRE domain agents genuine diagnostic depth. Currently each has only 3 shared triage tools. After this phase each agent has a rich domain-specific investigation surface: 6 new Network tools (NSG rules, VNet topology, load balancer health, flow logs, ExpressRoute, connectivity diagnostics), 6 new Security tools (Defender alerts, secure score, RBAC assignments, Key Vault audit, Policy compliance, public endpoint scan), and 4 new SRE tools (Service Health, Advisor recommendations, Change Analysis, cross-domain correlation).
 **Requirements**: PROD-003
 **Depends on:** Phase 19
-**Status:** In Progress (1/3 plans)
+**Status:** In Progress (2/3 plans)
 **Plans:** 3 plans
 
 Plans:
 - [x] 20-1 Network Agent Depth — 7 tools (4 stubs→real + 3 new incl. run_connectivity_check LRO), 39 tests passing ✅
-- [ ] 20-2 Security Agent Depth — 7 tools (3 stubs→real + 4 new), 4 new requirements packages, ~28 tests
+- [x] 20-2 Security Agent Depth — 7 tools (3 stubs→real + 4 new), 4 packages, 28 tests passing ✅
 - [ ] 20-3 SRE Agent Depth — 6 tools (2 stubs→real + 4 new incl. cross-domain correlation), 4 new requirements packages, ~22 tests
 
 ---

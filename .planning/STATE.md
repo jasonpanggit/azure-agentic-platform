@@ -3,17 +3,21 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: in_progress
-last_updated: "2026-04-02T12:00:00.000Z"
+last_updated: "2026-04-02T13:30:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 9
   total_plans: 52
-  completed_plans: 45
+  completed_plans: 47
 current_phase: 20
-current_plan: "20-1"
+current_plan: "20-3"
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-02 — Plan 20-2 COMPLETE: Security Agent Depth. All 7 security tools fully implemented with real SDK calls (replacing 3 no-op stubs). New tools added: query_secure_score (ascScore), query_rbac_assignments (max_results cap + truncated flag), query_policy_compliance (NonCompliant filter), scan_public_endpoints (public_ip_addresses.list_all). query_keyvault_diagnostics revised to Log Analytics approach with workspace_id skip guard. Module scaffold added: lazy imports for 5 packages, logger, _log_sdk_availability(), _extract_subscription_id(). Created agents/tests/security/__init__.py and agents/tests/security/test_security_tools.py with 28 unit tests — all passing. PROD-003 dependency satisfied.
+
+> Last updated: 2026-04-02 — Plan 20-3 COMPLETE: SRE Agent Depth. Replaced 2 existing stubs (query_availability_metrics, query_performance_baselines) with real MonitorManagementClient implementations. Added 4 new tools: query_service_health (azure-mgmt-servicehealth==1.0.0b4 preview), query_advisor_recommendations (stable), query_change_analysis (azure-mgmt-changeanalysis==1.0.0b2 preview — datetime args not ISO strings), correlate_cross_domain (pure Python RCA with confidence scoring). Module scaffold: lazy imports for all 4 packages, _log_sdk_availability(), _extract_subscription_id(). Created agents/tests/sre/__init__.py and agents/tests/sre/test_sre_tools.py with 22 unit tests — all passing. PROD-003 dependency satisfied.
 
 > Last updated: 2026-04-02 — Plan 20-1 COMPLETE: Network Agent Depth. All 7 network tools fully implemented with real azure-mgmt-network SDK calls (replacing 4 no-op stubs). New tools added: query_flow_logs, query_expressroute_circuit, run_connectivity_check (LRO poller with 60s timeout). Module scaffold added: lazy imports, logger, _log_sdk_availability(), _extract_subscription_id(). All tools accept subscription_id parameter. Created agents/tests/network/__init__.py and agents/tests/network/test_network_tools.py with 39 unit tests — all passing. PROD-003 dependency satisfied.
 
