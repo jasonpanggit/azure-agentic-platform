@@ -10,6 +10,7 @@ import { ResourcesTab } from './ResourcesTab'
 import { ObservabilityTab } from './ObservabilityTab'
 import { PatchTab } from './PatchTab'
 import { VMTab } from './VMTab'
+import { VMDetailPanel } from './VMDetailPanel'
 import { useAppState } from '@/lib/app-state-context'
 
 type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'observability' | 'patch'
@@ -39,7 +40,23 @@ interface DashboardPanelProps {
 export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: DashboardPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('alerts')
   const [filters, setFilters] = useState<FilterState>({})
+  const [vmDetailOpen, setVMDetailOpen] = useState(false)
+  const [selectedVM, setSelectedVM] = useState<{
+    incidentId: string | null
+    resourceId: string | null
+    resourceName: string | null
+  } | null>(null)
   const { selectedSubscriptions, selectedIncidentId } = useAppState()
+
+  function openVMDetail(incidentId: string | null, resourceId: string | null, resourceName: string | null) {
+    setSelectedVM({ incidentId, resourceId, resourceName })
+    setVMDetailOpen(true)
+  }
+
+  function closeVMDetail() {
+    setVMDetailOpen(false)
+    setSelectedVM(null)
+  }
 
   function handleTabChange(tab: TabId) {
     setActiveTab(tab)
@@ -111,7 +128,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
               <AlertFilters filters={filters} onChange={setFilters} />
             </div>
-            <AlertFeed filters={filters} subscriptions={selectedSubscriptions} />
+            <AlertFeed filters={filters} subscriptions={selectedSubscriptions} onInvestigate={(incidentId, resourceId, resourceName) => openVMDetail(incidentId, resourceId ?? null, resourceName ?? null)} />
           </div>
         </div>
 
@@ -135,7 +152,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-vms" role="tabpanel" aria-labelledby="tab-vms" hidden={activeTab !== 'vms'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <VMTab subscriptions={selectedSubscriptions} />
+            <VMTab subscriptions={selectedSubscriptions} onVMClick={(resourceId, resourceName) => openVMDetail(null, resourceId, resourceName)} />
           </div>
         </div>
 
@@ -151,6 +168,23 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
       </div>
+
+      {/* VM Detail Panel + backdrop */}
+      {vmDetailOpen && selectedVM && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            style={{ background: 'rgba(0,0,0,0.3)' }}
+            onClick={closeVMDetail}
+          />
+          <VMDetailPanel
+            incidentId={selectedVM.incidentId}
+            resourceId={selectedVM.resourceId}
+            resourceName={selectedVM.resourceName}
+            onClose={closeVMDetail}
+          />
+        </>
+      )}
     </div>
   )
 }
