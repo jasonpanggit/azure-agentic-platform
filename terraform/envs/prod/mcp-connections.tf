@@ -30,6 +30,8 @@ resource "azurerm_role_assignment" "terraform_sp_foundry_aidev" {
 
 # Azure MCP Server — primary tool surface (ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health)
 # Replaces the ad-hoc script registration from deploy-azure-mcp-server.sh:L104
+# NOTE: category must be "CustomKeys" — "MCP" is not a valid enum for 2025-09-01 API.
+# The existing connection (created manually) uses CustomKeys; we update target to internal FQDN.
 resource "azapi_resource" "mcp_connection_azure" {
   type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-09-01"
   name      = "azure-mcp-connection"
@@ -37,11 +39,13 @@ resource "azapi_resource" "mcp_connection_azure" {
 
   body = {
     properties = {
-      category = "MCP"
+      category = "CustomKeys"
       target   = "http://${module.azure_mcp_server.internal_fqdn}"
       authType = "None" # Internal VNet — network boundary is sufficient; no token needed
       metadata = {
-        description = "Azure MCP Server — ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health"
+        description  = "Azure MCP Server — ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health"
+        mcp_server   = "true"
+        transport    = "http"
       }
     }
   }
@@ -55,6 +59,7 @@ resource "azapi_resource" "mcp_connection_azure" {
 # Arc MCP Server — custom Arc tool surface (AGENT-005)
 # Covers Arc-enabled servers, Arc Kubernetes, and Arc data services
 # (gap not covered by the Azure MCP Server)
+# NOTE: category must be "CustomKeys" — "MCP" is not a valid enum for 2025-09-01 API.
 resource "azapi_resource" "mcp_connection_arc" {
   count = local.enable_arc_mcp_server ? 1 : 0
 
@@ -64,11 +69,13 @@ resource "azapi_resource" "mcp_connection_arc" {
 
   body = {
     properties = {
-      category = "MCP"
+      category = "CustomKeys"
       target   = "http://${module.arc_mcp_server[0].internal_fqdn}"
-      authType = "None" # Internal VNet — Arc MCP server uses ARC_MCP_AUTH_DISABLED=false for Entra JWT validation
+      authType = "None" # Internal VNet — Arc MCP server uses Entra JWT validation
       metadata = {
-        description = "Arc MCP Server — Arc Servers, Arc K8s, Arc Data Services"
+        description  = "Arc MCP Server — Arc Servers, Arc K8s, Arc Data Services"
+        mcp_server   = "true"
+        transport    = "http"
       }
     }
   }
