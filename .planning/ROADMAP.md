@@ -516,11 +516,15 @@ Plans:
 **Goal:** Resolve all known BLOCKING and HIGH-severity production defects so the platform is fully operational: authenticated, all agents functional, detection plane wiring ready, no unauthenticated external endpoints, Teams proactive alerting delivering cards. Executes all 12 tasks deferred from Phase 14 across 6 milestones: agent MCP tool group registration, auth enablement, Azure MCP Server security, Arc MCP Server real image, runbook RAG, hardcoded ID removal, Teams Bot registration, and agent framework RC5 pin.
 **Requirements**: PROD-001, PROD-002, PROD-003, PROD-005
 **Depends on:** Phase 18
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** In progress
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 19 to break down)
+- [ ] 19-1: MCP Security Hardening
+- [x] 19-2: Authentication Enablement — COMPLETE (2026-04-02): Terraform wired Entra auth, staging validation script, E2E service principal docs
+- [ ] 19-3: MCP Tool Registration
+- [ ] 19-4: Runbook RAG Seeding
+- [ ] 19-5: Teams Proactive Alerting
 
 ---
 
