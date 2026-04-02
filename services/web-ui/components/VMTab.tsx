@@ -20,6 +20,7 @@ interface VMRow {
 
 interface VMTabProps {
   subscriptions: string[]
+  onVMClick?: (resourceId: string, resourceName: string) => void
 }
 
 function PowerStateBadge({ state }: { state: string }) {
@@ -61,7 +62,7 @@ function HealthBadge({ state }: { state: string }) {
   )
 }
 
-export function VMTab({ subscriptions }: VMTabProps) {
+export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
   const [vms, setVMs] = useState<VMRow[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -190,7 +191,7 @@ export function VMTab({ subscriptions }: VMTabProps) {
                   style={{ borderBottom: '1px solid var(--border-subtle)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  onClick={() => console.log('[AAP] VMTab row clicked:', vm.id)}
+                  onClick={() => onVMClick?.(vm.id, vm.name)}
                 >
                   <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                     {vm.name}

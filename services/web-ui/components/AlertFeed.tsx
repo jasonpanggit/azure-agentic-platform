@@ -36,6 +36,7 @@ interface AlertFeedProps {
     domain?: string;
     status?: string;
   };
+  onInvestigate?: (incidentId: string, resourceId: string | undefined, resourceName: string | undefined) => void;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -59,7 +60,7 @@ function formatRelativeTime(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
+export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -260,9 +261,7 @@ export function AlertFeed({ subscriptions, filters }: AlertFeedProps) {
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 12%, transparent)' }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      // Phase 2: will open VMDetailPanel
-                      // For now: log so we can verify click works
-                      console.log('[AAP] Investigate clicked:', incident.incident_id, incident.resource_name)
+                      onInvestigate?.(incident.incident_id, incident.resource_id, incident.resource_name)
                     }}
                     title={`Investigate ${incident.resource_name}`}
                   >
