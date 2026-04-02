@@ -29,8 +29,9 @@ fi
 
 echo "==> Reading credentials from ${CREDS_FILE}"
 
-# Parse credentials.tfvars (HCL key = "value" format)
-extract() { grep -E "^${1}\s*=" "$CREDS_FILE" | sed 's/.*=\s*"\(.*\)"/\1/' | tr -d ' '; }
+# Parse credentials.tfvars — match only lines that START with the exact key name
+# (prevents api_gateway_client_id matching when searching for client_id)
+extract() { grep -E "^${1} " "$CREDS_FILE" | sed -E 's/^[^=]+= *"([^"]+)".*/\1/'; }
 
 export ARM_SUBSCRIPTION_ID="$(extract subscription_id)"
 export ARM_TENANT_ID="$(extract tenant_id)"
