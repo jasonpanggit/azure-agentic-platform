@@ -189,3 +189,27 @@ variable "pgvector_connection_string" {
   sensitive   = true
   default     = ""
 }
+
+variable "azure_mcp_image_tag" {
+  description = "Docker image tag for the Azure MCP Server Container App (services/azure-mcp-server)"
+  type        = string
+  default     = "latest"
+}
+
+variable "api_gateway_auth_mode" {
+  description = "Auth mode for API gateway: 'entra' (production) or 'disabled' (local dev only). Defaults to 'entra' (fail-closed)."
+  type        = string
+  default     = "entra"
+}
+
+variable "api_gateway_client_id" {
+  description = "Entra app registration client ID for API gateway Entra auth (API_GATEWAY_CLIENT_ID)."
+  type        = string
+  default     = ""
+}
+
+variable "api_gateway_tenant_id" {
+  description = "Entra tenant ID for API gateway Entra auth (API_GATEWAY_TENANT_ID)."
+  type        = string
+  default     = ""
+}

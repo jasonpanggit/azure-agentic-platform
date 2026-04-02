@@ -13,6 +13,11 @@ output "arc_mcp_server_fqdn" {
   value       = azurerm_container_app.arc_mcp_server.ingress[0].fqdn
 }
 
+output "internal_fqdn" {
+  description = "Internal FQDN for Arc MCP Server (Foundry MCP connection target — internal ingress only)"
+  value       = azurerm_container_app.arc_mcp_server.ingress[0].fqdn
+}
+
 output "arc_mcp_server_url" {
   description = "Full internal URL for Arc Agent to call Arc MCP Server tools"
   value       = "http://${azurerm_container_app.arc_mcp_server.ingress[0].fqdn}/mcp"

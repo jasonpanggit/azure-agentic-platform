@@ -29,4 +29,8 @@ EXPOSE 8080
 
 # Start proxy first (8080, returns 503 while azmcp warms up), then azmcp.
 # Redirect azmcp stderr to stdout so errors are visible in Container Apps logs.
-CMD ["sh", "-c", "node /app/proxy.js & azmcp server start --transport http --dangerously-disable-http-incoming-auth 2>&1; echo 'azmcp exited'; wait"]
+# SEC-001: --dangerously-disable-http-incoming-auth removed. Container App uses
+# internal-only ingress (external_enabled=false); only traffic from within the
+# Container Apps environment reaches azmcp. Defense-in-depth: network boundary
+# + process boundary.
+CMD ["sh", "-c", "node /app/proxy.js & azmcp server start --transport http 2>&1; echo 'azmcp exited'; wait"]

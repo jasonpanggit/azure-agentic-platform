@@ -1,21 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: in_progress
-last_updated: "2026-04-02T11:40:00.000Z"
+milestone: v2.0
+milestone_name: Roadmap — World-Class AIOps
+status: unknown
+last_updated: "2026-04-02T07:07:46.771Z"
 progress:
-
-> Last updated: 2026-04-02 — v2.0 Roadmap defined: Phases 19–28 added. Track 1 (19–21): production stabilisation + agent depth + detection plane activation. Track 2 (22–25): topology graph + change correlation + alert intelligence + institutional memory. Track 3 (26–28): predictive ops + closed-loop remediation + platform intelligence. Design spec: docs/superpowers/specs/2026-04-02-world-class-aiops-roadmap-design.md
-
-  completed_phases: 11
-  total_plans: 50
-  completed_plans: 52
+  total_phases: 22
+  completed_phases: 9
+  total_plans: 49
+  completed_plans: 44
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-02 — Plan 19-4 COMPLETE: Runbook RAG Seeding. BUG-002 (F-02) code complete — operator must run seeding script. Created scripts/ops/19-4-seed-runbooks.sh (prod seeding with temporary firewall rule pattern, auto Key Vault password retrieval, row count verification, validate.py post-seed check), created docs/ops/runbook-seeding.md (full operator guide: prerequisites, when to re-seed, step-by-step procedure, troubleshooting), added pgvector_connection_string placeholder to terraform/envs/prod/terraform.tfvars. pgvector_connection_string already in credentials.tfvars and wired end-to-end through agent-apps module. Operator must run bash scripts/ops/19-4-seed-runbooks.sh to seed 60 runbooks and resolve 500 error.
+
+> Last updated: 2026-04-02 — Plan 19-5 COMPLETE: Teams Proactive Alerting. PROD-005 code complete — operator must install bot in Teams channel and set TEAMS_CHANNEL_ID. Created scripts/ops/19-5-package-manifest.sh (manifest packaging with placeholder substitution), scripts/ops/19-5-test-teams-alerting.sh (full E2E test with pre-flight checks + synthetic Sev1 incident injection + PROD-005 checklist), added teams_channel_id placeholder to terraform/envs/prod/terraform.tfvars. TEAMS_CHANNEL_ID variable and wiring were already end-to-end complete in agent-apps module. Phase 19 all 5 plans complete.
+
+> Last updated: 2026-04-02 — Plan 19-3 COMPLETE: MCP Tool Group Registration. PROD-003 resolved (code complete, operator must run terraform apply): Created terraform/envs/prod/mcp-connections.tf with azapi_resource blocks for azure-mcp-connection and arc-mcp-connection on Foundry project. Added internal_fqdn output alias to arc-mcp-server module. Created scripts/ops/19-3-register-mcp-connections.sh operator runbook. All 4 domain agents (Network/Security/Arc/SRE) will resolve "tool group was not found" after terraform apply.
+
+> Last updated: 2026-04-02 — Plan 19-1 COMPLETE: Azure MCP Server Security Hardening. SEC-001 (CRITICAL) resolved: Terraform module `terraform/modules/azure-mcp-server/` created (3 files: main.tf, variables.tf, outputs.tf), internal-only ingress (`external_enabled = false`), `--dangerously-disable-http-incoming-auth` removed from Dockerfile, import block for `ca-azure-mcp-prod` in `terraform/envs/prod/imports.tf`, `azure_mcp_server_url` wired from `module.azure_mcp_server.internal_fqdn` into agent_apps. Operator runbook at `scripts/ops/19-1-azure-mcp-security.sh`. Operator must run terraform apply to activate in prod.
+
+> Last updated: 2026-04-02 — Plan 19-2 COMPLETE: Authentication Enablement. Replaced hardcoded API_GATEWAY_AUTH_MODE=disabled with variable-driven Entra auth in Terraform agent-apps module. Added api_gateway_auth_mode/client_id/tenant_id variables. Set prod+staging tfvars to entra mode with client 505df1d3/tenant abbdca26. Documented health endpoint exclusion in auth.py. Added buildUpstreamHeaders token format JSDoc. Created staging validation script (scripts/auth-validation/validate-staging-auth.sh). Created docs/ops/e2e-service-principal.md. Operator must run terraform apply + staging validation script before prod auth is live. MSAL config and CORS already correct — no web-ui changes needed.
+
+> Last updated: 2026-04-02T05:54:01.762Z — Phase 19 PLANNED: 5 plans created and verified (gsd-plan-checker PASS). Wave 1: MCP Security + Auth Enablement. Wave 2: MCP Tool Registration. Wave 3: Runbook RAG Seeding + Teams Proactive Alerting. V2.0 roadmap (Phases 19-28) committed to ROADMAP.md. Design spec at docs/superpowers/specs/2026-04-02-world-class-aiops-roadmap-design.md.
+
 > Last updated: 2026-04-02 — Plan 18-01 COMPLETE: Recharts Charts in ObservabilityTab. recharts ^3.8.1 installed; incident_throughput KQL query added to /api/observability; AgentLatencyCard rebuilt with P50/P95 BarChart; PipelineLagCard improved to prominent metric display; IncidentThroughputCard (new) with hourly bar chart; ObservabilityTab updated to 2×2 grid + full-width ActiveErrorsCard. npm run build zero TypeScript errors.
+
+> Last updated: 2026-04-02 — Completed quick task 260402-gcx: Azure Monitor validation scripts created (KQL queries, validate.sh CLI script, VALIDATION-REPORT.md template) covering all 12 containers.
 
 > Last updated: 2026-04-02 — Completed quick task 260402-fvo: Arc MCP Server OTel init added; all 12 containers now wired to App Insights. docs/observability-wiring.md created.
 
@@ -284,6 +296,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260401-nk7 | Add structured logging to all agents for Azure Container App log visibility | 2026-04-01 | 30a2907 | [260401-nk7-add-structured-logging-to-all-agents-for](./quick/260401-nk7-add-structured-logging-to-all-agents-for/) |
 | 260401-o1l | Add structured logging to web-ui Next.js API routes for Azure Container App log streaming | 2026-04-01 | fa798e2 | [260401-o1l-add-structured-logging-to-web-ui-next-js](./quick/260401-o1l-add-structured-logging-to-web-ui-next-js/) |
 | 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
+| 260402-gcx | Validate Azure Monitor is receiving logs from all agent containers | 2026-04-02 | d9aa6e1 | [260402-gcx-validate-azure-monitor-is-receiving-logs](./quick/260402-gcx-validate-azure-monitor-is-receiving-logs/) |
 
 ---
 

@@ -205,3 +205,21 @@ variable "pgvector_connection_string" {
   sensitive   = true
   default     = ""
 }
+
+variable "api_gateway_auth_mode" {
+  description = "Auth mode for API gateway: 'entra' (production) or 'disabled' (local dev only). Defaults to 'entra' (fail-closed)."
+  type        = string
+  default     = "entra"
+}
+
+variable "api_gateway_client_id" {
+  description = "Entra app registration client ID for API gateway Entra auth (API_GATEWAY_CLIENT_ID). Must match NEXT_PUBLIC_AZURE_CLIENT_ID in web-ui."
+  type        = string
+  default     = ""
+}
+
+variable "api_gateway_tenant_id" {
+  description = "Entra tenant ID for API gateway Entra auth (API_GATEWAY_TENANT_ID)."
+  type        = string
+  default     = ""
+}

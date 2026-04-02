@@ -212,6 +212,27 @@ module "arc_mcp_server" {
   use_placeholder_image = false
 }
 
+# --- Azure MCP Server (depends on: compute-env, monitoring) ---
+# Phase 19 Plan 1: SEC-001 fix — internal-only ingress, no auth-bypass flag.
+# The Container App was previously ad-hoc (DEBT-013); this module takes ownership.
+# Import block in imports.tf handles the existing ca-azure-mcp-prod resource.
+
+module "azure_mcp_server" {
+  source = "../../modules/azure-mcp-server"
+
+  environment                    = var.environment
+  resource_group_name            = azurerm_resource_group.main.name
+  location                       = var.location
+  container_apps_environment_id  = module.compute_env.container_apps_environment_id
+  acr_login_server               = module.compute_env.acr_login_server
+  acr_id                         = module.compute_env.acr_id
+  use_placeholder_image          = false
+  image_tag                      = var.azure_mcp_image_tag
+  subscription_id                = var.subscription_id
+  app_insights_connection_string = module.monitoring.app_insights_connection_string
+  required_tags                  = local.required_tags
+}
+
 # --- Agent Apps (depends on: compute-env, foundry, monitoring, databases) ---
 
 module "agent_apps" {
@@ -231,8 +252,12 @@ module "agent_apps" {
   cosmos_endpoint                = module.databases.cosmos_endpoint
   cosmos_database_name           = module.databases.cosmos_database_name
   cors_allowed_origins           = var.cors_allowed_origins
+  api_gateway_auth_mode          = var.api_gateway_auth_mode
+  api_gateway_client_id          = var.api_gateway_client_id
+  api_gateway_tenant_id          = var.api_gateway_tenant_id
   orchestrator_agent_id          = var.orchestrator_agent_id
   arc_mcp_server_url             = local.enable_arc_mcp_server ? module.arc_mcp_server[0].arc_mcp_server_url : ""
+  azure_mcp_server_url           = "http://${module.azure_mcp_server.internal_fqdn}"
   compute_agent_id               = var.compute_agent_id
   network_agent_id               = var.network_agent_id
   storage_agent_id               = var.storage_agent_id
