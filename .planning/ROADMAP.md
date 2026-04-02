@@ -502,3 +502,204 @@ Plans:
 | **Total** | **72** | **5** | **21** | **7** | **8** | **18** | **6** | **7** |
 
 > All 72 v1 requirements are covered across the 7 phases. No requirement is unassigned.
+
+---
+
+## v2.0 Roadmap — World-Class AIOps (Phases 19–28)
+
+> Defined: 2026-04-02. Full design spec: `docs/superpowers/specs/2026-04-02-world-class-aiops-roadmap-design.md`
+>
+> Three tracks: Track 1 (19–21) makes the platform work in production. Track 2 (22–25) adds Stage 4 intelligence. Track 3 (26–28) completes Stage 5 autonomous operations.
+
+### Phase 19: Production Stabilisation
+
+**Goal:** Resolve all known BLOCKING and HIGH-severity production defects so the platform is fully operational: authenticated, all agents functional, detection plane wiring ready, no unauthenticated external endpoints, Teams proactive alerting delivering cards. Executes all 12 tasks deferred from Phase 14 across 6 milestones: agent MCP tool group registration, auth enablement, Azure MCP Server security, Arc MCP Server real image, runbook RAG, hardcoded ID removal, Teams Bot registration, and agent framework RC5 pin.
+**Requirements**: PROD-001, PROD-002, PROD-003, PROD-005
+**Depends on:** Phase 18
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 19 to break down)
+
+---
+
+### Phase 20: Network & Security Agent Depth
+
+**Goal:** Give the Network, Security, and SRE domain agents genuine diagnostic depth. Currently each has only 3 shared triage tools. After this phase each agent has a rich domain-specific investigation surface: 6 new Network tools (NSG rules, VNet topology, load balancer health, flow logs, ExpressRoute, connectivity diagnostics), 6 new Security tools (Defender alerts, secure score, RBAC assignments, Key Vault audit, Policy compliance, public endpoint scan), and 4 new SRE tools (Service Health, Advisor recommendations, Change Analysis, cross-domain correlation).
+**Requirements**: PROD-003
+**Depends on:** Phase 19
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 20 to break down)
+
+---
+
+### Phase 21: Detection Plane Activation
+
+**Goal:** Enable the live detection loop in production. The Fabric Eventhouse + Activator infrastructure was built in Phase 4 and is complete in Terraform — it is currently disabled via `enable_fabric_data_plane = false`. This phase activates, validates, and operationalises the existing pipeline against real Azure Monitor alerts. No simulation scripts required after this phase.
+**Requirements**: PROD-004
+**Depends on:** Phase 19
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 21 to break down)
+
+---
+
+### Phase 22: Resource Topology Graph
+
+**Goal:** Build and maintain a real-time property graph of all Azure resources and their relationships. This is the single most differentiating Stage 4 capability — it enables causal RCA, blast-radius estimation, and topology-aware alert suppression in later phases. The graph is stored in Cosmos DB (adjacency-list), bootstrapped via ARG bulk query, synced every 15 minutes, and enriched by the Activity Log stream. New API endpoints expose blast-radius, path, and snapshot queries. All domain agents gain topology traversal as a mandatory triage step.
+**Requirements**: TOPO-001, TOPO-002, TOPO-003, TOPO-004, TOPO-005
+**Depends on:** Phase 21
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 22 to break down)
+
+---
+
+### Phase 23: Change Correlation Engine
+
+**Goal:** Automatically correlate every incident with Azure resource changes in the preceding time window. When a DB degrades 4 minutes after a VM resize, that correlation surfaces automatically. Sources: Activity Log (ARM operations), deployment events, Kubernetes resource changes, policy compliance changes. Algorithm ranks by temporal proximity + topological distance + change type and stores top-3 ChangeCorrelation objects on IncidentSummary. Surfaces in AlertFeed badge and VMDetailPanel.
+**Requirements**: INTEL-002
+**Depends on:** Phase 22
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 23 to break down)
+
+---
+
+### Phase 24: Alert Intelligence and Noise Reduction
+
+**Goal:** Reduce alert noise by ≥80% through topology-aware causal suppression, multi-dimensional alert correlation, and composite incident severity scoring. Causal suppression uses the Phase 22 topology graph to suppress downstream cascade alerts when an upstream root cause is identified. Multi-dimensional correlation groups alerts by temporal + topological + semantic similarity. Composite severity weights alert severity, blast radius, SLO risk, and business tier. Noise metrics surface in the Observability tab.
+**Requirements**: INTEL-001
+**Depends on:** Phase 22, Phase 23
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 24 to break down)
+
+---
+
+### Phase 25: Institutional Memory and SLO Tracking
+
+**Goal:** Give the platform memory. Every resolved investigation becomes institutional knowledge surfaced for future incidents via pgvector embeddings over resolved incident summaries and investigation transcripts. New incidents automatically get top-3 historical pattern matches. A weekly Container App job identifies systemic recurring patterns. SLO tracking adds SLODefinition model, error budget computation, burn-rate alerts (>2x for 1h or >3x for 15min), and SLO-aware incident auto-escalation with SLO health cards in the Observability tab.
+**Requirements**: INTEL-003, INTEL-004
+**Depends on:** Phase 24
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 25 to break down)
+
+---
+
+### Phase 26: Predictive Operations
+
+**Goal:** Move from reactive alerting to proactive prevention. Azure Monitor Dynamic Thresholds handle anomaly detection; custom ARIMA-based forecasting handles capacity exhaustion projections (disk fill rate, connection pool exhaustion, memory growth) with time-to-breach estimates. Per-resource seasonal baseline profiles in Cosmos DB. Pre-incident early warning signals detect subtle trends (error rate creep, latency drift). New /api/v1/forecasts endpoints and a Forecasts section in the dashboard. TOPO-005 scale validation must pass before this phase starts.
+**Requirements**: INTEL-005
+**Depends on:** Phase 25
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26 to break down)
+
+---
+
+### Phase 27: Closed-Loop Remediation
+
+**Goal:** Complete the remediation loop by adding execution, verification, and rollback to the existing HITL approval gate. Full pipeline: Incident → Triage → RCA → Runbook Selection (RAG) → Proposal → Human Approval → Pre-flight Checks → Execution → Verification → Resolution OR Rollback. Pre-flight checks include blast-radius confirmation, resource state ETag, change freeze windows, and cost estimation. Verification classifies: RESOLVED / IMPROVED / DEGRADED (auto-rollback) / TIMEOUT (escalate). Write-ahead log pattern ensures audit atomicity. Immutable remediation-audit Cosmos container with compliance export endpoint.
+**Requirements**: REMEDI-009, REMEDI-010, REMEDI-011, REMEDI-012, REMEDI-013
+**Depends on:** Phase 26, Phase 25, Phase 22
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 27 to break down)
+
+---
+
+### Phase 28: Platform Intelligence
+
+**Goal:** Synthesise everything the platform has learned into actionable platform-wide intelligence. Weekly systemic pattern analysis (k-means clustering, top-5 recurring issues, trend detection). Team and service health scoring with 30/60/90-day trends. FinOps integration: POST /api/v1/admin/business-tiers for operator-configured revenue tiers, wasted compute via Cost Management API, cost-saved-by-automation metric, FinOps tab in dashboard. Continuous learning loop captures operator approve/reject feedback. Platform Health dashboard for administrators showing detection pipeline lag, agent P50/P95, auto-remediation success rate, SLO compliance, error budget portfolio, noise ratio, and automation savings.
+**Requirements**: PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004
+**Depends on:** Phase 27
+**Status:** Not started
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 28 to break down)
+
+---
+
+## v2.0 Requirements
+
+### PROD (Production Readiness)
+| ID | Requirement |
+|----|-------------|
+| PROD-001 | Entra authentication enforced on all non-health API endpoints in production |
+| PROD-002 | Azure MCP Server authenticated via managed identity; internal ingress only; no unauthenticated external access |
+| PROD-003 | All 8 domain agent MCP tool groups registered in Foundry; each exercises domain tools in integration test |
+| PROD-004 | Live alert detection loop operational without simulation scripts |
+| PROD-005 | Teams proactive alerting delivers Adaptive Cards within 2 minutes of incident creation |
+
+### TOPO (Topology)
+| ID | Requirement |
+|----|-------------|
+| TOPO-001 | Resource property graph maintains all Azure resource types and their relationships |
+| TOPO-002 | Blast-radius query returns results within 2 seconds |
+| TOPO-003 | Topology graph freshness lag <15 minutes |
+| TOPO-004 | Topology traversal used by domain agents as a mandatory triage step |
+| TOPO-005 | Blast-radius query latency validated at ≥10,000 nodes before Phase 26 proceeds |
+
+### INTEL (Intelligence)
+| ID | Requirement |
+|----|-------------|
+| INTEL-001 | Alert noise reduction ≥80% on correlated alert storm simulations |
+| INTEL-002 | Change correlation surfaces correct cause within 30 seconds of incident creation |
+| INTEL-003 | Historical incident match surfaces in ≥33% of new incidents |
+| INTEL-004 | SLO breach prediction alerts fire before threshold is crossed |
+| INTEL-005 | Capacity exhaustion forecasts predict metric breaches ≥30 minutes in advance with ≥70% accuracy |
+
+### REMEDI v2 (Enhanced Remediation)
+| ID | Requirement |
+|----|-------------|
+| REMEDI-009 | Closed-loop verification step fires within 10 min after execution; classified RESOLVED / IMPROVED / DEGRADED / TIMEOUT |
+| REMEDI-010 | Pre-flight blast-radius check required; aborts if new failures detected post-approval |
+| REMEDI-011 | Write-ahead log: audit record written status:pending before ARM call; pending records >10 min trigger operator alert |
+| REMEDI-012 | Auto-rollback triggered when verification returns DEGRADED |
+| REMEDI-013 | Immutable audit trail for every automated action; exportable for compliance |
+
+### PLATINT (Platform Intelligence)
+| ID | Requirement |
+|----|-------------|
+| PLATINT-001 | Systemic pattern analysis runs on schedule; top-5 issues surfaced in UI |
+| PLATINT-002 | FinOps integration tracks incident cost impact and automation savings |
+| PLATINT-003 | Operator feedback (approve/reject) captured and fed to learning loop |
+| PLATINT-004 | POST /api/v1/admin/business-tiers available; zero-value default config seeded on Phase 28 deployment |
+
+---
+
+## World-Class Success Criteria
+
+When all phases 19–28 complete:
+
+| Metric | Target |
+|--------|--------|
+| MTTR (P1/P2 incidents) | <30 min for 80% |
+| Alert noise reduction | >90% raw alerts to actionable incidents |
+| Auto-remediation rate | >40% incidents resolved via automated action with approval |
+| SLO compliance (production tier) | >99.5% |
+| Live detection | Zero manual simulation scripts |
+| Audit completeness | Every automated action attributable, reviewable, exportable |
+| Predictive prevention | ≥30% of incidents caught in forecast state before alerting |
+| Institutional memory recall | Historical pattern match for >50% of repeating incident types |
