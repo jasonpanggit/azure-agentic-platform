@@ -11,6 +11,23 @@ locals {
   foundry_project_id = module.foundry.foundry_project_id
 }
 
+# Grant the CI/Terraform service principal "Azure AI Developer" on the Foundry account scope.
+# The azapi_resource blocks below call the Foundry data-plane API
+# (Microsoft.CognitiveServices/accounts/projects/connections) which requires this role —
+# Contributor at subscription scope is insufficient for Foundry data-plane writes.
+#
+# This role assignment is narrow (Foundry account scope only) and is required only for
+# terraform apply. It does NOT grant broad data access.
+data "azuread_service_principal" "terraform_sp" {
+  client_id = var.client_id
+}
+
+resource "azurerm_role_assignment" "terraform_sp_foundry_aidev" {
+  principal_id         = data.azuread_service_principal.terraform_sp.object_id
+  role_definition_name = "Azure AI Developer"
+  scope                = module.foundry.foundry_account_id
+}
+
 # Azure MCP Server — primary tool surface (ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health)
 # Replaces the ad-hoc script registration from deploy-azure-mcp-server.sh:L104
 resource "azapi_resource" "mcp_connection_azure" {
@@ -31,6 +48,8 @@ resource "azapi_resource" "mcp_connection_azure" {
 
   response_export_values  = ["*"]
   ignore_missing_property = true
+
+  depends_on = [azurerm_role_assignment.terraform_sp_foundry_aidev]
 }
 
 # Arc MCP Server — custom Arc tool surface (AGENT-005)
@@ -56,4 +75,6 @@ resource "azapi_resource" "mcp_connection_arc" {
 
   response_export_values  = ["*"]
   ignore_missing_property = true
+
+  depends_on = [azurerm_role_assignment.terraform_sp_foundry_aidev]
 }
