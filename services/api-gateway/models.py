@@ -82,6 +82,14 @@ class IncidentResponse(BaseModel):
             "Fields: resource_id, total_affected, hop_counts, affected_resources."
         ),
     )
+    suppressed: Optional[bool] = Field(
+        default=None,
+        description="True when this incident was suppressed as a downstream cascade (INTEL-001).",
+    )
+    parent_incident_id: Optional[str] = Field(
+        default=None,
+        description="incident_id of the parent incident that caused suppression.",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -252,6 +260,21 @@ class IncidentSummary(BaseModel):
             "Populated by the change_correlator BackgroundTask within 30 seconds "
             "of incident ingestion (INTEL-002)."
         ),
+    )
+    composite_severity: Optional[str] = Field(
+        default=None,
+        description=(
+            "Re-weighted severity combining base severity, blast radius size, "
+            "and domain SLO risk (INTEL-001). One of: Sev0, Sev1, Sev2, Sev3."
+        ),
+    )
+    suppressed: Optional[bool] = Field(
+        default=None,
+        description="True when this incident was suppressed as a downstream cascade.",
+    )
+    parent_incident_id: Optional[str] = Field(
+        default=None,
+        description="incident_id of the parent incident that caused suppression.",
     )
 
 
