@@ -3,7 +3,7 @@
 
 **Azure Agentic Platform (AAP)**
 
-An enterprise-grade AI operations platform that uses a domain-specialist multi-agent architecture to perform continuous monitoring, auditing, alerting, triage, troubleshooting, and automated remediation across all Azure subscriptions and Arc-enabled resources (servers, Kubernetes, data services). The platform exposes a hybrid web UI (Fluent UI 2 + Next.js) with co-equal conversational chat and live operational dashboards, and integrates with Microsoft Teams for two-way agent interaction, alert delivery, and human-in-the-loop remediation approvals.
+An enterprise-grade AI operations platform that uses a domain-specialist multi-agent architecture to perform continuous monitoring, auditing, alerting, triage, troubleshooting, and automated remediation across all Azure subscriptions and Arc-enabled resources (servers, Kubernetes, data services). The platform exposes a hybrid web UI (Tailwind CSS + shadcn/ui + Next.js) with co-equal conversational chat and live operational dashboards, and integrates with Microsoft Teams for two-way agent interaction, alert delivery, and human-in-the-loop remediation approvals.
 
 **Core Value:** Operators can understand, investigate, and resolve any Azure infrastructure issue — across all subscriptions and Arc-connected resources — through a single intelligent platform that shows its reasoning transparently and never acts without human approval.
 
@@ -44,7 +44,7 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Pattern | Use in this Platform |
 |---|---|
 | **Sequential** | Orchestrator → Domain Agent → result chain |
-| **Handoff** | Orchestrator delegates to Compute/Network/Storage/Security/Arc/SRE agents |
+| **Handoff** | Orchestrator delegates to Compute/Network/Storage/Security/Arc/SRE/Patch/EOL agents |
 | **Group Chat** | Multi-specialist collaboration on complex incidents |
 | **Concurrent** | Parallel agent fan-out for multi-domain investigations |
 | **Magentic** | Agentic planning with self-directed subtask decomposition |
@@ -157,7 +157,7 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 # Fabric User Data Function triggered by Activator
 #### Terraform provisioning of Fabric
 #### Confidence: **HIGH** for Eventhouse + Activator (both GA). **LOW** for Fabric IQ/Operations Agent (Preview — exclude from critical path)
-## Frontend (Next.js + Fluent UI 2)
+## Frontend (Next.js + Tailwind CSS + shadcn/ui)
 ### Next.js App Router
 | Attribute | Value |
 |---|---|
@@ -173,19 +173,26 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | **WebSocket** | ⚠️ More complex; requires separate WebSocket server or Azure Web PubSub; Container Apps support WebSockets but adds operational overhead. Use only if bidirectional push is needed. |
 | **Vercel AI SDK (`ai` package)** | ⚠️ Useful abstraction but adds a dependency and may conflict with Foundry's streaming format. Acceptable for prototyping. |
 #### Confidence: **HIGH** — SSE + App Router Route Handlers is the established pattern
-### Fluent UI 2
+### Tailwind CSS + shadcn/ui
 | Attribute | Value |
 |---|---|
-| **Package** | `@fluentui/react-components` |
-| **Latest version** | `9.73.4` (released 2026-03-17) |
-| **Install** | `npm install @fluentui/react-components` |
-| **Styling engine** | Griffel (CSS-in-JS, SSR-compatible) |
-| **Status** | ✅ GA (v9 is current stable) |
-#### Next.js App Router SSR Considerations
+| **Packages** | `tailwindcss`, `@tailwindcss/forms`, `shadcn/ui` (component source, not runtime dep) |
+| **Tailwind version** | `v3.4.19` |
+| **shadcn/ui preset** | New York |
+| **Components** | 18 components in `components/ui/` (button, card, badge, tabs, input, textarea, select, dialog, alert, avatar, separator, skeleton, scroll-area, toast, tooltip, dropdown-menu, sheet, table) |
+| **Icons** | `lucide-react` |
+| **Styling** | Utility-first CSS; no CSS-in-JS, no Griffel |
+| **CSS tokens** | Semantic custom properties in `globals.css` — `var(--accent-*)`, `var(--bg-canvas)`, `var(--text-primary)`, `var(--border)` |
+| **Dark mode** | Badge backgrounds use `color-mix(in srgb, var(--accent-*) 15%, transparent)` — never hardcoded Tailwind colors |
+| **Primary color** | Azure Blue `#0078D4` → `--primary: 207 90% 42%` |
+| **Font** | Inter via `next/font/google` |
+| **Status** | ✅ GA |
 #### What NOT to use
-- `@fluentui/react` v8 — the legacy Fabric/Office UI Fabric package; heavy, Office-branded, not the right baseline for a modern Azure ops UI
+- `@fluentui/react-components` v9 — removed in Phase 9; replaced by Tailwind CSS + shadcn/ui
+- `@fluentui/react` v8 — the legacy Fabric/Office UI Fabric package; heavy, Office-branded
 - `@fluentui/web-components` — web components variant; does not compose well with React state
-#### Confidence: **HIGH** — v9 is current and well-maintained; SSR pattern is settled
+- Griffel / FluentProvider — CSS-in-JS removed; Tailwind utility classes only
+#### Confidence: **HIGH** — Tailwind + shadcn/ui is production-proven; Phase 9 migration complete
 ## Teams Integration
 ### Teams SDK (New, 2026)
 | Attribute | Value |
@@ -282,6 +289,7 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | **AKS (Azure Kubernetes Service)** | ⚠️ Deferred | Container Apps is sufficient for this platform. Add AKS only if scale demands it. Confirmed deferred in PROJECT.md. |
 | **Azure Container Instances (ACI)** | ❌ Do not use | No scaling, no managed networking, no revision management. Container Apps is strictly superior. |
 | **@fluentui/react v8 ("Fabric")** | ❌ Do not use | Legacy Office UI Fabric; not actively developed for new features. v9 (`@fluentui/react-components`) is the correct package. |
+| **@fluentui/react-components v9** | ❌ Removed in Phase 9 | Replaced by Tailwind CSS + shadcn/ui in Phase 9. Do not re-introduce. |
 | **Bot Framework SDK (`botbuilder`)** | ❌ Avoid for new bots | Legacy SDK. New Teams SDK (`@microsoft/teams.js`) is the Microsoft-recommended replacement with cleaner developer experience. |
 | **`teams-ai` v1.8.1 (old Teams AI Library)** | ⚠️ Legacy path | Built on Bot Framework; will not receive new features. Migrate to new Teams SDK for fresh development. |
 | **Vercel AI SDK (`ai` package)** | ⚠️ Use sparingly | Useful helper but opinionated about streaming format. May conflict with Foundry's SSE format. Use raw `ReadableStream` for direct Foundry integration; `ai` package only as a thin convenience wrapper if needed. |
@@ -302,7 +310,8 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Fabric Eventhouse | (Fabric SaaS) | GA | ✅ GA |
 | Fabric Activator | (Fabric SaaS) | GA | ✅ GA |
 | Next.js | `next` | `15.x` | ✅ GA |
-| Fluent UI v9 | `@fluentui/react-components` | `9.73.4` | ✅ GA |
+| Tailwind CSS | `tailwindcss` | `v3.4.19` | ✅ GA |
+| shadcn/ui | shadcn/ui | New York | ✅ GA |
 | Teams SDK (TS) | `@microsoft/teams.js` | latest | ✅ GA (TS) |
 | Cosmos DB SDK | `azure-cosmos` | `4.x` | ✅ GA |
 | pgvector | `pgvector` | `0.3.x` | ✅ GA |
@@ -314,13 +323,94 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+### Python Patterns
+
+- **Type annotations:** `Optional[X]` over `X | None` in FastAPI signatures — `|` union fails at runtime on Python 3.9 even with `from __future__ import annotations`
+- **Pytest imports:** `pythonpath=["."]` in `pyproject.toml` — required for `agents.shared.*` resolution from repo root
+- **Hyphenated package shim:** `conftest.py` registers `services/api-gateway` as `sys.modules["services.api_gateway"]` + `setattr` on parent for `mock.patch` compat
+- **Module-level SDK scaffold:** Every agent follows the compute agent pattern:
+  ```python
+  try:
+      from azure.mgmt.xxx import XxxClient
+  except ImportError:
+      XxxClient = None  # type: ignore[assignment,misc]
+  def _log_sdk_availability(): ...   # called at module level
+  def _extract_subscription_id(resource_id: str) -> str: ...
+  ```
+- **Tool function pattern:** `start_time = time.monotonic()` at entry; `duration_ms` recorded in both `try` and `except` blocks; tool functions **never raise** — return structured error dicts instead
+
+### Frontend Patterns
+
+- **Proxy route pattern:** All `app/api/proxy/*/route.ts` files use `getApiGatewayUrl()` + `buildUpstreamHeaders(request)` + `AbortSignal.timeout(15000)` for 15s timeout
+- **CSS semantic token system:** Use `var(--accent-blue)`, `var(--accent-red)`, `var(--bg-canvas)`, `var(--text-primary)`, etc. — never hardcoded Tailwind color classes like `bg-green-100 text-green-700`
+- **Dark-mode-safe badges:** `color-mix(in srgb, var(--accent-*) 15%, transparent)` for badge backgrounds
+
+### Infrastructure Patterns
+
+- **Internal-only MCP servers:** Azure MCP Server and Arc MCP Server run as Container Apps with `external_enabled = false` (internal ingress only)
+- **MCP connection category:** Must be `"CustomKeys"` (NOT `"MCP"`) — Foundry returns 400 otherwise
+- **Gateway as thin router:** API gateway (FastAPI) contains no business logic; all incident reasoning deferred to Foundry agent threads
+- **Detection-plane incident IDs:** `det-` prefix on `incident_id` — any ID starting with `det-` was created via the detection plane (vs. manual/API ingestion)
+
+### Data Patterns
+
+- **ETag optimistic concurrency:** Cosmos DB budget/session records use ETag-based optimistic concurrency to prevent lost-update race conditions
+- **Fire-and-forget:** Non-critical async operations (Azure Monitor sync, OneLake audit writes) use fire-and-forget — failures logged but never raised
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+### Agent Topology
+
+9 agents on Azure Container Apps — 1 Orchestrator + 8 domain specialists:
+
+| Agent | Container App | Role |
+|-------|--------------|------|
+| **Orchestrator** | `ca-orchestrator-prod` | Routes to domain agents by intent; manages Foundry connected_agent handoffs |
+| **Compute** | `ca-compute-prod` | VM diagnostics, activity logs, metrics, resource health, OS version (ARG) |
+| **Network** | `ca-network-prod` | NSG rules, VNet topology, peering, load balancers, flow logs, ExpressRoute, connectivity checks |
+| **Storage** | `ca-storage-prod` | Storage account operations |
+| **Security** | `ca-security-prod` | Defender alerts, Key Vault diagnostics, IAM changes, secure score, RBAC, policy compliance |
+| **Arc** | `ca-arc-prod` | Arc-enabled servers/Kubernetes via Custom Arc MCP Server |
+| **SRE** | `ca-sre-prod` | Availability metrics, perf baselines, service health, Advisor, change analysis, cross-domain correlation |
+| **Patch** | `ca-patch-prod` | ARG-based patch assessment and installation history via Azure Update Manager |
+| **EOL** | `ca-eol-prod` | End-of-life detection via endoflife.date + MS Lifecycle APIs with PostgreSQL 24h cache |
+
+### API Gateway
+
+FastAPI thin router (`services/api-gateway/`) — routes requests to domain agents by subscription. No business logic; all incident reasoning deferred to Foundry agent threads.
+
+### MCP Surfaces
+
+- **Azure MCP Server** (GA) — `ca-azure-mcp-prod`, internal-only Container App; covers ARM, Compute, Storage, Databases, Monitoring, Security, Messaging
+- **Custom Arc MCP Server** — `ca-arc-mcp-prod`, internal-only Container App; covers Arc-enabled servers, Kubernetes, data services (Azure MCP Server gap)
+- Both registered as Foundry MCP connections (`category = "CustomKeys"`)
+
+### Data Stores
+
+- **Cosmos DB** (`aap-cosmos-prod`) — incidents, sessions, approvals (hot-path, ETag concurrency)
+- **PostgreSQL + pgvector** (`aap-postgres-prod`) — runbook library, RAG semantic search, EOL cache, platform settings
+- **Fabric OneLake** — audit logs, alert history, resource inventory snapshots
+
+### Detection Plane
+
+Azure Monitor → Event Hub → Fabric Eventhouse (KQL) → Fabric Activator → API Gateway `POST /api/v1/incidents`
+
+Domain classification via KQL `classify_domain()` (exact + prefix match). Incident IDs prefixed with `det-` for traceability.
+
+### Interaction Surfaces
+
+- **Web UI:** Next.js 15 (App Router) + Tailwind CSS + shadcn/ui — 6 dashboard tabs (Alerts, Audit, Topology, Resources, Observability, Patch) + conversational chat panel + resource-scoped VM chat
+- **Teams Bot:** TypeScript (new Teams SDK `@microsoft/teams.js`) — two-way agent interaction, Adaptive Card approval flows, proactive alert delivery
+
+### Conversation Threading
+
+Foundry Agent Service manages thread state. Chat endpoints are non-blocking (single-shot status check); client polls until terminal state.
+
+### Streaming
+
+SSE (Server-Sent Events) via `ReadableStream` in Next.js Route Handlers for real-time token streaming and agent trace events. No WebSocket or SignalR required.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
