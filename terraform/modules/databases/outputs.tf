@@ -49,3 +49,8 @@ output "cosmos_baselines_container_name" {
   description = "Name of the Cosmos DB baselines container for capacity forecasting (INTEL-005)"
   value       = azurerm_cosmosdb_sql_container.baselines.name
 }
+
+output "cosmos_remediation_audit_container_name" {
+  description = "Name of the Cosmos DB remediation_audit container for WAL and immutable audit trail (REMEDI-011, REMEDI-013)"
+  value       = azurerm_cosmosdb_sql_container.remediation_audit.name
+}
