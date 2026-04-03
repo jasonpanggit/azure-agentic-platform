@@ -375,6 +375,105 @@ async def ingest_incident(
         payload.domain,
     )
 
+    # topology_client resolved here so it is available for noise reduction (Phase 24),
+    # BackgroundTask correlator, and the TOPO-004 blast-radius prefetch below.
+    topology_client = getattr(request.app.state, "topology_client", None)
+
+    # --- Phase 24: Noise reduction (INTEL-001) ---
+    # Runs before dedup check. Precedence: suppression > correlation > dedup > new.
+    from services.api_gateway.noise_reducer import (
+        check_causal_suppression,
+        check_temporal_topological_correlation,
+        compute_composite_severity,
+    )
+    from datetime import datetime as _datetime, timezone as _timezone
+
+    _primary_resource_id = (
+        payload.affected_resources[0].resource_id if payload.affected_resources else ""
+    )
+    _composite_severity: Optional[str] = None
+
+    # 0a. Pre-fetch blast_radius for suppression + severity scoring.
+    _blast_radius_size = 0
+    if topology_client is not None and _primary_resource_id:
+        try:
+            loop = asyncio.get_running_loop()
+            _br = await loop.run_in_executor(
+                None,
+                topology_client.get_blast_radius,
+                _primary_resource_id,
+                3,
+            )
+            _blast_radius_size = _br.get("total_affected", 0)
+        except Exception as _br_exc:
+            logger.warning(
+                "noise_reducer: blast_radius prefetch failed (non-fatal) | "
+                "incident=%s error=%s",
+                payload.incident_id, _br_exc,
+            )
+
+    # 0b. Causal suppression check.
+    _suppressed_by: Optional[str] = await check_causal_suppression(
+        resource_id=_primary_resource_id,
+        topology_client=topology_client,
+        cosmos_client=cosmos,
+    )
+    if _suppressed_by is not None:
+        # Store suppressed incident to Cosmos (status=suppressed_cascade).
+        if cosmos is not None:
+            try:
+                _db = cosmos.get_database_client(
+                    os.environ.get("COSMOS_DB_NAME", "aap")
+                )
+                _cont = _db.get_container_client("incidents")
+                _cont.upsert_item({
+                    "id": payload.incident_id,
+                    "incident_id": payload.incident_id,
+                    "resource_id": _primary_resource_id,
+                    "severity": payload.severity,
+                    "domain": payload.domain,
+                    "status": "suppressed_cascade",
+                    "parent_incident_id": _suppressed_by,
+                    "title": payload.title,
+                    "created_at": _datetime.now(_timezone.utc).isoformat(),
+                })
+            except Exception as _sup_exc:
+                logger.warning(
+                    "noise_reducer: failed to persist suppressed incident | "
+                    "incident=%s error=%s",
+                    payload.incident_id, _sup_exc,
+                )
+        logger.info(
+            "noise_reducer: suppressed | incident=%s parent=%s",
+            payload.incident_id, _suppressed_by,
+        )
+        return IncidentResponse(
+            thread_id="suppressed",
+            status="suppressed_cascade",
+            suppressed=True,
+            parent_incident_id=_suppressed_by,
+        )
+
+    # 0c. Multi-dimensional correlation check.
+    _correlated_with: Optional[str] = await check_temporal_topological_correlation(
+        resource_id=_primary_resource_id,
+        domain=payload.domain,
+        topology_client=topology_client,
+        cosmos_client=cosmos,
+    )
+
+    # 0d. Composite severity scoring.
+    _composite_severity = compute_composite_severity(
+        severity=payload.severity,
+        blast_radius_size=_blast_radius_size,
+        domain=payload.domain,
+    )
+    logger.info(
+        "noise_reducer: composite_severity=%s blast_radius=%d | incident=%s",
+        _composite_severity, _blast_radius_size, payload.incident_id,
+    )
+    # --- End Phase 24 noise reduction ---
+
     # Dedup check (DETECT-005) — before Foundry dispatch
     from services.api_gateway.dedup_integration import check_dedup
 
@@ -396,6 +495,26 @@ async def ingest_incident(
             status=dedup_result.get("status", "deduplicated"),
         )
 
+    # Attach noise-reduction metadata to Cosmos incident doc (best-effort).
+    # The dedup check may have already written the doc; patch_item enriches it.
+    if cosmos is not None and _primary_resource_id:
+        try:
+            _db = cosmos.get_database_client(os.environ.get("COSMOS_DB_NAME", "aap"))
+            _cont = _db.get_container_client("incidents")
+            _cont.patch_item(
+                item=payload.incident_id,
+                partition_key=payload.incident_id,
+                patch_operations=[
+                    {"op": "add", "path": "/composite_severity", "value": _composite_severity},
+                    {"op": "add", "path": "/correlated_with", "value": _correlated_with},
+                ],
+            )
+        except Exception as _patch_exc:
+            logger.debug(
+                "noise_reducer: composite_severity patch skipped | incident=%s reason=%s",
+                payload.incident_id, _patch_exc,
+            )
+
     try:
         result = await create_foundry_thread(payload)
     except ValueError as exc:
@@ -416,9 +535,6 @@ async def ingest_incident(
         ) from exc
 
     # Queue diagnostic pipeline as background task (never blocks 202 response)
-    # topology_client resolved here so it's available for both the correlator
-    # BackgroundTask below and the TOPO-004 blast-radius prefetch that follows.
-    topology_client = getattr(request.app.state, "topology_client", None)
     if payload.affected_resources:
         primary_resource = payload.affected_resources[0].resource_id
         background_tasks.add_task(
@@ -438,7 +554,6 @@ async def ingest_incident(
         # Runs in parallel with diagnostic_pipeline — both are independent BackgroundTasks.
         # incident_created_at is not yet in payload; use current UTC time as proxy
         # (Fabric Activator fires within seconds of the event, so skew is negligible).
-        from datetime import datetime as _datetime, timezone as _timezone
         _incident_created_at = _datetime.now(_timezone.utc)
         background_tasks.add_task(
             correlate_incident_changes,
@@ -492,7 +607,68 @@ async def ingest_incident(
         thread_id=result["thread_id"],
         status="dispatched",
         blast_radius_summary=blast_radius_summary,
+        composite_severity=_composite_severity,
     )
+
+
+@app.get("/api/v1/incidents/stats")
+async def get_incident_stats(
+    window_hours: int = 24,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> dict:
+    """Noise reduction metrics for the INTEL-001 requirement.
+
+    Queries the incidents container and returns counts for:
+    - total: all incidents in the window
+    - suppressed: status == 'suppressed_cascade'
+    - correlated: status == 'correlated'
+    - new: all other non-terminal statuses
+    - noise_reduction_pct: (suppressed + correlated) / total * 100
+    - window_hours: echo of input param
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Incident store not configured")
+
+    import time as _time_mod
+    cutoff_ts = int(_time_mod.time()) - (window_hours * 3600)
+
+    try:
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DB_NAME", "aap"))
+        container = db.get_container_client("incidents")
+
+        query = (
+            "SELECT c.status FROM c "
+            "WHERE c._ts > @cutoff"
+        )
+        params = [{"name": "@cutoff", "value": cutoff_ts}]
+        items = list(container.query_items(
+            query=query,
+            parameters=params,
+            enable_cross_partition_query=True,
+        ))
+
+        total = len(items)
+        suppressed = sum(1 for i in items if i.get("status") == "suppressed_cascade")
+        correlated = sum(1 for i in items if i.get("status") == "correlated")
+        noise_reduction_pct = (
+            round((suppressed + correlated) / total * 100, 1) if total > 0 else 0.0
+        )
+        new_count = total - suppressed - correlated
+
+        return {
+            "total": total,
+            "suppressed": suppressed,
+            "correlated": correlated,
+            "new": new_count,
+            "noise_reduction_pct": noise_reduction_pct,
+            "window_hours": window_hours,
+        }
+    except Exception as exc:
+        logger.error("get_incident_stats: error | error=%s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Stats query failed")
 
 
 @app.get("/api/v1/incidents/{incident_id}/evidence")

@@ -285,6 +285,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260403-vsw | Run prod blockers: terraform apply domain agent IDs (COMPUTE_AGENT_ID live), runbook seeding workflow added (CAE job issue blocks auto-seed), Teams CHANNEL_ID pending | 2026-04-03 | 9b13050 | — |
 | 260325-gqo | Research microsoftgbb/agentic-platform-engineering repo and incorporate findings into planning docs | 2026-03-25 | ccc5d96 | [260325-gqo-research-microsoftgbb-agentic-platform-e](./quick/260325-gqo-research-microsoftgbb-agentic-platform-e/) |
 | 260326-x3n | Backfill VALIDATION.md for phases 1 and 3 | 2026-03-26 | b9a32d5 | [260326-x3n-backfill-validation-md-for-phases-1-and-](./quick/260326-x3n-backfill-validation-md-for-phases-1-and-/) |
 | 260327-x4g | Fix ObservabilityTab container-type bug, add tab icons, and modernise web-UI visual design | 2026-03-28 | 03994fb | [260327-x4g-fix-observabilitytab-container-type-bug-](./quick/260327-x4g-fix-observabilitytab-container-type-bug-/) |

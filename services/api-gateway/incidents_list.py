@@ -112,7 +112,7 @@ async def list_incidents(
         f"SELECT c.id, c.incident_id, c.severity, c.domain, c.status, "
         f"c.created_at, c.title, c.resource_id, c.subscription_id, "
         f"c.affected_resources, c.investigation_status, c.evidence_collected_at, "
-        f"c.top_changes "
+        f"c.top_changes, c.composite_severity, c.suppressed, c.parent_incident_id "
         f"FROM c WHERE {where_clause} "
         f"ORDER BY c.created_at DESC "
         f"OFFSET 0 LIMIT @limit"
@@ -150,6 +150,9 @@ async def list_incidents(
             "investigation_status": doc.get("investigation_status", "pending"),
             "evidence_collected_at": doc.get("evidence_collected_at"),
             "top_changes": doc.get("top_changes"),
+            "composite_severity": doc.get("composite_severity"),
+            "suppressed": doc.get("suppressed"),
+            "parent_incident_id": doc.get("parent_incident_id"),
         }
         enriched.append(enriched_doc)
 
