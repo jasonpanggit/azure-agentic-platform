@@ -128,8 +128,51 @@ def _register_hyphenated_package(hyphenated_path: Path, import_name: str) -> Non
         setattr(sys.modules[parent_name], leaf_name, mod)
 
 
+def _register_api_gateway_module(module_name: str) -> None:
+    """Import and register a module from services/api-gateway/ into sys.modules.
+
+    Uses importlib to load the actual .py file so that the module is fully
+    executable and mock.patch() can resolve attributes on it.
+
+    Args:
+        module_name: Leaf module name without package prefix (e.g., 'noise_reducer').
+    """
+    import importlib.util
+
+    full_name = f"services.api_gateway.{module_name}"
+    if full_name in sys.modules:
+        return  # Already loaded
+
+    spec = importlib.util.spec_from_file_location(
+        full_name,
+        str(_ROOT / "services" / "api-gateway" / f"{module_name}.py"),
+    )
+    if spec is None or spec.loader is None:
+        return  # File not found — skip silently
+
+    mod = importlib.util.module_from_spec(spec)
+    mod.__package__ = "services.api_gateway"
+    sys.modules[full_name] = mod
+    try:
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    except Exception:
+        # Registration failure is non-fatal; import will surface the error properly.
+        del sys.modules[full_name]
+        return
+
+    # Expose as attribute on the package so mock._importer can resolve it
+    pkg = sys.modules.get("services.api_gateway")
+    if pkg is not None:
+        setattr(pkg, module_name, mod)
+
+
 # Register services/api-gateway as services.api_gateway
 _register_hyphenated_package(
     _ROOT / "services" / "api-gateway",
     "services.api_gateway",
 )
+
+# Register modules required for test-time mock.patch() resolution.
+# Add new modules here when they are patched in tests but not yet imported
+# transitively by main.py at collection time.
+_register_api_gateway_module("noise_reducer")

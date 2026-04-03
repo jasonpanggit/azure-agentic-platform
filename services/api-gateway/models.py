@@ -90,6 +90,13 @@ class IncidentResponse(BaseModel):
         default=None,
         description="incident_id of the parent incident that caused suppression.",
     )
+    composite_severity: Optional[str] = Field(
+        default=None,
+        description=(
+            "Re-weighted severity combining base severity, blast radius size, "
+            "and domain SLO risk (INTEL-001). One of: Sev0, Sev1, Sev2, Sev3."
+        ),
+    )
 
 
 class HealthResponse(BaseModel):
