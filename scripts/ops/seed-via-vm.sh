@@ -108,7 +108,6 @@ if ! az vm create \
   --nsg "" \
   --admin-username azureuser \
   --generate-ssh-keys \
-  --no-wait false \
   --output none 2>&1; then
 
   echo ""
@@ -127,7 +126,6 @@ if ! az vm create \
     --nsg "" \
     --admin-username azureuser \
     --generate-ssh-keys \
-    --no-wait false \
     --output none
 fi
 
@@ -289,8 +287,7 @@ az vm run-command invoke \
     cd /tmp/aap
     ${SEED_ENV} /tmp/seed-env/bin/python scripts/seed-runbooks/seed.py
   " \
-  --output table \
-  --no-wait false 2>/dev/null || true  # capture output even if non-zero
+  --output table 2>&1 || true  # capture output even if non-zero
 
 # Check return by querying row count
 echo ""
@@ -302,7 +299,7 @@ az vm run-command invoke \
   --command-id RunShellScript \
   --scripts "
     set -e
-    POSTGRES_DSN='postgresql://aap_admin:${POSTGRES_PASSWORD}@aap-postgres-prod.postgres.database.azure.com:5432/aap?sslmode=require'
+    export POSTGRES_DSN='postgresql://aap_admin:${POSTGRES_PASSWORD}@aap-postgres-prod.postgres.database.azure.com:5432/aap?sslmode=require'
     /tmp/seed-env/bin/python -c \"
 import os, psycopg
 dsn = os.environ['POSTGRES_DSN']
@@ -332,8 +329,7 @@ az vm run-command invoke \
     cd /tmp/aap
     ${SEED_ENV} /tmp/seed-env/bin/python scripts/seed-runbooks/validate.py
   " \
-  --output table \
-  --no-wait false 2>/dev/null || true
+  --output table 2>&1 || true
 
 echo ""
 echo "=== Seeding and validation complete ==="
