@@ -10,6 +10,7 @@ routing layer between external callers and the Foundry agent runtime.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -68,6 +69,8 @@ from services.api_gateway.patch_endpoints import router as patch_router
 from services.api_gateway.vm_inventory import router as vm_inventory_router
 from services.api_gateway.vm_detail import router as vm_detail_router
 from services.api_gateway.vm_chat import router as vm_chat_router
+from services.api_gateway.topology_endpoints import router as topology_router
+from services.api_gateway.topology import TopologyClient, run_topology_sync_loop
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -186,11 +189,58 @@ async def lifespan(app: FastAPI):
         app.state.cosmos_client = None
         logger.warning("COSMOS_ENDPOINT not set — CosmosClient singleton not initialized")
 
+    # Initialize TopologyClient and run bootstrap if Cosmos is configured (TOPO-001)
+    _topology_sync_task = None
+    subscription_ids_raw = os.environ.get("SUBSCRIPTION_IDS", "")
+    _subscription_ids = [s.strip() for s in subscription_ids_raw.split(",") if s.strip()]
+    if app.state.cosmos_client is not None and _subscription_ids:
+        app.state.topology_client = TopologyClient(
+            cosmos_client=app.state.cosmos_client,
+            credential=app.state.credential,
+            subscription_ids=_subscription_ids,
+        )
+        # Bootstrap synchronously in startup (blocks until complete — acceptable for
+        # Container App startup; large estates may take 30–60s but remain within
+        # Container Apps' 240s startup grace period)
+        loop = asyncio.get_running_loop()
+        try:
+            bootstrap_result = await loop.run_in_executor(
+                None, app.state.topology_client.bootstrap
+            )
+            logger.info(
+                "startup: topology bootstrap complete | upserted=%d errors=%d",
+                bootstrap_result.get("upserted", 0),
+                bootstrap_result.get("errors", 0),
+            )
+        except Exception as exc:
+            logger.warning("startup: topology bootstrap failed (non-fatal) | error=%s", exc)
+        # Launch background sync loop (TOPO-003: <15 min freshness lag)
+        _topology_sync_task = asyncio.create_task(
+            run_topology_sync_loop(app.state.topology_client)
+        )
+        logger.info("startup: topology sync loop started | interval=900s")
+    else:
+        app.state.topology_client = None
+        logger.warning(
+            "startup: topology_client not initialized "
+            "(COSMOS_ENDPOINT=%s, SUBSCRIPTION_IDS=%s)",
+            "set" if app.state.cosmos_client else "not_set",
+            "set" if _subscription_ids else "not_set",
+        )
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
     if app.state.cosmos_client is not None:
         app.state.cosmos_client.close()
+    # Cancel topology sync loop on shutdown
+    if _topology_sync_task is not None and not _topology_sync_task.done():
+        _topology_sync_task.cancel()
+        try:
+            await _topology_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: topology sync loop cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
@@ -213,6 +263,7 @@ app.include_router(patch_router)
 app.include_router(vm_inventory_router)
 app.include_router(vm_detail_router)
 app.include_router(vm_chat_router)
+app.include_router(topology_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
