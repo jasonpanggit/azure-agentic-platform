@@ -99,3 +99,135 @@ class TestIncidentIngestion:
             json=valid_payload,
         )
         assert response.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# TOPO-004: Topology integration in incident handler tests
+# ---------------------------------------------------------------------------
+
+
+class TestIncidentHandlerTopologyIntegration:
+    """Tests for blast_radius_summary pre-fetch in POST /api/v1/incidents (TOPO-004)."""
+
+    def test_blast_radius_summary_populated_when_topology_available(self, client):
+        """blast_radius_summary is populated in response when topology_client is set."""
+        from unittest.mock import MagicMock, AsyncMock, patch
+
+        mock_topology_client = MagicMock()
+        mock_topology_client.get_blast_radius.return_value = {
+            "resource_id": "/subscriptions/s1/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm1",
+            "affected_resources": [
+                {
+                    "resource_id": "/subscriptions/s1/resourcegroups/rg/providers/microsoft.network/networkinterfaces/nic1",
+                    "resource_type": "microsoft.network/networkinterfaces",
+                    "resource_group": "rg",
+                    "subscription_id": "s1",
+                    "name": "nic1",
+                    "hop_count": 1,
+                }
+            ],
+            "hop_counts": {"/subscriptions/s1/resourcegroups/rg/providers/microsoft.network/networkinterfaces/nic1": 1},
+            "total_affected": 1,
+        }
+
+        with patch("services.api_gateway.main.create_foundry_thread", new_callable=AsyncMock) as mock_thread, \
+             patch("services.api_gateway.dedup_integration.check_dedup", return_value=None):
+            mock_thread.return_value = {"thread_id": "t-topo-001"}
+            # Inject topology_client onto app.state
+            client.app.state.topology_client = mock_topology_client
+
+            response = client.post(
+                "/api/v1/incidents",
+                json={
+                    "incident_id": "inc-topo-001",
+                    "severity": "Sev1",
+                    "domain": "compute",
+                    "affected_resources": [
+                        {
+                            "resource_id": "/subscriptions/s1/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm1",
+                            "subscription_id": "s1",
+                            "resource_type": "Microsoft.Compute/virtualMachines",
+                        }
+                    ],
+                    "detection_rule": "HighCpuAlert",
+                },
+            )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["thread_id"] == "t-topo-001"
+        # blast_radius_summary should be populated
+        assert data.get("blast_radius_summary") is not None
+        assert data["blast_radius_summary"]["total_affected"] == 1
+
+        # Cleanup
+        client.app.state.topology_client = None
+
+    def test_blast_radius_summary_none_when_topology_unavailable(self, client):
+        """blast_radius_summary is None when topology_client is not set."""
+        from unittest.mock import AsyncMock, patch
+
+        with patch("services.api_gateway.main.create_foundry_thread", new_callable=AsyncMock) as mock_thread, \
+             patch("services.api_gateway.dedup_integration.check_dedup", return_value=None):
+            mock_thread.return_value = {"thread_id": "t-topo-002"}
+            client.app.state.topology_client = None
+
+            response = client.post(
+                "/api/v1/incidents",
+                json={
+                    "incident_id": "inc-topo-002",
+                    "severity": "Sev2",
+                    "domain": "network",
+                    "affected_resources": [
+                        {
+                            "resource_id": "/subscriptions/s1/resourcegroups/rg/providers/microsoft.network/virtualnetworks/vnet1",
+                            "subscription_id": "s1",
+                            "resource_type": "Microsoft.Network/virtualNetworks",
+                        }
+                    ],
+                    "detection_rule": "VNetAlert",
+                },
+            )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["thread_id"] == "t-topo-002"
+        # blast_radius_summary should be None when topology unavailable
+        assert data.get("blast_radius_summary") is None
+
+    def test_incident_dispatched_even_if_topology_raises(self, client):
+        """Incident is dispatched successfully even if topology blast-radius fails."""
+        from unittest.mock import MagicMock, AsyncMock, patch
+
+        mock_topology_client = MagicMock()
+        mock_topology_client.get_blast_radius.side_effect = RuntimeError("Cosmos timeout")
+
+        with patch("services.api_gateway.main.create_foundry_thread", new_callable=AsyncMock) as mock_thread, \
+             patch("services.api_gateway.dedup_integration.check_dedup", return_value=None):
+            mock_thread.return_value = {"thread_id": "t-topo-003"}
+            client.app.state.topology_client = mock_topology_client
+
+            response = client.post(
+                "/api/v1/incidents",
+                json={
+                    "incident_id": "inc-topo-003",
+                    "severity": "Sev0",
+                    "domain": "sre",
+                    "affected_resources": [
+                        {
+                            "resource_id": "/subscriptions/s1/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm2",
+                            "subscription_id": "s1",
+                            "resource_type": "Microsoft.Compute/virtualMachines",
+                        }
+                    ],
+                    "detection_rule": "OutageAlert",
+                },
+            )
+
+        # Must still return 202 — topology failure is non-fatal
+        assert response.status_code == 202
+        data = response.json()
+        assert data["thread_id"] == "t-topo-003"
+        assert data.get("blast_radius_summary") is None
+
+        client.app.state.topology_client = None

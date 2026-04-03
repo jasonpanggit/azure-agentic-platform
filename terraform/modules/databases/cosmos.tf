@@ -145,6 +145,45 @@ resource "azurerm_cosmosdb_sql_container" "sessions" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "topology" {
+  name                  = "topology"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/resource_id"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/relationships/[]/target_id/?"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+
+    # Composite index for BFS traversal queries:
+    #   WHERE resource_id = @id (single-partition reads by topology service)
+    #   WHERE resource_type = @type AND last_synced_at >= @cutoff (freshness check)
+    composite_index {
+      index {
+        path  = "/resource_type"
+        order = "ascending"
+      }
+      index {
+        path  = "/last_synced_at"
+        order = "descending"
+      }
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
