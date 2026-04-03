@@ -309,7 +309,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260401-o1l | Add structured logging to web-ui Next.js API routes for Azure Container App log streaming | 2026-04-01 | fa798e2 | [260401-o1l-add-structured-logging-to-web-ui-next-js](./quick/260401-o1l-add-structured-logging-to-web-ui-next-js/) |
 | 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
 | 260402-gcx | Validate Azure Monitor is receiving logs from all agent containers | 2026-04-02 | d9aa6e1 | [260402-gcx-validate-azure-monitor-is-receiving-logs](./quick/260402-gcx-validate-azure-monitor-is-receiving-logs/) |
-| 260404-0hf | Seed runbooks via temporary VM in vnet-aap-prod — resolves F-02 (BUG-002) | 2026-04-04 | — | [260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-](./quick/260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-/) |
+| 260404-0hf | Seed runbooks via temporary VM in vnet-aap-prod — resolves F-02 (BUG-002) | 2026-04-04 | ca3e921 | [260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-](./quick/260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-/) |
 
 ---
 
