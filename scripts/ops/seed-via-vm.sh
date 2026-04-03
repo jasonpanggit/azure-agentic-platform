@@ -145,6 +145,8 @@ echo "OS Disk: ${OS_DISK_NAME}"
 # ---------------------------------------------------------------------------
 cleanup() {
   local exit_code=$?
+  # Disable errexit inside cleanup so all cleanup steps execute
+  set +e
   echo ""
   echo "=== CLEANUP: Deleting temporary VM and orphaned resources ==="
 
@@ -153,25 +155,29 @@ cleanup() {
     --resource-group "${RG}" \
     --name "${VM_NAME}" \
     --yes \
-    --force-deletion none \
-    --output none 2>/dev/null || echo "WARNING: VM delete failed (may already be gone)"
+    --output none 2>&1 || echo "WARNING: VM delete failed (may already be gone)"
+
+  # Wait for VM deletion to propagate before deleting dependent resources
+  sleep 10
 
   echo "--- Deleting NIC ---"
   if [[ -n "${NIC_ID:-}" ]]; then
-    az network nic delete --ids "${NIC_ID}" --output none 2>/dev/null || \
+    az network nic delete --ids "${NIC_ID}" --output none 2>&1 || \
       echo "WARNING: NIC delete failed"
   fi
 
-  echo "--- Deleting OS disk '${OS_DISK_NAME}' ---"
+  echo "--- Deleting OS disk '${OS_DISK_NAME:-}' ---"
   if [[ -n "${OS_DISK_NAME:-}" ]]; then
     az disk delete \
       --resource-group "${RG}" \
       --name "${OS_DISK_NAME}" \
       --yes \
-      --output none 2>/dev/null || echo "WARNING: OS disk delete failed"
+      --output none 2>&1 || echo "WARNING: OS disk delete failed"
   fi
 
+  echo ""
   echo "=== CLEANUP COMPLETE ==="
+  echo "Verify no orphans: az vm list -g ${RG} -o table"
   exit "${exit_code}"
 }
 trap cleanup EXIT
