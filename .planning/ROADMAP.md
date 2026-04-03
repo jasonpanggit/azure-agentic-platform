@@ -546,11 +546,12 @@ Plans:
 **Goal:** Enable the live detection loop in production. The Fabric Eventhouse + Activator infrastructure was built in Phase 4 and is complete in Terraform — it is currently disabled via `enable_fabric_data_plane = false`. This phase activates, validates, and operationalises the existing pipeline against real Azure Monitor alerts. No simulation scripts required after this phase.
 **Requirements**: PROD-004
 **Depends on:** Phase 19
-**Status:** In progress — Plan 21-1 complete (1/1 Terraform plan done)
-**Plans:** 1 plan
+**Status:** In progress — Plans 21-1 and 21-2 complete (2/3 plans done)
+**Plans:** 3 plans
 
 Plans:
 - [x] 21-1: Terraform Activation — flip enable_fabric_data_plane = true, add operator runbook comment, terraform fmt passes
+- [x] 21-2: Validation & Operator Runbook — scripts/ops/21-2-activate-detection-plane.sh (Phase 0 pre-flight, Steps 1-7, PROD-004 checklist), docs/ops/detection-plane-activation.md (architecture diagram, domain classification reference, troubleshooting, rollback)
 
 ---
 

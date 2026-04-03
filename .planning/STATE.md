@@ -3,19 +3,21 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: in_progress
-last_updated: "2026-04-03T15:00:00.000Z"
+last_updated: "2026-04-03T16:00:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 9
   total_plans: 52
-  completed_plans: 45
+  completed_plans: 46
 current_position:
   phase: 21
-  plan: 21-1
+  plan: 21-2
   plan_status: complete
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-03 — Plan 21-2 COMPLETE: Validation & Operator Runbook. Created scripts/ops/21-2-activate-detection-plane.sh (interactive runbook with Phase 0 terraform plan verification, Steps 1-7 covering Fabric resource checks, Eventstream connector, KQL table schemas, Activator trigger wiring with domain IS NOT NULL condition, OneLake mirror AUDIT-003 steps, validation KQL queries, end-to-end smoke test, and PROD-004 checklist). Created docs/ops/detection-plane-activation.md (full operator guide with architecture diagram, domain classification reference, troubleshooting, rollback). 2 atomic commits on branch gsd/phase-21-detection-plane-activation. Plan 21-3 (pipeline health check) is next.
 
 > Last updated: 2026-04-03 — Plan 21-1 COMPLETE: Terraform Activation. Flipped enable_fabric_data_plane = true in terraform/envs/prod/main.tf. Added Phase 21 comment referencing scripts/ops/21-2-activate-detection-plane.sh operator runbook. Added fabric_admin_email documentation comment to terraform.tfvars. Ran terraform fmt — all 3 prod env files pass fmt -check. 3 atomic commits on branch gsd/phase-21-detection-plane-activation. After next terraform apply, 5 Fabric data-plane resources will be provisioned: workspace (aap-prod), Eventhouse (eh-aap-prod), KQL DB (kqldb-aap-prod), Activator (act-aap-prod), Lakehouse (lh-aap-prod).
 
