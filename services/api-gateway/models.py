@@ -426,3 +426,35 @@ class ForecastResult(BaseModel):
         ...,
         description="True when any metric has breach_imminent=True",
     )
+
+
+class RemediationAuditRecord(BaseModel):
+    """WAL and immutable audit record written to Cosmos remediation_audit (REMEDI-011, REMEDI-013)."""
+
+    id: str                                       # execution_id (UUID)
+    incident_id: str
+    approval_id: str
+    thread_id: str
+    action_type: str                              # "execute" | "rollback"
+    proposed_action: str                          # "restart_vm" | "deallocate_vm" | "start_vm" | "resize_vm"
+    resource_id: str
+    executed_by: str                              # UPN from approval record (decided_by)
+    executed_at: str                              # ISO 8601 UTC
+    status: str                                   # "pending" | "complete" | "failed"
+    verification_result: Optional[str] = None    # "RESOLVED" | "IMPROVED" | "DEGRADED" | "TIMEOUT"
+    verified_at: Optional[str] = None
+    rolled_back: bool = False
+    rollback_execution_id: Optional[str] = None
+    preflight_blast_radius_size: int
+    wal_written_at: str                           # ISO 8601 UTC — written BEFORE ARM call
+
+
+class RemediationResult(BaseModel):
+    """Result returned by execute_remediation to the API endpoint (REMEDI-009, REMEDI-010)."""
+
+    execution_id: str
+    status: str                                   # "complete" | "failed" | "aborted"
+    verification_scheduled: bool
+    preflight_passed: bool
+    blast_radius_size: int
+    abort_reason: Optional[str] = None           # populated when status="aborted"
