@@ -85,6 +85,13 @@ from services.api_gateway.vm_detail import router as vm_detail_router
 from services.api_gateway.vm_chat import router as vm_chat_router
 from services.api_gateway.topology_endpoints import router as topology_router
 from services.api_gateway.topology import TopologyClient, run_topology_sync_loop
+from services.api_gateway.forecaster import (
+    FORECAST_ENABLED,
+    FORECAST_SWEEP_INTERVAL_SECONDS,
+    ForecasterClient,
+    run_forecast_sweep_loop,
+)
+from services.api_gateway.forecast_endpoints import router as forecast_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -286,6 +293,33 @@ async def lifespan(app: FastAPI):
             "set" if _subscription_ids else "not_set",
         )
 
+    # Initialize ForecasterClient and start background sweep (INTEL-005)
+    _forecast_sweep_task = None
+    if app.state.cosmos_client is not None and FORECAST_ENABLED:
+        app.state.forecaster_client = ForecasterClient(
+            cosmos_client=app.state.cosmos_client,
+            credential=app.state.credential,
+        )
+        _forecast_sweep_task = asyncio.create_task(
+            run_forecast_sweep_loop(
+                cosmos_client=app.state.cosmos_client,
+                credential=app.state.credential,
+                topology_client=app.state.topology_client,
+            )
+        )
+        logger.info(
+            "startup: forecast sweep loop started | interval=%ds",
+            FORECAST_SWEEP_INTERVAL_SECONDS,
+        )
+    else:
+        app.state.forecaster_client = None
+        logger.warning(
+            "startup: forecaster_client not initialized "
+            "(COSMOS_ENDPOINT=%s, FORECAST_ENABLED=%s)",
+            "set" if app.state.cosmos_client else "not_set",
+            os.environ.get("FORECAST_ENABLED", "true"),
+        )
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -299,6 +333,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("shutdown: topology sync loop cancelled")
+    # Cancel forecast sweep loop on shutdown
+    if _forecast_sweep_task is not None and not _forecast_sweep_task.done():
+        _forecast_sweep_task.cancel()
+        try:
+            await _forecast_sweep_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: forecast sweep loop cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
@@ -322,6 +364,7 @@ app.include_router(vm_inventory_router)
 app.include_router(vm_detail_router)
 app.include_router(vm_chat_router)
 app.include_router(topology_router)
+app.include_router(forecast_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
