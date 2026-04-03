@@ -8,7 +8,16 @@ location    = "eastus2"
 
 # Foundry agent IDs — provisioned via scripts/provision-domain-agents.py
 # Committed here so terraform apply does not wipe manually-set env vars.
+# IDs match the live Foundry orchestrator connected-agent tools (260331-ize wiring).
 orchestrator_agent_id = "asst_NeBVjCA5isNrIERoGYzRpBTu"
+compute_agent_id      = "asst_LRwIRuuMi0vxzfe0sN6Gl7ro"
+network_agent_id      = "asst_xgfrgpYy3t0tHMz6XtuZSfkt"
+storage_agent_id      = "asst_eyJ5bKQLMpuC17sfeZZmwOkI"
+security_agent_id     = "asst_E3zcct7P9mKHlqcRzU5CGbp4"
+sre_agent_id          = "asst_nSWrfRFyGhMqmtgzuWF4GgKH"
+arc_agent_id          = "asst_xTN3oTWku0R5Cbxsf56WkEdP"
+patch_agent_id        = "asst_XxAMxgwC9NAlKqqN7FLRiA3O"
+eol_agent_id          = "asst_s1TancOQbpIjltYQ0oGgfTDD"
 
 cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
@@ -19,6 +28,11 @@ all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 # See docs/BOOTSTRAP.md Step 1 for the full procedure when ready to enable.
 enable_entra_apps  = true
 enable_teams_bot   = true
+
+# Fabric capacity administrator email (required for Fabric module)
+# This is the email of the Entra user who administers the Fabric capacity.
+# Set via: TF_VAR_fabric_admin_email="admin@yourdomain.com"
+# fabric_admin_email = ""  # Set via TF_VAR_fabric_admin_email or credentials.tfvars
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
