@@ -26,8 +26,8 @@ all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 # The aap-web-ui-prod app registration exists and works; Terraform does not need to own it today.
 # Enabling this requires a Global Administrator to grant Application.ReadWrite.All to the CI SP.
 # See docs/BOOTSTRAP.md Step 1 for the full procedure when ready to enable.
-enable_entra_apps  = true
-enable_teams_bot   = true
+enable_entra_apps = true
+enable_teams_bot  = true
 
 # Fabric capacity administrator email (required for Fabric module)
 # This is the email of the Entra user who administers the Fabric capacity.
@@ -46,9 +46,9 @@ azure_mcp_image_tag = "latest"
 # Enables Entra token validation on all non-health API endpoints.
 # client_id matches NEXT_PUBLIC_AZURE_CLIENT_ID in the web-ui (aap-web-ui-prod app registration).
 # tenant_id is the single Entra tenant for this platform.
-api_gateway_auth_mode  = "entra"
-api_gateway_client_id  = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
-api_gateway_tenant_id  = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
+api_gateway_auth_mode = "entra"
+api_gateway_client_id = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
+api_gateway_tenant_id = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 
 # Teams channel ID for proactive alert delivery (PROD-005 / F-04)
 # Set after installing the bot in the target channel.

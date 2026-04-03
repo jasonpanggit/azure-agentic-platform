@@ -334,13 +334,13 @@ module "eventhub" {
 module "fabric" {
   source = "../../modules/fabric"
 
-  resource_group_name      = azurerm_resource_group.main.name
-  location                 = var.location
-  environment              = var.environment
-  required_tags            = local.required_tags
-  fabric_capacity_sku      = "F4" # Prod: higher capacity
-  fabric_admin_email       = var.fabric_admin_email
-  fabric_capacity_name     = "fcaapprod"
+  resource_group_name  = azurerm_resource_group.main.name
+  location             = var.location
+  environment          = var.environment
+  required_tags        = local.required_tags
+  fabric_capacity_sku  = "F4" # Prod: higher capacity
+  fabric_admin_email   = var.fabric_admin_email
+  fabric_capacity_name = "fcaapprod"
   # Phase 21: Fabric data plane activated (workspace, Eventhouse, KQL DB, Activator, Lakehouse).
   # Post-apply: run scripts/ops/21-2-activate-detection-plane.sh for manual wiring steps.
   enable_fabric_data_plane = true
