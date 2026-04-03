@@ -180,6 +180,55 @@ class ApprovalRecord(BaseModel):
     proposal: dict
 
 
+class ChangeCorrelation(BaseModel):
+    """A single Azure resource change correlated with an incident (INTEL-002)."""
+
+    change_id: str = Field(
+        ...,
+        description="Activity Log event ID (correlationId or eventDataId)",
+    )
+    operation_name: str = Field(
+        ...,
+        description="ARM operation name, e.g. 'Microsoft.Compute/virtualMachines/write'",
+    )
+    resource_id: str = Field(
+        ...,
+        description="Full ARM resource ID of the changed resource",
+    )
+    resource_name: str = Field(
+        ...,
+        description="Last path segment of resource_id (human-readable name)",
+    )
+    caller: Optional[str] = Field(
+        default=None,
+        description="UPN or object ID of the principal who made the change",
+    )
+    changed_at: str = Field(
+        ...,
+        description="ISO 8601 timestamp when the change occurred",
+    )
+    delta_minutes: float = Field(
+        ...,
+        description="Minutes before the incident was created (positive = before incident)",
+    )
+    topology_distance: int = Field(
+        ...,
+        description="BFS hop count from incident resource: 0 = same resource, 1 = direct neighbor, etc.",
+    )
+    change_type_score: float = Field(
+        ...,
+        description="Score 0.0–1.0 based on the operation type",
+    )
+    correlation_score: float = Field(
+        ...,
+        description="Overall weighted score 0.0–1.0: w_temporal*temporal + w_topology*topology + w_change_type*change_type",
+    )
+    status: str = Field(
+        ...,
+        description="Activity Log event status: 'Succeeded' | 'Failed' | 'Started'",
+    )
+
+
 class IncidentSummary(BaseModel):
     """Summary of an incident for the alert feed (UI-006)."""
 
@@ -196,6 +245,14 @@ class IncidentSummary(BaseModel):
     subscription_id: Optional[str] = None
     investigation_status: Optional[str] = None  # pending | evidence_ready | investigating | resolved
     evidence_collected_at: Optional[str] = None
+    top_changes: Optional[list["ChangeCorrelation"]] = Field(
+        default=None,
+        description=(
+            "Top-3 Azure resource changes correlated with this incident. "
+            "Populated by the change_correlator BackgroundTask within 30 seconds "
+            "of incident ingestion (INTEL-002)."
+        ),
+    )
 
 
 class AuditEntry(BaseModel):
