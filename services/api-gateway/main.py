@@ -46,6 +46,7 @@ from services.api_gateway.models import (
     ApprovalResponse,
     AuditEntry,
     AuditExportResponse,
+    ChangeCorrelation,
     ChatRequest,
     ChatResponse,
     ChatResultResponse,
@@ -64,6 +65,7 @@ from services.api_gateway.approvals import (
 from services.api_gateway.runbook_rag import generate_query_embedding, search_runbooks
 from services.api_gateway.azure_tools import AzureToolRequest, AzureToolResponse, call_azure_tool
 from services.api_gateway.diagnostic_pipeline import run_diagnostic_pipeline
+from services.api_gateway.change_correlator import correlate_incident_changes
 from services.api_gateway.health import router as health_router
 from services.api_gateway.patch_endpoints import router as patch_router
 from services.api_gateway.vm_inventory import router as vm_inventory_router
@@ -414,6 +416,9 @@ async def ingest_incident(
         ) from exc
 
     # Queue diagnostic pipeline as background task (never blocks 202 response)
+    # topology_client resolved here so it's available for both the correlator
+    # BackgroundTask below and the TOPO-004 blast-radius prefetch that follows.
+    topology_client = getattr(request.app.state, "topology_client", None)
     if payload.affected_resources:
         primary_resource = payload.affected_resources[0].resource_id
         background_tasks.add_task(
@@ -429,12 +434,31 @@ async def ingest_incident(
             payload.incident_id, primary_resource,
         )
 
+        # Queue change correlator as background task (INTEL-002: within 30 seconds)
+        # Runs in parallel with diagnostic_pipeline — both are independent BackgroundTasks.
+        # incident_created_at is not yet in payload; use current UTC time as proxy
+        # (Fabric Activator fires within seconds of the event, so skew is negligible).
+        from datetime import datetime as _datetime, timezone as _timezone
+        _incident_created_at = _datetime.now(_timezone.utc)
+        background_tasks.add_task(
+            correlate_incident_changes,
+            incident_id=payload.incident_id,
+            resource_id=primary_resource,
+            incident_created_at=_incident_created_at,
+            credential=credential,
+            cosmos_client=cosmos,
+            topology_client=topology_client,
+        )
+        logger.info(
+            "correlator: queued | incident_id=%s resource=%s",
+            payload.incident_id, primary_resource,
+        )
+
     # TOPO-004: Pre-fetch topology blast-radius for primary affected resource.
     # Attach as blast_radius_summary to IncidentResponse so the Foundry thread
     # receives topology context at dispatch time without an extra API round-trip.
     # Gracefully degraded: if topology is unavailable, incident is still dispatched.
     blast_radius_summary = None
-    topology_client = getattr(request.app.state, "topology_client", None)
     if topology_client is not None and payload.affected_resources:
         primary_resource_id = payload.affected_resources[0].resource_id
         try:
@@ -504,6 +528,45 @@ async def get_incident_evidence(
             "get_incident_evidence: error | incident_id=%s error=%s", incident_id, e, exc_info=True
         )
         raise HTTPException(status_code=500, detail="Evidence retrieval failed")
+
+
+@app.get(
+    "/api/v1/incidents/{incident_id}/correlations",
+    response_model=list[ChangeCorrelation],
+)
+async def get_incident_correlations(
+    incident_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> list[ChangeCorrelation]:
+    """Get change correlations for an incident (INTEL-002).
+
+    Returns the top-3 ChangeCorrelation objects stored on the incident document.
+    These are populated within 30 seconds of incident ingestion by the
+    change_correlator BackgroundTask.
+
+    Returns 200 with empty list if correlations have not yet been computed.
+    Returns 404 if the incident itself does not exist.
+    Returns 503 if Cosmos DB is not configured.
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Incident store not configured")
+    try:
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DB_NAME", "aap"))
+        container = db.get_container_client("incidents")
+        doc = container.read_item(incident_id, partition_key=incident_id)
+        raw_changes = doc.get("top_changes") or []
+        return [ChangeCorrelation(**c) for c in raw_changes]
+    except Exception as exc:
+        if "404" in str(exc) or "NotFound" in type(exc).__name__:
+            raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+        logger.error(
+            "get_incident_correlations: error | incident_id=%s error=%s",
+            incident_id, exc, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Correlations retrieval failed")
 
 
 @app.get(
