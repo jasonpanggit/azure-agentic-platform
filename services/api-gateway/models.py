@@ -74,6 +74,14 @@ class IncidentResponse(BaseModel):
 
     thread_id: str
     status: str = "dispatched"
+    blast_radius_summary: Optional[dict] = Field(
+        default=None,
+        description=(
+            "Topology blast-radius summary for the primary affected resource. "
+            "Populated when topology service is available (TOPO-004). "
+            "Fields: resource_id, total_affected, hop_counts, affected_resources."
+        ),
+    )
 
 
 class HealthResponse(BaseModel):

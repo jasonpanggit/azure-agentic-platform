@@ -352,6 +352,7 @@ async def health() -> HealthResponse:
 )
 async def ingest_incident(
     payload: IncidentPayload,
+    request: Request,
     background_tasks: BackgroundTasks,
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
@@ -428,9 +429,45 @@ async def ingest_incident(
             payload.incident_id, primary_resource,
         )
 
+    # TOPO-004: Pre-fetch topology blast-radius for primary affected resource.
+    # Attach as blast_radius_summary to IncidentResponse so the Foundry thread
+    # receives topology context at dispatch time without an extra API round-trip.
+    # Gracefully degraded: if topology is unavailable, incident is still dispatched.
+    blast_radius_summary = None
+    topology_client = getattr(request.app.state, "topology_client", None)
+    if topology_client is not None and payload.affected_resources:
+        primary_resource_id = payload.affected_resources[0].resource_id
+        try:
+            loop = asyncio.get_running_loop()
+            blast_result = await loop.run_in_executor(
+                None,
+                topology_client.get_blast_radius,
+                primary_resource_id,
+                3,  # max_depth=3 is the standard triage depth
+            )
+            blast_radius_summary = {
+                "resource_id": blast_result.get("resource_id"),
+                "total_affected": blast_result.get("total_affected", 0),
+                "affected_resources": blast_result.get("affected_resources", []),
+                "hop_counts": blast_result.get("hop_counts", {}),
+            }
+            logger.info(
+                "topology: blast_radius prefetch | incident=%s resource=%s affected=%d",
+                payload.incident_id,
+                primary_resource_id[:80],
+                blast_result.get("total_affected", 0),
+            )
+        except Exception as exc:
+            logger.warning(
+                "topology: blast_radius prefetch failed (non-fatal) | incident=%s error=%s",
+                payload.incident_id,
+                exc,
+            )
+
     return IncidentResponse(
         thread_id=result["thread_id"],
         status="dispatched",
+        blast_radius_summary=blast_radius_summary,
     )
 
 
