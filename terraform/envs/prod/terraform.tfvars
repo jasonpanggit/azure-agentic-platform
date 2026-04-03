@@ -8,7 +8,16 @@ location    = "eastus2"
 
 # Foundry agent IDs — provisioned via scripts/provision-domain-agents.py
 # Committed here so terraform apply does not wipe manually-set env vars.
+# IDs match the live Foundry orchestrator connected-agent tools (260331-ize wiring).
 orchestrator_agent_id = "asst_NeBVjCA5isNrIERoGYzRpBTu"
+compute_agent_id      = "asst_LRwIRuuMi0vxzfe0sN6Gl7ro"
+network_agent_id      = "asst_xgfrgpYy3t0tHMz6XtuZSfkt"
+storage_agent_id      = "asst_eyJ5bKQLMpuC17sfeZZmwOkI"
+security_agent_id     = "asst_E3zcct7P9mKHlqcRzU5CGbp4"
+sre_agent_id          = "asst_nSWrfRFyGhMqmtgzuWF4GgKH"
+arc_agent_id          = "asst_xTN3oTWku0R5Cbxsf56WkEdP"
+patch_agent_id        = "asst_XxAMxgwC9NAlKqqN7FLRiA3O"
+eol_agent_id          = "asst_s1TancOQbpIjltYQ0oGgfTDD"
 
 cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
@@ -17,8 +26,13 @@ all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 # The aap-web-ui-prod app registration exists and works; Terraform does not need to own it today.
 # Enabling this requires a Global Administrator to grant Application.ReadWrite.All to the CI SP.
 # See docs/BOOTSTRAP.md Step 1 for the full procedure when ready to enable.
-enable_entra_apps  = true
-enable_teams_bot   = true
+enable_entra_apps = true
+enable_teams_bot  = true
+
+# Fabric capacity administrator email (required for Fabric module)
+# This is the email of the Entra user who administers the Fabric capacity.
+# Set via: TF_VAR_fabric_admin_email="admin@yourdomain.com"
+# fabric_admin_email = ""  # Set via TF_VAR_fabric_admin_email or credentials.tfvars
 
 # Web UI public URL — used by entra-apps module for redirect URI and CORS configuration
 web_ui_public_url = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
@@ -32,9 +46,9 @@ azure_mcp_image_tag = "latest"
 # Enables Entra token validation on all non-health API endpoints.
 # client_id matches NEXT_PUBLIC_AZURE_CLIENT_ID in the web-ui (aap-web-ui-prod app registration).
 # tenant_id is the single Entra tenant for this platform.
-api_gateway_auth_mode  = "entra"
-api_gateway_client_id  = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
-api_gateway_tenant_id  = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
+api_gateway_auth_mode = "entra"
+api_gateway_client_id = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
+api_gateway_tenant_id = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 
 # Teams channel ID for proactive alert delivery (PROD-005 / F-04)
 # Set after installing the bot in the target channel.

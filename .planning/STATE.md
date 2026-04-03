@@ -2,16 +2,26 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-02T07:07:46.771Z"
+status: in_progress
+last_updated: "2026-04-03T17:30:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 9
-  total_plans: 49
-  completed_plans: 44
+  total_plans: 52
+  completed_plans: 47
+current_position:
+  phase: 21
+  plan: 21-3
+  plan_status: complete
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-03 — Plan 21-3 COMPLETE: Pipeline Health Monitoring. Created scripts/ops/21-3-detection-health-check.sh (7-check health monitor: Fabric capacity Active, Fabric workspace exists, Event Hub namespace Active, Event Hub configured, API gateway /health 200, recent det- incidents optional-auth, Container App running). PROD-004 status output: HEALTHY/DEGRADED/UNHEALTHY; exits 0 for HEALTHY, 1 otherwise. Appended "Ongoing Health Monitoring" section to docs/ops/detection-plane-activation.md (usage examples, coverage table, recommended schedule). Phase 21 all 3 plans complete. 2 atomic commits on branch gsd/phase-21-detection-plane-activation.
+
+> Last updated: 2026-04-03 — Plan 21-2 COMPLETE: Validation & Operator Runbook. Created scripts/ops/21-2-activate-detection-plane.sh (interactive runbook with Phase 0 terraform plan verification, Steps 1-7 covering Fabric resource checks, Eventstream connector, KQL table schemas, Activator trigger wiring with domain IS NOT NULL condition, OneLake mirror AUDIT-003 steps, validation KQL queries, end-to-end smoke test, and PROD-004 checklist). Created docs/ops/detection-plane-activation.md (full operator guide with architecture diagram, domain classification reference, troubleshooting, rollback). 2 atomic commits on branch gsd/phase-21-detection-plane-activation. Plan 21-3 (pipeline health check) is next.
+
+> Last updated: 2026-04-03 — Plan 21-1 COMPLETE: Terraform Activation. Flipped enable_fabric_data_plane = true in terraform/envs/prod/main.tf. Added Phase 21 comment referencing scripts/ops/21-2-activate-detection-plane.sh operator runbook. Added fabric_admin_email documentation comment to terraform.tfvars. Ran terraform fmt — all 3 prod env files pass fmt -check. 3 atomic commits on branch gsd/phase-21-detection-plane-activation. After next terraform apply, 5 Fabric data-plane resources will be provisioned: workspace (aap-prod), Eventhouse (eh-aap-prod), KQL DB (kqldb-aap-prod), Activator (act-aap-prod), Lakehouse (lh-aap-prod).
 
 > Last updated: 2026-04-02 — Plan 19-4 COMPLETE: Runbook RAG Seeding. BUG-002 (F-02) code complete — operator must run seeding script. Created scripts/ops/19-4-seed-runbooks.sh (prod seeding with temporary firewall rule pattern, auto Key Vault password retrieval, row count verification, validate.py post-seed check), created docs/ops/runbook-seeding.md (full operator guide: prerequisites, when to re-seed, step-by-step procedure, troubleshooting), added pgvector_connection_string placeholder to terraform/envs/prod/terraform.tfvars. pgvector_connection_string already in credentials.tfvars and wired end-to-end through agent-apps module. Operator must run bash scripts/ops/19-4-seed-runbooks.sh to seed 60 runbooks and resolve 500 error.
 

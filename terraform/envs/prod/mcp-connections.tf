@@ -43,9 +43,9 @@ resource "azapi_resource" "mcp_connection_azure" {
       target   = "http://${module.azure_mcp_server.internal_fqdn}"
       authType = "None" # Internal VNet — network boundary is sufficient; no token needed
       metadata = {
-        description  = "Azure MCP Server — ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health"
-        mcp_server   = "true"
-        transport    = "http"
+        description = "Azure MCP Server — ARM, Monitor, Log Analytics, Advisor, Policy, Resource Health"
+        mcp_server  = "true"
+        transport   = "http"
       }
     }
   }
@@ -73,9 +73,9 @@ resource "azapi_resource" "mcp_connection_arc" {
       target   = "http://${module.arc_mcp_server[0].internal_fqdn}"
       authType = "None" # Internal VNet — Arc MCP server uses Entra JWT validation
       metadata = {
-        description  = "Arc MCP Server — Arc Servers, Arc K8s, Arc Data Services"
-        mcp_server   = "true"
-        transport    = "http"
+        description = "Arc MCP Server — Arc Servers, Arc K8s, Arc Data Services"
+        mcp_server  = "true"
+        transport   = "http"
       }
     }
   }
