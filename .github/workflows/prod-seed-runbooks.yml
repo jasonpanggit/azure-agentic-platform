@@ -1,0 +1,104 @@
+name: Prod Seed Runbooks (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: prod-seed-runbooks
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-aap-prod
+  POSTGRES_SERVER_NAME: aap-postgres-prod
+  TEMP_FIREWALL_RULE_NAME: gh-runner-temp-seed-runbooks
+
+jobs:
+  seed-runbooks:
+    name: Seed 60 Runbooks into Prod PostgreSQL pgvector
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Azure Login
+        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Runner Egress IP
+        id: runner_ip
+        run: |
+          ip=$(curl -sf https://api.ipify.org)
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          echo "Runner IP: $ip"
+
+      - name: Enable PostgreSQL Public Access + Add Firewall Rule
+        run: |
+          az postgres flexible-server update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --public-access Enabled
+          sleep 15
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+            --yes || true
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+
+      - name: Install Python Dependencies
+        run: |
+          pip install -r scripts/seed-runbooks/requirements.txt
+
+      - name: Seed Runbooks
+        env:
+          POSTGRES_HOST: aap-postgres-prod.postgres.database.azure.com
+          POSTGRES_USER: aap_admin
+          POSTGRES_DB: aap
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        run: |
+          cd scripts/seed-runbooks
+          python3 seed.py
+
+      - name: Validate Runbook Embeddings
+        env:
+          POSTGRES_HOST: aap-postgres-prod.postgres.database.azure.com
+          POSTGRES_USER: aap_admin
+          POSTGRES_DB: aap
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        run: |
+          cd scripts/seed-runbooks
+          python3 validate.py
+
+      - name: Remove Temporary Firewall Rule + Disable Public Access
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+            --yes || echo "::warning::Failed to delete firewall rule"
+          if az postgres flexible-server update \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$POSTGRES_SERVER_NAME" \
+              --public-access Disabled; then
+            echo "PostgreSQL public access re-disabled."
+          else
+            echo "::warning::Could not re-disable public access — check manually."
+          fi
