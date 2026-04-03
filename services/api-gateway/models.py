@@ -244,6 +244,20 @@ class ChangeCorrelation(BaseModel):
     )
 
 
+class HistoricalMatch(BaseModel):
+    """A single historical incident match from pgvector cosine similarity (INTEL-003)."""
+
+    incident_id: str = Field(..., description="ID of the matching historical incident")
+    domain: str = Field(..., description="Domain of the historical incident")
+    severity: str = Field(..., description="Severity of the historical incident")
+    title: Optional[str] = Field(default=None, description="Title of the historical incident")
+    similarity: float = Field(..., description="Cosine similarity score (0.0–1.0)")
+    resolution_excerpt: Optional[str] = Field(
+        default=None, description="First 300 chars of the resolution that fixed it"
+    )
+    resolved_at: str = Field(..., description="ISO 8601 timestamp when the incident was resolved")
+
+
 class IncidentSummary(BaseModel):
     """Summary of an incident for the alert feed (UI-006)."""
 
@@ -283,6 +297,17 @@ class IncidentSummary(BaseModel):
         default=None,
         description="incident_id of the parent incident that caused suppression.",
     )
+    historical_matches: Optional[list[HistoricalMatch]] = Field(
+        default=None,
+        description=(
+            "Top-3 historical incidents with similar pattern. "
+            "Populated within 10s of ingestion by BackgroundTask (INTEL-003)."
+        ),
+    )
+    slo_escalated: Optional[bool] = Field(
+        default=None,
+        description="True when severity was escalated to Sev0 due to domain SLO burn-rate alert.",
+    )
 
 
 class AuditEntry(BaseModel):
@@ -301,3 +326,59 @@ class AuditExportResponse(BaseModel):
 
     report_metadata: dict
     remediation_events: list[dict]
+
+
+class SLODefinition(BaseModel):
+    """A Service Level Objective definition with current health metrics (INTEL-004)."""
+
+    id: str = Field(..., description="Unique SLO identifier (UUID)")
+    name: str = Field(..., description="Human-readable SLO name, e.g. 'Compute API Availability'")
+    domain: str = Field(..., description="Domain this SLO applies to (compute, network, etc.)")
+    metric: str = Field(
+        ..., description="Metric type: error_rate | latency_p99 | availability"
+    )
+    target_pct: float = Field(..., description="Target percentage, e.g. 99.9")
+    window_hours: int = Field(..., description="Rolling evaluation window in hours")
+    current_value: Optional[float] = Field(
+        default=None, description="Last measured metric value"
+    )
+    error_budget_pct: Optional[float] = Field(
+        default=None,
+        description="Remaining error budget as percentage: (current_value / target_pct) * 100",
+    )
+    burn_rate_1h: Optional[float] = Field(
+        default=None, description="Error budget consumption rate over last 1 hour"
+    )
+    burn_rate_15min: Optional[float] = Field(
+        default=None, description="Error budget consumption rate over last 15 minutes"
+    )
+    status: str = Field(
+        default="healthy",
+        description="healthy | burn_rate_alert | budget_exhausted",
+    )
+    created_at: Optional[str] = Field(default=None, description="ISO 8601 creation timestamp")
+    updated_at: Optional[str] = Field(default=None, description="ISO 8601 last-updated timestamp")
+
+
+class SLOHealth(BaseModel):
+    """SLO health snapshot returned by GET /api/v1/slos/{slo_id}/health (INTEL-004)."""
+
+    slo_id: str
+    status: str  # healthy | burn_rate_alert | budget_exhausted
+    error_budget_pct: Optional[float] = None
+    burn_rate_1h: Optional[float] = None
+    burn_rate_15min: Optional[float] = None
+    alert: bool = Field(
+        ...,
+        description="True when burn_rate_1h > 2.0 OR burn_rate_15min > 3.0",
+    )
+
+
+class SLOCreateRequest(BaseModel):
+    """Request body for POST /api/v1/slos."""
+
+    name: str = Field(..., min_length=1)
+    domain: str = Field(..., description="compute | network | storage | security | arc | sre")
+    metric: str = Field(..., description="error_rate | latency_p99 | availability")
+    target_pct: float = Field(..., gt=0.0, le=100.0)
+    window_hours: int = Field(..., gt=0)
