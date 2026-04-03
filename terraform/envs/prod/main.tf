@@ -341,7 +341,9 @@ module "fabric" {
   fabric_capacity_sku      = "F4" # Prod: higher capacity
   fabric_admin_email       = var.fabric_admin_email
   fabric_capacity_name     = "fcaapprod"
-  enable_fabric_data_plane = false
+  # Phase 21: Fabric data plane activated (workspace, Eventhouse, KQL DB, Activator, Lakehouse).
+  # Post-apply: run scripts/ops/21-2-activate-detection-plane.sh for manual wiring steps.
+  enable_fabric_data_plane = true
 }
 
 # --- Entra App Registrations (depends on: keyvault) ---
