@@ -17,6 +17,8 @@ current_position:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-04 — Quick task 260404-1jj COMPLETE: Updated CLAUDE.md — replaced stale Fluent UI 2 references with Tailwind CSS + shadcn/ui, added conventions and architecture sections, updated agent count to 8.
+
 > Last updated: 2026-04-04 — Quick task 260404-0hf COMPLETE: Seed runbooks via temporary VM. Created scripts/ops/seed-via-vm.sh (self-contained operator script: provisions Ubuntu VM in vnet-aap-prod/snet-reserved-1, uploads seed scripts + 60 runbooks via chunked base64 transfer, runs seed.py and validate.py, cleans up VM/NIC/disk). Executed successfully against prod — 60 runbooks seeded into aap-postgres-prod. Subnet delegation fallback worked (snet-container-apps → snet-reserved-1). F-02 (BUG-002) RESOLVED: runbook search endpoint no longer returns 500. Manual cleanup of VM/NIC/OS disk performed; no orphaned resources remain.
 
 > Last updated: 2026-04-03 — Plan 21-3 COMPLETE: Pipeline Health Monitoring. Created scripts/ops/21-3-detection-health-check.sh (7-check health monitor: Fabric capacity Active, Fabric workspace exists, Event Hub namespace Active, Event Hub configured, API gateway /health 200, recent det- incidents optional-auth, Container App running). PROD-004 status output: HEALTHY/DEGRADED/UNHEALTHY; exits 0 for HEALTHY, 1 otherwise. Appended "Ongoing Health Monitoring" section to docs/ops/detection-plane-activation.md (usage examples, coverage table, recommended schedule). Phase 21 all 3 plans complete. 2 atomic commits on branch gsd/phase-21-detection-plane-activation.
@@ -306,6 +308,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
 | 260402-gcx | Validate Azure Monitor is receiving logs from all agent containers | 2026-04-02 | d9aa6e1 | [260402-gcx-validate-azure-monitor-is-receiving-logs](./quick/260402-gcx-validate-azure-monitor-is-receiving-logs/) |
 | 260404-0hf | Seed runbooks via temporary VM in vnet-aap-prod — resolves F-02 (BUG-002) | 2026-04-04 | ca3e921 | [260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-](./quick/260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-/) |
+| 260404-1jj | Review CLAUDE.md and update if necessary | 2026-04-04 | f53aac3 | [260404-1jj-review-claude-md-and-update-if-necessary](./quick/260404-1jj-review-claude-md-and-update-if-necessary/) |
 
 ---
 
