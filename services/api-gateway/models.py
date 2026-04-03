@@ -382,3 +382,47 @@ class SLOCreateRequest(BaseModel):
     metric: str = Field(..., description="error_rate | latency_p99 | availability")
     target_pct: float = Field(..., gt=0.0, le=100.0)
     window_hours: int = Field(..., gt=0)
+
+
+class MetricForecast(BaseModel):
+    """Capacity forecast for a single metric on a single resource (INTEL-005)."""
+
+    metric_name: str = Field(..., description="Azure Monitor metric name")
+    current_value: float = Field(..., description="Smoothed current level from Holt's method")
+    threshold: float = Field(..., description="Capacity threshold that triggers a breach")
+    trend_per_interval: float = Field(
+        ..., description="Trend per 5-minute interval from Holt smoothing"
+    )
+    time_to_breach_minutes: Optional[float] = Field(
+        default=None,
+        description=(
+            "Estimated minutes until threshold breach. "
+            "None when metric is stable or declining away from threshold."
+        ),
+    )
+    confidence: str = Field(
+        ...,
+        description="Forecast confidence based on hold-out MAPE: high (<15%) | medium (<30%) | low",
+    )
+    mape: float = Field(
+        ..., description="Mean Absolute Percentage Error from hold-out validation (0–100)"
+    )
+    last_updated: str = Field(..., description="ISO 8601 UTC timestamp of last sweep")
+    breach_imminent: bool = Field(
+        ...,
+        description="True when time_to_breach_minutes < FORECAST_BREACH_ALERT_MINUTES (60 min)",
+    )
+
+
+class ForecastResult(BaseModel):
+    """All capacity forecasts for a single Azure resource (INTEL-005)."""
+
+    resource_id: str = Field(..., description="ARM resource ID")
+    resource_type: str = Field(..., description="ARM resource type (lowercased)")
+    forecasts: list[MetricForecast] = Field(
+        default_factory=list, description="Per-metric forecasts"
+    )
+    has_imminent_breach: bool = Field(
+        ...,
+        description="True when any metric has breach_imminent=True",
+    )

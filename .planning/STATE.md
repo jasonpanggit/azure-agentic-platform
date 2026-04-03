@@ -17,6 +17,8 @@ current_position:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-04 — Quick task 260404-1jj COMPLETE: Updated CLAUDE.md — replaced stale Fluent UI 2 references with Tailwind CSS + shadcn/ui, added conventions and architecture sections, updated agent count to 8.
+
 > Last updated: 2026-04-04 — Quick task 260404-0hf COMPLETE: Seed runbooks via temporary VM. Created scripts/ops/seed-via-vm.sh (self-contained operator script: provisions Ubuntu VM in vnet-aap-prod/snet-reserved-1, uploads seed scripts + 60 runbooks via chunked base64 transfer, runs seed.py and validate.py, cleans up VM/NIC/disk). Executed successfully against prod — 60 runbooks seeded into aap-postgres-prod. Subnet delegation fallback worked (snet-container-apps → snet-reserved-1). F-02 (BUG-002) RESOLVED: runbook search endpoint no longer returns 500. Manual cleanup of VM/NIC/OS disk performed; no orphaned resources remain.
 
 > Last updated: 2026-04-03 — Plan 21-3 COMPLETE: Pipeline Health Monitoring. Created scripts/ops/21-3-detection-health-check.sh (7-check health monitor: Fabric capacity Active, Fabric workspace exists, Event Hub namespace Active, Event Hub configured, API gateway /health 200, recent det- incidents optional-auth, Container App running). PROD-004 status output: HEALTHY/DEGRADED/UNHEALTHY; exits 0 for HEALTHY, 1 otherwise. Appended "Ongoing Health Monitoring" section to docs/ops/detection-plane-activation.md (usage examples, coverage table, recommended schedule). Phase 21 all 3 plans complete. 2 atomic commits on branch gsd/phase-21-detection-plane-activation.
@@ -183,17 +185,13 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 
 ## Blockers/Concerns
 
-**Phase 8 BLOCKING findings (from VALIDATION-REPORT.md — must resolve before phase closes):**
+No blockers as of 2026-04-04. All production blockers resolved:
 
-- **F-01**: `Azure AI Developer` RBAC missing on Foundry for gateway MI `69e05934-1feb-44d4-8fd2-30373f83ccec` — blocks Foundry dispatch, agent triage (E2E-002 triage polling timed out), SSE event generation — **RESOLVED (260331-k6y)**
-- **F-02**: `GET /api/v1/runbooks/search` returns 500 — pgvector/PostgreSQL connection or seed issue on prod — **RESOLVED (260404-0hf): 60 runbooks seeded via VM; endpoint returns 401 (auth required) not 500**
-
-**Operator actions still needed (from .planning/BACKLOG.md):**
-
-- Complete F-01 RBAC assignment: `az role assignment create --assignee 69e05934-... --role "Azure AI Developer" --scope /subscriptions/4c727b88-.../resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/foundry-aap-prod`
-- Verify `PGVECTOR_CONNECTION_STRING` env var on `ca-api-gateway-prod` and seed prod runbooks (resolves F-02)
-- Complete 08-04-06 Container App rebuild to activate OTel spans in App Insights
-- See `.planning/BACKLOG.md` for full 11-item backlog (2 BLOCKING + 9 DEGRADED)
+- **F-01**: RESOLVED (260331-k6y) — `Azure AI Developer` RBAC on gateway MI
+- **F-02**: RESOLVED (260404-0hf) — 60 runbooks seeded into prod pgvector via temp VM
+- **Teams CHANNEL_ID**: RESOLVED (2026-04-04) — `#Alerts` channel wired to `ca-teams-bot-prod`
+- **Application.ReadWrite.All**: RESOLVED (2026-04-04) — admin-consented on CI SP
+- **All 8 domain agent IDs**: RESOLVED (2026-04-03) — wired via terraform apply
 
 ---
 
@@ -310,6 +308,7 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 | 260402-fvo | Wire up all agent containers to App Insights for observability | 2026-04-02 | 23e678e | [260402-fvo-wire-up-all-agent-containers-to-app-insi](./quick/260402-fvo-wire-up-all-agent-containers-to-app-insi/) |
 | 260402-gcx | Validate Azure Monitor is receiving logs from all agent containers | 2026-04-02 | d9aa6e1 | [260402-gcx-validate-azure-monitor-is-receiving-logs](./quick/260402-gcx-validate-azure-monitor-is-receiving-logs/) |
 | 260404-0hf | Seed runbooks via temporary VM in vnet-aap-prod — resolves F-02 (BUG-002) | 2026-04-04 | ca3e921 | [260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-](./quick/260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-/) |
+| 260404-1jj | Review CLAUDE.md and update if necessary | 2026-04-04 | f53aac3 | [260404-1jj-review-claude-md-and-update-if-necessary](./quick/260404-1jj-review-claude-md-and-update-if-necessary/) |
 
 ---
 

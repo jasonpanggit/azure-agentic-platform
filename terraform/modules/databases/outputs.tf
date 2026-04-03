@@ -44,3 +44,8 @@ output "cosmos_topology_container_name" {
   description = "Name of the Cosmos DB topology container for the resource property graph (TOPO-001)"
   value       = azurerm_cosmosdb_sql_container.topology.name
 }
+
+output "cosmos_baselines_container_name" {
+  description = "Name of the Cosmos DB baselines container for capacity forecasting (INTEL-005)"
+  value       = azurerm_cosmosdb_sql_container.baselines.name
+}

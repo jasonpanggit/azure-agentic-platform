@@ -184,6 +184,58 @@ resource "azurerm_cosmosdb_sql_container" "topology" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "baselines" {
+  name                  = "baselines"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/resource_id"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/data_points/[]/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+
+    # Composite index for the sweep query:
+    #   WHERE resource_type = @type AND last_updated >= @cutoff
+    #   Used by ForecasterClient.get_all_imminent() to find breach-imminent resources
+    composite_index {
+      index {
+        path  = "/resource_type"
+        order = "ascending"
+      }
+      index {
+        path  = "/last_updated"
+        order = "descending"
+      }
+    }
+
+    # Composite index for time-to-breach alert queries:
+    #   WHERE resource_id = @id AND time_to_breach_minutes <= @threshold
+    composite_index {
+      index {
+        path  = "/resource_id"
+        order = "ascending"
+      }
+      index {
+        path  = "/time_to_breach_minutes"
+        order = "ascending"
+      }
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
