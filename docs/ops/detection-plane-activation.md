@@ -393,3 +393,37 @@ To disable the Fabric data-plane and destroy all data-plane resources:
 | `services/detection-plane/payload_mapper.py` | DetectionResults → IncidentPayload mapping (det- prefix) |
 | `services/detection-plane/docs/AUDIT-003-onelake-setup.md` | Full OneLake mirror setup instructions |
 | `services/detection-plane/kql/` | KQL function and update policy definitions |
+
+---
+
+## Ongoing Health Monitoring
+
+After the detection plane is activated, use the health check script to verify the pipeline remains operational:
+
+```bash
+# Basic health check (no auth required for infrastructure checks)
+bash scripts/ops/21-3-detection-health-check.sh
+
+# Full health check including incident verification (requires auth)
+export E2E_CLIENT_ID="<client-id>"
+export E2E_CLIENT_SECRET="<client-secret>"
+bash scripts/ops/21-3-detection-health-check.sh
+```
+
+### Health Check Coverage
+
+| Check | What it validates | Requires auth |
+|-------|-------------------|---------------|
+| Fabric capacity | Capacity is Active | No |
+| Fabric workspace | Workspace exists | No |
+| Event Hub namespace | Namespace is Active | No |
+| Event Hub messages | Hub is configured | No |
+| API gateway | Health endpoint returns 200 | No |
+| Recent det- incidents | Pipeline is creating incidents | Yes |
+| Container App status | Gateway is running | No |
+
+### Recommended Schedule
+
+- **Manual**: After any Terraform apply that touches the fabric module
+- **CI**: Add to staging-e2e workflow as a post-deploy check
+- **Cron**: Daily at 06:00 UTC for production alerting
