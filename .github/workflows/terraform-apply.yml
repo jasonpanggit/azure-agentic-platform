@@ -263,31 +263,10 @@ jobs:
         id: runner_ip
         run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
 
-      - name: Add Temporary PostgreSQL Firewall Rule
-        run: |
-          az postgres flexible-server firewall-rule create \
-            --resource-group "rg-aap-prod" \
-            --name "aap-postgres-prod" \
-            --rule-name "gh-runner-temp-$$" \
-            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
-            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
-
-      - name: Install PostgreSQL Client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
-
-      - name: Create pgvector Extension
-        env:
-          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          PGSSLMODE: require
-        run: |
-          psql \
-            -v ON_ERROR_STOP=1 \
-            -h "aap-postgres-prod.postgres.database.azure.com" \
-            -U aap_admin \
-            -d aap \
-            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+      # NOTE: aap-postgres-prod is VNet-injected (public_network_access_enabled=false).
+      # Firewall rule approach does not work for private Postgres — skipped for prod.
+      # pgvector extension was already created during initial bootstrap (Phase 19).
+      # azure.extensions=VECTOR is managed by Terraform (postgres.tf line 33-37).
 
       - name: Remove Temporary PostgreSQL Firewall Rule
         if: always()
