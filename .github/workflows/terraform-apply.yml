@@ -237,6 +237,7 @@ jobs:
           python-version: '3.11'
 
       - name: Provision Foundry Agents
+        continue-on-error: true
         env:
           AZURE_PROJECT_ENDPOINT: ${{ secrets.FOUNDRY_PROJECT_ENDPOINT }}
         run: |
