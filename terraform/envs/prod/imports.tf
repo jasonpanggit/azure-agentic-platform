@@ -1,6 +1,7 @@
 # --- Azure MCP Server Container App import (DEBT-013 / SEC-001) ---
 # APPLIED 2026-04-02. Import blocks are one-shot — removed after successful apply.
 # ca-azure-mcp-prod, its role assignments, and azure-mcp-connection are now in Terraform state.
+# [ci-trigger: 2026-04-04 — re-enable state backend public access + 409 role assignment fix]
 
 # --- Entra App Registration imports ---
 # Imports the web-UI app registration (aap-web-ui-prod) created manually on 2026-03-28.
