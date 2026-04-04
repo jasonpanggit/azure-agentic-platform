@@ -244,14 +244,20 @@ jobs:
           pip install --quiet "azure-ai-projects>=2.0.1" "azure-ai-agents" "azure-identity"
           python scripts/provision-foundry-agents.py --no-deploy
 
+      - name: Write Prod Credentials
+        env:
+          PROD_CREDENTIALS_TFVARS: ${{ secrets.PROD_CREDENTIALS_TFVARS }}
+        run: |
+          echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
+
       - name: Terraform Apply
         working-directory: terraform/envs/prod
         run: |
+          EXTRA_VARS=""
           if [ -f "../../../scripts/agents.tfvars" ]; then
-            terraform apply -auto-approve -input=false -var-file ../../../scripts/agents.tfvars
-          else
-            terraform apply -auto-approve -input=false
+            EXTRA_VARS="-var-file ../../../scripts/agents.tfvars"
           fi
+          terraform apply -auto-approve -input=false -var-file credentials.tfvars $EXTRA_VARS
 
       - name: Get Runner Egress IP
         id: runner_ip
