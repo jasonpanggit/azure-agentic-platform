@@ -60,7 +60,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy ${{ inputs.container_app_name }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     environment: ${{ inputs.github_environment }}
 
     steps:

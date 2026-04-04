@@ -42,7 +42,7 @@ permissions:
 jobs:
   detect-changes:
     name: Detect Changed Agents
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     outputs:
       base_related: ${{ steps.resolve.outputs.base_related }}
       orchestrator: ${{ steps.resolve.outputs.orchestrator }}
@@ -137,7 +137,7 @@ jobs:
       needs.detect-changes.outputs.arc == 'true' ||
       needs.detect-changes.outputs.patch == 'true' ||
       needs.detect-changes.outputs.eol == 'true')
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
     steps:

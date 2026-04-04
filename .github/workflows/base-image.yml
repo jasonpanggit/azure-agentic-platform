@@ -43,7 +43,7 @@ jobs:
     name: Log installed agent package versions
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     continue-on-error: true
     steps:
       - name: Azure login (OIDC)

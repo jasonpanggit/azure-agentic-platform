@@ -42,7 +42,7 @@ env:
 jobs:
   setup-pgvector:
     name: Enable pgvector + Run Migrations on Prod
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     environment: prod
 
     steps:
