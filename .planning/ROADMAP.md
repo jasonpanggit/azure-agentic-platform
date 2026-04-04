@@ -640,10 +640,11 @@ Plans:
 **Requirements**: PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004
 **Depends on:** Phase 27
 **Status:** In progress (1/? plans complete)
-**Plans:** 1 plan complete
+**Plans:** 2 plans complete
 
 Plans:
 - [x] 28-1: Cosmos DB containers — pattern_analysis (/analysis_date) + business_tiers (/tier_name), both no-TTL, outputs added (PLATINT-001, PLATINT-004) — COMPLETE
+- [x] 28-2: Pattern Analyzer — ApprovalAction feedback fields, process_approval_decision feedback persistence, 5 new Pydantic models, pattern_analyzer.py (8 pure-Python functions, 7 env vars, no numpy/sklearn), 21 tests passing (PLATINT-001, PLATINT-002, PLATINT-003) — COMPLETE
 - [ ] TBD (run /gsd:plan-phase 28 to break down remaining plans)
 
 ---
