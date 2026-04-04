@@ -27,3 +27,8 @@ output "acr_name" {
   description = "Name of the Azure Container Registry"
   value       = azurerm_container_registry.main.name
 }
+
+output "acr_agent_pool_name" {
+  description = "Name of the ACR Tasks private agent pool"
+  value       = azurerm_container_registry_agent_pool.main.name
+}

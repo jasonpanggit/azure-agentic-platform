@@ -64,3 +64,9 @@ variable "subnet_reserved_1_cidr" {
   type        = string
   default     = "10.0.64.0/24"
 }
+
+variable "subnet_acr_agent_pool_cidr" {
+  description = "CIDR for ACR Tasks private agent pool subnet (/27 minimum required by Azure)"
+  type        = string
+  default     = "10.0.5.0/27"
+}

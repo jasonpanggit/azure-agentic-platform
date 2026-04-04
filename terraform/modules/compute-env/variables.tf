@@ -34,6 +34,11 @@ variable "container_apps_subnet_id" {
   type        = string
 }
 
+variable "acr_agent_pool_subnet_id" {
+  description = "Subnet ID for the ACR Tasks private agent pool"
+  type        = string
+}
+
 variable "log_analytics_workspace_id" {
   description = "Resource ID of the Log Analytics workspace"
   type        = string

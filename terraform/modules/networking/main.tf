@@ -90,6 +90,15 @@ resource "azurerm_subnet" "reserved_1" {
   service_endpoints = ["Microsoft.EventHub"]
 }
 
+# ACR Tasks private agent pool subnet — /27 minimum required by Azure, no delegation needed
+resource "azurerm_subnet" "acr_agent_pool" {
+  name                 = "snet-acr-agent-pool"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.subnet_acr_agent_pool_cidr]
+  default_outbound_access_enabled = false
+}
+
 # --- Network Security Groups ---
 
 # Container Apps NSG — minimal rules; Container Apps manages its own networking

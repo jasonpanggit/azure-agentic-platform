@@ -130,6 +130,7 @@ module "compute_env" {
   environment                = var.environment
   required_tags              = local.required_tags
   container_apps_subnet_id   = module.networking.subnet_container_apps_id
+  acr_agent_pool_subnet_id   = module.networking.subnet_acr_agent_pool_id
   log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
 
   # NOTE (ISSUE-01): No private_endpoint_subnet_id or private_dns_zone_acr_id

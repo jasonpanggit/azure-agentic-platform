@@ -32,11 +32,10 @@ resource "azurerm_container_registry" "main" {
   location                      = var.location
   sku                           = "Premium"
   admin_enabled                 = false
-  public_network_access_enabled = false  # Private endpoint only; ACR Tasks bypass via trusted services
+  public_network_access_enabled = false  # Private endpoint only; builds use private agent pool (VNet-injected)
   data_endpoint_enabled         = true
 
-  # Allow Azure-internal services (ACR Tasks build agents) to bypass the private network restriction.
-  # ACR Tasks run inside Microsoft's network and are classified as trusted Azure services.
+  # Allow Azure-internal services to bypass firewall (e.g. Terraform plan reads)
   network_rule_bypass_option = "AzureServices"
 
   identity {
@@ -48,3 +47,24 @@ resource "azurerm_container_registry" "main" {
 
 # NOTE: ACR private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
+
+# ── ACR Tasks Private Agent Pool ───────────────────────────────────────────────
+# VNet-injected build agents so 'az acr build' can reach the private ACR endpoint.
+# Runner calls: az acr build --registry <acr> --agent-pool aap-builder-<env> ...
+resource "azurerm_container_registry_agent_pool" "main" {
+  name                    = "aap-builder-${var.environment}"
+  resource_group_name     = var.resource_group_name
+  location                = var.location
+  container_registry_name = azurerm_container_registry.main.name
+
+  # S1: 2 vCPU, 3 GiB RAM — sufficient for sequential image builds
+  instance_count          = 1
+  tier                    = "S1"
+
+  # Inject agents into our VNet so they reach ACR via private endpoint
+  virtual_network_subnet_id = var.acr_agent_pool_subnet_id
+
+  tags = var.required_tags
+
+  depends_on = [azurerm_container_registry.main]
+}

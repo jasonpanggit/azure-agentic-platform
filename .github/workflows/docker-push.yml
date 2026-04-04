@@ -147,9 +147,12 @@ jobs:
           IMAGE="${{ steps.acr.outputs.login_server }}/${{ inputs.image_name }}"
           TAG="${{ steps.tag.outputs.tag }}"
 
-          # az acr build runs the build server-side in ACR — no local Docker daemon required
+          # az acr build runs the build server-side in ACR — no local Docker daemon required.
+          # --agent-pool targets our VNet-injected private agent pool so it can reach the
+          # private ACR endpoint (publicNetworkAccess=Disabled).
           az acr build \
             --registry "${{ steps.acr.outputs.name }}" \
+            --agent-pool "aap-builder-prod" \
             --image "${IMAGE}:${TAG}" \
             --image "${IMAGE}:latest" \
             --file "${{ inputs.dockerfile_path }}" \

@@ -67,3 +67,8 @@ output "private_dns_zone_servicebus_id" {
   description = "Resource ID of the Service Bus private DNS zone"
   value       = azurerm_private_dns_zone.servicebus.id
 }
+
+output "subnet_acr_agent_pool_id" {
+  description = "Resource ID of the ACR Tasks private agent pool subnet"
+  value       = azurerm_subnet.acr_agent_pool.id
+}
