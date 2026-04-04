@@ -32,8 +32,12 @@ resource "azurerm_container_registry" "main" {
   location                      = var.location
   sku                           = "Premium"
   admin_enabled                 = false
-  public_network_access_enabled = false  # Runner is VNet-resident; images pushed via private endpoint
+  public_network_access_enabled = false  # Private endpoint only; ACR Tasks bypass via trusted services
   data_endpoint_enabled         = true
+
+  # Allow Azure-internal services (ACR Tasks build agents) to bypass the private network restriction.
+  # ACR Tasks run inside Microsoft's network and are classified as trusted Azure services.
+  network_rule_bypass_option = "AzureServices"
 
   identity {
     type = "SystemAssigned"
