@@ -1,7 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Server, RefreshCw } from 'lucide-react'
+import { useMsal } from '@azure/msal-react'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { gatewayTokenRequest } from '@/lib/msal-config'
 
 interface VMRow {
   id: string
@@ -81,10 +84,25 @@ function VMTypeBadge({ vmType }: { vmType: string }) {
 }
 
 export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
+  const { instance, accounts } = useMsal()
   const [vms, setVMs] = useState<VMRow[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const account = accounts[0]
+    if (!account) return null
+    try {
+      const result = await instance.acquireTokenSilent({ ...gatewayTokenRequest, account })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({ ...gatewayTokenRequest, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
 
   async function fetchVMs() {
     if (subscriptions.length === 0) return
@@ -93,7 +111,10 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
     try {
       const params = new URLSearchParams({ subscriptions: subscriptions.join(',') })
       if (search) params.set('search', search)
-      const res = await fetch(`/api/proxy/vms?${params}`)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/vms?${params}`, { headers })
       const data = await res.json()
       setVMs(data.vms ?? [])
     } catch {

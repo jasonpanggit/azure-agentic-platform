@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity } from 'lucide-react'
+import { useMsal } from '@azure/msal-react'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { gatewayTokenRequest } from '@/lib/msal-config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -159,6 +162,7 @@ function Sparkline({ data, color = 'var(--accent-blue)' }: { data: number[]; col
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }: VMDetailPanelProps) {
+  const { instance, accounts } = useMsal()
   const [vm, setVM] = useState<VMDetail | null>(null)
   const [evidence, setEvidence] = useState<Evidence | null>(null)
   const [metrics, setMetrics] = useState<MetricSeries[]>([])
@@ -178,12 +182,30 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [, setChatRunId] = useState<string | null>(null)
   const chatPollRef = useRef<NodeJS.Timeout | null>(null)
 
+  // ── Auth token acquisition ────────────────────────────────────────────────
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const account = accounts[0]
+    if (!account) return null
+    try {
+      const result = await instance.acquireTokenSilent({ ...gatewayTokenRequest, account })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({ ...gatewayTokenRequest, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
+
   // Fetch VM detail
   const fetchVM = useCallback(async () => {
     if (!resourceId) return
     try {
       const encoded = encodeResourceId(resourceId)
-      const res = await fetch(`/api/proxy/vms/${encoded}`)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/vms/${encoded}`, { headers })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setVM(data)
@@ -192,13 +214,16 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     } finally {
       setLoading(false)
     }
-  }, [resourceId])
+  }, [resourceId, getAccessToken])
 
   // Fetch evidence for incident
   const fetchEvidence = useCallback(async (): Promise<boolean> => {
     if (!incidentId) return true
     try {
-      const res = await fetch(`/api/proxy/incidents/${incidentId}/evidence`)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/incidents/${incidentId}/evidence`, { headers })
       if (res.status === 202) {
         setPollingEvidence(true)
         return false // still pending
@@ -212,7 +237,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       setPollingEvidence(false)
       return true
     }
-  }, [incidentId])
+  }, [incidentId, getAccessToken])
 
   // Fetch metrics
   const fetchMetrics = useCallback(async () => {
@@ -225,7 +250,10 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         timespan: timeRange,
         interval: timeRange === 'P7D' ? 'PT1H' : 'PT5M',
       })
-      const res = await fetch(`/api/proxy/vms/${encoded}/metrics?${queryParams}`)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/vms/${encoded}/metrics?${queryParams}`, { headers })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setMetrics(data.metrics ?? [])
@@ -234,7 +262,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     } finally {
       setMetricsLoading(false)
     }
-  }, [resourceId, timeRange])
+  }, [resourceId, timeRange, getAccessToken])
 
   // ── Chat functions ──────────────────────────────────────────────────────────
 
@@ -243,8 +271,12 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
 
     chatPollRef.current = setInterval(async () => {
       try {
+        const token = await getAccessToken()
+        const headers: Record<string, string> = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
         const res = await fetch(
-          `/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}&run_id=${encodeURIComponent(runId)}`
+          `/api/proxy/chat/result?thread_id=${encodeURIComponent(threadId)}&run_id=${encodeURIComponent(runId)}`,
+          { headers }
         )
         if (!res.ok) {
           clearInterval(chatPollRef.current!)
@@ -290,9 +322,12 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     setChatStreaming(true)
 
     try {
+      const token = await getAccessToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`/api/proxy/vms/${encoded}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: text,
           thread_id: chatThreadId,
