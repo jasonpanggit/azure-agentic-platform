@@ -36,6 +36,17 @@
 #   id = "/servicePrincipals/c30c212c-7dc9-4c29-9147-3a22c64ab3c8"
 # }
 
+# --- RBAC role assignment import (409 Conflict fix) ---
+# The api-gateway Reader role on subscription 4c727b88-... already exists in Azure
+# (assignment ID: 344f496823dd404db298f1d4fad789de) but was not in Terraform state.
+# Import block resolves the 409 RoleAssignmentExists error on terraform apply.
+# Remove this block after the first successful apply.
+
+import {
+  to = module.rbac.azurerm_role_assignment.agent_rbac["api-gateway-reader-4c727b8812f44c919c2b372aab3bbae9"]
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/providers/Microsoft.Authorization/roleAssignments/344f496823dd404db298f1d4fad789de"
+}
+
 # --- Cosmos DB data-plane RBAC imports ---
 # Assignment GUIDs from: az cosmosdb sql role assignment list --account-name aap-cosmos-prod --resource-group rg-aap-prod
 # Run on: 2026-03-31
