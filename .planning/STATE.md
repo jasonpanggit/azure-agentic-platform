@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-04 — Quick task 260405-0rp COMPLETE: Redeployed web-ui and api-gateway to production. Both running image ac92180. web-ui revision --0000065, api-gateway revision --0000084. Both /health checks returning 200.
+
 > Last updated: 2026-04-04 — Quick task 260404-vm9 COMPLETE: Added Reader + Monitoring Reader RBAC roles to API gateway managed identity across all in-scope subscriptions in Terraform. Fixes VM health showing "Unknown" and metrics showing "No metrics available". Run terraform apply to activate.
 
 > Last updated: 2026-04-04 — Plan 28-3 COMPLETE: Intelligence Endpoints (PLATINT-001–004 code-complete). 5 new API endpoints: GET /api/v1/intelligence/patterns (PatternAnalysisResult or 404/503), GET /api/v1/intelligence/platform-health (8 metrics aggregated from Cosmos+PostgreSQL), POST/GET /api/v1/admin/business-tiers (FinOps tier CRUD). Default business tier seeded on startup. run_pattern_analysis_loop background task in lifespan. approve/reject endpoints pass feedback_text/feedback_tags to process_approval_decision (PLATINT-003). 12 new tests all passing. 588 total api-gateway tests pass (no regressions). Phase 28 fully complete (28-1 Terraform + 28-2 Pattern Analyzer + 28-3 Endpoints). Branch: gsd/phase-28-platform-intelligence.
@@ -328,6 +330,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260404-0hf | Seed runbooks via temporary VM in vnet-aap-prod — resolves F-02 (BUG-002) | 2026-04-04 | ca3e921 | [260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-](./quick/260404-0hf-spin-up-a-temporary-vm-in-vnet-aap-prod-/) |
 | 260404-1jj | Review CLAUDE.md and update if necessary | 2026-04-04 | f53aac3 | [260404-1jj-review-claude-md-and-update-if-necessary](./quick/260404-1jj-review-claude-md-and-update-if-necessary/) |
 | 260404-vm9 | Add Reader and Monitoring Reader RBAC roles to API gateway managed identity in Terraform | 2026-04-04 | 1556e53 | [260404-vm9-add-reader-and-monitoring-reader-rbac-ro](./quick/260404-vm9-add-reader-and-monitoring-reader-rbac-ro/) |
+| 260405-0rp | redeploy web-ui and api gateway | 2026-04-04 | — | [260405-0rp-redeploy-web-ui-and-api-gateway](./quick/260405-0rp-redeploy-web-ui-and-api-gateway/) |
 
 ---
 
