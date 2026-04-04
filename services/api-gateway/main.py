@@ -357,6 +357,56 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("startup: WAL stale monitor not started (COSMOS_ENDPOINT not set)")
 
+    # Seed default business tier if container is empty (PLATINT-004)
+    if app.state.cosmos_client is not None:
+        try:
+            from datetime import datetime as _dt_seed, timezone as _tz_seed
+            _bt_db = app.state.cosmos_client.get_database_client(
+                os.environ.get("COSMOS_DATABASE", "aap")
+            )
+            _bt_container = _bt_db.get_container_client(COSMOS_BUSINESS_TIERS_CONTAINER)
+            _bt_items = list(_bt_container.query_items(
+                "SELECT c.id FROM c",
+                enable_cross_partition_query=True,
+                max_item_count=1,
+            ))
+            if not _bt_items:
+                _now_iso = _dt_seed.now(_tz_seed.utc).isoformat()
+                _bt_container.upsert_item({
+                    "id": "default",
+                    "tier_name": "default",
+                    "monthly_revenue_usd": 0.0,
+                    "resource_tags": {},
+                    "created_at": _now_iso,
+                    "updated_at": _now_iso,
+                })
+                logger.info("startup: seeded default business tier")
+            else:
+                logger.info("startup: business_tiers container already has %d item(s)", len(_bt_items))
+        except Exception as exc:
+            logger.warning("startup: business tier seeding failed (non-fatal) | error=%s", exc)
+
+    # Start pattern analysis background loop (PLATINT-001)
+    _pattern_analysis_task: Optional[asyncio.Task] = None
+    if app.state.cosmos_client is not None and PATTERN_ANALYSIS_ENABLED:
+        _pattern_analysis_task = asyncio.create_task(
+            run_pattern_analysis_loop(
+                cosmos_client=app.state.cosmos_client,
+                interval_seconds=PATTERN_ANALYSIS_INTERVAL_SECONDS,
+            )
+        )
+        logger.info(
+            "startup: pattern analysis loop started | interval=%ds",
+            PATTERN_ANALYSIS_INTERVAL_SECONDS,
+        )
+    else:
+        logger.warning(
+            "startup: pattern analysis loop not started "
+            "(COSMOS_ENDPOINT=%s, PATTERN_ANALYSIS_ENABLED=%s)",
+            "set" if app.state.cosmos_client else "not_set",
+            os.environ.get("PATTERN_ANALYSIS_ENABLED", "true"),
+        )
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -386,6 +436,15 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("shutdown: WAL stale monitor cancelled")
+
+    # Cancel pattern analysis loop on shutdown
+    if _pattern_analysis_task is not None and not _pattern_analysis_task.done():
+        _pattern_analysis_task.cancel()
+        try:
+            await _pattern_analysis_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: pattern analysis loop cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
