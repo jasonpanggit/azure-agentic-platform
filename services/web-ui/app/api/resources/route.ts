@@ -57,13 +57,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
 
     const typeQuery = typeFilter ? `&$filter=resourceType eq '${typeFilter}'` : '';
-    const resources: ArmResource[] = [];
 
-    // Fetch resources from each subscription in parallel (capped at first 200 per sub)
-    await Promise.all(
+    // Fetch resources from each subscription in parallel (up to 500 per sub)
+    const perSubResults = await Promise.all(
       subscriptionIds.slice(0, 10).map(async (subId) => {
+        const subResources: ArmResource[] = [];
         let url: string | undefined =
-          `https://management.azure.com/subscriptions/${subId}/resources?api-version=2021-04-01&$top=200${typeQuery}`;
+          `https://management.azure.com/subscriptions/${subId}/resources?api-version=2021-04-01&$top=500${typeQuery}`;
 
         while (url) {
           const res = await fetch(url, {
@@ -72,14 +72,17 @@ export async function GET(request: Request): Promise<NextResponse> {
           if (!res.ok) break;
 
           const data: ArmResourceListResponse = await res.json();
-          resources.push(...(data.value ?? []));
+          subResources.push(...(data.value ?? []));
           url = data.nextLink;
 
-          // Cap at 200 resources per subscription to avoid oversized responses
-          if (resources.length >= 200) break;
+          // Cap at 500 resources per subscription to match topology tab
+          if (subResources.length >= 500) break;
         }
+        return subResources;
       })
     );
+
+    const resources: ArmResource[] = perSubResults.flat();
 
     // Sort by type then name
     resources.sort((a, b) =>
