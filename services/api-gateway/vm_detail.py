@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/v1/vms", tags=["vm-detail"])
 DEFAULT_METRICS = [
     "Percentage CPU",
     "Available Memory Bytes",
-    "Disk Read Bytes/sec",
-    "Disk Write Bytes/sec",
+    "Disk Read Bytes",
+    "Disk Write Bytes",
     "Network In Total",
     "Network Out Total",
 ]
@@ -317,8 +317,8 @@ async def get_vm_metrics(
                             "minimum": dp.minimum,
                         })
             metrics_out.append({
-                "name": metric.name.value if metric.name else None,
-                "unit": metric.unit.value if metric.unit else None,
+                "name": metric.name.value if hasattr(metric.name, "value") else str(metric.name) if metric.name else None,
+                "unit": metric.unit.value if hasattr(metric.unit, "value") else str(metric.unit) if metric.unit else None,
                 "timeseries": timeseries,
             })
 

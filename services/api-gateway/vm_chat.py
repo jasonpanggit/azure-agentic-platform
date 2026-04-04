@@ -183,11 +183,15 @@ async def _create_or_continue_vm_thread(
     New threads: inject evidence context as a system message before the user message.
     Continuing threads: just append the user message.
     """
-    compute_agent_id = os.environ.get("COMPUTE_AGENT_ID")
+    # Use orchestrator so connected_agent tools (compute, network, etc.) are available.
+    # Direct compute agent runs have no tools — orchestrator routes to compute via connected_agent.
+    compute_agent_id = (
+        os.environ.get("ORCHESTRATOR_AGENT_ID")
+        or os.environ.get("COMPUTE_AGENT_ID")
+    )
     if not compute_agent_id:
         raise ValueError(
-            "COMPUTE_AGENT_ID environment variable is required for resource-scoped chat. "
-            "Set it to the Foundry agent ID for the compute agent."
+            "ORCHESTRATOR_AGENT_ID environment variable is required for resource-scoped chat."
         )
 
     client = _get_foundry_client()
