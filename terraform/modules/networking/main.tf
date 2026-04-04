@@ -90,13 +90,119 @@ resource "azurerm_subnet" "reserved_1" {
   service_endpoints = ["Microsoft.EventHub"]
 }
 
-# ACR Tasks private agent pool subnet — /27 minimum required by Azure, no delegation needed
+# ACR Tasks private agent pool subnet — /27 minimum required by Azure, no delegation needed.
+# Service endpoints required per: https://learn.microsoft.com/en-us/azure/container-registry/tasks-agent-pools
 resource "azurerm_subnet" "acr_agent_pool" {
   name                 = "snet-acr-agent-pool"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.subnet_acr_agent_pool_cidr]
   default_outbound_access_enabled = false
+
+  service_endpoints = [
+    "Microsoft.AzureActiveDirectory",
+    "Microsoft.EventHub",
+    "Microsoft.KeyVault",
+    "Microsoft.Storage",
+  ]
+}
+
+# NSG for ACR Tasks agent pool subnet — required outbound rules per docs
+resource "azurerm_network_security_group" "acr_agent_pool" {
+  name                = "nsg-snet-acr-agent-pool-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.required_tags
+}
+
+resource "azurerm_network_security_rule" "acr_agent_pool_kv_out" {
+  name                        = "AllowAzureKeyVaultOutbound"
+  priority                    = 100
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureKeyVault"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+resource "azurerm_network_security_rule" "acr_agent_pool_storage_out" {
+  name                        = "AllowStorageOutbound"
+  priority                    = 110
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+resource "azurerm_network_security_rule" "acr_agent_pool_eventhub_out" {
+  name                        = "AllowEventHubOutbound"
+  priority                    = 120
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "EventHub"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+resource "azurerm_network_security_rule" "acr_agent_pool_aad_out" {
+  name                        = "AllowAzureActiveDirectoryOutbound"
+  priority                    = 130
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureActiveDirectory"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+resource "azurerm_network_security_rule" "acr_agent_pool_monitor_out" {
+  name                        = "AllowAzureMonitorOutbound"
+  priority                    = 140
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges     = ["443", "12000"]
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+# Allow MCR/Docker Hub pulls (build agents need to pull base images)
+resource "azurerm_network_security_rule" "acr_agent_pool_internet_https_out" {
+  name                        = "AllowInternetHTTPSOutbound"
+  priority                    = 150
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.acr_agent_pool.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "acr_agent_pool" {
+  subnet_id                 = azurerm_subnet.acr_agent_pool.id
+  network_security_group_id = azurerm_network_security_group.acr_agent_pool.id
 }
 
 # --- Network Security Groups ---
