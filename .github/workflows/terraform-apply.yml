@@ -246,7 +246,12 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/envs/prod
-        run: terraform apply -auto-approve -input=false -var-file ../../../scripts/agents.tfvars
+        run: |
+          if [ -f "../../../scripts/agents.tfvars" ]; then
+            terraform apply -auto-approve -input=false -var-file ../../../scripts/agents.tfvars
+          else
+            terraform apply -auto-approve -input=false
+          fi
 
       - name: Get Runner Egress IP
         id: runner_ip
