@@ -54,15 +54,20 @@ from services.api_gateway.models import (
     ApprovalResponse,
     AuditEntry,
     AuditExportResponse,
+    BusinessTier,
+    BusinessTiersResponse,
     ChangeCorrelation,
     ChatRequest,
     ChatResponse,
     ChatResultResponse,
     HealthResponse,
     HistoricalMatch,
+    IncidentPattern,
     IncidentPayload,
     IncidentResponse,
     IncidentSummary,
+    PatternAnalysisResult,
+    PlatformHealth,
     RemediationAuditRecord,
     RemediationResult,
     RunbookResult,
@@ -101,6 +106,12 @@ from services.api_gateway.forecaster import (
     run_forecast_sweep_loop,
 )
 from services.api_gateway.forecast_endpoints import router as forecast_router
+from services.api_gateway.pattern_analyzer import (
+    PATTERN_ANALYSIS_ENABLED,
+    PATTERN_ANALYSIS_INTERVAL_SECONDS,
+    analyze_patterns,
+    run_pattern_analysis_loop,
+)
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -110,6 +121,13 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+COSMOS_PATTERN_ANALYSIS_CONTAINER = os.environ.get(
+    "COSMOS_PATTERN_ANALYSIS_CONTAINER", "pattern_analysis"
+)
+COSMOS_BUSINESS_TIERS_CONTAINER = os.environ.get(
+    "COSMOS_BUSINESS_TIERS_CONTAINER", "business_tiers"
+)
 
 
 async def _run_startup_migrations() -> None:
@@ -339,6 +357,56 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("startup: WAL stale monitor not started (COSMOS_ENDPOINT not set)")
 
+    # Seed default business tier if container is empty (PLATINT-004)
+    if app.state.cosmos_client is not None:
+        try:
+            from datetime import datetime as _dt_seed, timezone as _tz_seed
+            _bt_db = app.state.cosmos_client.get_database_client(
+                os.environ.get("COSMOS_DATABASE", "aap")
+            )
+            _bt_container = _bt_db.get_container_client(COSMOS_BUSINESS_TIERS_CONTAINER)
+            _bt_items = list(_bt_container.query_items(
+                "SELECT c.id FROM c",
+                enable_cross_partition_query=True,
+                max_item_count=1,
+            ))
+            if not _bt_items:
+                _now_iso = _dt_seed.now(_tz_seed.utc).isoformat()
+                _bt_container.upsert_item({
+                    "id": "default",
+                    "tier_name": "default",
+                    "monthly_revenue_usd": 0.0,
+                    "resource_tags": {},
+                    "created_at": _now_iso,
+                    "updated_at": _now_iso,
+                })
+                logger.info("startup: seeded default business tier")
+            else:
+                logger.info("startup: business_tiers container already has %d item(s)", len(_bt_items))
+        except Exception as exc:
+            logger.warning("startup: business tier seeding failed (non-fatal) | error=%s", exc)
+
+    # Start pattern analysis background loop (PLATINT-001)
+    _pattern_analysis_task: Optional[asyncio.Task] = None
+    if app.state.cosmos_client is not None and PATTERN_ANALYSIS_ENABLED:
+        _pattern_analysis_task = asyncio.create_task(
+            run_pattern_analysis_loop(
+                cosmos_client=app.state.cosmos_client,
+                interval_seconds=PATTERN_ANALYSIS_INTERVAL_SECONDS,
+            )
+        )
+        logger.info(
+            "startup: pattern analysis loop started | interval=%ds",
+            PATTERN_ANALYSIS_INTERVAL_SECONDS,
+        )
+    else:
+        logger.warning(
+            "startup: pattern analysis loop not started "
+            "(COSMOS_ENDPOINT=%s, PATTERN_ANALYSIS_ENABLED=%s)",
+            "set" if app.state.cosmos_client else "not_set",
+            os.environ.get("PATTERN_ANALYSIS_ENABLED", "true"),
+        )
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -368,6 +436,15 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("shutdown: WAL stale monitor cancelled")
+
+    # Cancel pattern analysis loop on shutdown
+    if _pattern_analysis_task is not None and not _pattern_analysis_task.done():
+        _pattern_analysis_task.cancel()
+        try:
+            await _pattern_analysis_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: pattern analysis loop cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
@@ -1247,6 +1324,8 @@ async def approve_proposal(
             decision="approved",
             decided_by=payload.decided_by,
             scope_confirmed=payload.scope_confirmed,
+            feedback_text=payload.feedback_text,
+            feedback_tags=payload.feedback_tags,
             cosmos_client=cosmos_client,
         )
         return ApprovalResponse(approval_id=approval_id, status="approved")
@@ -1283,6 +1362,8 @@ async def reject_proposal(
             thread_id=effective_thread_id,
             decision="rejected",
             decided_by=payload.decided_by,
+            feedback_text=payload.feedback_text,
+            feedback_tags=payload.feedback_tags,
             cosmos_client=cosmos_client,
         )
         return ApprovalResponse(approval_id=approval_id, status="rejected")
@@ -1589,6 +1670,238 @@ async def export_remediation_audit(
         cosmos_client=cosmos_client,
     )
     return AuditExportResponse(**report)
+
+
+@app.get(
+    "/api/v1/intelligence/patterns",
+    response_model=PatternAnalysisResult,
+)
+async def get_pattern_analysis(
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> PatternAnalysisResult:
+    """Get the most recent pattern analysis result (PLATINT-001).
+
+    Returns the latest weekly analysis from the pattern_analysis container.
+    Returns 404 if no analysis has been run yet.
+    Returns 503 if Cosmos DB is not configured.
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Pattern analysis store not configured")
+    try:
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DATABASE", "aap"))
+        container = db.get_container_client(COSMOS_PATTERN_ANALYSIS_CONTAINER)
+        # Get the most recent analysis by ordering analysis_date descending
+        items = list(container.query_items(
+            "SELECT * FROM c ORDER BY c.analysis_date DESC OFFSET 0 LIMIT 1",
+            enable_cross_partition_query=True,
+        ))
+        if not items:
+            raise HTTPException(status_code=404, detail="No pattern analysis available yet")
+        clean = {k: v for k, v in items[0].items() if not k.startswith("_")}
+        return PatternAnalysisResult(**clean)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("get_pattern_analysis: error | error=%s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Pattern analysis retrieval failed")
+
+
+@app.get(
+    "/api/v1/intelligence/platform-health",
+    response_model=PlatformHealth,
+)
+async def get_platform_health(
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> PlatformHealth:
+    """Aggregate platform-wide health metrics (PLATINT-004).
+
+    Computes from existing data sources:
+    - detection_pipeline_lag_seconds: age of most recent det- incident
+    - auto_remediation_success_rate: complete/(complete+failed) from remediation_audit last 7d
+    - noise_reduction_pct: suppressed_cascade/total incidents last 24h
+    - slo_compliance_pct: healthy SLOs / total SLOs
+    - automation_savings_count: complete remediation executions last 30d
+    - agent_p50_ms, agent_p95_ms: None (deferred — requires App Insights query)
+    - error_budget_portfolio: [{slo_id, error_budget_pct}] from slo_definitions
+
+    Authentication: Entra ID Bearer token required.
+    """
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+    now = _dt.now(_tz.utc)
+    now_iso = now.isoformat()
+
+    detection_pipeline_lag_seconds: Optional[float] = None
+    auto_remediation_success_rate: Optional[float] = None
+    noise_reduction_pct: Optional[float] = None
+    slo_compliance_pct: Optional[float] = None
+    automation_savings_count: int = 0
+    error_budget_portfolio: list[dict] = []
+
+    if cosmos is not None:
+        db_name = os.environ.get("COSMOS_DATABASE", "aap")
+        db = cosmos.get_database_client(db_name)
+
+        # 1. Detection pipeline lag: age of most recent det- incident
+        try:
+            incidents_container = db.get_container_client("incidents")
+            det_items = list(incidents_container.query_items(
+                "SELECT TOP 1 c.created_at FROM c WHERE STARTSWITH(c.incident_id, 'det-') ORDER BY c.created_at DESC",
+                enable_cross_partition_query=True,
+            ))
+            if det_items and det_items[0].get("created_at"):
+                last_det = _dt.fromisoformat(det_items[0]["created_at"])
+                if last_det.tzinfo is None:
+                    last_det = last_det.replace(tzinfo=_tz.utc)
+                detection_pipeline_lag_seconds = (now - last_det).total_seconds()
+        except Exception as exc:
+            logger.debug("platform_health: detection lag query failed | error=%s", exc)
+
+        # 2. Auto-remediation success rate (last 7 days)
+        try:
+            remediation_container = db.get_container_client("remediation_audit")
+            cutoff_7d = (now - _td(days=7)).isoformat()
+            rem_items = list(remediation_container.query_items(
+                "SELECT c.status FROM c WHERE c.action_type = 'execute' AND c.executed_at >= @cutoff",
+                parameters=[{"name": "@cutoff", "value": cutoff_7d}],
+                enable_cross_partition_query=True,
+            ))
+            complete_count = sum(1 for r in rem_items if r.get("status") == "complete")
+            failed_count = sum(1 for r in rem_items if r.get("status") == "failed")
+            total_rem = complete_count + failed_count
+            if total_rem > 0:
+                auto_remediation_success_rate = round(complete_count / total_rem * 100, 1)
+        except Exception as exc:
+            logger.debug("platform_health: remediation rate query failed | error=%s", exc)
+
+        # 3. Noise reduction percentage (last 24 hours)
+        try:
+            import time as _time_mod
+            cutoff_ts = int(_time_mod.time()) - 86400
+            noise_items = list(incidents_container.query_items(
+                "SELECT c.status FROM c WHERE c._ts > @cutoff",
+                parameters=[{"name": "@cutoff", "value": cutoff_ts}],
+                enable_cross_partition_query=True,
+            ))
+            total_noise = len(noise_items)
+            suppressed = sum(1 for i in noise_items if i.get("status") == "suppressed_cascade")
+            if total_noise > 0:
+                noise_reduction_pct = round(suppressed / total_noise * 100, 1)
+        except Exception as exc:
+            logger.debug("platform_health: noise reduction query failed | error=%s", exc)
+
+        # 4. Automation savings count (last 30 days)
+        try:
+            cutoff_30d = (now - _td(days=30)).isoformat()
+            savings_items = list(remediation_container.query_items(
+                "SELECT c.id FROM c WHERE c.status = 'complete' AND c.action_type = 'execute' AND c.executed_at >= @cutoff",
+                parameters=[{"name": "@cutoff", "value": cutoff_30d}],
+                enable_cross_partition_query=True,
+            ))
+            automation_savings_count = len(savings_items)
+        except Exception as exc:
+            logger.debug("platform_health: automation savings query failed | error=%s", exc)
+
+    # 5. SLO compliance + error budget portfolio (from PostgreSQL)
+    try:
+        slos = await list_slos()
+        if slos:
+            healthy_count = sum(1 for s in slos if s.get("status") == "healthy")
+            slo_compliance_pct = round(healthy_count / len(slos) * 100, 1)
+            error_budget_portfolio = [
+                {"slo_id": s.get("id", ""), "error_budget_pct": s.get("error_budget_pct")}
+                for s in slos
+            ]
+    except Exception as exc:
+        logger.debug("platform_health: SLO compliance query failed | error=%s", exc)
+
+    return PlatformHealth(
+        detection_pipeline_lag_seconds=detection_pipeline_lag_seconds,
+        auto_remediation_success_rate=auto_remediation_success_rate,
+        noise_reduction_pct=noise_reduction_pct,
+        slo_compliance_pct=slo_compliance_pct,
+        automation_savings_count=automation_savings_count,
+        agent_p50_ms=None,
+        agent_p95_ms=None,
+        error_budget_portfolio=error_budget_portfolio,
+        generated_at=now_iso,
+    )
+
+
+@app.post(
+    "/api/v1/admin/business-tiers",
+    response_model=BusinessTier,
+)
+async def upsert_business_tier(
+    payload: BusinessTier,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> BusinessTier:
+    """Create or update a business tier for FinOps cost impact tracking (PLATINT-004).
+
+    Upserts by tier_name (id == tier_name). Requires admin-level Entra token.
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Business tier store not configured")
+    try:
+        from datetime import datetime as _dt, timezone as _tz
+        now_iso = _dt.now(_tz.utc).isoformat()
+
+        doc = payload.model_dump()
+        doc["id"] = payload.tier_name  # Cosmos id = tier_name
+        doc["updated_at"] = now_iso
+        if not doc.get("created_at"):
+            doc["created_at"] = now_iso
+
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DATABASE", "aap"))
+        container = db.get_container_client(COSMOS_BUSINESS_TIERS_CONTAINER)
+        container.upsert_item(doc)
+        logger.info("business_tier: upserted | tier_name=%s", payload.tier_name)
+        return BusinessTier(**doc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("upsert_business_tier: error | error=%s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Business tier upsert failed")
+
+
+@app.get(
+    "/api/v1/admin/business-tiers",
+    response_model=BusinessTiersResponse,
+)
+async def list_business_tiers(
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos: Any = Depends(get_optional_cosmos_client),
+) -> BusinessTiersResponse:
+    """List all configured business tiers (PLATINT-004).
+
+    Authentication: Entra ID Bearer token required.
+    """
+    if cosmos is None:
+        raise HTTPException(status_code=503, detail="Business tier store not configured")
+    try:
+        db = cosmos.get_database_client(os.environ.get("COSMOS_DATABASE", "aap"))
+        container = db.get_container_client(COSMOS_BUSINESS_TIERS_CONTAINER)
+        items = list(container.query_items(
+            "SELECT * FROM c",
+            enable_cross_partition_query=True,
+        ))
+        tiers = [
+            BusinessTier(**{k: v for k, v in item.items() if not k.startswith("_")})
+            for item in items
+        ]
+        return BusinessTiersResponse(tiers=tiers)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("list_business_tiers: error | error=%s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Business tier retrieval failed")
 
 
 @app.post("/api/v1/azure-tools", response_model=AzureToolResponse)

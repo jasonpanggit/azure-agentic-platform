@@ -157,7 +157,7 @@ class ChatResultResponse(BaseModel):
 
 
 class ApprovalAction(BaseModel):
-    """Payload for approve/reject actions (D-09, TEAMS-003)."""
+    """Payload for approve/reject actions (D-09, TEAMS-003, PLATINT-003)."""
 
     decided_by: str = Field(..., description="UPN or object ID of the operator")
     scope_confirmed: Optional[bool] = Field(
@@ -165,6 +165,12 @@ class ApprovalAction(BaseModel):
     )
     thread_id: Optional[str] = Field(
         default=None, description="Thread ID from card data (TEAMS-003 Action.Execute)"
+    )
+    feedback_text: Optional[str] = Field(
+        default=None, description="Free-text operator feedback on the proposal quality (PLATINT-003)"
+    )
+    feedback_tags: Optional[list[str]] = Field(
+        default=None, description="Structured feedback tags, e.g. ['false_positive', 'not_useful'] (PLATINT-003)"
     )
 
 
@@ -458,3 +464,63 @@ class RemediationResult(BaseModel):
     preflight_passed: bool
     blast_radius_size: int
     abort_reason: Optional[str] = None           # populated when status="aborted"
+
+
+class BusinessTier(BaseModel):
+    """Operator-configured revenue tier for FinOps cost impact tracking (PLATINT-004)."""
+
+    id: str
+    tier_name: str
+    monthly_revenue_usd: float
+    resource_tags: dict
+    created_at: str
+    updated_at: str
+
+
+class IncidentPattern(BaseModel):
+    """A single recurring incident pattern identified by the pattern analyzer (PLATINT-001)."""
+
+    pattern_id: str
+    domain: str
+    resource_type: Optional[str] = None
+    detection_rule: Optional[str] = None
+    incident_count: int
+    frequency_per_week: float
+    avg_severity_score: float
+    top_title_words: list[str]
+    first_seen: str
+    last_seen: str
+    operator_flagged: bool = False
+    common_feedback: list[str] = []
+
+
+class PatternAnalysisResult(BaseModel):
+    """Weekly pattern analysis output stored in Cosmos pattern_analysis container (PLATINT-001)."""
+
+    analysis_id: str
+    analysis_date: str
+    period_days: int
+    total_incidents_analyzed: int
+    top_patterns: list[IncidentPattern]
+    finops_summary: dict
+    generated_at: str
+
+
+class PlatformHealth(BaseModel):
+    """Platform-wide health metrics aggregated from existing data sources (PLATINT-004)."""
+
+    detection_pipeline_lag_seconds: Optional[float] = None
+    auto_remediation_success_rate: Optional[float] = None
+    noise_reduction_pct: Optional[float] = None
+    slo_compliance_pct: Optional[float] = None
+    automation_savings_count: int = 0
+    agent_p50_ms: Optional[float] = None
+    agent_p95_ms: Optional[float] = None
+    error_budget_portfolio: list[dict] = []
+    generated_at: str
+
+
+class BusinessTiersResponse(BaseModel):
+    """Response wrapper for GET /api/v1/admin/business-tiers (PLATINT-004)."""
+
+    tiers: list[BusinessTier]

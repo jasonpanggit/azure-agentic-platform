@@ -54,3 +54,13 @@ output "cosmos_remediation_audit_container_name" {
   description = "Name of the Cosmos DB remediation_audit container for WAL and immutable audit trail (REMEDI-011, REMEDI-013)"
   value       = azurerm_cosmosdb_sql_container.remediation_audit.name
 }
+
+output "cosmos_pattern_analysis_container_name" {
+  description = "Name of the Cosmos DB pattern_analysis container for platform intelligence (PLATINT-001)"
+  value       = azurerm_cosmosdb_sql_container.pattern_analysis.name
+}
+
+output "cosmos_business_tiers_container_name" {
+  description = "Name of the Cosmos DB business_tiers container for FinOps tier configuration (PLATINT-004)"
+  value       = azurerm_cosmosdb_sql_container.business_tiers.name
+}
