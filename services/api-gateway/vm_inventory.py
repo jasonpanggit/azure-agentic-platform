@@ -1,5 +1,8 @@
 """VM inventory endpoint — fleet-level VM listing with health and alert enrichment.
 
+Covers both Azure VMs (microsoft.compute/virtualmachines) and Arc-enabled
+servers (microsoft.hybridcompute/machines) to match the Patch tab scope.
+
 GET /api/v1/vms
   ?subscriptions=sub1,sub2   (required, comma-separated)
   ?status=all|running|stopped|deallocated  (default: all)
@@ -11,8 +14,11 @@ Response: { vms: [...], total: int, has_more: bool }
 
 Each VM record contains:
   id, name, resource_group, subscription_id, location, size,
-  os_type, os_name, power_state, health_state, ama_status,
+  os_type, os_name, power_state, vm_type, health_state, ama_status,
   active_alert_count, tags
+
+vm_type: "Azure VM" for microsoft.compute/virtualmachines,
+         "Arc VM" for microsoft.hybridcompute/machines
 """
 from __future__ import annotations
 
@@ -79,6 +85,18 @@ def _run_arg_query(
 def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     """Build ARG KQL query for VM inventory.
 
+    Includes both Azure VMs (microsoft.compute/virtualmachines) and
+    Arc-enabled servers (microsoft.hybridcompute/machines) so the count
+    matches the Patch tab which covers both resource types.
+
+    Arc machines use different property paths:
+      - osType:  properties.osType (same for both)
+      - osName:  properties.osSku (Arc) vs storageProfile.imageReference.offer (Azure)
+      - vmSize:  no hardware profile on Arc — returns empty string
+      - vmType:  "Arc VM" vs "Azure VM" label for the UI
+      - power state: properties.status ("Connected"/"Disconnected") for Arc
+                     vs properties.extended.instanceView.powerState.displayStatus for Azure
+
     Args:
         status_filter: "all", "running", "stopped", or "deallocated".
         search: Optional name substring filter.
@@ -88,9 +106,18 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     """
     kql = """Resources
 | where type =~ 'microsoft.compute/virtualmachines'
-| extend powerState = tostring(properties.extended.instanceView.powerState.displayStatus)
-| extend osType = tostring(properties.storageProfile.osDisk.osType)
-| extend osName = tostring(properties.storageProfile.imageReference.offer)
+    or type =~ 'microsoft.hybridcompute/machines'
+| extend vmType = iff(type =~ 'microsoft.hybridcompute/machines', 'Arc VM', 'Azure VM')
+| extend powerState = iff(
+    type =~ 'microsoft.hybridcompute/machines',
+    tostring(properties.status),
+    tostring(properties.extended.instanceView.powerState.displayStatus)
+  )
+| extend osType = tostring(properties.osType)
+| extend osName = coalesce(
+    tostring(properties.osSku),
+    tostring(properties.storageProfile.imageReference.offer)
+  )
 | extend vmSize = tostring(properties.hardwareProfile.vmSize)
 | project
     id,
@@ -102,6 +129,7 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     osType,
     osName,
     powerState,
+    vmType,
     tags
 """
     if status_filter != "all":
@@ -387,6 +415,7 @@ async def list_vms(
                 "os_type": row.get("osType", ""),
                 "os_name": row.get("osName", ""),
                 "power_state": power_state,
+                "vm_type": row.get("vmType", "Azure VM"),  # "Azure VM" or "Arc VM"
                 "health_state": health_state,
                 "ama_status": "unknown",  # Phase 17: AMA extension check
                 "active_alert_count": alert_count,

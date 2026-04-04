@@ -13,6 +13,7 @@ interface VMRow {
   os_type: string
   os_name: string
   power_state: string
+  vm_type: string  // "Azure VM" | "Arc VM"
   health_state: string
   ama_status: string
   active_alert_count: number
@@ -58,6 +59,23 @@ function HealthBadge({ state }: { state: string }) {
       style={{ color: config.color }}
     >
       {config.label}
+    </span>
+  )
+}
+
+function VMTypeBadge({ vmType }: { vmType: string }) {
+  const isArc = vmType === 'Arc VM'
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
+      style={{
+        background: isArc
+          ? 'color-mix(in srgb, var(--accent-blue) 15%, transparent)'
+          : 'var(--bg-subtle)',
+        color: isArc ? 'var(--accent-blue)' : 'var(--text-muted)',
+      }}
+    >
+      {isArc ? 'Arc' : 'Azure'}
     </span>
   )
 }
@@ -163,16 +181,13 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
               ? 'Select a subscription to view VMs'
               : 'No VMs found in selected subscriptions'}
           </p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            VM inventory endpoint available in Phase 2
-          </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Resource Group', 'Size', 'OS', 'Power State', 'Health', 'Alerts'].map(col => (
+                {['Name', 'Resource Group', 'Size', 'OS', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide"
@@ -200,10 +215,13 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                     {vm.resource_group}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {vm.size}
+                    {vm.size || '—'}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     {vm.os_name || vm.os_type}
+                  </td>
+                  <td className="px-4 py-3">
+                    <VMTypeBadge vmType={vm.vm_type ?? 'Azure VM'} />
                   </td>
                   <td className="px-4 py-3">
                     <PowerStateBadge state={vm.power_state} />
