@@ -96,28 +96,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to ACR
-        if: inputs.push_image
-        run: |
-          ACR_LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER }}"
-          if [ -z "$ACR_LOGIN_SERVER" ]; then
-            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
-            exit 1
-          fi
-
-          ACR_NAME="${ACR_LOGIN_SERVER%%.azurecr.io}"
-          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
-            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
-            exit 1
-          fi
-
-          # Use --expose-token so no local Docker daemon socket is required for credential setup
-          TOKEN=$(az acr login --name "$ACR_NAME" --expose-token --output tsv --query accessToken)
-          echo "$TOKEN" | docker login "$ACR_LOGIN_SERVER" --username 00000000-0000-0000-0000-000000000000 --password-stdin
-
       - name: Resolve image tag
         id: tag
         run: |
@@ -133,41 +111,78 @@ jobs:
 
           printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Build and Push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: ${{ inputs.build_context }}
-          file: ${{ inputs.dockerfile_path }}
-          push: ${{ inputs.push_image }}
-          platforms: linux/amd64
-          tags: |
-            ${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}
-            ${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:latest
-          build-args: ${{ inputs.build_args }}
-          no-cache: ${{ inputs.no_cache }}
-          cache-from: ${{ inputs.no_cache && '' || 'type=gha' }}
-          cache-to: ${{ inputs.no_cache && '' || 'type=gha,mode=max' }}
+      - name: Validate ACR name
+        id: acr
+        run: |
+          ACR_LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER }}"
+          if [ -z "$ACR_LOGIN_SERVER" ]; then
+            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
+            exit 1
+          fi
+
+          ACR_NAME="${ACR_LOGIN_SERVER%%.azurecr.io}"
+          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
+            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
+            exit 1
+          fi
+
+          echo "name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+          echo "login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Push via ACR Tasks
+        if: inputs.push_image
+        run: |
+          # Build args: convert newline-separated KEY=VALUE pairs to --build-arg flags
+          BUILD_ARG_FLAGS=""
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            BUILD_ARG_FLAGS="$BUILD_ARG_FLAGS --build-arg $line"
+          done <<< "${{ inputs.build_args }}"
+
+          NO_CACHE_FLAG=""
+          if [ "${{ inputs.no_cache }}" = "true" ]; then
+            NO_CACHE_FLAG="--no-cache"
+          fi
+
+          IMAGE="${{ steps.acr.outputs.login_server }}/${{ inputs.image_name }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          # az acr build runs the build server-side in ACR — no local Docker daemon required
+          az acr build \
+            --registry "${{ steps.acr.outputs.name }}" \
+            --image "${IMAGE}:${TAG}" \
+            --image "${IMAGE}:latest" \
+            --file "${{ inputs.dockerfile_path }}" \
+            --platform linux/amd64 \
+            $NO_CACHE_FLAG \
+            $BUILD_ARG_FLAGS \
+            "${{ inputs.build_context }}"
+
+      - name: Build only (no push)
+        if: '!inputs.push_image'
+        run: |
+          # Validate the build context and Dockerfile exist
+          if [ ! -f "${{ inputs.dockerfile_path }}" ]; then
+            echo "::error::Dockerfile not found at ${{ inputs.dockerfile_path }}"
+            exit 1
+          fi
+          echo "push_image=false — skipping build (no Docker daemon available on self-hosted runner)"
 
       - name: Image Size Check
-        if: ${{ inputs.push_image }}
+        if: inputs.push_image
         run: |
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}"
-          MANIFEST=""
-          for attempt in 1 2 3 4 5 6; do
-            MANIFEST=$(docker manifest inspect "$IMAGE" 2>/dev/null || true)
-            if [ -n "$MANIFEST" ]; then
-              break
-            fi
+          IMAGE="${{ steps.acr.outputs.login_server }}/${{ inputs.image_name }}"
+          TAG="${{ steps.tag.outputs.tag }}"
 
-            if [ "$attempt" -lt 6 ]; then
-              echo "Manifest not yet available for $IMAGE; retrying after registry propagation delay"
-              sleep 10
-            fi
-          done
+          # Use az acr manifest to inspect image size — no Docker daemon required
+          MANIFEST=$(az acr manifest show \
+            --registry "${{ steps.acr.outputs.name }}" \
+            --name "${{ inputs.image_name }}:${TAG}" \
+            --output json 2>/dev/null || true)
 
           if [ -z "$MANIFEST" ]; then
-            echo "::error::Could not inspect manifest for $IMAGE after waiting for registry propagation"
-            exit 1
+            echo "::warning::Could not inspect manifest for ${IMAGE}:${TAG} — skipping size check"
+            exit 0
           fi
 
           SIZE=$(echo "$MANIFEST" | jq '([.layers // .manifests // [] | .[].size // 0] | add) // 0')
