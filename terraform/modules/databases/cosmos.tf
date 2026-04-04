@@ -283,6 +283,52 @@ resource "azurerm_cosmosdb_sql_container" "remediation_audit" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "pattern_analysis" {
+  name                  = "pattern_analysis"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/analysis_date"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/top_patterns/[]/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "business_tiers" {
+  name                  = "business_tiers"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/tier_name"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
