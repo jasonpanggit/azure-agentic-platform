@@ -92,6 +92,39 @@ resource "azurerm_subnet" "reserved_1" {
 
 # ACR Tasks private agent pool subnet — /27 minimum required by Azure, no delegation needed.
 # Service endpoints required per: https://learn.microsoft.com/en-us/azure/container-registry/tasks-agent-pools
+# NAT Gateway for ACR agent pool subnet — required for internet egress (base image pulls)
+# default_outbound_access_enabled=false disables implicit SNAT; NAT Gateway provides
+# explicit, predictable outbound IPs for build agents.
+resource "azurerm_public_ip" "acr_agent_pool_nat" {
+  name                = "pip-nat-acr-agent-pool-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  zones               = ["1"]
+  tags                = var.required_tags
+}
+
+resource "azurerm_nat_gateway" "acr_agent_pool" {
+  name                    = "nat-acr-agent-pool-${var.environment}"
+  location                = var.location
+  resource_group_name     = var.resource_group_name
+  sku_name                = "Standard"
+  idle_timeout_in_minutes = 10
+  zones                   = ["1"]
+  tags                    = var.required_tags
+}
+
+resource "azurerm_nat_gateway_public_ip_association" "acr_agent_pool" {
+  nat_gateway_id       = azurerm_nat_gateway.acr_agent_pool.id
+  public_ip_address_id = azurerm_public_ip.acr_agent_pool_nat.id
+}
+
+resource "azurerm_subnet_nat_gateway_association" "acr_agent_pool" {
+  subnet_id      = azurerm_subnet.acr_agent_pool.id
+  nat_gateway_id = azurerm_nat_gateway.acr_agent_pool.id
+}
+
 resource "azurerm_subnet" "acr_agent_pool" {
   name                 = "snet-acr-agent-pool"
   resource_group_name  = var.resource_group_name
