@@ -38,3 +38,4 @@ provider "azapi" {
 provider "azuread" {
   use_oidc = true
 }
+
