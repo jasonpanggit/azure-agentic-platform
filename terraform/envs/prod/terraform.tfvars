@@ -46,7 +46,9 @@ azure_mcp_image_tag = "latest"
 # Enables Entra token validation on all non-health API endpoints.
 # client_id matches NEXT_PUBLIC_AZURE_CLIENT_ID in the web-ui (aap-web-ui-prod app registration).
 # tenant_id is the single Entra tenant for this platform.
-api_gateway_auth_mode = "entra"
+# api_gateway_auth_mode is intentionally omitted here — controlled via the
+# API_GATEWAY_AUTH_MODE GitHub Actions environment variable (TF_VAR_api_gateway_auth_mode).
+# Defaults to "entra" when the GH variable is not set (see variables.tf).
 api_gateway_client_id = "505df1d3-3bd3-4151-ae87-6e5974b72a44"
 api_gateway_tenant_id = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 
