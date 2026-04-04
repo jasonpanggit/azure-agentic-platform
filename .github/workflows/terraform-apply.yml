@@ -100,7 +100,6 @@ jobs:
     if: false  # disabled — staging infrastructure not provisioned yet
     runs-on: ubuntu-latest
     needs: apply-dev
-    if: always()
     environment: staging
     continue-on-error: true
 
