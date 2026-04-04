@@ -54,15 +54,20 @@ from services.api_gateway.models import (
     ApprovalResponse,
     AuditEntry,
     AuditExportResponse,
+    BusinessTier,
+    BusinessTiersResponse,
     ChangeCorrelation,
     ChatRequest,
     ChatResponse,
     ChatResultResponse,
     HealthResponse,
     HistoricalMatch,
+    IncidentPattern,
     IncidentPayload,
     IncidentResponse,
     IncidentSummary,
+    PatternAnalysisResult,
+    PlatformHealth,
     RemediationAuditRecord,
     RemediationResult,
     RunbookResult,
@@ -101,6 +106,12 @@ from services.api_gateway.forecaster import (
     run_forecast_sweep_loop,
 )
 from services.api_gateway.forecast_endpoints import router as forecast_router
+from services.api_gateway.pattern_analyzer import (
+    PATTERN_ANALYSIS_ENABLED,
+    PATTERN_ANALYSIS_INTERVAL_SECONDS,
+    analyze_patterns,
+    run_pattern_analysis_loop,
+)
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -110,6 +121,13 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+COSMOS_PATTERN_ANALYSIS_CONTAINER = os.environ.get(
+    "COSMOS_PATTERN_ANALYSIS_CONTAINER", "pattern_analysis"
+)
+COSMOS_BUSINESS_TIERS_CONTAINER = os.environ.get(
+    "COSMOS_BUSINESS_TIERS_CONTAINER", "business_tiers"
+)
 
 
 async def _run_startup_migrations() -> None:
