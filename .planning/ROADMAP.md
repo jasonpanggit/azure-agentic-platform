@@ -640,7 +640,7 @@ Plans:
 **Requirements**: PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004
 **Depends on:** Phase 27
 **Status:** COMPLETE (3/3 plans complete)
-**Plans:** 3 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 28-1: Cosmos DB containers — pattern_analysis (/analysis_date) + business_tiers (/tier_name), both no-TTL, outputs added (PLATINT-001, PLATINT-004) — COMPLETE
