@@ -445,3 +445,4 @@ resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
   value        = azuread_application_password.fabric_sp[0].value
   key_vault_id = module.keyvault.keyvault_id
 }
+
