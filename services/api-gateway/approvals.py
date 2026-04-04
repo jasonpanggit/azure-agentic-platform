@@ -95,6 +95,8 @@ async def process_approval_decision(
     decision: str,  # "approved" or "rejected"
     decided_by: str,
     scope_confirmed: Optional[bool] = None,
+    feedback_text: Optional[str] = None,
+    feedback_tags: Optional[list[str]] = None,
     cosmos_client: Optional[CosmosClient] = None,
 ) -> dict:
     """Process an approve/reject decision on a pending proposal.
@@ -163,6 +165,10 @@ async def process_approval_decision(
         "decided_at": now,
         "decided_by": decided_by,
     }
+    if feedback_text is not None:
+        updated_record["feedback_text"] = feedback_text
+    if feedback_tags is not None:
+        updated_record["feedback_tags"] = feedback_tags
 
     result = container.replace_item(
         item=approval_id,
