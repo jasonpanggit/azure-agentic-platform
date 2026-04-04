@@ -213,3 +213,10 @@ variable "api_gateway_tenant_id" {
   type        = string
   default     = ""
 }
+
+variable "github_pat" {
+  description = "Fine-grained GitHub PAT for the self-hosted runner. Required permissions: Actions=read, Administration=read+write on the azure-agentic-platform repository. Set via TF_VAR_github_pat or credentials.tfvars."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

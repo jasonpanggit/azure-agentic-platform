@@ -447,5 +447,33 @@ resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
   key_vault_id = module.keyvault.keyvault_id
 }
 
+# --- GitHub Actions Self-Hosted Runner (depends on: compute-env, keyvault) ---
+# VNet-resident runner on Container Apps Job. Enables locking down KV, Postgres,
+# and ACR to private-only — GitHub-hosted runners cannot reach private endpoints.
+
+module "github_runner" {
+  source = "../../modules/github-runner"
+
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+  environment         = var.environment
+  required_tags       = local.required_tags
+
+  container_apps_environment_id = module.compute_env.container_apps_environment_id
+  acr_id                        = module.compute_env.acr_id
+  acr_login_server              = module.compute_env.acr_login_server
+  key_vault_id                  = module.keyvault.keyvault_id
+
+  github_pat   = var.github_pat
+  github_owner = "jasonpanggit"
+  github_repo  = "azure-agentic-platform"
+
+  runner_labels           = "self-hosted,azure,linux"
+  max_runners             = 5
+  runner_cpu              = 2.0
+  runner_memory           = "4Gi"
+  replica_timeout_seconds = 1800
+}
+
 
 

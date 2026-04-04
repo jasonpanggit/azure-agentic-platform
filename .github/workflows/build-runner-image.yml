@@ -1,0 +1,43 @@
+name: Build Runner Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/github-runner/**'
+      - '.github/workflows/build-runner-image.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_NAME: github-runner
+  IMAGE_TAG: latest
+
+jobs:
+  build:
+    name: Build and Push Runner Image
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and Push to ACR
+        run: |
+          az acr build \
+            --registry "${{ vars.ACR_LOGIN_SERVER }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --file docker/github-runner/Dockerfile \
+            docker/github-runner/
