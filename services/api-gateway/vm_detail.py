@@ -62,27 +62,48 @@ def _get_vm_details_from_arg(
     subscription_ids: List[str],
     resource_id: str,
 ) -> Optional[Dict[str, Any]]:
-    """Fetch detailed VM info from ARG for a single resource ID."""
+    """Fetch detailed VM info from ARG for a single resource ID.
+
+    Handles both Azure VMs (microsoft.compute/virtualmachines) and
+    Arc-enabled servers (microsoft.hybridcompute/machines).
+    """
     from azure.mgmt.resourcegraph import ResourceGraphClient
     from azure.mgmt.resourcegraph.models import QueryRequest
 
     name = resource_id.rstrip("/").split("/")[-1]
     safe_name = name.replace("'", "''")
+    safe_id = resource_id.replace("'", "''")
 
     kql = f"""
 Resources
-| where type =~ 'microsoft.compute/virtualmachines'
+| where type in~ ('microsoft.compute/virtualmachines', 'microsoft.hybridcompute/machines')
 | where name =~ '{safe_name}'
-| where id =~ '{resource_id.replace("'", "''")}'
-| extend powerState = tostring(properties.extended.instanceView.powerState.displayStatus)
-| extend osType = tostring(properties.storageProfile.osDisk.osType)
-| extend osName = tostring(properties.storageProfile.imageReference.offer)
-| extend vmSize = tostring(properties.hardwareProfile.vmSize)
-| extend nicIds = properties.networkProfile.networkInterfaces
+| where id =~ '{safe_id}'
+| extend powerState = iff(
+    type =~ 'microsoft.compute/virtualmachines',
+    tostring(properties.extended.instanceView.powerState.displayStatus),
+    tostring(properties.status.powerState)
+  )
+| extend osType = iff(
+    type =~ 'microsoft.compute/virtualmachines',
+    tostring(properties.storageProfile.osDisk.osType),
+    tostring(properties.osType)
+  )
+| extend osName = iff(
+    type =~ 'microsoft.compute/virtualmachines',
+    tostring(properties.storageProfile.imageReference.offer),
+    tostring(properties.osSku)
+  )
+| extend vmSize = iff(
+    type =~ 'microsoft.compute/virtualmachines',
+    tostring(properties.hardwareProfile.vmSize),
+    ''
+  )
+| extend vmType = iff(type =~ 'microsoft.compute/virtualmachines', 'Azure VM', 'Arc VM')
 | extend availabilityZones = properties.zones
 | project id, name, resourceGroup, subscriptionId, location,
     vmSize, osType, osName, powerState, tags,
-    availabilityZones
+    availabilityZones, vmType
 | limit 1
 """
 
@@ -212,6 +233,7 @@ async def get_vm_detail(
         "power_state": _normalize_power_state(arg_row.get("powerState", "")),
         "health_state": health["health_state"],
         "health_summary": health.get("summary"),
+        "vm_type": arg_row.get("vmType", "Azure VM"),
         "ama_status": "unknown",
         "tags": arg_row.get("tags") or {},
         "active_incidents": active_incidents,
