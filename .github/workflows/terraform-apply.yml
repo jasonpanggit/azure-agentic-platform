@@ -234,6 +234,24 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Ensure Tfstate Storage Account Is Accessible
+        run: |
+          # Azure Policy may re-disable publicNetworkAccess on the tfstate storage account.
+          # The self-hosted runner accesses it over the public endpoint, so we must ensure
+          # public access is enabled before terraform init.
+          SA_NAME="staaptfstateprod"
+          RG_NAME="rg-aap-tfstate-prod"
+          ACCESS=$(az storage account show --name "$SA_NAME" --resource-group "$RG_NAME" \
+            --query publicNetworkAccess --output tsv 2>/dev/null || echo "Unknown")
+          if [ "$ACCESS" != "Enabled" ]; then
+            echo "::warning::Tfstate storage $SA_NAME has publicNetworkAccess=$ACCESS — re-enabling"
+            az storage account update --name "$SA_NAME" --resource-group "$RG_NAME" \
+              --public-network-access Enabled --output none
+            echo "Public network access re-enabled on $SA_NAME"
+          else
+            echo "Tfstate storage $SA_NAME publicNetworkAccess is Enabled (OK)"
+          fi
+
       - name: Terraform Init
         working-directory: terraform/envs/prod
         run: terraform init -input=false
