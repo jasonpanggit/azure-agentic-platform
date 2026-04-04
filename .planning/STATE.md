@@ -2,20 +2,32 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: in_progress
-last_updated: "2026-04-03T17:30:00.000Z"
+status: unknown
+last_updated: "2026-04-04T06:00:00.000Z"
 progress:
   total_phases: 22
-  completed_phases: 9
-  total_plans: 52
-  completed_plans: 47
-current_position:
-  phase: 21
-  plan: 21-3
-  plan_status: complete
+  completed_phases: 10
+  total_plans: 74
+  completed_plans: 53
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-04 — Plan 28-1 COMPLETE: Cosmos DB containers for Platform Intelligence (PLATINT-001, PLATINT-004). Added pattern_analysis container (partition /analysis_date, no TTL, /top_patterns/[]/* excluded from index) and business_tiers container (partition /tier_name, standard indexing, no TTL) to terraform/modules/databases/cosmos.tf. Added cosmos_pattern_analysis_container_name and cosmos_business_tiers_container_name outputs to outputs.tf. Total container count now 8. terraform fmt -check passes. 2 atomic commits on branch gsd/phase-28-platform-intelligence.
+
+> Last updated: 2026-04-04 — Phase 27 COMPLETE: Closed-Loop Remediation (REMEDI-009–013 satisfied). 3 plans: Cosmos remediation_audit container (no-TTL, partition /incident_id), remediation_executor.py (WAL before ARM, pre-flight blast-radius, 10-min delayed verification, auto-rollback on DEGRADED, WAL stale monitor), execute/verification/audit-export endpoints wired into main.py. 31 new tests (19 executor + 12 endpoint). 555 total tests pass. Merged to main.
+
+> Last updated: 2026-04-04 — Phase 26 COMPLETE: Predictive Operations (INTEL-005 satisfied). Cosmos baselines container, forecaster.py (pure-Python Holt double exponential smoothing, α=0.3 β=0.1, MAPE confidence scoring), forecast_endpoints.py (GET /api/v1/forecasts, GET /api/v1/forecasts/imminent), background sweep every 15 min emits FORECAST_ALERT incidents when breach <60 min. INTEL-005 accuracy test script. Merged to main.
+
+> Last updated: 2026-04-04 — Phase 25 COMPLETE: Institutional Memory and SLO Tracking (INTEL-003, INTEL-004 satisfied). PostgreSQL incident_memory table (pgvector 1536-dim, threshold 0.35, reuses generate_query_embedding), slo_tracker.py (burn-rate alerts >2x/1h or >3x/15min, Google SRE book thresholds), SLO-aware Sev0 escalation on incident ingestion, POST /api/v1/incidents/{id}/resolve endpoint, SLO CRUD endpoints. Merged to main.
+
+> Last updated: 2026-04-04 — Phase 24 COMPLETE: Alert Intelligence and Noise Reduction (INTEL-001 satisfied). noise_reducer.py (causal suppression via blast_radius, temporal+topological correlation, composite severity scoring), wired BEFORE dedup in ingest_incident, GET /api/v1/incidents/stats noise metrics. Merged to main.
+
+> Last updated: 2026-04-04 — Phase 23 COMPLETE: Change Correlation Engine (INTEL-002 satisfied). change_correlator.py (Activity Log + topology, weighted scoring temporal/topology/change_type), BackgroundTask wired on incident ingestion, GET /api/v1/incidents/{id}/correlations endpoint. Merged to main.
+
+> Last updated: 2026-04-04 — Phase 22 COMPLETE: Resource Topology Graph (TOPO-001–005 satisfied). Cosmos topology container, topology.py (BFS blast-radius, adjacency list), topology_endpoints.py (blast-radius, path, snapshot, bootstrap). Merged to main.
+
+> Last updated: 2026-04-04 — Phase 21 COMPLETE: Detection Plane Activation (PROD-004 satisfied). Terraform flip enable_fabric_data_plane=true, operator runbook scripts, pipeline health check script. Merged to main.
 
 > Last updated: 2026-04-04 — Quick task 260404-1jj COMPLETE: Updated CLAUDE.md — replaced stale Fluent UI 2 references with Tailwind CSS + shadcn/ui, added conventions and architecture sections, updated agent count to 8.
 
