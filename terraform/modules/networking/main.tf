@@ -272,6 +272,20 @@ resource "azurerm_network_security_rule" "pe_allow_container_apps_inbound" {
   network_security_group_name = azurerm_network_security_group.private_endpoints.name
 }
 
+resource "azurerm_network_security_rule" "pe_allow_acr_agent_pool_inbound" {
+  name                        = "AllowAcrAgentPoolInbound"
+  priority                    = 110
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = var.subnet_acr_agent_pool_cidr
+  destination_address_prefix  = var.subnet_private_endpoints_cidr
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
 resource "azurerm_network_security_rule" "pe_deny_all_inbound" {
   name                        = "DenyAllInbound"
   priority                    = 4096
