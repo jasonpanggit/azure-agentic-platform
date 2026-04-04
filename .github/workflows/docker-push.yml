@@ -96,25 +96,27 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
       - name: Login to ACR
         if: inputs.push_image
         run: |
-          ACR_NAME="${{ vars.ACR_LOGIN_SERVER }}"
-          if [ -z "$ACR_NAME" ]; then
+          ACR_LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER }}"
+          if [ -z "$ACR_LOGIN_SERVER" ]; then
             echo "::error::ACR_LOGIN_SERVER repository variable is not set"
             exit 1
           fi
 
-          ACR_NAME="${ACR_NAME%%.azurecr.io}"
+          ACR_NAME="${ACR_LOGIN_SERVER%%.azurecr.io}"
           if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
             echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
             exit 1
           fi
 
-          az acr login --name "$ACR_NAME"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+          # Use --expose-token so no local Docker daemon socket is required for credential setup
+          TOKEN=$(az acr login --name "$ACR_NAME" --expose-token --output tsv --query accessToken)
+          echo "$TOKEN" | docker login "$ACR_LOGIN_SERVER" --username 00000000-0000-0000-0000-000000000000 --password-stdin
 
       - name: Resolve image tag
         id: tag
