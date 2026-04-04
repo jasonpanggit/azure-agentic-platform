@@ -135,18 +135,22 @@ def test_build_vm_kql_includes_strcat_offer_sku():
     assert "imageReference.sku" in kql
 
 
-def test_build_vm_kql_uses_nullif_to_skip_empty_strings():
-    """KQL coalesce branches must use nullif(..., '') so empty-string osSku/instanceViewOsName
-    don't short-circuit coalesce before reaching the strcat branch.
+def test_build_vm_kql_skips_empty_strings_before_strcat():
+    """KQL must skip empty osSku/instanceViewOsName before falling through to strcat.
 
     Root cause: Azure VMs return osSku='' and instanceViewOsName='' while the real OS
-    info lives in storageProfile.imageReference.offer+sku. KQL coalesce treats '' as
-    non-null, so without nullif the coalesce returns '' instead of the strcat value.
+    info lives in storageProfile.imageReference.offer+sku. Without an emptiness guard,
+    the empty string is returned as-is instead of falling through to the strcat branch.
+
+    The fix uses nested iff(isnotempty(...), ...) — ARG KQL does not support nullif().
     """
     from services.api_gateway.vm_inventory import _build_vm_kql
 
     kql = _build_vm_kql("all", None)
-    assert "nullif" in kql, "KQL must use nullif() to skip empty strings in coalesce"
+    # Must use isnotempty guards to skip empty strings — ARG does not have nullif()
+    assert "isnotempty" in kql, "KQL must use isnotempty() to skip empty strings"
+    # strcat must still be present for the offer+sku fallback
+    assert "strcat" in kql
 
 
 def test_build_vm_kql_includes_instance_view_osname():

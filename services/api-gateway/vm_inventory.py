@@ -115,19 +115,22 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     tostring(properties.extended.instanceView.powerState.displayStatus)
   )
 | extend osType = tostring(properties.osType)
-| extend osName = coalesce(
-    nullif(tostring(properties.osSku), ""),
-    nullif(tostring(properties.extended.instanceView.osName), ""),
+| extend osName = iff(
+    isnotempty(tostring(properties.osSku)),
+    tostring(properties.osSku),
     iff(
-        isnotempty(tostring(properties.storageProfile.imageReference.offer)),
-        strcat(
-            tostring(properties.storageProfile.imageReference.offer),
-            " ",
-            tostring(properties.storageProfile.imageReference.sku)
-        ),
-        ""
-    ),
-    nullif(tostring(properties.osType), "")
+        isnotempty(tostring(properties.extended.instanceView.osName)),
+        tostring(properties.extended.instanceView.osName),
+        iff(
+            isnotempty(tostring(properties.storageProfile.imageReference.offer)),
+            strcat(
+                tostring(properties.storageProfile.imageReference.offer),
+                " ",
+                tostring(properties.storageProfile.imageReference.sku)
+            ),
+            tostring(properties.osType)
+        )
+    )
   )
 | extend vmSize = tostring(properties.hardwareProfile.vmSize)
 | project
