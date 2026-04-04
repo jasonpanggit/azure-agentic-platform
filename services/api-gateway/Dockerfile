@@ -1,6 +1,6 @@
 # services/api-gateway/Dockerfile
 # Standalone API gateway for incident ingestion
-FROM mcr.microsoft.com/mirror/docker/library/python:3.12-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 

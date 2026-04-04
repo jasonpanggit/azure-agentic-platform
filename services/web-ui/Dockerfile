@@ -1,7 +1,7 @@
 # services/web-ui/Dockerfile
 # Next.js App Router with Fluent UI v9 for Azure AIOps
 
-FROM mcr.microsoft.com/mirror/docker/library/node:20-slim AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ COPY . .
 RUN npm run build
 
 # Production image
-FROM mcr.microsoft.com/mirror/docker/library/node:20-slim AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 
