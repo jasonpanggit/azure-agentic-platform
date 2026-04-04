@@ -446,3 +446,4 @@ resource "azurerm_key_vault_secret" "fabric_sp_client_secret" {
   key_vault_id = module.keyvault.keyvault_id
 }
 
+
