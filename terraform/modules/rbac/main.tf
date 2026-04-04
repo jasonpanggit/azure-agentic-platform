@@ -137,6 +137,27 @@ locals {
       }
     } : {},
 
+    # API Gateway: Reader + Monitoring Reader across all in-scope subscriptions
+    # (VM health checks via ResourceHealth API + Azure Monitor metrics reads)
+    merge(
+      {
+        for sub_id in var.all_subscription_ids :
+        "api-gateway-reader-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["api-gateway"]
+          role_definition_name = "Reader"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      },
+      {
+        for sub_id in var.all_subscription_ids :
+        "api-gateway-monreader-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["api-gateway"]
+          role_definition_name = "Monitoring Reader"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      }
+    ),
+
     # All agents: Cosmos DB Operator on platform subscription
     {
       for name, principal_id in var.agent_principal_ids :
