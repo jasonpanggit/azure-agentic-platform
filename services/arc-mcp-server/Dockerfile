@@ -3,7 +3,7 @@
 # dependency set (mcp[cli], Azure Arc SDKs) and do not need agent-framework
 # or azure-ai-agentserver packages.
 
-FROM python:3.11-slim
+FROM mcr.microsoft.com/mirror/docker/library/python:3.11-slim
 
 # Build args
 ARG IMAGE_TAG=latest

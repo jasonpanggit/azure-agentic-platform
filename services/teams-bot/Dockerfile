@@ -2,7 +2,7 @@
 # Multi-stage build for Azure Agentic Platform Teams bot
 
 # Stage 1: Build
-FROM node:20-alpine AS build
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -12,7 +12,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Runtime
-FROM node:20-alpine
+FROM mcr.microsoft.com/mirror/docker/library/node:20-alpine
 WORKDIR /app
 
 COPY --from=build /app/dist ./dist
