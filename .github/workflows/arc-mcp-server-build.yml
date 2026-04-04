@@ -38,6 +38,8 @@ jobs:
       - name: Install dependencies
         working-directory: services/arc-mcp-server
         run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
           # Test dependencies
@@ -49,6 +51,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/services/arc-mcp-server
           ARC_DISCONNECT_ALERT_HOURS: "1"
         run: |
+          . .venv/bin/activate
           pytest tests/ -m unit \
             --tb=short \
             -v \

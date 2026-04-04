@@ -167,7 +167,9 @@ jobs:
 
       - name: Install Python and Seed Dependencies
         run: |
-          python3 -m pip install --upgrade pip
+          python3 -m venv .venv-seed
+          . .venv-seed/bin/activate
+          pip install --upgrade pip
           pip install -r scripts/seed-runbooks/requirements.txt
 
       - name: Create Runbooks Table and Seed Data
@@ -178,7 +180,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-        run: python3 scripts/seed-runbooks/seed.py
+        run: |
+          . .venv-seed/bin/activate
+          python scripts/seed-runbooks/seed.py
 
       - name: Validate Runbook Embeddings
         env:
@@ -188,7 +192,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-        run: python3 scripts/seed-runbooks/validate.py
+        run: |
+          . .venv-seed/bin/activate
+          python scripts/seed-runbooks/validate.py
 
       - name: Remove Temporary PostgreSQL Firewall Rule
         if: always()
@@ -237,6 +243,8 @@ jobs:
         env:
           AZURE_PROJECT_ENDPOINT: ${{ secrets.FOUNDRY_PROJECT_ENDPOINT }}
         run: |
+          python3 -m venv .venv-foundry
+          . .venv-foundry/bin/activate
           pip install --quiet "azure-ai-projects>=2.0.1" "azure-ai-agents" "azure-identity"
           python scripts/provision-foundry-agents.py --no-deploy
 
