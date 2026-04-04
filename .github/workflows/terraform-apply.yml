@@ -210,6 +210,11 @@ jobs:
       TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
       TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      # Controls API Gateway auth mode without touching tfvars.
+      # Set the "API_GATEWAY_AUTH_MODE" GitHub Actions variable to "disabled"
+      # to bypass Entra auth (e.g. for testing), or "entra" to enforce it.
+      # Falls back to the terraform.tfvars default ("entra") when not set.
+      TF_VAR_api_gateway_auth_mode: ${{ vars.API_GATEWAY_AUTH_MODE }}
 
     steps:
       - name: Checkout
