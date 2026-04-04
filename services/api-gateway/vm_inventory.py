@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, Query
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.os_normalizer import normalize_os
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
 
     Arc machines use different property paths:
       - osType:  properties.osType (same for both)
-      - osName:  properties.osSku (Arc) vs storageProfile.imageReference.offer (Azure)
+      - osName:  properties.osSku (Arc) vs strcat(offer, " ", sku) (Azure) + normalize_os()
       - vmSize:  no hardware profile on Arc — returns empty string
       - vmType:  "Arc VM" vs "Azure VM" label for the UI
       - power state: properties.status ("Connected"/"Disconnected") for Arc
@@ -115,8 +116,18 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
   )
 | extend osType = tostring(properties.osType)
 | extend osName = coalesce(
-    tostring(properties.osSku),
-    tostring(properties.storageProfile.imageReference.offer)
+    nullif(tostring(properties.osSku), ""),
+    nullif(tostring(properties.extended.instanceView.osName), ""),
+    iff(
+        isnotempty(tostring(properties.storageProfile.imageReference.offer)),
+        strcat(
+            tostring(properties.storageProfile.imageReference.offer),
+            " ",
+            tostring(properties.storageProfile.imageReference.sku)
+        ),
+        ""
+    ),
+    nullif(tostring(properties.osType), "")
   )
 | extend vmSize = tostring(properties.hardwareProfile.vmSize)
 | project
@@ -404,6 +415,10 @@ async def list_vms(
         health_state = health_map.get(rid, "Unknown")
         alert_count = alert_map.get(rid.lower(), 0)
 
+        os_raw = row.get("osName", "")
+        os_type = row.get("osType", "")
+        os_display = normalize_os(os_raw, os_type)
+
         vms.append(
             {
                 "id": rid,
@@ -412,8 +427,8 @@ async def list_vms(
                 "subscription_id": row.get("subscriptionId", ""),
                 "location": row.get("location", ""),
                 "size": row.get("vmSize", ""),
-                "os_type": row.get("osType", ""),
-                "os_name": row.get("osName", ""),
+                "os_type": os_type,
+                "os_name": os_display,
                 "power_state": power_state,
                 "vm_type": row.get("vmType", "Azure VM"),  # "Azure VM" or "Arc VM"
                 "health_state": health_state,
