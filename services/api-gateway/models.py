@@ -157,7 +157,7 @@ class ChatResultResponse(BaseModel):
 
 
 class ApprovalAction(BaseModel):
-    """Payload for approve/reject actions (D-09, TEAMS-003)."""
+    """Payload for approve/reject actions (D-09, TEAMS-003, PLATINT-003)."""
 
     decided_by: str = Field(..., description="UPN or object ID of the operator")
     scope_confirmed: Optional[bool] = Field(
@@ -165,6 +165,12 @@ class ApprovalAction(BaseModel):
     )
     thread_id: Optional[str] = Field(
         default=None, description="Thread ID from card data (TEAMS-003 Action.Execute)"
+    )
+    feedback_text: Optional[str] = Field(
+        default=None, description="Free-text operator feedback on the proposal quality (PLATINT-003)"
+    )
+    feedback_tags: Optional[list[str]] = Field(
+        default=None, description="Structured feedback tags, e.g. ['false_positive', 'not_useful'] (PLATINT-003)"
     )
 
 
