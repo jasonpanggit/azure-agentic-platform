@@ -32,7 +32,14 @@ from services.api_gateway.http_rate_limiter import (
 
 from services.api_gateway.audit import query_audit_log
 from services.api_gateway.dependencies import get_cosmos_client, get_credential, get_optional_cosmos_client
-from services.api_gateway.audit_export import generate_remediation_report
+from services.api_gateway.audit_export import (
+    generate_remediation_audit_export,
+    generate_remediation_report,
+)
+from services.api_gateway.remediation_executor import (
+    execute_remediation,
+    run_wal_stale_monitor,
+)
 from services.api_gateway.auth import verify_token
 from services.api_gateway.chat import (
     _approve_pending_subrun_mcp_calls,
@@ -56,6 +63,8 @@ from services.api_gateway.models import (
     IncidentPayload,
     IncidentResponse,
     IncidentSummary,
+    RemediationAuditRecord,
+    RemediationResult,
     RunbookResult,
     SLOCreateRequest,
     SLODefinition,
@@ -320,6 +329,16 @@ async def lifespan(app: FastAPI):
             os.environ.get("FORECAST_ENABLED", "true"),
         )
 
+    # Start WAL stale-monitor background task (REMEDI-011)
+    _wal_monitor_task: Optional[asyncio.Task] = None
+    if app.state.cosmos_client is not None:
+        _wal_monitor_task = asyncio.create_task(
+            run_wal_stale_monitor(app.state.cosmos_client)
+        )
+        logger.info("startup: WAL stale monitor started | interval=300s")
+    else:
+        logger.warning("startup: WAL stale monitor not started (COSMOS_ENDPOINT not set)")
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -341,6 +360,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("shutdown: forecast sweep loop cancelled")
+    # Cancel WAL stale monitor on shutdown
+    if _wal_monitor_task is not None and not _wal_monitor_task.done():
+        _wal_monitor_task.cancel()
+        try:
+            await _wal_monitor_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: WAL stale monitor cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
@@ -1266,6 +1293,153 @@ async def reject_proposal(
         raise HTTPException(status_code=400, detail=error_msg)
 
 
+@app.post(
+    "/api/v1/approvals/{approval_id}/execute",
+    response_model=RemediationResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def execute_approval(
+    approval_id: str,
+    request: Request,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
+    credential: Any = Depends(get_credential),
+) -> RemediationResult:
+    """Execute an approved remediation proposal (REMEDI-009, REMEDI-010, REMEDI-011, REMEDI-012).
+
+    Pre-conditions:
+      - approval_id must exist in the approvals container (404 if not)
+      - approval status must be 'approved' (409 if pending/rejected/expired/executed)
+      - approval must not be expired (410 if expired)
+
+    Returns RemediationResult with execution_id and verification_scheduled=True.
+    """
+    from services.api_gateway.approvals import _get_approvals_container, _is_expired
+    from azure.cosmos.exceptions import CosmosResourceNotFoundError
+
+    # Read approval record via cross-partition query (only have approval_id)
+    approvals_container = _get_approvals_container(cosmos_client=cosmos_client)
+    try:
+        records = list(approvals_container.query_items(
+            query="SELECT * FROM c WHERE c.id = @approval_id",
+            parameters=[{"name": "@approval_id", "value": approval_id}],
+            enable_cross_partition_query=True,
+        ))
+    except Exception as exc:
+        logger.error(
+            "execute_approval: cosmos read failed | approval_id=%s error=%s", approval_id, exc
+        )
+        raise HTTPException(status_code=500, detail="Failed to read approval record")
+
+    if not records:
+        raise HTTPException(status_code=404, detail="Approval not found")
+
+    approval_record = records[0]
+
+    # Status guards
+    if _is_expired(approval_record):
+        raise HTTPException(status_code=410, detail="Approval has expired")
+
+    if approval_record["status"] != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot execute approval in status: {approval_record['status']}. Must be 'approved'.",
+        )
+
+    # Resolve topology client from app state
+    topology_client = getattr(request.app.state, "topology_client", None)
+
+    try:
+        result = await execute_remediation(
+            approval_id=approval_id,
+            credential=credential,
+            cosmos_client=cosmos_client,
+            topology_client=topology_client,
+            approval_record=approval_record,
+        )
+    except Exception as exc:
+        logger.error(
+            "execute_approval: execution failed | approval_id=%s error=%s",
+            approval_id, exc, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Remediation execution failed")
+
+    # Update approval status to "executed" (best-effort)
+    try:
+        approvals_container.patch_item(
+            item=approval_id,
+            partition_key=approval_record["thread_id"],
+            patch_operations=[
+                {"op": "add", "path": "/status", "value": "executed"},
+                {"op": "add", "path": "/executed_at", "value": result.execution_id},
+            ],
+        )
+    except Exception as exc:
+        logger.warning(
+            "execute_approval: approval status update failed (non-fatal) | approval_id=%s error=%s",
+            approval_id, exc,
+        )
+
+    return result
+
+
+@app.get(
+    "/api/v1/approvals/{approval_id}/verification",
+    response_model=RemediationAuditRecord,
+)
+async def get_verification_result(
+    approval_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
+) -> RemediationAuditRecord:
+    """Get the verification result for an executed remediation (REMEDI-009).
+
+    Returns 202 with Retry-After: 60 if verification is still pending.
+    Returns 404 if no execution record exists for this approval_id.
+    """
+    from services.api_gateway.remediation_executor import _get_remediation_audit_container
+
+    container = _get_remediation_audit_container(cosmos_client)
+    try:
+        records = list(container.query_items(
+            query="SELECT * FROM c WHERE c.approval_id = @approval_id",
+            parameters=[{"name": "@approval_id", "value": approval_id}],
+            enable_cross_partition_query=True,
+        ))
+    except Exception as exc:
+        logger.error(
+            "get_verification_result: cosmos query failed | approval_id=%s error=%s",
+            approval_id, exc,
+        )
+        raise HTTPException(status_code=500, detail="Failed to query remediation audit")
+
+    # Filter to primary execution record (not rollback)
+    execution_records = [r for r in records if r.get("action_type") == "execute"]
+
+    if not execution_records:
+        raise HTTPException(
+            status_code=404, detail="No execution record found for this approval"
+        )
+
+    record = execution_records[-1]  # most recent
+
+    # Verification not yet complete
+    if record.get("verification_result") is None:
+        return JSONResponse(
+            content={
+                "execution_id": record["id"],
+                "approval_id": approval_id,
+                "verification_result": None,
+                "status": "pending_verification",
+            },
+            status_code=202,
+            headers={"Retry-After": "60"},
+        )
+
+    clean = {k: v for k, v in record.items() if not k.startswith("_")}
+    return RemediationAuditRecord(**clean)
+
+
 @app.get("/api/v1/approvals", response_model=list[ApprovalRecord])
 async def list_approvals(
     status: str = "pending",
@@ -1395,6 +1569,25 @@ async def export_audit_report(
     Authentication: Entra ID Bearer token required.
     """
     report = await generate_remediation_report(from_time=from_time, to_time=to_time)
+    return AuditExportResponse(**report)
+
+
+@app.get("/api/v1/audit/remediation-export", response_model=AuditExportResponse)
+async def export_remediation_audit(
+    from_time: str,
+    to_time: str,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
+) -> AuditExportResponse:
+    """Export immutable remediation audit trail for compliance (REMEDI-013).
+
+    Combines OneLake events + Cosmos approvals + Cosmos remediation_audit WAL records.
+    """
+    report = await generate_remediation_audit_export(
+        from_time=from_time,
+        to_time=to_time,
+        cosmos_client=cosmos_client,
+    )
     return AuditExportResponse(**report)
 
 

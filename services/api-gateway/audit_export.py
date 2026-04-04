@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -169,3 +169,134 @@ async def _read_approval_records(
     except Exception as exc:
         logger.error("Failed to read Cosmos DB approval records: %s", exc)
         return {}
+
+
+async def _read_remediation_audit_records(
+    from_time: str,
+    to_time: str,
+    cosmos_client: Optional[Any],
+) -> list[dict]:
+    """Read execution records from the Cosmos remediation_audit container."""
+    if cosmos_client is None:
+        logger.debug("Cosmos not available — skipping remediation_audit read")
+        return []
+    try:
+        from services.api_gateway.remediation_executor import _get_remediation_audit_container
+
+        container = _get_remediation_audit_container(cosmos_client)
+        query = (
+            "SELECT * FROM c WHERE "
+            "c.executed_at >= @from_time AND c.executed_at <= @to_time"
+        )
+        items = list(container.query_items(
+            query=query,
+            parameters=[
+                {"name": "@from_time", "value": from_time},
+                {"name": "@to_time", "value": to_time},
+            ],
+            enable_cross_partition_query=True,
+        ))
+        return [{k: v for k, v in item.items() if not k.startswith("_")} for item in items]
+    except Exception as exc:
+        logger.error("Failed to read remediation_audit records: %s", exc)
+        return []
+
+
+async def generate_remediation_audit_export(
+    from_time: str,
+    to_time: str,
+    cosmos_client: Optional[Any] = None,
+) -> dict[str, Any]:
+    """Generate REMEDI-013 compliance export combining all three audit sources.
+
+    Sources:
+      1. OneLake remediation events (REMEDI-007)
+      2. Cosmos approvals (approval chain)
+      3. Cosmos remediation_audit WAL records (authoritative for automated ARM actions)
+    """
+    # Source 1: OneLake
+    onelake_events = await _read_onelake_events(from_time, to_time)
+    # Source 2: Cosmos approvals
+    approval_map = await _read_approval_records(from_time, to_time)
+    # Source 3: Cosmos remediation_audit (NEW)
+    audit_records = await _read_remediation_audit_records(from_time, to_time, cosmos_client)
+
+    # Index audit records by approval_id for merge
+    audit_by_approval: dict[str, dict] = {}
+    for rec in audit_records:
+        approval_id = rec.get("approval_id", "")
+        if approval_id:
+            audit_by_approval[approval_id] = rec
+
+    # Build enriched event list
+    enriched_events: list[dict] = []
+    seen_approval_ids: set[str] = set()
+
+    for event in onelake_events:
+        approval_id = event.get("approvalId", "")
+        approval = approval_map.get(approval_id, {})
+        audit_rec = audit_by_approval.get(approval_id, {})
+        seen_approval_ids.add(approval_id)
+        enriched_events.append({
+            **event,
+            "approval_chain": {
+                "proposed_at": approval.get("proposed_at", ""),
+                "decided_at": approval.get("decided_at", ""),
+                "decided_by": approval.get("decided_by", ""),
+                "status": approval.get("status", event.get("outcome", "")),
+                "expires_at": approval.get("expires_at", ""),
+            },
+            "execution_audit": {
+                "execution_id": audit_rec.get("id", ""),
+                "status": audit_rec.get("status", ""),
+                "verification_result": audit_rec.get("verification_result"),
+                "verified_at": audit_rec.get("verified_at"),
+                "rolled_back": audit_rec.get("rolled_back", False),
+                "preflight_blast_radius_size": audit_rec.get("preflight_blast_radius_size", 0),
+            } if audit_rec else None,
+        })
+
+    # Add Cosmos audit records not covered by OneLake events
+    for audit_rec in audit_records:
+        approval_id = audit_rec.get("approval_id", "")
+        if approval_id in seen_approval_ids:
+            continue
+        approval = approval_map.get(approval_id, {})
+        seen_approval_ids.add(approval_id)
+        enriched_events.append({
+            "timestamp": audit_rec.get("executed_at", ""),
+            "agentId": "",
+            "toolName": audit_rec.get("proposed_action", ""),
+            "toolParameters": {},
+            "approvedBy": audit_rec.get("executed_by", ""),
+            "outcome": audit_rec.get("status", ""),
+            "durationMs": 0,
+            "correlationId": "",
+            "threadId": audit_rec.get("thread_id", ""),
+            "approvalId": approval_id,
+            "approval_chain": {
+                "proposed_at": approval.get("proposed_at", ""),
+                "decided_at": approval.get("decided_at", ""),
+                "decided_by": approval.get("decided_by", ""),
+                "status": approval.get("status", ""),
+                "expires_at": approval.get("expires_at", ""),
+            },
+            "execution_audit": {
+                "execution_id": audit_rec.get("id", ""),
+                "status": audit_rec.get("status", ""),
+                "verification_result": audit_rec.get("verification_result"),
+                "verified_at": audit_rec.get("verified_at"),
+                "rolled_back": audit_rec.get("rolled_back", False),
+                "preflight_blast_radius_size": audit_rec.get("preflight_blast_radius_size", 0),
+            },
+        })
+
+    return {
+        "report_metadata": {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "period": {"from": from_time, "to": to_time},
+            "total_events": len(enriched_events),
+            "sources": ["onelake", "cosmos_approvals", "cosmos_remediation_audit"],
+        },
+        "remediation_events": enriched_events,
+    }

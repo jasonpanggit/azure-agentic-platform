@@ -236,6 +236,53 @@ resource "azurerm_cosmosdb_sql_container" "baselines" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "remediation_audit" {
+  name                  = "remediation_audit"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/incident_id"]
+  partition_key_version = 2
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+
+    # Composite index for WAL stale-monitor query (REMEDI-011):
+    #   WHERE c.status = "pending" AND c.wal_written_at < @cutoff
+    composite_index {
+      index {
+        path  = "/status"
+        order = "ascending"
+      }
+      index {
+        path  = "/wal_written_at"
+        order = "ascending"
+      }
+    }
+
+    # Composite index for compliance export query (REMEDI-013):
+    #   WHERE c.executed_at >= @from AND c.executed_at <= @to
+    composite_index {
+      index {
+        path  = "/executed_at"
+        order = "ascending"
+      }
+      index {
+        path  = "/incident_id"
+        order = "ascending"
+      }
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
