@@ -20,22 +20,6 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }
 
-# ── Store GitHub PAT in existing Key Vault ────────────────────────────────────
-resource "azurerm_key_vault_access_policy" "runner_kv_read" {
-  key_vault_id = var.key_vault_id
-  tenant_id    = azurerm_user_assigned_identity.runner.tenant_id
-  object_id    = azurerm_user_assigned_identity.runner.principal_id
-
-  secret_permissions = ["Get"]
-}
-
-resource "azurerm_key_vault_secret" "github_pat" {
-  name         = "github-runner-pat"
-  value        = var.github_pat
-  key_vault_id = var.key_vault_id
-  tags         = var.required_tags
-}
-
 # ── Container App Job — GitHub Actions Runner ──────────────────────────────────
 resource "azurerm_container_app_job" "github_runner" {
   name                         = "caj-github-runner-${var.environment}"
@@ -84,11 +68,11 @@ resource "azurerm_container_app_job" "github_runner" {
     identity_ids = [azurerm_user_assigned_identity.runner.id]
   }
 
-  # PAT sourced from Key Vault (no plaintext in state)
+  # PAT stored inline — KV reference causes 400 on first apply due to identity
+  # propagation lag. The value is marked sensitive in variables.tf.
   secret {
-    name                = "github-runner-pat"
-    key_vault_secret_id = azurerm_key_vault_secret.github_pat.versionless_id
-    identity            = azurerm_user_assigned_identity.runner.id
+    name  = "github-runner-pat"
+    value = var.github_pat
   }
 
   # Pull runner image from ACR using managed identity
@@ -126,8 +110,6 @@ resource "azurerm_container_app_job" "github_runner" {
   tags = var.required_tags
 
   depends_on = [
-    azurerm_key_vault_access_policy.runner_kv_read,
     azurerm_role_assignment.acr_pull,
-    azurerm_key_vault_secret.github_pat,
   ]
 }

@@ -462,7 +462,6 @@ module "github_runner" {
   container_apps_environment_id = module.compute_env.container_apps_environment_id
   acr_id                        = module.compute_env.acr_id
   acr_login_server              = module.compute_env.acr_login_server
-  key_vault_id                  = module.keyvault.keyvault_id
 
   github_pat   = var.github_pat
   github_owner = "jasonpanggit"

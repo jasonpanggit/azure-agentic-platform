@@ -33,11 +33,6 @@ variable "acr_login_server" {
   type        = string
 }
 
-variable "key_vault_id" {
-  description = "Resource ID of the Key Vault for storing the GitHub PAT"
-  type        = string
-}
-
 variable "github_pat" {
   description = "Fine-grained GitHub PAT with Actions=read, Administration=read+write"
   type        = string
