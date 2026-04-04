@@ -341,9 +341,10 @@ module "fabric" {
   fabric_capacity_sku  = "F4" # Prod: higher capacity
   fabric_admin_email   = var.fabric_admin_email
   fabric_capacity_name = "fcaapprod"
-  # Phase 21: Fabric data plane activated (workspace, Eventhouse, KQL DB, Activator, Lakehouse).
-  # Post-apply: run scripts/ops/21-2-activate-detection-plane.sh for manual wiring steps.
-  enable_fabric_data_plane = true
+  # Fabric data plane disabled in CI — Microsoft.Fabric/workspaces API returns 404 InvalidResourceType
+  # from GitHub Actions runners. Workspace must be provisioned manually or via az cli with correct auth.
+  # Re-enable once Fabric GA resolves the runner IP restriction.
+  enable_fabric_data_plane = false
 }
 
 # --- Entra App Registrations (depends on: keyvault) ---
