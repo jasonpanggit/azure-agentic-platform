@@ -13,6 +13,7 @@ permissions:
 env:
   TERRAFORM_VERSION: '1.9.8'
   ARM_USE_OIDC: true
+  ARM_USE_AZUREAD: true
 
 jobs:
   apply-dev:
