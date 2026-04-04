@@ -639,13 +639,13 @@ Plans:
 **Goal:** Synthesise everything the platform has learned into actionable platform-wide intelligence. Weekly systemic pattern analysis (k-means clustering, top-5 recurring issues, trend detection). Team and service health scoring with 30/60/90-day trends. FinOps integration: POST /api/v1/admin/business-tiers for operator-configured revenue tiers, wasted compute via Cost Management API, cost-saved-by-automation metric, FinOps tab in dashboard. Continuous learning loop captures operator approve/reject feedback. Platform Health dashboard for administrators showing detection pipeline lag, agent P50/P95, auto-remediation success rate, SLO compliance, error budget portfolio, noise ratio, and automation savings.
 **Requirements**: PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004
 **Depends on:** Phase 27
-**Status:** In progress (1/? plans complete)
-**Plans:** 2 plans complete
+**Status:** COMPLETE (3/3 plans complete)
+**Plans:** 3 plans complete
 
 Plans:
 - [x] 28-1: Cosmos DB containers — pattern_analysis (/analysis_date) + business_tiers (/tier_name), both no-TTL, outputs added (PLATINT-001, PLATINT-004) — COMPLETE
 - [x] 28-2: Pattern Analyzer — ApprovalAction feedback fields, process_approval_decision feedback persistence, 5 new Pydantic models, pattern_analyzer.py (8 pure-Python functions, 7 env vars, no numpy/sklearn), 21 tests passing (PLATINT-001, PLATINT-002, PLATINT-003) — COMPLETE
-- [ ] TBD (run /gsd:plan-phase 28 to break down remaining plans)
+- [x] 28-3: Intelligence Endpoints — GET /api/v1/intelligence/patterns, GET /api/v1/intelligence/platform-health, POST/GET /api/v1/admin/business-tiers, default tier seeding, pattern analysis background loop, feedback passthrough (approve/reject), 12 tests passing (PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004) — COMPLETE
 
 ---
 

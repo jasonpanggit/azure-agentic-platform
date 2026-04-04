@@ -3,15 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: unknown
-last_updated: "2026-04-04T06:00:00.000Z"
+last_updated: "2026-04-04T07:25:00.000Z"
 progress:
   total_phases: 22
   completed_phases: 10
   total_plans: 74
-  completed_plans: 54
+  completed_plans: 57
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last updated: 2026-04-04 — Plan 28-3 COMPLETE: Intelligence Endpoints (PLATINT-001–004 code-complete). 5 new API endpoints: GET /api/v1/intelligence/patterns (PatternAnalysisResult or 404/503), GET /api/v1/intelligence/platform-health (8 metrics aggregated from Cosmos+PostgreSQL), POST/GET /api/v1/admin/business-tiers (FinOps tier CRUD). Default business tier seeded on startup. run_pattern_analysis_loop background task in lifespan. approve/reject endpoints pass feedback_text/feedback_tags to process_approval_decision (PLATINT-003). 12 new tests all passing. 588 total api-gateway tests pass (no regressions). Phase 28 fully complete (28-1 Terraform + 28-2 Pattern Analyzer + 28-3 Endpoints). Branch: gsd/phase-28-platform-intelligence.
 
 > Last updated: 2026-04-04 — Plan 28-2 COMPLETE: Pattern Analyzer (PLATINT-001, PLATINT-002, PLATINT-003). ApprovalAction extended with feedback_text/feedback_tags fields (default=None). process_approval_decision() accepts and persists feedback to Cosmos. 5 new Pydantic models: BusinessTier, IncidentPattern, PatternAnalysisResult, PlatformHealth, BusinessTiersResponse. pattern_analyzer.py created — 8 pure-Python functions, no numpy/sklearn, 7 env vars. 21 tests all passing. 5 atomic commits on gsd/phase-28-platform-intelligence.
 
