@@ -7,5 +7,6 @@ terraform {
     use_azuread_auth     = true
     # Auth uses ARM_CLIENT_ID / ARM_CLIENT_SECRET / ARM_TENANT_ID env vars at init time
     # (backend blocks cannot reference Terraform variables)
+    # Note: storage account requires publicNetworkAccess=Enabled for GitHub Actions runners
   }
 }
