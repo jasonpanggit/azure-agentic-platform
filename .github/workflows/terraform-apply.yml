@@ -19,6 +19,8 @@ jobs:
     name: Apply (dev)
     runs-on: ubuntu-latest
     environment: dev
+    # Skip dev/staging if their Terraform state backend doesn't exist yet
+    continue-on-error: true
 
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -95,7 +97,9 @@ jobs:
     name: Apply (staging)
     runs-on: ubuntu-latest
     needs: apply-dev
+    if: always()
     environment: staging
+    continue-on-error: true
 
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -197,6 +201,7 @@ jobs:
     name: Apply (prod)
     runs-on: ubuntu-latest
     needs: apply-staging
+    if: always()
     environment: prod
 
     env:
