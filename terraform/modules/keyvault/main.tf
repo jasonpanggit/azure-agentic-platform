@@ -6,7 +6,7 @@ resource "azurerm_key_vault" "main" {
   sku_name                      = "standard"
   soft_delete_retention_days    = 90
   purge_protection_enabled      = true
-  public_network_access_enabled = true  # Required for GitHub Actions runners to read KV secrets during terraform apply
+  public_network_access_enabled = false  # Runner is VNet-resident; public access not needed
   rbac_authorization_enabled    = true
 
   tags = var.required_tags

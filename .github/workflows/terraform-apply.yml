@@ -200,7 +200,7 @@ jobs:
 
   apply-prod:
     name: Apply (prod)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, azure, linux]
     environment: prod
 
     env:
@@ -231,11 +231,6 @@ jobs:
         working-directory: terraform/envs/prod
         run: terraform init -input=false
 
-      - name: Setup Python for Agent Provisioning
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Provision Foundry Agents
         continue-on-error: true
         env:
@@ -259,20 +254,14 @@ jobs:
           fi
           terraform apply -auto-approve -input=false -var-file credentials.tfvars $EXTRA_VARS
 
-      - name: Get Runner Egress IP
-        id: runner_ip
-        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
-
-      # NOTE: aap-postgres-prod is VNet-injected (public_network_access_enabled=false).
-      # Firewall rule approach does not work for private Postgres — skipped for prod.
-      # pgvector extension was already created during initial bootstrap (Phase 19).
-      # azure.extensions=VECTOR is managed by Terraform (postgres.tf line 33-37).
-
-      - name: Remove Temporary PostgreSQL Firewall Rule
-        if: always()
+      - name: Create pgvector Extension
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          PGSSLMODE: require
         run: |
-          az postgres flexible-server firewall-rule delete \
-            --resource-group "rg-aap-prod" \
-            --name "aap-postgres-prod" \
-            --rule-name "gh-runner-temp-$$" \
-            --yes || true
+          psql \
+            -v ON_ERROR_STOP=1 \
+            -h "aap-postgres-prod.postgres.database.azure.com" \
+            -U aap_admin \
+            -d aap \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
