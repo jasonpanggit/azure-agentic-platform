@@ -289,21 +289,16 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         if (terminal.includes(data.run_status)) {
           clearInterval(chatPollRef.current!)
           setChatStreaming(false)
-          if (data.run_status === 'completed' && data.messages?.length) {
-            const assistantMsgs = (data.messages as Array<{ role: string; content: unknown }>)
-              .filter(m => m.role === 'assistant')
-            if (assistantMsgs.length) {
-              const last = assistantMsgs[assistantMsgs.length - 1]
-              const content = Array.isArray(last.content)
-                ? (last.content as Array<{ text?: { value?: string } }>)
-                    .map(c => c.text?.value ?? '')
-                    .join('')
-                : String(last.content)
-              setChatMessages(prev => [
-                ...prev,
-                { role: 'assistant', content, approval_id: data.approval_id },
-              ])
-            }
+          if (data.run_status === 'completed' && data.reply) {
+            setChatMessages(prev => [
+              ...prev,
+              { role: 'assistant', content: data.reply, approval_id: data.approval_id },
+            ])
+          } else if (data.run_status === 'failed' || data.run_status === 'cancelled' || data.run_status === 'expired') {
+            setChatMessages(prev => [
+              ...prev,
+              { role: 'assistant', content: 'Error: the AI agent run did not complete. Please try again.' },
+            ])
           }
         }
       } catch {
@@ -334,16 +329,21 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
           incident_id: incidentId,
         }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        const detail = errBody?.error ?? `Gateway error (HTTP ${res.status})`
+        throw new Error(detail)
+      }
       const data = await res.json()
       setChatThreadId(data.thread_id)
       setChatRunId(data.run_id)
       startChatPolling(data.thread_id, data.run_id)
-    } catch {
+    } catch (err) {
       setChatStreaming(false)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
       setChatMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Error: could not reach the AI agent.' },
+        { role: 'assistant', content: `Error: could not reach the AI agent. ${detail}` },
       ])
     }
   }
@@ -457,6 +457,14 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
 
             {/* VM Info */}
             <div className="px-4 py-3 space-y-2">
+              <div>
+                <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {vm.name || resourceName || 'VM Detail'}
+                </div>
+                <div className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {vm.subscription_id}
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <HealthIcon state={vm.health_state} />
                 <span className="text-sm font-medium" style={{ color: HealthColor(vm.health_state) }}>
