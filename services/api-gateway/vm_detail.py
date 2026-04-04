@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.os_normalizer import normalize_os
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +91,25 @@ Resources
     tostring(properties.osType)
   )
 | extend osName = iff(
-    type =~ 'microsoft.compute/virtualmachines',
-    tostring(properties.storageProfile.imageReference.offer),
-    tostring(properties.osSku)
+    type =~ 'microsoft.hybridcompute/machines',
+    tostring(properties.osSku),
+    iff(
+        isnotempty(tostring(properties.osSku)),
+        tostring(properties.osSku),
+        iff(
+            isnotempty(tostring(properties.extended.instanceView.osName)),
+            tostring(properties.extended.instanceView.osName),
+            iff(
+                isnotempty(tostring(properties.storageProfile.imageReference.offer)),
+                strcat(
+                    tostring(properties.storageProfile.imageReference.offer),
+                    ' ',
+                    tostring(properties.storageProfile.imageReference.sku)
+                ),
+                tostring(properties.osType)
+            )
+        )
+    )
   )
 | extend vmSize = iff(
     type =~ 'microsoft.compute/virtualmachines',
@@ -221,6 +238,10 @@ async def get_vm_detail(
     duration_ms = (time.monotonic() - start) * 1000
     logger.info("vm_detail: complete | resource=%s duration_ms=%.0f", resource_id[-60:], duration_ms)
 
+    os_raw = arg_row.get("osName", "")
+    os_type = arg_row.get("osType", "")
+    os_display = normalize_os(os_raw, os_type)
+
     return {
         "id": resource_id,
         "name": arg_row.get("name", ""),
@@ -228,8 +249,8 @@ async def get_vm_detail(
         "subscription_id": arg_row.get("subscriptionId", ""),
         "location": arg_row.get("location", ""),
         "size": arg_row.get("vmSize", ""),
-        "os_type": arg_row.get("osType", ""),
-        "os_name": arg_row.get("osName", ""),
+        "os_type": os_type,
+        "os_name": os_display,
         "power_state": _normalize_power_state(arg_row.get("powerState", "")),
         "health_state": health["health_state"],
         "health_summary": health.get("summary"),
