@@ -17,13 +17,11 @@ Execution order: Layer 1 first, then Layer 2, then create new.
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from azure.core import MatchConditions
 from azure.cosmos import ContainerProxy
-from azure.cosmos.exceptions import CosmosResourceExistsError
 
 from models import (
     AlertStatus,
@@ -180,7 +178,7 @@ async def collapse_duplicate(
                 item=record["id"],
                 body=updated,
                 etag=etag,
-                match_condition=MatchConditions.IfMatch,
+                match_condition=MatchConditions.IfNotModified,
             )
         except Exception as exc:
             if "412" in str(exc) or "Precondition Failed" in str(exc):
@@ -244,7 +242,7 @@ async def correlate_alert(
                 item=record["id"],
                 body=updated,
                 etag=etag,
-                match_condition=MatchConditions.IfMatch,
+                match_condition=MatchConditions.IfNotModified,
             )
         except Exception as exc:
             if "412" in str(exc) or "Precondition Failed" in str(exc):

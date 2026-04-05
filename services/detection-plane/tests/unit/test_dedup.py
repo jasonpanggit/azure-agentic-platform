@@ -1,13 +1,12 @@
 """Unit tests for two-layer deduplication (DETECT-005)."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from azure.core import MatchConditions
+from unittest.mock import MagicMock
 
 import pytest
 
 from dedup import (
-    DedupResult,
     collapse_duplicate,
     correlate_alert,
     create_incident_record,
@@ -100,7 +99,7 @@ class TestCollapseDuplicate:
         assert result["duplicate_count"] == 3
         mock_container.replace_item.assert_called_once()
         call_kwargs = mock_container.replace_item.call_args.kwargs
-        assert call_kwargs.get("match_condition") == "IfMatch"
+        assert call_kwargs.get("match_condition") == MatchConditions.IfNotModified
 
     @pytest.mark.asyncio
     async def test_uses_etag(self, mock_container: MagicMock) -> None:
@@ -146,7 +145,7 @@ class TestCorrelateAlert:
         mock_container.replace_item.return_value = {**existing}
         await correlate_alert(existing, "a-2", "Sev2", "rule-x", mock_container)
         call_kwargs = mock_container.replace_item.call_args.kwargs
-        assert call_kwargs.get("match_condition") == "IfMatch"
+        assert call_kwargs.get("match_condition") == MatchConditions.IfNotModified
         assert call_kwargs.get("etag") == "etag-42"
 
 

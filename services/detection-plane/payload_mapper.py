@@ -16,7 +16,7 @@ The IncidentPayload schema is defined in services/api-gateway/models.py:
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 def map_detection_result_to_incident_payload(

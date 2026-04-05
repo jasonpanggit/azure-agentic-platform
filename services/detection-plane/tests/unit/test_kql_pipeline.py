@@ -8,8 +8,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 from classify_domain import DOMAIN_MAPPINGS, classify_domain
 
 # Path to KQL files relative to repo root
