@@ -453,11 +453,12 @@ async def run_diagnostic_pipeline(
                 )
 
                 # Step 6: Update incident investigation_status
+                # The incidents container uses /resource_id as partition key.
                 try:
                     incidents_container = db.get_container_client("incidents")
                     incident_doc = await asyncio.get_event_loop().run_in_executor(
                         None,
-                        lambda: incidents_container.read_item(incident_id, partition_key=incident_id),
+                        lambda: incidents_container.read_item(incident_id, partition_key=resource_id),
                     )
                     incident_doc["investigation_status"] = "evidence_ready"
                     incident_doc["evidence_collected_at"] = datetime.now(timezone.utc).isoformat()
