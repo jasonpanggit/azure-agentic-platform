@@ -667,15 +667,17 @@ async def enable_diagnostic_settings(
         rg_idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
         resource_group = parts[rg_idx + 1]
 
-        # Extract location from the workspace (reused during AMA install)
+        # Get the VM's own location (required for AMA extension install).
+        # Do NOT use the workspace location — it may be in a different region.
         token = _arm_token(credential)
-        ws_resp = requests.get(
-            f"{_ARM_BASE}{workspace_resource_id}",
-            params={"api-version": "2022-10-01"},
+        vm_resp = requests.get(
+            f"{_ARM_BASE}{resource_id}",
+            params={"api-version": "2023-03-01"},
             headers={"Authorization": f"Bearer {token}"},
             timeout=15,
         )
-        location = ws_resp.json().get("location", "eastasia") if ws_resp.status_code == 200 else "eastasia"
+        location = vm_resp.json().get("location", "eastus") if vm_resp.status_code == 200 else "eastus"
+        logger.info("diag_settings: vm location=%s", location)
 
         import asyncio
 
