@@ -35,9 +35,7 @@ Resources
     id       = tolower(id),
     name,
     type     = tolower(type),
-    location,
-    resourceGroup,
-    subscriptionId
+    location
 | order by type asc, name asc
 """
 

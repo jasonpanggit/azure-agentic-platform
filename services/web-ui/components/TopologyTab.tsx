@@ -133,9 +133,7 @@ function SubscriptionNode({
   childrenOf: (parentId: string | null) => TopologyNode[];
 }) {
   const isOpen = openItems.has(sub.id);
-  const totalResources = nodes.filter(
-    (n) => n.kind === 'resource' && nodes.find((rg) => rg.id === n.parentId && rg.parentId === sub.id)
-  ).length;
+  const totalResources = resourceGroups.reduce((sum, rg) => sum + (rg.resourceCount ?? 0), 0);
 
   return (
     <Collapsible open={isOpen} onOpenChange={() => onToggle(sub.id)}>
