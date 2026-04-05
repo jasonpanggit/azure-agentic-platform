@@ -159,6 +159,46 @@ function Sparkline({ data, color = 'var(--accent-blue)' }: { data: number[]; col
   )
 }
 
+// ── Available metrics catalog ─────────────────────────────────────────────
+
+interface MetricOption {
+  name: string       // Azure Monitor metric name
+  label: string      // Short display label
+  group: string      // CPU | Memory | Disk | Network | Availability
+}
+
+const METRIC_CATALOG: MetricOption[] = [
+  // CPU
+  { name: 'Percentage CPU',              label: 'CPU %',              group: 'CPU' },
+  { name: 'CPU Credits Remaining',       label: 'CPU Credits Left',   group: 'CPU' },
+  { name: 'CPU Credits Consumed',        label: 'CPU Credits Used',   group: 'CPU' },
+  // Memory
+  { name: 'Available Memory Bytes',      label: 'Free Memory',        group: 'Memory' },
+  // Disk
+  { name: 'Disk Read Bytes',             label: 'Disk Read',          group: 'Disk' },
+  { name: 'Disk Write Bytes',            label: 'Disk Write',         group: 'Disk' },
+  { name: 'Disk Read Operations/Sec',    label: 'Disk Read IOPS',     group: 'Disk' },
+  { name: 'Disk Write Operations/Sec',   label: 'Disk Write IOPS',    group: 'Disk' },
+  { name: 'OS Disk Queue Depth',         label: 'Disk Queue',         group: 'Disk' },
+  { name: 'OS Disk Bandwidth Consumed Percentage', label: 'Disk BW %', group: 'Disk' },
+  // Network
+  { name: 'Network In Total',            label: 'Net In',             group: 'Network' },
+  { name: 'Network Out Total',           label: 'Net Out',            group: 'Network' },
+  // Availability
+  { name: 'VM Availability Metric',      label: 'Availability',       group: 'Availability' },
+]
+
+const DEFAULT_METRICS = [
+  'Percentage CPU',
+  'Available Memory Bytes',
+  'Disk Read Bytes',
+  'Disk Write Bytes',
+  'Disk Read Operations/Sec',
+  'Disk Write Operations/Sec',
+  'Network In Total',
+  'Network Out Total',
+]
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }: VMDetailPanelProps) {
@@ -170,6 +210,8 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<'PT1H' | 'PT6H' | 'PT24H' | 'P7D'>('PT24H')
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(DEFAULT_METRICS)
+  const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
   const [pollingEvidence, setPollingEvidence] = useState(false)
 
   // ── Diagnostic settings state ────────────────────────────────────────────
@@ -251,7 +293,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     try {
       const encoded = encodeResourceId(resourceId)
       const queryParams = new URLSearchParams({
-        metrics: 'Percentage CPU,Available Memory Bytes,Disk Read Bytes,Network In Total',
+        metrics: selectedMetrics.join(','),
         timespan: timeRange,
         interval: timeRange === 'P7D' ? 'PT1H' : 'PT5M',
       })
@@ -267,7 +309,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     } finally {
       setMetricsLoading(false)
     }
-  }, [resourceId, timeRange, getAccessToken])
+  }, [resourceId, timeRange, selectedMetrics, getAccessToken])
 
   // ── Diagnostic settings functions ────────────────────────────────────────
 
@@ -624,7 +666,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                   Metrics
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   {(['PT1H', 'PT6H', 'PT24H', 'P7D'] as const).map(r => (
                     <button
                       key={r}
@@ -638,12 +680,75 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                       {r.replace('PT', '').replace('P', '').replace('H', 'h').replace('D', 'd')}
                     </button>
                   ))}
+                  {/* Metric selector */}
+                  <div className="relative ml-1">
+                    <button
+                      onClick={() => setMetricSelectorOpen(v => !v)}
+                      className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer font-bold"
+                      style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
+                      title="Add / remove metrics"
+                    >
+                      ＋
+                    </button>
+                    {metricSelectorOpen && (
+                      <div
+                        className="absolute right-0 top-6 z-50 rounded-lg shadow-xl overflow-y-auto"
+                        style={{
+                          width: '220px',
+                          maxHeight: '320px',
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                          Select metrics
+                        </div>
+                        {(['CPU', 'Memory', 'Disk', 'Network', 'Availability'] as const).map(group => (
+                          <div key={group}>
+                            <div className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                              {group}
+                            </div>
+                            {METRIC_CATALOG.filter(m => m.group === group).map(m => (
+                              <label
+                                key={m.name}
+                                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:opacity-80"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedMetrics.includes(m.name)}
+                                  onChange={e => {
+                                    setSelectedMetrics(prev =>
+                                      e.target.checked
+                                        ? [...prev, m.name]
+                                        : prev.filter(n => n !== m.name)
+                                    )
+                                  }}
+                                  className="accent-[var(--accent-blue)]"
+                                />
+                                <span className="text-[11px]">{m.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                        <div className="px-3 py-2" style={{ borderTop: '1px solid var(--border)' }}>
+                          <button
+                            onClick={() => setMetricSelectorOpen(false)}
+                            className="w-full text-[11px] py-1 rounded cursor-pointer"
+                            style={{ background: 'var(--accent-blue)', color: 'white' }}
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {metricsLoading ? (
                 <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => (
+                  {[...Array(selectedMetrics.length || 4)].map((_, i) => (
                     <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
                   ))}
                 </div>

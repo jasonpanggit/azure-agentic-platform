@@ -39,6 +39,8 @@ DEFAULT_METRICS = [
     "Available Memory Bytes",
     "Disk Read Bytes",
     "Disk Write Bytes",
+    "Disk Read Operations/Sec",
+    "Disk Write Operations/Sec",
     "Network In Total",
     "Network Out Total",
 ]
