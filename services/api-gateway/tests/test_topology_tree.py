@@ -107,6 +107,8 @@ def test_tree_edges_link_sub_to_rg_to_resource(client):
     res_node = next(n for n in data["nodes"] if n["kind"] == "resource")
     assert {"source": sub_node["id"], "target": rg_node["id"]} in edges
     assert {"source": rg_node["id"], "target": res_node["id"]} in edges
+    assert rg_node["parentId"] == sub_node["id"]
+    assert res_node["parentId"] == rg_node["id"]
 
 
 def test_tree_resource_count_matches_children(client):
