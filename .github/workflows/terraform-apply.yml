@@ -262,6 +262,11 @@ jobs:
         env:
           AZURE_PROJECT_ENDPOINT: ${{ secrets.FOUNDRY_PROJECT_ENDPOINT }}
         run: |
+          # Ensure python3-venv is available (required on Debian/Ubuntu runners)
+          if ! python3 -m venv --help &>/dev/null; then
+            PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            sudo apt-get install -y -qq "python${PYVER}-venv" || sudo apt-get install -y -qq python3-venv
+          fi
           python3 -m venv .venv-foundry
           . .venv-foundry/bin/activate
           pip install --quiet "azure-ai-projects>=2.0.1" "azure-ai-agents" "azure-identity"
