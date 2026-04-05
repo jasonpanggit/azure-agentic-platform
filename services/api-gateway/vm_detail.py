@@ -16,6 +16,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.api_gateway.auth import verify_token
@@ -390,8 +391,6 @@ def _is_arc_vm(resource_id: str) -> bool:
 
 def _check_ama_installed(credential: Any, resource_id: str, os_type: str) -> bool:
     """Check if the Azure Monitor Agent extension is installed on the VM."""
-    import requests
-
     token = _arm_token(credential)
     ext_name = "AzureMonitorWindowsAgent" if os_type.lower() == "windows" else "AzureMonitorLinuxAgent"
     url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
@@ -406,8 +405,6 @@ def _check_ama_installed(credential: Any, resource_id: str, os_type: str) -> boo
 
 def _list_dcr_associations(credential: Any, resource_id: str) -> List[Dict[str, Any]]:
     """List Data Collection Rule associations for a VM resource."""
-    import requests
-
     token = _arm_token(credential)
     url = f"{_ARM_BASE}{resource_id}/providers/Microsoft.Insights/dataCollectionRuleAssociations"
     resp = requests.get(
@@ -428,8 +425,6 @@ def _ensure_platform_dcr(
     resource_group: str,
 ) -> str:
     """Create the platform DCR if it doesn't exist. Returns DCR resource ID."""
-    import requests
-
     token = _arm_token(credential)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
@@ -525,8 +520,6 @@ def _ensure_platform_dcr(
 
 def _create_dcr_association(credential: Any, resource_id: str, dcr_id: str) -> None:
     """Associate a Data Collection Rule with a VM."""
-    import requests
-
     token = _arm_token(credential)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     url = (
@@ -549,8 +542,6 @@ def _install_ama_extension(
     credential: Any, resource_id: str, os_type: str, location: str
 ) -> None:
     """Install the Azure Monitor Agent extension on the VM."""
-    import requests
-
     token = _arm_token(credential)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
@@ -677,8 +668,6 @@ async def enable_diagnostic_settings(
         resource_group = parts[rg_idx + 1]
 
         # Extract location from the workspace (reused during AMA install)
-        import requests
-
         token = _arm_token(credential)
         ws_resp = requests.get(
             f"{_ARM_BASE}{workspace_resource_id}",
