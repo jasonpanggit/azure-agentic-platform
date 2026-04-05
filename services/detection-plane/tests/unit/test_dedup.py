@@ -155,7 +155,7 @@ class TestCreateIncidentRecord:
     @pytest.mark.asyncio
     async def test_creates_record_with_correct_fields(self, mock_container: MagicMock) -> None:
         mock_container.create_item.return_value = {"id": "inc-1"}
-        result = await create_incident_record(
+        await create_incident_record(
             incident_id="inc-1",
             resource_id="res-1",
             severity="Sev1",
