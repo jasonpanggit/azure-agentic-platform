@@ -272,6 +272,19 @@ jobs:
         run: |
           echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
 
+      - name: Enable Key Vault Public Access for Terraform
+        run: |
+          # Terraform's azurerm provider uses the autorest HTTP client which resolves
+          # kv-aap-prod.vault.azure.net to the public IP even from VNet-resident runners.
+          # Temporarily enable public access so azurerm_key_vault_secret reads/writes succeed.
+          # Restored to Disabled in the post-apply step (always runs).
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Enabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access enabled for terraform apply"
+
       - name: Terraform Apply
         working-directory: terraform/envs/prod
         run: |
@@ -280,6 +293,16 @@ jobs:
             EXTRA_VARS="-var-file ../../../scripts/agents.tfvars"
           fi
           terraform apply -auto-approve -input=false -var-file credentials.tfvars $EXTRA_VARS
+
+      - name: Restore Key Vault Public Access to Disabled
+        if: always()
+        run: |
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Disabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access restored to Disabled"
 
       - name: Create pgvector Extension
         env:
