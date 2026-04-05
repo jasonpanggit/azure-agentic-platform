@@ -67,10 +67,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: unit-tests
+    permissions:
+      id-token: write
     defaults:
       run:
         working-directory: services/detection-plane
-    environment: staging
     steps:
       - uses: actions/checkout@v4
 
@@ -91,7 +92,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          COSMOS_ENDPOINT: ${{ secrets.COSMOS_ENDPOINT }}
-          COSMOS_DATABASE_NAME: ${{ secrets.COSMOS_DATABASE_NAME }}
+          COSMOS_ENDPOINT: ${{ secrets.E2E_COSMOS_ENDPOINT }}
+          COSMOS_DATABASE_NAME: ${{ vars.E2E_COSMOS_DB || 'aap' }}
           EVENTHUB_CONNECTION_STRING: ${{ secrets.EVENTHUB_CONNECTION_STRING }}
         run: python -m pytest tests/integration/ -v -m integration --tb=short
