@@ -255,9 +255,16 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`/api/proxy/vms/${encoded}`, { headers })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setVM(data)
+      if (res.status === 404) {
+        // VM not found in ARG — not an error, just no live VM data available
+        // The panel can still show evidence and incident context
+        setVM(null)
+      } else if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      } else {
+        const data = await res.json()
+        setVM(data)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load VM details')
     } finally {
@@ -556,10 +563,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
           <div className="p-6 text-center text-sm" style={{ color: 'var(--accent-red)' }}>
             {error}
           </div>
-        ) : vm ? (
+        ) : (vm || incidentId) ? (
           <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
 
-            {/* VM Info */}
+            {/* VM Info — only when ARG data is available */}
+            {vm ? (
             <div className="px-4 py-3 space-y-2">
               <div>
                 <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -594,8 +602,19 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 ))}
               </div>
             </div>
+            ) : (
+            /* No ARG data — show minimal header so the panel isn't blank */
+            <div className="px-4 py-3">
+              <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {resourceName || 'Resource Detail'}
+              </div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Live VM data unavailable (resource not found in Azure Resource Graph)
+              </div>
+            </div>
+            )}
 
-            {/* Evidence section */}
+            {/* Evidence section — shown for any incident regardless of VM data */}
             {incidentId && (
               <div className="px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
@@ -774,7 +793,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 </div>
               ) : metrics.length === 0 || metrics.every(m => m.timeseries.length === 0) ? (
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {vm.power_state === 'deallocated'
+                  {vm?.power_state === 'deallocated'
                     ? 'No metrics — VM is deallocated. Start the VM to collect data.'
                     : 'No metrics available'}
                 </div>
@@ -854,7 +873,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
             </div>
 
             {/* Active incidents */}
-            {vm.active_incidents.length > 0 && (
+            {vm && vm.active_incidents.length > 0 && (
               <div className="px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
                   Active Incidents ({vm.active_incidents.length})
