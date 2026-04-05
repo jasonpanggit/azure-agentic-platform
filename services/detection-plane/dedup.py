@@ -21,6 +21,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from azure.core import MatchConditions
 from azure.cosmos import ContainerProxy
 from azure.cosmos.exceptions import CosmosResourceExistsError
 
@@ -179,7 +180,7 @@ async def collapse_duplicate(
                 item=record["id"],
                 body=updated,
                 etag=etag,
-                match_condition="IfMatch",
+                match_condition=MatchConditions.IfMatch,
             )
         except Exception as exc:
             if "412" in str(exc) or "Precondition Failed" in str(exc):
@@ -243,7 +244,7 @@ async def correlate_alert(
                 item=record["id"],
                 body=updated,
                 etag=etag,
-                match_condition="IfMatch",
+                match_condition=MatchConditions.IfMatch,
             )
         except Exception as exc:
             if "412" in str(exc) or "Precondition Failed" in str(exc):
