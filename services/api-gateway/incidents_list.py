@@ -128,11 +128,9 @@ async def list_incidents(
 
     results = list(items)
 
-    # Client-side subscription filter (cross-partition query can't filter on non-PK)
-    if subscription_ids:
-        results = [r for r in results if r.get("subscription_id") in subscription_ids]
-
-    # Enrich each result with parsed resource metadata and investigation status
+    # Enrich each result with parsed resource metadata and investigation status.
+    # NOTE: subscription_id is derived from the ARM resource_id during enrichment,
+    # so the subscription filter must run AFTER enrichment (not before).
     enriched = []
     for doc in results:
         resource_id = doc.get("resource_id") or (
@@ -158,5 +156,10 @@ async def list_incidents(
             "slo_escalated": doc.get("slo_escalated"),
         }
         enriched.append(enriched_doc)
+
+    # Client-side subscription filter — runs after enrichment because subscription_id
+    # is parsed from the ARM resource_id and is not a raw field in the Cosmos document.
+    if subscription_ids:
+        enriched = [r for r in enriched if r.get("subscription_id") in subscription_ids]
 
     return enriched
