@@ -91,7 +91,7 @@ export function ResourcesTab({ subscriptions }: ResourcesTabProps) {
       if (subscriptions.length > 0) {
         params.set('subscriptions', subscriptions.join(','));
       }
-      const res = await fetch(`/api/resources?${params.toString()}`);
+      const res = await fetch(`/api/proxy/resources?${params.toString()}`);
       const data: { resources?: Resource[]; resourceTypes?: string[]; error?: string } =
         await res.json();
       if (data.error) {

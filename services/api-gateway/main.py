@@ -106,6 +106,8 @@ from services.api_gateway.forecaster import (
     run_forecast_sweep_loop,
 )
 from services.api_gateway.forecast_endpoints import router as forecast_router
+from services.api_gateway.resources_inventory import router as resources_inventory_router
+from services.api_gateway.topology_tree import router as topology_tree_router
 from services.api_gateway.pattern_analyzer import (
     PATTERN_ANALYSIS_ENABLED,
     PATTERN_ANALYSIS_INTERVAL_SECONDS,
@@ -469,6 +471,8 @@ app.include_router(vm_detail_router)
 app.include_router(vm_chat_router)
 app.include_router(topology_router)
 app.include_router(forecast_router)
+app.include_router(resources_inventory_router)
+app.include_router(topology_tree_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")

@@ -78,7 +78,7 @@ async def test_collect_resource_health_success():
     mock_health_cls = MagicMock(return_value=mock_client)
 
     mock_health_module = MagicMock()
-    mock_health_module.MicrosoftResourceHealth = mock_health_cls
+    mock_health_module.ResourceHealthMgmtClient = mock_health_cls
 
     with patch.dict("sys.modules", {"azure.mgmt.resourcehealth": mock_health_module}):
         result = await _collect_resource_health(mock_credential, RESOURCE_ID)
