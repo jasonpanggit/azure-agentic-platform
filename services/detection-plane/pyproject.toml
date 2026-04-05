@@ -16,6 +16,9 @@ dev = [
     "pytest-asyncio>=0.23.0",
 ]
 
+[tool.setuptools]
+py-modules = ["alert_state", "classify_domain", "dedup", "models", "payload_mapper"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
