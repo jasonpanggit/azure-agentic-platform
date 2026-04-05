@@ -288,6 +288,57 @@ async def get_vm_detail(
     }
 
 
+def _fetch_single_metric(
+    client: Any,
+    resource_id: str,
+    metric_name: str,
+    timespan: str,
+    interval: str,
+) -> Optional[Dict[str, Any]]:
+    """Fetch a single metric from Azure Monitor.
+
+    Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
+    the metric is unsupported for this VM SKU or returns no data.  Exceptions
+    are caught per-metric so one unsupported metric cannot poison the whole
+    batch.
+    """
+    try:
+        response = client.metrics.list(
+            resource_uri=resource_id,
+            metricnames=metric_name,
+            timespan=timespan,
+            interval=interval,
+            aggregation="Average,Maximum,Minimum",
+        )
+        for metric in response.value:
+            timeseries = []
+            for ts in metric.timeseries:
+                for dp in ts.data:
+                    if dp.time_stamp:
+                        timeseries.append({
+                            "timestamp": dp.time_stamp.isoformat(),
+                            "average": dp.average,
+                            "maximum": dp.maximum,
+                            "minimum": dp.minimum,
+                        })
+            name_val = (
+                metric.name.value if hasattr(metric.name, "value")
+                else str(metric.name) if metric.name else None
+            )
+            unit_val = (
+                metric.unit.value if hasattr(metric.unit, "value")
+                else str(metric.unit) if metric.unit else None
+            )
+            return {"name": name_val, "unit": unit_val, "timeseries": timeseries}
+        # response.value was empty — metric unsupported for this SKU
+        return None
+    except Exception as exc:
+        logger.warning(
+            "vm_metrics: skipping metric=%r | error=%s", metric_name, exc
+        )
+        return None
+
+
 @router.get("/{resource_id_base64}/metrics")
 async def get_vm_metrics(
     resource_id_base64: str,
@@ -300,7 +351,13 @@ async def get_vm_metrics(
     credential=Depends(get_credential),
     _user=Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Return time-series metric data for a VM."""
+    """Return time-series metric data for a VM.
+
+    Each metric is fetched in a separate Azure Monitor call executed
+    concurrently.  This isolates SKU-specific metrics (e.g. CPU Credits,
+    OS Disk Bandwidth) that would otherwise poison an entire batched request
+    and cause all metrics to return empty.
+    """
     start = time.monotonic()
 
     try:
@@ -320,39 +377,35 @@ async def get_vm_metrics(
     )
 
     try:
+        import asyncio
         from azure.mgmt.monitor import MonitorManagementClient
 
         client = MonitorManagementClient(credential, sub_id)
-        response = client.metrics.list(
-            resource_uri=resource_id,
-            metricnames=",".join(metric_names),
-            timespan=timespan,
-            interval=interval,
-            aggregation="Average,Maximum,Minimum",
-        )
+        loop = asyncio.get_event_loop()
 
-        metrics_out = []
-        for metric in response.value:
-            timeseries = []
-            for ts in metric.timeseries:
-                for dp in ts.data:
-                    if dp.time_stamp:
-                        timeseries.append({
-                            "timestamp": dp.time_stamp.isoformat(),
-                            "average": dp.average,
-                            "maximum": dp.maximum,
-                            "minimum": dp.minimum,
-                        })
-            metrics_out.append({
-                "name": metric.name.value if hasattr(metric.name, "value") else str(metric.name) if metric.name else None,
-                "unit": metric.unit.value if hasattr(metric.unit, "value") else str(metric.unit) if metric.unit else None,
-                "timeseries": timeseries,
-            })
+        # Fetch each metric concurrently — one unsupported metric cannot
+        # poison the other results.
+        tasks = [
+            loop.run_in_executor(
+                None,
+                _fetch_single_metric,
+                client,
+                resource_id,
+                name,
+                timespan,
+                interval,
+            )
+            for name in metric_names
+        ]
+        results = await asyncio.gather(*tasks)
+
+        # Filter out None (unsupported / empty metrics)
+        metrics_out = [r for r in results if r is not None]
 
         duration_ms = (time.monotonic() - start) * 1000
         logger.info(
-            "vm_metrics: complete | resource=%s metrics_count=%d duration_ms=%.0f",
-            resource_id[-60:], len(metrics_out), duration_ms,
+            "vm_metrics: complete | resource=%s requested=%d returned=%d duration_ms=%.0f",
+            resource_id[-60:], len(metric_names), len(metrics_out), duration_ms,
         )
 
         return {
