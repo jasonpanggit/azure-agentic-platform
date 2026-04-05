@@ -288,6 +288,12 @@ export function InstalledPatchesPanel({
 
   return (
     <>
+      {/* Backdrop overlay — matches VMDetailPanel's rgba(0,0,0,0.3) */}
+      <div
+        className="fixed inset-0 z-30"
+        style={{ background: 'rgba(0,0,0,0.3)' }}
+        onClick={() => onOpenChange(false)}
+      />
       {/* Side panel */}
       <div
         role="dialog"
