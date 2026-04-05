@@ -24,6 +24,13 @@ COPY services/__init__.py ./services/__init__.py
 COPY services/api-gateway/ ./services/api_gateway/
 COPY agents/ ./agents/
 
+# Copy detection-plane shared modules needed by dedup_integration.py.
+# dedup_integration adds /app/services/detection-plane to sys.path and then
+# does bare `from dedup import ...` — so the files must land at that exact path.
+COPY services/detection-plane/dedup.py ./services/detection-plane/dedup.py
+COPY services/detection-plane/models.py ./services/detection-plane/models.py
+COPY services/detection-plane/__init__.py ./services/detection-plane/__init__.py
+
 # Non-root user for security — must be created after npm install
 # so /usr/local/lib/node_modules is readable by all
 RUN useradd --create-home --shell /bin/bash gatewayuser && \
