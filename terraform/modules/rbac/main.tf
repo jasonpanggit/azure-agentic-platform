@@ -137,8 +137,12 @@ locals {
       }
     } : {},
 
-    # API Gateway: Reader + Monitoring Reader across all in-scope subscriptions
-    # (VM health checks via ResourceHealth API + Azure Monitor metrics reads)
+    # API Gateway: Reader + Monitoring Reader + Monitoring Contributor + VM Contributor
+    # across all in-scope subscriptions
+    # - Reader: VM health checks via ResourceHealth API + ARG queries
+    # - Monitoring Reader: Azure Monitor metrics reads
+    # - Monitoring Contributor: Create/update DCR and DCR associations (AMA monitoring setup)
+    # - Virtual Machine Contributor: Install AMA extension on VMs
     merge(
       {
         for sub_id in var.all_subscription_ids :
@@ -153,6 +157,22 @@ locals {
         "api-gateway-monreader-${replace(sub_id, "-", "")}" => {
           principal_id         = var.agent_principal_ids["api-gateway"]
           role_definition_name = "Monitoring Reader"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      },
+      {
+        for sub_id in var.all_subscription_ids :
+        "api-gateway-moncontrib-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["api-gateway"]
+          role_definition_name = "Monitoring Contributor"
+          scope                = "/subscriptions/${sub_id}"
+        }
+      },
+      {
+        for sub_id in var.all_subscription_ids :
+        "api-gateway-vmcontrib-${replace(sub_id, "-", "")}" => {
+          principal_id         = var.agent_principal_ids["api-gateway"]
+          role_definition_name = "Virtual Machine Contributor"
           scope                = "/subscriptions/${sub_id}"
         }
       }

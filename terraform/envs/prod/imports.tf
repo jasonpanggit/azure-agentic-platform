@@ -48,6 +48,21 @@ import {
   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/providers/Microsoft.Authorization/roleAssignments/344f496823dd404db298f1d4fad789de"
 }
 
+# --- API Gateway Monitoring Contributor + VM Contributor imports ---
+# Manually assigned 2026-04-05 to enable AMA extension install and DCR management.
+# Import blocks required to avoid 409 conflict on next terraform apply.
+# Remove after first successful apply.
+
+import {
+  to = module.rbac.azurerm_role_assignment.agent_rbac["api-gateway-moncontrib-4c727b8812f44c919c2b372aab3bbae9"]
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/providers/Microsoft.Authorization/roleAssignments/7e7136d1-ba33-410d-b36e-70ab21871818"
+}
+
+import {
+  to = module.rbac.azurerm_role_assignment.agent_rbac["api-gateway-vmcontrib-4c727b8812f44c919c2b372aab3bbae9"]
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/providers/Microsoft.Authorization/roleAssignments/ab6b0796-4ad6-4df2-b7db-caae36b4e0b2"
+}
+
 # --- Cosmos DB data-plane RBAC imports ---
 # Assignment GUIDs from: az cosmosdb sql role assignment list --account-name aap-cosmos-prod --resource-group rg-aap-prod
 # Run on: 2026-03-31
