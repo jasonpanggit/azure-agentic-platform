@@ -1,7 +1,9 @@
 """VM detail and metrics endpoints.
 
-GET /api/v1/vms/{resource_id_base64}       — full VM profile
-GET /api/v1/vms/{resource_id_base64}/metrics — time-series metric data
+GET  /api/v1/vms/{resource_id_base64}                        — full VM profile
+GET  /api/v1/vms/{resource_id_base64}/metrics                — time-series metric data
+GET  /api/v1/vms/{resource_id_base64}/diagnostic-settings    — check if diag settings exist
+POST /api/v1/vms/{resource_id_base64}/diagnostic-settings    — enable diag settings → LA workspace
 
 resource_id_base64: ARM resource ID base64url-encoded (no padding).
 Decode with: base64.urlsafe_b64decode(pad(resource_id_base64)).decode()
@@ -10,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +21,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
 from services.api_gateway.os_normalizer import normalize_os
+
+# ARM resource ID of the Log Analytics workspace to send diagnostics to.
+# Set LOG_ANALYTICS_WORKSPACE_RESOURCE_ID on the API gateway container app.
+# Falls back to constructing it from the customer ID if only that is available.
+_LA_WORKSPACE_RESOURCE_ID = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
+
+# Diagnostic setting name we manage (stable name so we can detect / overwrite)
+_DIAG_SETTING_NAME = "aap-diagnostics"
 
 logger = logging.getLogger(__name__)
 
@@ -342,3 +353,131 @@ async def get_vm_metrics(
             resource_id[-60:], exc, duration_ms, exc_info=True,
         )
         raise HTTPException(status_code=502, detail=f"Metrics unavailable: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic settings helpers
+# ---------------------------------------------------------------------------
+
+def _get_diag_client(credential: Any, subscription_id: str) -> Any:
+    from azure.mgmt.monitor import MonitorManagementClient
+    return MonitorManagementClient(credential, subscription_id)
+
+
+def _check_diag_settings(credential: Any, resource_id: str) -> Dict[str, Any]:
+    """Return whether aap-diagnostics setting exists and which workspace it targets."""
+    sub_id = _extract_subscription_id(resource_id)
+    client = _get_diag_client(credential, sub_id)
+    try:
+        setting = client.diagnostic_settings.get(resource_uri=resource_id, name=_DIAG_SETTING_NAME)
+        ws_id = getattr(setting, "workspace_id", None) or ""
+        return {"configured": True, "workspace_id": ws_id, "name": _DIAG_SETTING_NAME}
+    except Exception:
+        return {"configured": False, "workspace_id": None, "name": _DIAG_SETTING_NAME}
+
+
+def _enable_diag_settings(credential: Any, resource_id: str, workspace_resource_id: str) -> Dict[str, Any]:
+    """Create or update the aap-diagnostics setting to send all logs+metrics to the workspace."""
+    from azure.mgmt.monitor.models import (
+        DiagnosticSettingsResource,
+        LogSettings,
+        MetricSettings,
+        RetentionPolicy,
+    )
+
+    sub_id = _extract_subscription_id(resource_id)
+    client = _get_diag_client(credential, sub_id)
+
+    # Fetch available log/metric categories for this resource type
+    categories = list(client.diagnostic_settings_category.list(resource_uri=resource_id))
+    retention = RetentionPolicy(enabled=False, days=0)
+
+    log_settings = [
+        LogSettings(category=c.name, enabled=True, retention_policy=retention)
+        for c in categories if c.category_type == "Logs"
+    ]
+    metric_settings = [
+        MetricSettings(category=c.name, enabled=True, retention_policy=retention)
+        for c in categories if c.category_type == "Metrics"
+    ]
+
+    # Azure VMs always support AllMetrics even if category list is empty
+    if not metric_settings:
+        metric_settings = [MetricSettings(category="AllMetrics", enabled=True, retention_policy=retention)]
+
+    params = DiagnosticSettingsResource(
+        workspace_id=workspace_resource_id,
+        logs=log_settings,
+        metrics=metric_settings,
+    )
+
+    result = client.diagnostic_settings.create_or_update(
+        resource_uri=resource_id,
+        name=_DIAG_SETTING_NAME,
+        parameters=params,
+    )
+
+    return {
+        "name": result.name,
+        "workspace_id": result.workspace_id,
+        "log_categories": [s.category for s in (result.logs or [])],
+        "metric_categories": [s.category for s in (result.metrics or [])],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic settings routes
+# ---------------------------------------------------------------------------
+
+@router.get("/{resource_id_base64}/diagnostic-settings")
+async def get_diagnostic_settings(
+    resource_id_base64: str,
+    credential=Depends(get_credential),
+    _user=Depends(verify_token),
+) -> Dict[str, Any]:
+    """Check whether the aap-diagnostics setting exists for this VM."""
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _check_diag_settings, credential, resource_id)
+    return result
+
+
+@router.post("/{resource_id_base64}/diagnostic-settings")
+async def enable_diagnostic_settings(
+    resource_id_base64: str,
+    credential=Depends(get_credential),
+    _user=Depends(verify_token),
+) -> Dict[str, Any]:
+    """Enable diagnostic settings for this VM, sending all logs and metrics to the
+    platform Log Analytics workspace (LOG_ANALYTICS_WORKSPACE_RESOURCE_ID).
+    """
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    workspace_resource_id = _LA_WORKSPACE_RESOURCE_ID
+    if not workspace_resource_id:
+        raise HTTPException(
+            status_code=503,
+            detail="LOG_ANALYTICS_WORKSPACE_RESOURCE_ID is not configured on the API gateway.",
+        )
+
+    logger.info("diag_settings: enable | resource=%s workspace=%s", resource_id[-60:], workspace_resource_id[-60:])
+
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, _enable_diag_settings, credential, resource_id, workspace_resource_id
+        )
+        logger.info("diag_settings: enabled | resource=%s name=%s", resource_id[-60:], result.get("name"))
+        return {"status": "enabled", **result}
+    except Exception as exc:
+        logger.error("diag_settings: failed | resource=%s error=%s", resource_id[-60:], exc, exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Failed to enable diagnostic settings: {exc}")

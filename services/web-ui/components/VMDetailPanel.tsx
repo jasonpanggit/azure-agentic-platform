@@ -172,6 +172,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [timeRange, setTimeRange] = useState<'PT1H' | 'PT6H' | 'PT24H' | 'P7D'>('PT24H')
   const [pollingEvidence, setPollingEvidence] = useState(false)
 
+  // ── Diagnostic settings state ────────────────────────────────────────────
+  const [diagConfigured, setDiagConfigured] = useState<boolean | null>(null)
+  const [diagEnabling, setDiagEnabling] = useState(false)
+  const [diagError, setDiagError] = useState<string | null>(null)
+
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -263,6 +268,47 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       setMetricsLoading(false)
     }
   }, [resourceId, timeRange, getAccessToken])
+
+  // ── Diagnostic settings functions ────────────────────────────────────────
+
+  async function fetchDiagSettings() {
+    if (!resourceId) return
+    try {
+      const encoded = encodeResourceId(resourceId)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings`, { headers })
+      if (!res.ok) return
+      const data = await res.json()
+      setDiagConfigured(data.configured ?? false)
+    } catch {
+      // non-fatal — leave diagConfigured as null (unknown)
+    }
+  }
+
+  async function enableDiagSettings() {
+    if (!resourceId || diagEnabling) return
+    setDiagEnabling(true)
+    setDiagError(null)
+    try {
+      const encoded = encodeResourceId(resourceId)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings`, {
+        method: 'POST',
+        headers,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setDiagConfigured(true)
+    } catch (err) {
+      setDiagError(err instanceof Error ? err.message : 'Failed to enable diagnostic settings')
+    } finally {
+      setDiagEnabling(false)
+    }
+  }
 
   // ── Chat functions ──────────────────────────────────────────────────────────
 
@@ -386,6 +432,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     fetchVM()
     fetchEvidence()
     fetchMetrics()
+    fetchDiagSettings()
   }, [resourceId, incidentId, fetchVM, fetchEvidence, fetchMetrics])
 
   // Poll evidence if still pending
@@ -632,6 +679,34 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                     )
                   })}
                 </div>
+              )}
+
+              {/* Diagnostic settings status — shown below metrics regardless of data */}
+              {diagConfigured === false && (
+                <div
+                  className="mt-3 rounded-md p-2 text-xs flex items-start justify-between gap-2"
+                  style={{ background: `color-mix(in srgb, var(--accent-blue) 8%, transparent)`, border: '1px solid color-mix(in srgb, var(--accent-blue) 20%, transparent)' }}
+                >
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Diagnostic settings not configured. Enable to send all logs &amp; metrics to the platform workspace.
+                  </span>
+                  <button
+                    onClick={enableDiagSettings}
+                    disabled={diagEnabling}
+                    className="flex-shrink-0 px-2 py-1 rounded text-[11px] font-medium cursor-pointer disabled:opacity-50"
+                    style={{ background: 'var(--accent-blue)', color: 'white' }}
+                  >
+                    {diagEnabling ? 'Enabling…' : 'Enable'}
+                  </button>
+                </div>
+              )}
+              {diagConfigured === true && (
+                <div className="mt-2 text-[11px]" style={{ color: 'var(--accent-green)' }}>
+                  ✓ Diagnostic settings configured
+                </div>
+              )}
+              {diagError && (
+                <div className="mt-1 text-xs" style={{ color: 'var(--accent-red)' }}>{diagError}</div>
               )}
             </div>
 
