@@ -187,7 +187,11 @@ def _get_health_states_sync(
         Dict mapping resource_id → availability_state string.
         Unknown on any failure.
     """
-    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+    # Class renamed MicrosoftResourceHealth → ResourceHealthMgmtClient in v1.0.0b6
+    try:
+        from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as _RHClient
+    except ImportError:
+        from azure.mgmt.resourcehealth import MicrosoftResourceHealth as _RHClient  # type: ignore[no-redef]
 
     results: Dict[str, str] = {}
     for rid in resource_ids:
@@ -201,7 +205,7 @@ def _get_health_states_sync(
             continue
 
         try:
-            client = MicrosoftResourceHealth(credential, sub_id)
+            client = _RHClient(credential, sub_id)
             status = client.availability_statuses.get_by_resource(
                 resource_uri=rid,
                 expand="recommendedActions",

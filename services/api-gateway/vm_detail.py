@@ -149,8 +149,12 @@ def _get_resource_health(credential: Any, resource_id: str) -> Dict[str, Any]:
     """Fetch resource health state and summary for a VM."""
     try:
         sub_id = _extract_subscription_id(resource_id)
-        from azure.mgmt.resourcehealth import MicrosoftResourceHealth
-        client = MicrosoftResourceHealth(credential, sub_id)
+        # Class renamed MicrosoftResourceHealth → ResourceHealthMgmtClient in v1.0.0b6
+        try:
+            from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as _RHClient
+        except ImportError:
+            from azure.mgmt.resourcehealth import MicrosoftResourceHealth as _RHClient  # type: ignore[no-redef]
+        client = _RHClient(credential, sub_id)
         status = client.availability_statuses.get_by_resource(
             resource_uri=resource_id, expand="recommendedActions"
         )
