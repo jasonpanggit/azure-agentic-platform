@@ -206,11 +206,18 @@ def _get_health_states_sync(
                 resource_uri=rid,
                 expand="recommendedActions",
             )
-            state = (
-                status.properties.availability_state.value
+            raw_state = (
+                status.properties.availability_state
                 if status.properties and status.properties.availability_state
-                else "Unknown"
+                else None
             )
+            # SDK returns a plain str in v1.0.0b6+; older versions returned an enum
+            if raw_state is None:
+                state = "Unknown"
+            elif hasattr(raw_state, "value"):
+                state = raw_state.value
+            else:
+                state = str(raw_state)
             results[rid] = state
         except Exception as exc:
             logger.debug(

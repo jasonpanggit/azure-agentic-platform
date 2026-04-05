@@ -155,8 +155,16 @@ def _get_resource_health(credential: Any, resource_id: str) -> Dict[str, Any]:
             resource_uri=resource_id, expand="recommendedActions"
         )
         props = status.properties
+        raw_state = props.availability_state if props and props.availability_state else None
+        # SDK returns a plain str in v1.0.0b6+; older versions returned an enum
+        if raw_state is None:
+            health_state = "Unknown"
+        elif hasattr(raw_state, "value"):
+            health_state = raw_state.value
+        else:
+            health_state = str(raw_state)
         return {
-            "health_state": props.availability_state.value if props and props.availability_state else "Unknown",
+            "health_state": health_state,
             "summary": props.summary if props else None,
             "reason_type": props.reason_type if props else None,
         }
