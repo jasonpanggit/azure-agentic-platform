@@ -77,15 +77,23 @@ const DAYS_OPTIONS: readonly { readonly value: DaysOption; readonly label: strin
   { value: '365', label: '365 days' },
 ] as const;
 
-function categoryBadgeClass(category: string): string {
+function categoryBadgeStyle(category: string): React.CSSProperties {
   const lower = category.toLowerCase();
   if (lower === 'security') {
-    return 'bg-red-900/40 text-red-400 border-red-700/50 border';
+    return {
+      background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
+      color: 'var(--accent-red)',
+      borderColor: 'color-mix(in srgb, var(--accent-red) 35%, transparent)',
+    };
   }
   if (lower === 'critical') {
-    return 'bg-orange-900/40 text-orange-400 border-orange-700/50 border';
+    return {
+      background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
+      color: 'var(--accent-orange)',
+      borderColor: 'color-mix(in srgb, var(--accent-orange) 35%, transparent)',
+    };
   }
-  return '';
+  return {};
 }
 
 const MAX_VISIBLE_CVES = 3;
@@ -99,31 +107,43 @@ function StatChip({ label, value, variant }: {
   readonly value: string | number;
   readonly variant?: 'default' | 'warning' | 'danger';
 }) {
-  const bgMap = {
-    default: 'bg-zinc-800 border-zinc-700',
-    warning: 'bg-orange-900/30 border-orange-700/50',
-    danger: 'bg-red-900/30 border-red-700/50',
-  } as const;
-
-  const textMap = {
-    default: 'text-zinc-100',
-    warning: 'text-orange-400',
-    danger: 'text-red-400',
-  } as const;
-
   const v = variant ?? 'default';
 
+  const bgStyle: Record<string, React.CSSProperties> = {
+    default: {
+      background: 'var(--bg-subtle)',
+      borderColor: 'var(--border)',
+    },
+    warning: {
+      background: 'color-mix(in srgb, var(--accent-orange) 12%, transparent)',
+      borderColor: 'color-mix(in srgb, var(--accent-orange) 35%, transparent)',
+    },
+    danger: {
+      background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)',
+      borderColor: 'color-mix(in srgb, var(--accent-red) 35%, transparent)',
+    },
+  };
+
+  const textColor: Record<string, string> = {
+    default: 'var(--text-primary)',
+    warning: 'var(--accent-orange)',
+    danger: 'var(--accent-red)',
+  };
+
   return (
-    <div className={`flex flex-col items-center rounded-lg border px-4 py-2.5 ${bgMap[v]}`}>
-      <span className={`font-mono text-lg font-semibold ${textMap[v]}`}>{value}</span>
-      <span className="text-[11px] text-zinc-500">{label}</span>
+    <div
+      className="flex flex-col items-center rounded-lg border px-4 py-2.5"
+      style={bgStyle[v]}
+    >
+      <span className="font-mono text-lg font-semibold" style={{ color: textColor[v] }}>{value}</span>
+      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
     </div>
   );
 }
 
 function CveBadges({ cves }: { readonly cves: readonly string[] }) {
   if (cves.length === 0) {
-    return <span className="text-zinc-600">&mdash;</span>;
+    return <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>;
   }
 
   const visible = cves.slice(0, MAX_VISIBLE_CVES);
@@ -135,7 +155,8 @@ function CveBadges({ cves }: { readonly cves: readonly string[] }) {
         <Badge
           key={cve}
           variant="outline"
-          className="text-[10px] font-mono px-1.5 py-0 text-zinc-400 border-zinc-700"
+          className="text-[10px] font-mono px-1.5 py-0"
+          style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
         >
           {cve}
         </Badge>
@@ -143,7 +164,8 @@ function CveBadges({ cves }: { readonly cves: readonly string[] }) {
       {overflow > 0 && (
         <Badge
           variant="outline"
-          className="text-[10px] font-mono px-1.5 py-0 text-zinc-500 border-zinc-700"
+          className="text-[10px] font-mono px-1.5 py-0"
+          style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
         >
           +{overflow} more
         </Badge>
@@ -169,8 +191,8 @@ function SkeletonRows() {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
-      <Package className="h-8 w-8 text-zinc-600" />
-      <p className="text-sm text-zinc-400 text-center max-w-[320px]">
+      <Package className="h-8 w-8" style={{ color: 'var(--text-muted)' }} />
+      <p className="text-sm text-center max-w-[320px]" style={{ color: 'var(--text-secondary)' }}>
         No installed patches recorded in Log Analytics for this machine.
       </p>
     </div>
@@ -180,8 +202,8 @@ function EmptyState() {
 function ErrorState({ onRetry }: { readonly onRetry: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
-      <AlertTriangle className="h-8 w-8 text-red-500" />
-      <p className="text-sm text-zinc-400">Failed to load patch detail.</p>
+      <AlertTriangle className="h-8 w-8" style={{ color: 'var(--accent-red)' }} />
+      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Failed to load patch detail.</p>
       <Button variant="outline" size="sm" onClick={onRetry}>
         <RefreshCw className="h-3.5 w-3.5 mr-1" />
         Try again
@@ -266,13 +288,14 @@ export function InstalledPatchesPanel({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="fixed inset-y-0 right-0 left-auto translate-x-0 translate-y-0 top-0 h-full w-full max-w-2xl rounded-none border-l border-zinc-800 bg-zinc-900 p-0 data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out duration-300 sm:rounded-none"
+        className="fixed inset-y-0 right-0 left-auto translate-x-0 translate-y-0 top-0 h-full w-full max-w-2xl rounded-none border-l p-0 data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out duration-300 sm:rounded-none"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
         {machine && (
           <div className="flex h-full flex-col">
             {/* Header */}
-            <DialogHeader className="border-b border-zinc-800 px-6 py-4">
-              <DialogTitle className="text-base font-semibold text-zinc-100">
+            <DialogHeader className="px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <DialogTitle className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {machine.machineName}
               </DialogTitle>
               <DialogDescription asChild>
@@ -282,14 +305,15 @@ export function InstalledPatchesPanel({
                   </Badge>
                   <Badge
                     variant="outline"
-                    className={machine.vmType === 'Arc VM'
-                      ? 'text-xs border-purple-500/50 text-purple-400'
-                      : 'text-xs border-blue-500/50 text-blue-400'
+                    className="text-xs"
+                    style={machine.vmType === 'Arc VM'
+                      ? { borderColor: 'color-mix(in srgb, var(--accent-purple) 50%, transparent)', color: 'var(--accent-purple)' }
+                      : { borderColor: 'color-mix(in srgb, var(--accent-blue) 50%, transparent)', color: 'var(--accent-blue)' }
                     }
                   >
                     {machine.vmType}
                   </Badge>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {machine.resourceGroup}
                   </span>
                 </div>
@@ -297,7 +321,7 @@ export function InstalledPatchesPanel({
             </DialogHeader>
 
             {/* Summary strip */}
-            <div className="grid grid-cols-4 gap-3 px-6 py-4 border-b border-zinc-800">
+            <div className="grid grid-cols-4 gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <StatChip label="Installed" value={machine.installedCount} />
               <StatChip
                 label="Critical"
@@ -317,8 +341,8 @@ export function InstalledPatchesPanel({
             </div>
 
             {/* Days selector */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800">
-              <span className="text-xs font-semibold text-zinc-400">
+            <div className="flex items-center justify-between px-6 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+              <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                 Installed Patches
               </span>
               <Select value={days} onValueChange={handleDaysChange}>
@@ -343,12 +367,12 @@ export function InstalledPatchesPanel({
                   <Table className="w-full text-sm">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500">Name</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Version</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Category</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Publisher</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[90px]">Installed</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 min-w-[120px]">CVEs</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                        <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -368,42 +392,43 @@ export function InstalledPatchesPanel({
 
                 {/* Patches table */}
                 {!loading && !error && patches.length > 0 && (
-                  <div className="rounded-md border border-zinc-800 overflow-hidden">
+                  <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
                     <Table className="w-full text-sm">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500">Name</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Version</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Category</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[100px]">Publisher</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 w-[90px]">Installed</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold text-zinc-500 min-w-[120px]">CVEs</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                          <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {patches.map((p, idx) => (
                           <TableRow
                             key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`}
-                            className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                            className="border-b hover:bg-muted/50 transition-colors"
                           >
-                            <TableCell className="h-9 px-3 align-middle text-[13px] text-zinc-200 max-w-[220px] truncate">
+                            <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
                               {p.SoftwareName}
                             </TableCell>
-                            <TableCell className="h-9 px-3 align-middle font-mono text-[12px] text-zinc-400">
+                            <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                               {p.CurrentVersion || '\u2014'}
                             </TableCell>
                             <TableCell className="h-9 px-3 align-middle">
                               <Badge
                                 variant="outline"
-                                className={`text-[11px] ${categoryBadgeClass(p.Category)}`}
+                                className="text-[11px] border"
+                                style={categoryBadgeStyle(p.Category)}
                               >
                                 {p.Category || 'Other'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="h-9 px-3 align-middle text-[12px] text-zinc-500 max-w-[120px] truncate">
+                            <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
                               {p.Publisher || '\u2014'}
                             </TableCell>
-                            <TableCell className="h-9 px-3 align-middle text-[12px] text-zinc-400">
+                            <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                               {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
                             </TableCell>
                             <TableCell className="h-9 px-3 align-middle">
