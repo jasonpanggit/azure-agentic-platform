@@ -246,7 +246,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     try {
       const encoded = encodeResourceId(resourceId)
       const queryParams = new URLSearchParams({
-        metrics: 'Percentage CPU,Available Memory Bytes,Disk Read Bytes/sec,Network In Total',
+        metrics: 'Percentage CPU,Available Memory Bytes,Disk Read Bytes,Network In Total',
         timespan: timeRange,
         interval: timeRange === 'P7D' ? 'PT1H' : 'PT5M',
       })
@@ -269,6 +269,9 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   function startChatPolling(threadId: string, runId: string) {
     if (chatPollRef.current) clearInterval(chatPollRef.current)
 
+    // Guard against two concurrent interval callbacks both appending a reply
+    let appended = false
+
     chatPollRef.current = setInterval(async () => {
       try {
         const token = await getAccessToken()
@@ -289,16 +292,20 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         if (terminal.includes(data.run_status)) {
           clearInterval(chatPollRef.current!)
           setChatStreaming(false)
-          if (data.run_status === 'completed' && data.reply) {
-            setChatMessages(prev => [
-              ...prev,
-              { role: 'assistant', content: data.reply, approval_id: data.approval_id },
-            ])
-          } else if (data.run_status === 'failed' || data.run_status === 'cancelled' || data.run_status === 'expired') {
-            setChatMessages(prev => [
-              ...prev,
-              { role: 'assistant', content: 'Error: the AI agent run did not complete. Please try again.' },
-            ])
+          // Only append once — guards against concurrent interval callbacks
+          if (!appended) {
+            appended = true
+            if (data.run_status === 'completed' && data.reply) {
+              setChatMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: data.reply, approval_id: data.approval_id },
+              ])
+            } else if (data.run_status === 'failed' || data.run_status === 'cancelled' || data.run_status === 'expired') {
+              setChatMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: 'Error: the AI agent run did not complete. Please try again.' },
+              ])
+            }
           }
         }
       } catch {
