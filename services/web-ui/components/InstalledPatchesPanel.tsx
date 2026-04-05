@@ -1,13 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -27,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
 // ---------------------------------------------------------------------------
@@ -225,6 +218,7 @@ export function InstalledPatchesPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<DaysOption>('90');
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const fetchPatches = useCallback(async (resourceId: string, daysVal: string) => {
     setLoading(true);
@@ -252,7 +246,6 @@ export function InstalledPatchesPanel({
   // Fetch when panel opens or days changes
   useEffect(() => {
     if (!machine || !open) return;
-    // Skip fetch if the machine has no installed patches
     if (machine.installedCount === 0) {
       setPatches([]);
       setLoading(false);
@@ -272,10 +265,18 @@ export function InstalledPatchesPanel({
     }
   }, [open]);
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onOpenChange]);
+
   const handleRetry = useCallback(() => {
-    if (machine) {
-      fetchPatches(machine.id, days);
-    }
+    if (machine) fetchPatches(machine.id, days);
   }, [machine, days, fetchPatches]);
 
   const handleDaysChange = useCallback((value: string) => {
@@ -285,166 +286,192 @@ export function InstalledPatchesPanel({
   const shouldShowEmpty = !loading && !error && machine !== null && machine.installedCount === 0;
   const shouldShowFetchedEmpty = !loading && !error && patches.length === 0 && machine !== null && machine.installedCount > 0;
 
+  if (!open || !machine) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="fixed inset-y-0 right-0 left-auto translate-x-0 translate-y-0 top-0 h-full w-full max-w-2xl rounded-none border-l p-0 data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out duration-300 sm:rounded-none"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+    <>
+      {/* Backdrop — matches VMDetailPanel: light scrim, not bg-black/80 */}
+      <div
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.2)' }}
+        onClick={() => onOpenChange(false)}
+        aria-hidden="true"
+      />
+
+      {/* Side panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={machine.machineName}
+        className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden w-full max-w-2xl"
+        style={{
+          background: 'var(--bg-surface)',
+          borderLeft: '1px solid var(--border)',
+          boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+        }}
       >
-        {machine && (
-          <div className="flex h-full flex-col">
-            {/* Header */}
-            <DialogHeader className="px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-              <DialogTitle className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {machine.machineName}
-              </DialogTitle>
-              <DialogDescription asChild>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {machine.osVersion || machine.osType}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="text-xs"
-                    style={machine.vmType === 'Arc VM'
-                      ? { borderColor: 'color-mix(in srgb, var(--accent-purple) 50%, transparent)', color: 'var(--accent-purple)' }
-                      : { borderColor: 'color-mix(in srgb, var(--accent-blue) 50%, transparent)', color: 'var(--accent-blue)' }
-                    }
-                  >
-                    {machine.vmType}
-                  </Badge>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {machine.resourceGroup}
-                  </span>
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-
-            {/* Summary strip */}
-            <div className="grid grid-cols-4 gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-              <StatChip label="Installed" value={machine.installedCount} />
-              <StatChip
-                label="Critical"
-                value={machine.criticalCount}
-                variant={machine.criticalCount > 0 ? 'danger' : 'default'}
-              />
-              <StatChip
-                label="Security"
-                value={machine.securityCount}
-                variant={machine.securityCount > 0 ? 'danger' : 'default'}
-              />
-              <StatChip
-                label="Reboot Pending"
-                value={machine.rebootPending ? 'Yes' : 'No'}
-                variant={machine.rebootPending ? 'warning' : 'default'}
-              />
-            </div>
-
-            {/* Days selector */}
-            <div className="flex items-center justify-between px-6 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Installed Patches
+        {/* Header */}
+        <div
+          className="flex items-start justify-between px-6 py-4 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {machine.machineName}
+            </h2>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="secondary" className="text-xs">
+                {machine.osVersion || machine.osType}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="text-xs"
+                style={machine.vmType === 'Arc VM'
+                  ? { borderColor: 'color-mix(in srgb, var(--accent-purple) 50%, transparent)', color: 'var(--accent-purple)' }
+                  : { borderColor: 'color-mix(in srgb, var(--accent-blue) 50%, transparent)', color: 'var(--accent-blue)' }
+                }
+              >
+                {machine.vmType}
+              </Badge>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {machine.resourceGroup}
               </span>
-              <Select value={days} onValueChange={handleDaysChange}>
-                <SelectTrigger className="w-[120px] h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
-
-            {/* Patch table or state */}
-            <ScrollArea className="flex-1">
-              <div className="px-6 py-4">
-                {/* Loading */}
-                {loading && (
-                  <Table className="w-full text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
-                        <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <SkeletonRows />
-                    </TableBody>
-                  </Table>
-                )}
-
-                {/* Error */}
-                {!loading && error && <ErrorState onRetry={handleRetry} />}
-
-                {/* Empty — no LAW data (installedCount === 0, no fetch) */}
-                {shouldShowEmpty && <EmptyState />}
-
-                {/* Empty — fetched but no results */}
-                {shouldShowFetchedEmpty && <EmptyState />}
-
-                {/* Patches table */}
-                {!loading && !error && patches.length > 0 && (
-                  <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-                    <Table className="w-full text-sm">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
-                          <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {patches.map((p, idx) => (
-                          <TableRow
-                            key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`}
-                            className="border-b hover:bg-muted/50 transition-colors"
-                          >
-                            <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
-                              {p.SoftwareName}
-                            </TableCell>
-                            <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                              {p.CurrentVersion || '\u2014'}
-                            </TableCell>
-                            <TableCell className="h-9 px-3 align-middle">
-                              <Badge
-                                variant="outline"
-                                className="text-[11px] border"
-                                style={categoryBadgeStyle(p.Category)}
-                              >
-                                {p.Category || 'Other'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
-                              {p.Publisher || '\u2014'}
-                            </TableCell>
-                            <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                              {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
-                            </TableCell>
-                            <TableCell className="h-9 px-3 align-middle">
-                              <CveBadges cves={p.cves ?? []} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="rounded-sm p-1 opacity-70 hover:opacity-100 transition-opacity"
+            style={{ color: 'var(--text-secondary)' }}
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Summary strip */}
+        <div className="grid grid-cols-4 gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <StatChip label="Installed" value={machine.installedCount} />
+          <StatChip
+            label="Critical"
+            value={machine.criticalCount}
+            variant={machine.criticalCount > 0 ? 'danger' : 'default'}
+          />
+          <StatChip
+            label="Security"
+            value={machine.securityCount}
+            variant={machine.securityCount > 0 ? 'danger' : 'default'}
+          />
+          <StatChip
+            label="Reboot Pending"
+            value={machine.rebootPending ? 'Yes' : 'No'}
+            variant={machine.rebootPending ? 'warning' : 'default'}
+          />
+        </div>
+
+        {/* Days selector */}
+        <div className="flex items-center justify-between px-6 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+            Installed Patches
+          </span>
+          <Select value={days} onValueChange={handleDaysChange}>
+            <SelectTrigger className="w-[120px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DAYS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Patch table or state */}
+        <ScrollArea className="flex-1">
+          <div className="px-6 py-4">
+            {/* Loading */}
+            {loading && (
+              <Table className="w-full text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <SkeletonRows />
+                </TableBody>
+              </Table>
+            )}
+
+            {/* Error */}
+            {!loading && error && <ErrorState onRetry={handleRetry} />}
+
+            {/* Empty — no LAW data */}
+            {shouldShowEmpty && <EmptyState />}
+
+            {/* Empty — fetched but no results */}
+            {shouldShowFetchedEmpty && <EmptyState />}
+
+            {/* Patches table */}
+            {!loading && !error && patches.length > 0 && (
+              <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {patches.map((p, idx) => (
+                      <TableRow
+                        key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`}
+                        className="border-b hover:bg-muted/50 transition-colors"
+                      >
+                        <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
+                          {p.SoftwareName}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                          {p.CurrentVersion || '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle">
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] border"
+                            style={categoryBadgeStyle(p.Category)}
+                          >
+                            {p.Category || 'Other'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
+                          {p.Publisher || '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                          {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle">
+                          <CveBadges cves={p.cves ?? []} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    </>
   );
 }
