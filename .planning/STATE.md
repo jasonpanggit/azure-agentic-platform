@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last updated: 2026-04-05 - Completed quick task 260405-hnb: Replace deprecated diagnostic settings with AMA + DCR association approach
+
 > Last updated: 2026-04-04 — Quick task 260405-16u COMPLETE: Import block added to imports.tf to resolve 409 RoleAssignmentExists conflict for api-gateway Reader role. Merged to main (6486586). Will take effect on next successful terraform apply.
 
 > Last updated: 2026-04-04 — Quick task 260404-vm9 COMPLETE: Added Reader + Monitoring Reader RBAC roles to API gateway managed identity across all in-scope subscriptions in Terraform. Fixes VM health showing "Unknown" and metrics showing "No metrics available". Run terraform apply to activate.
@@ -332,6 +334,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260404-vm9 | Add Reader and Monitoring Reader RBAC roles to API gateway managed identity in Terraform | 2026-04-04 | 1556e53 | [260404-vm9-add-reader-and-monitoring-reader-rbac-ro](./quick/260404-vm9-add-reader-and-monitoring-reader-rbac-ro/) |
 | 260405-0rp | redeploy web-ui and api gateway | 2026-04-04 | — | [260405-0rp-redeploy-web-ui-and-api-gateway](./quick/260405-0rp-redeploy-web-ui-and-api-gateway/) |
 | 260405-16u | Import existing Terraform role assignment into state to fix 409 conflict | 2026-04-04 | 6486586 | [260405-16u-import-existing-terraform-role-assignmen](./quick/260405-16u-import-existing-terraform-role-assignmen/) |
+| 260405-hnb | Replace deprecated diagnostic settings with AMA + DCR association approach | 2026-04-05 | 3eca489 | [260405-hnb-replace-deprecated-diagnostic-settings-w](./quick/260405-hnb-replace-deprecated-diagnostic-settings-w/) |
 
 ---
 
