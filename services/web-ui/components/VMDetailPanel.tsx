@@ -216,6 +216,8 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
 
   // ── Diagnostic settings state ────────────────────────────────────────────
   const [diagConfigured, setDiagConfigured] = useState<boolean | null>(null)
+  const [diagAmaInstalled, setDiagAmaInstalled] = useState<boolean | null>(null)
+  const [diagDcrAssociated, setDiagDcrAssociated] = useState<boolean | null>(null)
   const [diagEnabling, setDiagEnabling] = useState(false)
   const [diagError, setDiagError] = useState<string | null>(null)
 
@@ -320,12 +322,15 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       const token = await getAccessToken()
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings`, { headers })
+      const osParam = vm?.os_type ? `?os_type=${encodeURIComponent(vm.os_type)}` : ''
+      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings${osParam}`, { headers })
       if (!res.ok) return
       const data = await res.json()
+      setDiagAmaInstalled(data.ama_installed ?? false)
+      setDiagDcrAssociated(data.dcr_associated ?? false)
       setDiagConfigured(data.configured ?? false)
     } catch {
-      // non-fatal — leave diagConfigured as null (unknown)
+      // non-fatal — leave diag states as null (unknown)
     }
   }
 
@@ -338,15 +343,18 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       const token = await getAccessToken()
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings`, {
+      const osParam = vm?.os_type ? `?os_type=${encodeURIComponent(vm.os_type)}` : ''
+      const res = await fetch(`/api/proxy/vms/${encoded}/diagnostic-settings${osParam}`, {
         method: 'POST',
         headers,
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setDiagAmaInstalled(true)
+      setDiagDcrAssociated(true)
       setDiagConfigured(true)
     } catch (err) {
-      setDiagError(err instanceof Error ? err.message : 'Failed to enable diagnostic settings')
+      setDiagError(err instanceof Error ? err.message : 'Failed to enable monitoring')
     } finally {
       setDiagEnabling(false)
     }
@@ -787,13 +795,36 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
               )}
 
               {/* Diagnostic settings status — shown below metrics regardless of data */}
-              {diagConfigured === false && (
+              {diagConfigured === true && (
+                <div className="mt-2 text-[11px] flex items-center gap-1" style={{ color: 'var(--accent-green)' }}>
+                  ✓ Azure Monitor Agent active — collecting data to Log Analytics
+                </div>
+              )}
+              {diagAmaInstalled === true && diagDcrAssociated === false && (
+                <div
+                  className="mt-3 rounded-md p-2 text-xs flex items-start justify-between gap-2"
+                  style={{ background: `color-mix(in srgb, var(--accent-orange) 8%, transparent)`, border: '1px solid color-mix(in srgb, var(--accent-orange) 20%, transparent)' }}
+                >
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    AMA installed, no data collection rule — click Enable to link a DCR.
+                  </span>
+                  <button
+                    onClick={enableDiagSettings}
+                    disabled={diagEnabling}
+                    className="flex-shrink-0 px-2 py-1 rounded text-[11px] font-medium cursor-pointer disabled:opacity-50"
+                    style={{ background: 'var(--accent-orange)', color: 'white' }}
+                  >
+                    {diagEnabling ? 'Enabling…' : 'Enable'}
+                  </button>
+                </div>
+              )}
+              {diagConfigured === false && diagAmaInstalled === false && (
                 <div
                   className="mt-3 rounded-md p-2 text-xs flex items-start justify-between gap-2"
                   style={{ background: `color-mix(in srgb, var(--accent-blue) 8%, transparent)`, border: '1px solid color-mix(in srgb, var(--accent-blue) 20%, transparent)' }}
                 >
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    Diagnostic settings not configured. Enable to send all logs &amp; metrics to the platform workspace.
+                    Enable monitoring — installs Azure Monitor Agent and Data Collection Rule.
                   </span>
                   <button
                     onClick={enableDiagSettings}
@@ -803,11 +834,6 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                   >
                     {diagEnabling ? 'Enabling…' : 'Enable'}
                   </button>
-                </div>
-              )}
-              {diagConfigured === true && (
-                <div className="mt-2 text-[11px]" style={{ color: 'var(--accent-green)' }}>
-                  ✓ Diagnostic settings configured
                 </div>
               )}
               {diagError && (

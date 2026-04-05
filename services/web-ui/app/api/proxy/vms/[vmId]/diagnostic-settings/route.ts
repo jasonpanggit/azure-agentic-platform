@@ -15,7 +15,10 @@ export async function GET(
   log.info('check diagnostic settings', { vmId: vmId.slice(0, 40) });
 
   try {
-    const url = `${getApiGatewayUrl()}/api/v1/vms/${encodeURIComponent(vmId)}/diagnostic-settings`;
+    const { searchParams } = new URL(req.url);
+    const query = searchParams.toString();
+    const qs = query ? `?${query}` : '';
+    const url = `${getApiGatewayUrl()}/api/v1/vms/${encodeURIComponent(vmId)}/diagnostic-settings${qs}`;
     const upstreamHeaders = buildUpstreamHeaders(req.headers.get('Authorization'), false);
 
     const res = await fetch(url, {
@@ -48,7 +51,10 @@ export async function POST(
   log.info('enable diagnostic settings', { vmId: vmId.slice(0, 40) });
 
   try {
-    const url = `${getApiGatewayUrl()}/api/v1/vms/${encodeURIComponent(vmId)}/diagnostic-settings`;
+    const { searchParams } = new URL(req.url);
+    const query = searchParams.toString();
+    const qs = query ? `?${query}` : '';
+    const url = `${getApiGatewayUrl()}/api/v1/vms/${encodeURIComponent(vmId)}/diagnostic-settings${qs}`;
     const upstreamHeaders = buildUpstreamHeaders(req.headers.get('Authorization'), false);
 
     const res = await fetch(url, {
