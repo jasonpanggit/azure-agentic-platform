@@ -703,13 +703,25 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                         className="absolute right-0 top-6 z-50 rounded-lg shadow-xl overflow-y-auto"
                         style={{
                           width: '220px',
-                          maxHeight: '320px',
+                          maxHeight: '420px',
                           background: 'var(--bg-surface)',
                           border: '1px solid var(--border)',
                         }}
                       >
-                        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
-                          Select metrics
+                        <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Select metrics</span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedMetrics(METRIC_CATALOG.map(m => m.name))}
+                              className="text-[10px] cursor-pointer hover:opacity-70"
+                              style={{ color: 'var(--accent-blue)' }}
+                            >All</button>
+                            <button
+                              onClick={() => setSelectedMetrics(DEFAULT_METRICS)}
+                              className="text-[10px] cursor-pointer hover:opacity-70"
+                              style={{ color: 'var(--text-muted)' }}
+                            >Reset</button>
+                          </div>
                         </div>
                         {(['CPU', 'Memory', 'Disk', 'Network', 'Availability'] as const).map(group => (
                           <div key={group}>
@@ -775,7 +787,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                       <div key={m.name} className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                            {m.name?.replace('Percentage ', '').replace(' Bytes', 'B').replace('/sec', '/s') ?? '—'}
+                            {METRIC_CATALOG.find(c => c.name === m.name)?.label ?? m.name ?? '—'}
                           </div>
                           {latest !== undefined && (
                             <div className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>
