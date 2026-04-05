@@ -358,72 +358,75 @@ async def get_vm_metrics(
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic settings helpers
+# Diagnostic settings helpers — use ARM REST directly (azure-mgmt-monitor v6+
+# removed DiagnosticSettingsResource; REST API is stable across all versions)
 # ---------------------------------------------------------------------------
 
-def _get_diag_client(credential: Any, subscription_id: str) -> Any:
-    from azure.mgmt.monitor import MonitorManagementClient
-    return MonitorManagementClient(credential, subscription_id)
+_ARM_BASE = "https://management.azure.com"
+_DIAG_API = "2021-05-01-preview"
+
+
+def _arm_token(credential: Any) -> str:
+    """Acquire a bearer token for the ARM audience."""
+    return credential.get_token("https://management.azure.com/.default").token
 
 
 def _check_diag_settings(credential: Any, resource_id: str) -> Dict[str, Any]:
     """Return whether aap-diagnostics setting exists and which workspace it targets."""
-    sub_id = _extract_subscription_id(resource_id)
-    client = _get_diag_client(credential, sub_id)
-    try:
-        setting = client.diagnostic_settings.get(resource_uri=resource_id, name=_DIAG_SETTING_NAME)
-        ws_id = getattr(setting, "workspace_id", None) or ""
-        return {"configured": True, "workspace_id": ws_id, "name": _DIAG_SETTING_NAME}
-    except Exception:
-        return {"configured": False, "workspace_id": None, "name": _DIAG_SETTING_NAME}
+    import requests
+    token = _arm_token(credential)
+    url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettings/{_DIAG_SETTING_NAME}"
+    resp = requests.get(url, params={"api-version": _DIAG_API},
+                        headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    if resp.status_code == 200:
+        props = resp.json().get("properties", {})
+        return {"configured": True, "workspace_id": props.get("workspaceId"), "name": _DIAG_SETTING_NAME}
+    return {"configured": False, "workspace_id": None, "name": _DIAG_SETTING_NAME}
 
 
 def _enable_diag_settings(credential: Any, resource_id: str, workspace_resource_id: str) -> Dict[str, Any]:
-    """Create or update the aap-diagnostics setting to send all logs+metrics to the workspace."""
-    from azure.mgmt.monitor.models import (
-        DiagnosticSettingsResource,
-        LogSettings,
-        MetricSettings,
-        RetentionPolicy,
-    )
+    """Create or update the aap-diagnostics setting via ARM REST API."""
+    import requests
+    token = _arm_token(credential)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    sub_id = _extract_subscription_id(resource_id)
-    client = _get_diag_client(credential, sub_id)
+    # Fetch available categories for this resource type
+    cat_url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettingsCategories"
+    cat_resp = requests.get(cat_url, params={"api-version": _DIAG_API}, headers=headers, timeout=15)
+    categories = cat_resp.json().get("value", []) if cat_resp.status_code == 200 else []
 
-    # Fetch available log/metric categories for this resource type
-    categories = list(client.diagnostic_settings_category.list(resource_uri=resource_id))
-    retention = RetentionPolicy(enabled=False, days=0)
-
-    log_settings = [
-        LogSettings(category=c.name, enabled=True, retention_policy=retention)
-        for c in categories if c.category_type == "Logs"
+    logs = [
+        {"category": c["name"], "enabled": True}
+        for c in categories if c.get("properties", {}).get("categoryType") == "Logs"
     ]
-    metric_settings = [
-        MetricSettings(category=c.name, enabled=True, retention_policy=retention)
-        for c in categories if c.category_type == "Metrics"
+    metrics = [
+        {"category": c["name"], "enabled": True}
+        for c in categories if c.get("properties", {}).get("categoryType") == "Metrics"
     ]
+    # VMs always support AllMetrics even if category list is empty
+    if not metrics:
+        metrics = [{"category": "AllMetrics", "enabled": True}]
 
-    # Azure VMs always support AllMetrics even if category list is empty
-    if not metric_settings:
-        metric_settings = [MetricSettings(category="AllMetrics", enabled=True, retention_policy=retention)]
+    body = {
+        "properties": {
+            "workspaceId": workspace_resource_id,
+            "logs": logs,
+            "metrics": metrics,
+        }
+    }
 
-    params = DiagnosticSettingsResource(
-        workspace_id=workspace_resource_id,
-        logs=log_settings,
-        metrics=metric_settings,
-    )
+    put_url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettings/{_DIAG_SETTING_NAME}"
+    put_resp = requests.put(put_url, params={"api-version": _DIAG_API}, headers=headers,
+                            json=body, timeout=30)
+    if not put_resp.ok:
+        raise ValueError(f"ARM returned {put_resp.status_code}: {put_resp.text[:300]}")
 
-    result = client.diagnostic_settings.create_or_update(
-        resource_uri=resource_id,
-        name=_DIAG_SETTING_NAME,
-        parameters=params,
-    )
-
+    props = put_resp.json().get("properties", {})
     return {
-        "name": result.name,
-        "workspace_id": result.workspace_id,
-        "log_categories": [s.category for s in (result.logs or [])],
-        "metric_categories": [s.category for s in (result.metrics or [])],
+        "name": _DIAG_SETTING_NAME,
+        "workspace_id": props.get("workspaceId"),
+        "log_categories": [lg["category"] for lg in props.get("logs", []) if lg.get("enabled")],
+        "metric_categories": [m["category"] for m in props.get("metrics", []) if m.get("enabled")],
     }
 
 
