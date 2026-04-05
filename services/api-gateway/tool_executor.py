@@ -141,6 +141,13 @@ def _exec_query_activity_log(args: dict) -> dict:
             )
             events = client.activity_logs.list(filter=filter_str)
             for event in events:
+                # SDK v5+ returns plain str for localizable fields; older SDKs return
+                # LocalizableString objects with a .value attribute. Guard both.
+                def _str_val(obj: Any) -> Optional[str]:
+                    if obj is None:
+                        return None
+                    return obj.value if hasattr(obj, "value") else str(obj)
+
                 all_entries.append(
                     {
                         "eventTimestamp": (
@@ -148,19 +155,11 @@ def _exec_query_activity_log(args: dict) -> dict:
                             if event.event_timestamp
                             else None
                         ),
-                        "operationName": (
-                            event.operation_name.value
-                            if event.operation_name
-                            else None
-                        ),
+                        "operationName": _str_val(event.operation_name),
                         "caller": event.caller,
-                        "status": (
-                            event.status.value if event.status else None
-                        ),
+                        "status": _str_val(event.status),
                         "resourceId": event.resource_id,
-                        "level": (
-                            event.level.value if event.level else None
-                        ),
+                        "level": _str_val(event.level),
                         "description": event.description,
                     }
                 )
@@ -347,14 +346,16 @@ def _exec_query_resource_health(args: dict) -> dict:
             availability_state,
             duration_ms,
         )
+        # occurred_time was added in a later SDK version — guard with getattr
+        occurred_time_raw = getattr(status.properties, "occurred_time", None)
         return {
             "resource_id": resource_id,
             "availability_state": availability_state,
             "summary": status.properties.summary,
             "reason_type": status.properties.reason_type,
             "occurred_time": (
-                status.properties.occurred_time.isoformat()
-                if status.properties.occurred_time
+                occurred_time_raw.isoformat()
+                if occurred_time_raw
                 else None
             ),
             "query_status": "success",
@@ -429,8 +430,8 @@ def _exec_query_monitor_metrics(args: dict) -> dict:
                         )
             metrics_out.append(
                 {
-                    "name": metric.name.value if metric.name else None,
-                    "unit": metric.unit.value if metric.unit else None,
+                    "name": metric.name.value if hasattr(metric.name, "value") else str(metric.name) if metric.name else None,
+                    "unit": metric.unit.value if hasattr(metric.unit, "value") else str(metric.unit) if metric.unit else None,
                     "timeseries": timeseries,
                 }
             )
