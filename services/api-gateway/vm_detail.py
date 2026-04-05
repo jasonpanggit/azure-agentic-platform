@@ -27,8 +27,9 @@ from services.api_gateway.os_normalizer import normalize_os
 # Falls back to constructing it from the customer ID if only that is available.
 _LA_WORKSPACE_RESOURCE_ID = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
 
-# Diagnostic setting name we manage (stable name so we can detect / overwrite)
-_DIAG_SETTING_NAME = "aap-diagnostics"
+# DCR and association names we manage (stable names so we can detect / overwrite)
+_DCR_NAME = "aap-dcr"
+_DCR_ASSOC_NAME = "aap-dcr-assoc"
 
 logger = logging.getLogger(__name__)
 
@@ -370,12 +371,11 @@ async def get_vm_metrics(
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic settings helpers — use ARM REST directly (azure-mgmt-monitor v6+
-# removed DiagnosticSettingsResource; REST API is stable across all versions)
+# AMA + DCR helpers — replaced deprecated microsoft.insights/diagnosticSettings
+# (deprecated 2026-03-31) with Azure Monitor Agent + Data Collection Rules.
 # ---------------------------------------------------------------------------
 
 _ARM_BASE = "https://management.azure.com"
-_DIAG_API = "2021-05-01-preview"
 
 
 def _arm_token(credential: Any) -> str:
@@ -383,100 +383,279 @@ def _arm_token(credential: Any) -> str:
     return credential.get_token("https://management.azure.com/.default").token
 
 
-def _check_diag_settings(credential: Any, resource_id: str) -> Dict[str, Any]:
-    """Return whether aap-diagnostics setting exists and which workspace it targets."""
+def _is_arc_vm(resource_id: str) -> bool:
+    """Return True if the resource ID belongs to an Arc-enabled server."""
+    return "microsoft.hybridcompute" in resource_id.lower()
+
+
+def _check_ama_installed(credential: Any, resource_id: str, os_type: str) -> bool:
+    """Check if the Azure Monitor Agent extension is installed on the VM."""
     import requests
+
     token = _arm_token(credential)
-    url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettings/{_DIAG_SETTING_NAME}"
-    resp = requests.get(url, params={"api-version": _DIAG_API},
-                        headers={"Authorization": f"Bearer {token}"}, timeout=15)
-    if resp.status_code == 200:
-        props = resp.json().get("properties", {})
-        return {"configured": True, "workspace_id": props.get("workspaceId"), "name": _DIAG_SETTING_NAME}
-    return {"configured": False, "workspace_id": None, "name": _DIAG_SETTING_NAME}
+    ext_name = "AzureMonitorWindowsAgent" if os_type.lower() == "windows" else "AzureMonitorLinuxAgent"
+    url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
+    resp = requests.get(
+        url,
+        params={"api-version": "2023-03-01"},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    return resp.status_code == 200
 
 
-def _enable_diag_settings(credential: Any, resource_id: str, workspace_resource_id: str) -> Dict[str, Any]:
-    """Create or update the aap-diagnostics setting via ARM REST API."""
+def _list_dcr_associations(credential: Any, resource_id: str) -> List[Dict[str, Any]]:
+    """List Data Collection Rule associations for a VM resource."""
     import requests
+
+    token = _arm_token(credential)
+    url = f"{_ARM_BASE}{resource_id}/providers/Microsoft.Insights/dataCollectionRuleAssociations"
+    resp = requests.get(
+        url,
+        params={"api-version": "2022-06-01"},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    if resp.status_code == 200:
+        return resp.json().get("value", [])
+    return []
+
+
+def _ensure_platform_dcr(
+    credential: Any,
+    workspace_resource_id: str,
+    subscription_id: str,
+    resource_group: str,
+) -> str:
+    """Create the platform DCR if it doesn't exist. Returns DCR resource ID."""
+    import requests
+
     token = _arm_token(credential)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    # Fetch available categories for this resource type
-    cat_url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettingsCategories"
-    cat_resp = requests.get(cat_url, params={"api-version": _DIAG_API}, headers=headers, timeout=15)
-    categories = cat_resp.json().get("value", []) if cat_resp.status_code == 200 else []
+    # Resolve LA workspace location from ARM
+    ws_url = f"{_ARM_BASE}{workspace_resource_id}"
+    ws_resp = requests.get(ws_url, params={"api-version": "2022-10-01"}, headers=headers, timeout=15)
+    location = ws_resp.json().get("location", "eastasia") if ws_resp.status_code == 200 else "eastasia"
 
-    logs = [
-        {"category": c["name"], "enabled": True}
-        for c in categories if c.get("properties", {}).get("categoryType") == "Logs"
-    ]
-    metrics = [
-        {"category": c["name"], "enabled": True}
-        for c in categories if c.get("properties", {}).get("categoryType") == "Metrics"
-    ]
-    # VMs always support AllMetrics even if category list is empty
-    if not metrics:
-        metrics = [{"category": "AllMetrics", "enabled": True}]
+    dcr_id = (
+        f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
+        f"/providers/Microsoft.Insights/dataCollectionRules/{_DCR_NAME}"
+    )
 
     body = {
+        "location": location,
         "properties": {
-            "workspaceId": workspace_resource_id,
-            "logs": logs,
-            "metrics": metrics,
-        }
+            "dataSources": {
+                "performanceCounters": [
+                    {
+                        "name": "aap-perf-windows",
+                        "streams": ["Microsoft-Perf"],
+                        "samplingFrequencyInSeconds": 60,
+                        "counterSpecifiers": [
+                            "\\Processor Information(_Total)\\% Processor Time",
+                            "\\Memory\\Available Bytes",
+                            "\\LogicalDisk(_Total)\\Disk Read Bytes/sec",
+                            "\\LogicalDisk(_Total)\\Disk Write Bytes/sec",
+                            "\\Network Interface(*)\\Bytes Received/sec",
+                            "\\Network Interface(*)\\Bytes Sent/sec",
+                        ],
+                    },
+                    {
+                        "name": "aap-perf-linux",
+                        "streams": ["Microsoft-Perf"],
+                        "samplingFrequencyInSeconds": 60,
+                        "counterSpecifiers": [
+                            "Processor(*)\\% Processor Time",
+                            "Memory(*)\\Available MBytes Memory",
+                            "Logical Disk(*)\\Disk Read Bytes/sec",
+                            "Logical Disk(*)\\Disk Write Bytes/sec",
+                            "Network(*)\\Total Bytes Received",
+                            "Network(*)\\Total Bytes Transmitted",
+                        ],
+                    },
+                ],
+                "syslog": [
+                    {
+                        "name": "aap-syslog",
+                        "streams": ["Microsoft-Syslog"],
+                        "facilityNames": ["auth", "cron", "daemon", "kern", "syslog"],
+                        "logLevels": ["Warning", "Error", "Critical", "Alert", "Emergency"],
+                    }
+                ],
+                "windowsEventLogs": [
+                    {
+                        "name": "aap-windows-events",
+                        "streams": ["Microsoft-Event"],
+                        "xPathQueries": [
+                            "System!*[System[(Level=1 or Level=2 or Level=3)]]",
+                            "Application!*[System[(Level=1 or Level=2)]]",
+                        ],
+                    }
+                ],
+            },
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": workspace_resource_id,
+                        "name": "aap-la-dest",
+                    }
+                ]
+            },
+            "dataFlows": [
+                {"streams": ["Microsoft-Perf"], "destinations": ["aap-la-dest"]},
+                {"streams": ["Microsoft-Syslog"], "destinations": ["aap-la-dest"]},
+                {"streams": ["Microsoft-Event"], "destinations": ["aap-la-dest"]},
+            ],
+        },
     }
 
-    put_url = f"{_ARM_BASE}{resource_id}/providers/microsoft.insights/diagnosticSettings/{_DIAG_SETTING_NAME}"
-    put_resp = requests.put(put_url, params={"api-version": _DIAG_API}, headers=headers,
-                            json=body, timeout=30)
+    put_url = f"{_ARM_BASE}{dcr_id}"
+    put_resp = requests.put(
+        put_url,
+        params={"api-version": "2022-06-01"},
+        headers=headers,
+        json=body,
+        timeout=30,
+    )
     if not put_resp.ok:
-        raise ValueError(f"ARM returned {put_resp.status_code}: {put_resp.text[:300]}")
+        raise ValueError(f"Failed to create DCR: {put_resp.status_code}: {put_resp.text[:300]}")
+    return dcr_id
 
-    props = put_resp.json().get("properties", {})
-    return {
-        "name": _DIAG_SETTING_NAME,
-        "workspace_id": props.get("workspaceId"),
-        "log_categories": [lg["category"] for lg in props.get("logs", []) if lg.get("enabled")],
-        "metric_categories": [m["category"] for m in props.get("metrics", []) if m.get("enabled")],
+
+def _create_dcr_association(credential: Any, resource_id: str, dcr_id: str) -> None:
+    """Associate a Data Collection Rule with a VM."""
+    import requests
+
+    token = _arm_token(credential)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    url = (
+        f"{_ARM_BASE}{resource_id}/providers/Microsoft.Insights"
+        f"/dataCollectionRuleAssociations/{_DCR_ASSOC_NAME}"
+    )
+    body = {"properties": {"dataCollectionRuleId": dcr_id}}
+    resp = requests.put(
+        url,
+        params={"api-version": "2022-06-01"},
+        headers=headers,
+        json=body,
+        timeout=30,
+    )
+    if not resp.ok:
+        raise ValueError(f"Failed to create DCR association: {resp.status_code}: {resp.text[:300]}")
+
+
+def _install_ama_extension(
+    credential: Any, resource_id: str, os_type: str, location: str
+) -> None:
+    """Install the Azure Monitor Agent extension on the VM."""
+    import requests
+
+    token = _arm_token(credential)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    is_windows = os_type.lower() == "windows"
+    ext_name = "AzureMonitorWindowsAgent" if is_windows else "AzureMonitorLinuxAgent"
+    ext_type = "AzureMonitorWindowsAgent" if is_windows else "AzureMonitorLinuxAgent"
+
+    body = {
+        "location": location,
+        "properties": {
+            "publisher": "Microsoft.Azure.Monitor",
+            "type": ext_type,
+            "typeHandlerVersion": "1.0",
+            "autoUpgradeMinorVersion": True,
+            "enableAutomaticUpgrade": True,
+        },
     }
+
+    url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
+    resp = requests.put(
+        url,
+        params={"api-version": "2023-03-01"},
+        headers=headers,
+        json=body,
+        timeout=60,
+    )
+    if not resp.ok and resp.status_code != 409:  # 409 = already exists
+        raise ValueError(f"Failed to install AMA: {resp.status_code}: {resp.text[:300]}")
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic settings routes
+# Diagnostic settings routes (AMA + DCR)
 # ---------------------------------------------------------------------------
 
 @router.get("/{resource_id_base64}/diagnostic-settings")
 async def get_diagnostic_settings(
     resource_id_base64: str,
+    os_type: str = Query("windows", description="VM OS type: windows or linux"),
     credential=Depends(get_credential),
     _user=Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Check whether the aap-diagnostics setting exists for this VM."""
+    """Check whether AMA is installed and a DCR association exists for this VM."""
+    start_time = time.monotonic()
+
     try:
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    # Arc VMs: return not-configured without making API calls
+    if _is_arc_vm(resource_id):
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "diag_settings: arc_vm_skip | resource=%s duration_ms=%.0f",
+            resource_id[-60:], duration_ms,
+        )
+        return {"ama_installed": False, "dcr_associated": False, "configured": False}
+
     import asyncio
+
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _check_diag_settings, credential, resource_id)
-    return result
+
+    ama_task = loop.run_in_executor(None, _check_ama_installed, credential, resource_id, os_type)
+    dcr_task = loop.run_in_executor(None, _list_dcr_associations, credential, resource_id)
+
+    ama_installed, dcr_list = await asyncio.gather(ama_task, dcr_task)
+    dcr_associated = len(dcr_list) > 0
+
+    duration_ms = (time.monotonic() - start_time) * 1000
+    logger.info(
+        "diag_settings: check | resource=%s ama=%s dcr=%s duration_ms=%.0f",
+        resource_id[-60:], ama_installed, dcr_associated, duration_ms,
+    )
+
+    return {
+        "ama_installed": ama_installed,
+        "dcr_associated": dcr_associated,
+        "configured": ama_installed and dcr_associated,
+    }
 
 
 @router.post("/{resource_id_base64}/diagnostic-settings")
 async def enable_diagnostic_settings(
     resource_id_base64: str,
+    os_type: str = Query("linux", description="VM OS type: windows or linux"),
     credential=Depends(get_credential),
     _user=Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Enable diagnostic settings for this VM, sending all logs and metrics to the
-    platform Log Analytics workspace (LOG_ANALYTICS_WORKSPACE_RESOURCE_ID).
+    """Enable AMA monitoring: install Azure Monitor Agent, create platform DCR,
+    and associate the DCR with the VM.
     """
+    start_time = time.monotonic()
+
     try:
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Arc VMs: not supported via this API
+    if _is_arc_vm(resource_id):
+        raise HTTPException(
+            status_code=400,
+            detail="AMA installation via this API is not supported for Arc VMs. "
+            "Use Azure Policy or Arc extension management.",
+        )
 
     workspace_resource_id = _LA_WORKSPACE_RESOURCE_ID
     if not workspace_resource_id:
@@ -485,16 +664,62 @@ async def enable_diagnostic_settings(
             detail="LOG_ANALYTICS_WORKSPACE_RESOURCE_ID is not configured on the API gateway.",
         )
 
-    logger.info("diag_settings: enable | resource=%s workspace=%s", resource_id[-60:], workspace_resource_id[-60:])
+    logger.info(
+        "diag_settings: enable | resource=%s workspace=%s os_type=%s",
+        resource_id[-60:], workspace_resource_id[-60:], os_type,
+    )
 
     try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, _enable_diag_settings, credential, resource_id, workspace_resource_id
+        sub_id = _extract_subscription_id(resource_id)
+        # Extract resource group from the ARM resource ID
+        parts = resource_id.split("/")
+        rg_idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
+        resource_group = parts[rg_idx + 1]
+
+        # Extract location from the workspace (reused during AMA install)
+        import requests
+
+        token = _arm_token(credential)
+        ws_resp = requests.get(
+            f"{_ARM_BASE}{workspace_resource_id}",
+            params={"api-version": "2022-10-01"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
         )
-        logger.info("diag_settings: enabled | resource=%s name=%s", resource_id[-60:], result.get("name"))
-        return {"status": "enabled", **result}
+        location = ws_resp.json().get("location", "eastasia") if ws_resp.status_code == 200 else "eastasia"
+
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+
+        # Step 1: Ensure platform DCR exists
+        dcr_id = await loop.run_in_executor(
+            None, _ensure_platform_dcr, credential, workspace_resource_id, sub_id, resource_group
+        )
+
+        # Step 2: Create DCR association + install AMA in parallel
+        assoc_task = loop.run_in_executor(None, _create_dcr_association, credential, resource_id, dcr_id)
+        ama_task = loop.run_in_executor(None, _install_ama_extension, credential, resource_id, os_type, location)
+        await asyncio.gather(assoc_task, ama_task)
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "diag_settings: enabled | resource=%s dcr=%s duration_ms=%.0f",
+            resource_id[-60:], dcr_id, duration_ms,
+        )
+
+        return {
+            "status": "enabled",
+            "ama_installed": True,
+            "dcr_associated": True,
+            "configured": True,
+        }
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error("diag_settings: failed | resource=%s error=%s", resource_id[-60:], exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Failed to enable diagnostic settings: {exc}")
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "diag_settings: failed | resource=%s error=%s duration_ms=%.0f",
+            resource_id[-60:], exc, duration_ms, exc_info=True,
+        )
+        raise HTTPException(status_code=502, detail=f"Failed to enable monitoring: {exc}")
