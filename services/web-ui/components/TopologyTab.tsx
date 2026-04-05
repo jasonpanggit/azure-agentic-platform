@@ -180,7 +180,7 @@ export function TopologyTab({ subscriptions }: TopologyTabProps) {
       if (subscriptions.length > 0) {
         params.set('subscriptions', subscriptions.join(','));
       }
-      const res = await fetch(`/api/topology?${params.toString()}`);
+      const res = await fetch(`/api/proxy/topology?${params.toString()}`);
       const data: TopologyData = await res.json();
       if (data.error) {
         setError(data.error);
