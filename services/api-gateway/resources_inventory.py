@@ -78,7 +78,12 @@ async def list_resources(
             _RESOURCES_KQL,
         )
     except Exception as exc:
-        logger.error("resources_inventory: ARG query failed | error=%s", exc)
+        duration_ms = (time.monotonic() - start) * 1000
+        logger.error(
+            "resources_inventory: ARG query failed | error=%s duration_ms=%.0f",
+            exc,
+            duration_ms,
+        )
         raise HTTPException(status_code=500, detail=f"ARG query failed: {exc}") from exc
 
     resources = [

@@ -62,10 +62,10 @@ def test_list_resources_response_shape(client):
     ):
         resp = client.get("/api/v1/resources/inventory?subscriptions=sub1")
     item = resp.json()["resources"][0]
-    assert "id" in item
-    assert "name" in item
-    assert "type" in item
-    assert "location" in item
+    assert item["name"] == "vm-001"
+    assert item["type"] == "microsoft.compute/virtualmachines"
+    assert item["location"] == "eastus"
+    assert "subscriptions/sub1" in item["id"]
 
 
 def test_list_resources_types_sorted(client):
