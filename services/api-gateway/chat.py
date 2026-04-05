@@ -236,14 +236,22 @@ def _approve_pending_subrun_mcp_calls(
     thread_id: str,
     run_id: str,
 ) -> None:
-    """Find and approve pending MCP tool approval gates on domain-agent sub-runs.
+    """Find and handle pending action gates on domain-agent sub-runs.
+
+    Handles two types of ``requires_action``:
+
+    1. **submit_tool_approval** — MCP tool approval gates. Auto-approves all
+       pending MCP tool calls so the domain agent can proceed.
+    2. **submit_tool_outputs** — Function tool calls that need gateway-side
+       execution. Executes each tool via ``tool_executor.execute_tool_call``
+       and submits the results back to Foundry.
 
     Uses the Foundry REST API directly (NOT the SDK) because:
     - SDK's threads.list() ignores the limit parameter and returns ALL threads (~18s)
     - REST API with limit=5 returns in ~1.5s
 
     Strategy: list the 5 most recent threads, find any domain-agent runs with
-    requires_action: submit_tool_approval, and approve them.
+    requires_action, and handle them by type.
     """
     import requests as _requests
     from azure.identity import DefaultAzureCredential
@@ -297,34 +305,75 @@ def _approve_pending_subrun_mcp_calls(
                 continue
 
             ra = sub_run_data.get("required_action") or {}
-            if ra.get("type") != "submit_tool_approval":
-                continue
-
-            tool_calls = (ra.get("submit_tool_approval") or {}).get("tool_calls", [])
-            approvals = [{"tool_call_id": tc["id"], "approve": True} for tc in tool_calls]
+            ra_type = ra.get("type")
             sub_run_id = sub_run_data["id"]
 
-            logger.info(
-                "Approving %d MCP tool call(s) for sub-run %s/%s",
-                len(approvals), t_id, sub_run_id,
-            )
-            try:
-                resp = _requests.post(
-                    f"{endpoint}/threads/{t_id}/runs/{sub_run_id}/submit_tool_outputs"
-                    f"?api-version={api_ver}",
-                    headers=headers,
-                    json={"tool_approvals": approvals},
-                    timeout=10,
+            if ra_type == "submit_tool_approval":
+                # MCP tool approval gate — auto-approve all pending calls
+                tool_calls = (ra.get("submit_tool_approval") or {}).get("tool_calls", [])
+                approvals = [{"tool_call_id": tc["id"], "approve": True} for tc in tool_calls]
+
+                logger.info(
+                    "Approving %d MCP tool call(s) for sub-run %s/%s",
+                    len(approvals), t_id, sub_run_id,
                 )
-                if resp.status_code in (200, 201):
-                    logger.info("✅ Approved MCP sub-run %s", sub_run_id)
-                else:
-                    logger.warning(
-                        "Failed to approve sub-run %s: %s %s",
-                        sub_run_id, resp.status_code, resp.text[:200],
+                try:
+                    resp = _requests.post(
+                        f"{endpoint}/threads/{t_id}/runs/{sub_run_id}/submit_tool_outputs"
+                        f"?api-version={api_ver}",
+                        headers=headers,
+                        json={"tool_approvals": approvals},
+                        timeout=10,
                     )
-            except Exception as exc:
-                logger.warning("Exception approving sub-run %s: %s", sub_run_id, exc)
+                    if resp.status_code in (200, 201):
+                        logger.info("Approved MCP sub-run %s", sub_run_id)
+                    else:
+                        logger.warning(
+                            "Failed to approve sub-run %s: %s %s",
+                            sub_run_id, resp.status_code, resp.text[:200],
+                        )
+                except Exception as exc:
+                    logger.warning("Exception approving sub-run %s: %s", sub_run_id, exc)
+
+            elif ra_type == "submit_tool_outputs":
+                # Function tool calls — execute locally and return results
+                from services.api_gateway.tool_executor import execute_tool_call
+
+                tool_calls = (ra.get("submit_tool_outputs") or {}).get("tool_calls", [])
+                tool_outputs = []
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    fn_name = fn.get("name", "")
+                    fn_args_raw = fn.get("arguments", "{}")
+                    tc_id = tc.get("id", "")
+                    logger.info(
+                        "Executing function tool %s for sub-run %s/%s",
+                        fn_name, t_id, sub_run_id,
+                    )
+                    output = execute_tool_call(fn_name, fn_args_raw)
+                    tool_outputs.append({"tool_call_id": tc_id, "output": output})
+
+                logger.info(
+                    "Submitting %d tool output(s) for sub-run %s/%s",
+                    len(tool_outputs), t_id, sub_run_id,
+                )
+                try:
+                    resp = _requests.post(
+                        f"{endpoint}/threads/{t_id}/runs/{sub_run_id}/submit_tool_outputs"
+                        f"?api-version={api_ver}",
+                        headers=headers,
+                        json={"tool_outputs": tool_outputs},
+                        timeout=30,
+                    )
+                    if resp.status_code in (200, 201):
+                        logger.info("Submitted tool outputs for sub-run %s", sub_run_id)
+                    else:
+                        logger.warning(
+                            "Failed to submit tool outputs for sub-run %s: %s %s",
+                            sub_run_id, resp.status_code, resp.text[:200],
+                        )
+                except Exception as exc:
+                    logger.warning("Exception submitting tool outputs for sub-run %s: %s", sub_run_id, exc)
 
 
 
