@@ -600,8 +600,12 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                     <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
                   ))}
                 </div>
-              ) : metrics.length === 0 ? (
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>No metrics available</div>
+              ) : metrics.length === 0 || metrics.every(m => m.timeseries.length === 0) ? (
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {vm.power_state === 'deallocated'
+                    ? 'No metrics — VM is deallocated. Start the VM to collect data.'
+                    : 'No metrics available'}
+                </div>
               ) : (
                 <div className="space-y-3">
                   {metrics.map((m) => {
