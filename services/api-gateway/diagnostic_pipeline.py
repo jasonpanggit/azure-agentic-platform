@@ -28,12 +28,13 @@ PIPELINE_ENABLED = os.environ.get("DIAGNOSTIC_PIPELINE_ENABLED", "true").lower()
 PIPELINE_TIMEOUT = int(os.environ.get("DIAGNOSTIC_PIPELINE_TIMEOUT_SECONDS", "30"))
 LA_WORKSPACE_ID = os.environ.get("DIAGNOSTIC_LA_WORKSPACE_ID", "")
 
-# VM metrics to collect by default
+# VM metrics to collect by default.
+# Use the canonical API names (no trailing /sec — those are legacy aliases not accepted by all SKUs).
 VM_METRICS = [
     "Percentage CPU",
     "Available Memory Bytes",
-    "Disk Read Bytes/sec",
-    "Disk Write Bytes/sec",
+    "Disk Read Bytes",
+    "Disk Write Bytes",
     "Network In Total",
     "Network Out Total",
 ]
@@ -71,13 +72,19 @@ async def _collect_activity_log(
         events = await asyncio.get_event_loop().run_in_executor(
             None, lambda: list(client.activity_logs.list(filter=filter_str))
         )
+        def _str_val(obj: Any) -> Optional[str]:
+            """Handle both plain str (SDK v5+) and LocalizableString (.value) objects."""
+            if obj is None:
+                return None
+            return obj.value if hasattr(obj, "value") else str(obj)
+
         for event in events:
             entries.append({
                 "eventTimestamp": event.event_timestamp.isoformat() if event.event_timestamp else None,
-                "operationName": event.operation_name.value if event.operation_name else None,
+                "operationName": _str_val(event.operation_name),
                 "caller": event.caller,
-                "status": event.status.value if event.status else None,
-                "level": event.level.value if event.level else None,
+                "status": _str_val(event.status),
+                "level": _str_val(event.level),
                 "description": event.description,
             })
         duration_ms = (time.monotonic() - start_time) * 1000
@@ -102,10 +109,13 @@ async def _collect_resource_health(
     """Collect Resource Health availability status."""
     start_time = time.monotonic()
     try:
-        from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+        try:
+            from azure.mgmt.resourcehealth import ResourceHealthMgmtClient
+        except ImportError:
+            from azure.mgmt.resourcehealth import MicrosoftResourceHealth as ResourceHealthMgmtClient  # type: ignore[no-redef]
 
         sub_id = _extract_subscription_id(resource_id)
-        client = MicrosoftResourceHealth(credential, sub_id)
+        client = ResourceHealthMgmtClient(credential, sub_id)
         status = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: client.availability_statuses.get_by_resource(
@@ -113,11 +123,14 @@ async def _collect_resource_health(
                 expand="recommendedActions",
             ),
         )
-        availability_state = (
-            status.properties.availability_state.value
-            if status.properties and status.properties.availability_state
-            else "Unknown"
-        )
+        raw_state = status.properties.availability_state if status.properties else None
+        if hasattr(raw_state, "value"):
+            availability_state = raw_state.value
+        elif raw_state is not None:
+            availability_state = str(raw_state)
+        else:
+            availability_state = "Unknown"
+        occurred_time_raw = getattr(status.properties, "occurred_time", None) if status.properties else None
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info(
             "pipeline: resource_health complete | resource=%s state=%s duration_ms=%.0f",
@@ -129,9 +142,7 @@ async def _collect_resource_health(
             "summary": status.properties.summary if status.properties else None,
             "reason_type": status.properties.reason_type if status.properties else None,
             "occurred_time": (
-                status.properties.occurred_time.isoformat()
-                if status.properties and status.properties.occurred_time
-                else None
+                occurred_time_raw.isoformat() if occurred_time_raw else None
             ),
             "duration_ms": duration_ms,
         }
@@ -181,8 +192,8 @@ async def _collect_metrics(
                             "minimum": dp.minimum,
                         })
             metrics_out.append({
-                "name": metric.name.value if metric.name else None,
-                "unit": metric.unit.value if metric.unit else None,
+                "name": metric.name.value if hasattr(metric.name, "value") else str(metric.name) if metric.name else None,
+                "unit": metric.unit.value if hasattr(metric.unit, "value") else str(metric.unit) if metric.unit else None,
                 "timeseries": timeseries,
             })
         duration_ms = (time.monotonic() - start_time) * 1000
