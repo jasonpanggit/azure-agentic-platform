@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -218,8 +218,6 @@ export function InstalledPatchesPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<DaysOption>('90');
-  const panelRef = useRef<HTMLDivElement>(null);
-
   const fetchPatches = useCallback(async (resourceId: string, daysVal: string) => {
     setLoading(true);
     setError(null);
@@ -290,17 +288,8 @@ export function InstalledPatchesPanel({
 
   return (
     <>
-      {/* Backdrop — matches VMDetailPanel: light scrim, not bg-black/80 */}
-      <div
-        className="fixed inset-0 z-40"
-        style={{ background: 'rgba(0,0,0,0.2)' }}
-        onClick={() => onOpenChange(false)}
-        aria-hidden="true"
-      />
-
       {/* Side panel */}
       <div
-        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={machine.machineName}
