@@ -1,16 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const MIN_WIDTH = 360;
-const MAX_WIDTH = 800;
-const DEFAULT_WIDTH = 420;
-const STORAGE_KEY = 'chat-drawer-width';
+// ---------------------------------------------------------------------------
+// Defaults (chat drawer — backwards-compatible when called with no args)
+// ---------------------------------------------------------------------------
 
-export function useResizable() {
+const DEFAULT_MIN_WIDTH = 360;
+const DEFAULT_MAX_WIDTH = 800;
+const DEFAULT_DEFAULT_WIDTH = 420;
+const DEFAULT_STORAGE_KEY = 'chat-drawer-width';
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export interface UseResizableOptions {
+  /** Minimum panel width in px (default 360) */
+  readonly minWidth?: number;
+  /** Maximum panel width in px (default 800) */
+  readonly maxWidth?: number;
+  /** Initial width in px when no localStorage value exists (default 420) */
+  readonly defaultWidth?: number;
+  /** localStorage key for persistence (default 'chat-drawer-width') */
+  readonly storageKey?: string;
+}
+
+export function useResizable(options?: UseResizableOptions) {
+  const minWidth = options?.minWidth ?? DEFAULT_MIN_WIDTH;
+  const maxWidth = options?.maxWidth ?? DEFAULT_MAX_WIDTH;
+  const defaultWidth = options?.defaultWidth ?? DEFAULT_DEFAULT_WIDTH;
+  const storageKey = options?.storageKey ?? DEFAULT_STORAGE_KEY;
+
   const [width, setWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') return DEFAULT_WIDTH;
-    const stored = localStorage.getItem(STORAGE_KEY);
+    if (typeof window === 'undefined') return defaultWidth;
+    const stored = localStorage.getItem(storageKey);
     const parsed = stored ? parseInt(stored, 10) : NaN;
-    return isNaN(parsed) ? DEFAULT_WIDTH : Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, parsed));
+    return isNaN(parsed) ? defaultWidth : Math.min(maxWidth, Math.max(minWidth, parsed));
   });
 
   const isDragging = useRef(false);
@@ -31,7 +55,7 @@ export function useResizable() {
       if (!isDragging.current) return;
       // Drawer is on the right side — dragging left increases width
       const delta = startX.current - e.clientX;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta));
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth.current + delta));
       setWidth(newWidth);
     };
 
@@ -43,7 +67,7 @@ export function useResizable() {
       // Persist to localStorage
       setWidth(prev => {
         if (typeof window !== 'undefined') {
-          localStorage.setItem(STORAGE_KEY, String(prev));
+          localStorage.setItem(storageKey, String(prev));
         }
         return prev;
       });
@@ -55,7 +79,7 @@ export function useResizable() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [minWidth, maxWidth, storageKey]);
 
   return { width, onMouseDown };
 }
