@@ -132,6 +132,7 @@ jobs:
               select(.change.actions != ["delete"]) |
               select(
                 (.change.after.tags == null) or
+                ((.change.after.tags | type) != "object") or
                 (.change.after.tags.environment == null) or
                 (.change.after.tags["managed-by"] != "terraform") or
                 (.change.after.tags.project != "aap")
