@@ -181,6 +181,18 @@ class ApprovalResponse(BaseModel):
     status: str  # approved, rejected, expired, error
 
 
+class ApprovalCreateRequest(BaseModel):
+    """Request body for POST /api/v1/approvals (synthetic approval injection for ops/demos)."""
+
+    thread_id: str
+    incident_id: str
+    agent_name: str = "compute-agent"
+    proposal: dict
+    resource_snapshot: dict = {}
+    risk_level: str = "low"
+    timeout_minutes: Optional[int] = None
+
+
 class ApprovalRecord(BaseModel):
     """Full approval record from Cosmos DB (D-12)."""
 

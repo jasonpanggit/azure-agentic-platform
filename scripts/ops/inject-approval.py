@@ -2,8 +2,11 @@
 """inject-approval.py — Create a synthetic approval record for deterministic demos.
 
 When the Foundry agent does not autonomously propose remediation (the approval
-flow is agent-driven), this script creates a realistic approval record directly
-in Cosmos DB so the ProposalCard renders in the Web UI chat stream.
+flow is agent-driven), this script creates a realistic approval record by calling
+POST /api/v1/approvals on the API gateway.
+
+The API gateway is the right place to go: it reaches Cosmos DB via private endpoint
+inside vnet-aap-prod, so no Cosmos firewall rules or public access are required.
 
 Usage:
     python3 scripts/ops/inject-approval.py \
@@ -18,39 +21,50 @@ Usage:
         --risk-level medium
 
 Prerequisites:
-    - pip install azure-cosmos azure-identity
-    - COSMOS_ENDPOINT environment variable (or --cosmos-endpoint flag)
-    - Azure credentials available (az login or managed identity)
+    - pip install requests  (stdlib urllib works too, but requests is nicer)
+    - API gateway must be reachable (public Container App URL)
+    - No authentication required (API_GATEWAY_AUTH_MODE=disabled in prod)
 
 The script prints the approval_id and curl commands for approve/reject.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
-import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any
+
+API_GATEWAY_DEFAULT = (
+    "https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+)
 
 
-def _get_cosmos_client(endpoint: str):
-    """Create a CosmosClient with DefaultAzureCredential."""
+def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """POST JSON to url. Uses requests if available, else urllib."""
+    body = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+
     try:
-        from azure.cosmos import CosmosClient
-        from azure.identity import DefaultAzureCredential
-    except ImportError:
-        print("ERROR: Missing dependencies. Install with:")
-        print("  pip install azure-cosmos azure-identity")
-        sys.exit(1)
+        import requests  # type: ignore[import-untyped]
 
-    credential = DefaultAzureCredential()
-    return CosmosClient(url=endpoint, credential=credential)
+        resp = requests.post(url, data=body, headers=headers, timeout=30)
+        if not resp.ok:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:400]}")
+        return resp.json()
+
+    except ImportError:
+        import urllib.request
+
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status >= 400:
+                raise RuntimeError(f"HTTP {resp.status}: {resp.read().decode()[:400]}")
+            return json.loads(resp.read())
 
 
 def create_synthetic_approval(
-    cosmos_endpoint: str,
-    database_name: str,
+    api_gateway: str,
     incident_id: str,
     thread_id: str,
     proposal_text: str,
@@ -58,63 +72,52 @@ def create_synthetic_approval(
     agent_name: str,
     resource_id: str,
     timeout_minutes: int,
-) -> dict:
-    """Create a synthetic approval record in Cosmos DB approvals container.
+) -> dict[str, Any]:
+    """Call POST /api/v1/approvals on the API gateway to create the record.
 
-    Returns the full record as written to Cosmos.
+    The gateway writes to Cosmos via its private endpoint — no public Cosmos
+    access required.
     """
-    client = _get_cosmos_client(cosmos_endpoint)
-    database = client.get_database_client(database_name)
-    container = database.get_container_client("approvals")
+    url = f"{api_gateway.rstrip('/')}/api/v1/approvals"
 
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=timeout_minutes)
-    approval_id = f"appr_{uuid.uuid4()}"
-    action_id = f"act_{uuid.uuid4()}"
-
-    record = {
-        "id": approval_id,
-        "action_id": action_id,
+    payload: dict[str, Any] = {
         "thread_id": thread_id,
         "incident_id": incident_id,
         "agent_name": agent_name,
-        "status": "pending",
         "risk_level": risk_level,
-        "proposed_at": now.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "decided_at": None,
-        "decided_by": None,
-        "executed_at": None,
-        "abort_reason": None,
-        "resource_snapshot": {
-            "resource_id": resource_id,
-            "resource_type": "Microsoft.Compute/virtualMachines",
-            "resource_group": "aml-rg",
-            "subscription_id": "4c727b88-12f4-4c91-9c2b-372aab3bbae9",
-            "vm_name": "jumphost",
-            "current_state": "Running",
-        },
+        "timeout_minutes": timeout_minutes,
         "proposal": {
             "action": proposal_text,
             "justification": (
                 "CPU utilization exceeded 95% on the jumphost VM. "
-                "The stress-ng process is consuming all available CPU cores. "
-                "Terminating this process will restore normal CPU levels."
+                "The PowerShell background jobs are consuming all available CPU cores. "
+                "Terminating these jobs will immediately restore normal CPU levels."
             ),
             "estimated_impact": "Low — terminates a synthetic load-generation process",
-            "rollback_plan": "Re-run stress-ng if testing must continue",
+            "rollback_plan": "Re-run stress jobs if load testing must continue",
             "affected_services": ["jumphost VM"],
+        },
+        "resource_snapshot": {
+            "resource_id": resource_id,
+            "resource_type": "Microsoft.Compute/virtualMachines",
+            "resource_group": resource_id.split("/resourceGroups/")[1].split("/")[0]
+            if "/resourceGroups/" in resource_id
+            else "aml-rg",
+            "subscription_id": resource_id.split("/subscriptions/")[1].split("/")[0]
+            if "/subscriptions/" in resource_id
+            else "",
+            "vm_name": resource_id.split("/")[-1] if resource_id else "jumphost",
+            "current_state": "Running",
         },
     }
 
-    result = container.create_item(body=record)
-    return result
+    return _post_json(url, payload)
 
 
 def main() -> None:
-    """Parse arguments and create the synthetic approval."""
+    """Parse arguments and create the synthetic approval via the API gateway."""
     parser = argparse.ArgumentParser(
-        description="Create a synthetic approval record in Cosmos DB for demo purposes.",
+        description="Create a synthetic approval record via the API gateway (no Cosmos access needed).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -130,8 +133,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--proposal",
-        default="Terminate stress-ng process on jumphost to reduce CPU utilization to normal levels",
-        help="Proposal action text (default: terminate stress-ng)",
+        default="Terminate CPU-intensive processes on jumphost to restore normal utilization",
+        help="Proposal action text",
     )
     parser.add_argument(
         "--risk-level",
@@ -146,7 +149,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--resource-id",
-        default="/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/aml-rg/providers/Microsoft.Compute/virtualMachines/jumphost",
+        default=(
+            "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+            "/resourceGroups/aml-rg"
+            "/providers/Microsoft.Compute/virtualMachines/jumphost"
+        ),
         help="Full ARM resource ID of the target VM",
     )
     parser.add_argument(
@@ -156,30 +163,24 @@ def main() -> None:
         help="Approval expiry timeout in minutes (default: 30)",
     )
     parser.add_argument(
-        "--cosmos-endpoint",
-        default=os.environ.get("COSMOS_ENDPOINT", "https://aap-cosmos-prod.documents.azure.com:443/"),
-        help="Cosmos DB endpoint (default: COSMOS_ENDPOINT env var or aap-cosmos-prod)",
-    )
-    parser.add_argument(
-        "--database-name",
-        default=os.environ.get("COSMOS_DATABASE_NAME", "aap"),
-        help="Cosmos DB database name (default: aap)",
+        "--api-gateway",
+        default=os.environ.get("API_GATEWAY_URL", API_GATEWAY_DEFAULT),
+        help="API gateway base URL (default: API_GATEWAY_URL env var or prod URL)",
     )
 
     args = parser.parse_args()
 
-    print("Creating synthetic approval record...")
+    print("Creating synthetic approval via API gateway...")
+    print(f"  API Gateway:  {args.api_gateway}")
     print(f"  Incident ID:  {args.incident_id}")
     print(f"  Thread ID:    {args.thread_id}")
     print(f"  Risk level:   {args.risk_level}")
     print(f"  Proposal:     {args.proposal}")
-    print(f"  Cosmos:       {args.cosmos_endpoint}")
     print()
 
     try:
         record = create_synthetic_approval(
-            cosmos_endpoint=args.cosmos_endpoint,
-            database_name=args.database_name,
+            api_gateway=args.api_gateway,
             incident_id=args.incident_id,
             thread_id=args.thread_id,
             proposal_text=args.proposal,
@@ -193,28 +194,34 @@ def main() -> None:
         sys.exit(1)
 
     approval_id = record["id"]
-    expires_at = record["expires_at"]
-    api_gateway = "https://ca-api-gateway-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+    expires_at = record.get("expires_at", "")
+    gw = args.api_gateway.rstrip("/")
 
     print("Approval record created successfully!")
     print()
     print(f"  Approval ID:  {approval_id}")
-    print(f"  Action ID:    {record['action_id']}")
-    print(f"  Status:       {record['status']}")
+    print(f"  Action ID:    {record.get('action_id', '')}")
+    print(f"  Status:       {record.get('status', 'pending')}")
     print(f"  Expires at:   {expires_at}")
     print()
     print("To approve via curl:")
-    print(f'  curl -s -X POST "{api_gateway}/api/v1/approvals/{approval_id}/approve?thread_id={args.thread_id}" \\')
-    print(f'    -H "Content-Type: application/json" \\')
-    print(f'    -d \'{{"decided_by": "operator@demo", "scope_confirmed": true}}\' | python3 -m json.tool')
+    print(
+        f'  curl -s -X POST "{gw}/api/v1/approvals/{approval_id}/approve'
+        f'?thread_id={args.thread_id}" \\'
+    )
+    print('    -H "Content-Type: application/json" \\')
+    print('    -d \'{"decided_by": "operator@demo", "scope_confirmed": true}\' | python3 -m json.tool')
     print()
     print("To reject via curl:")
-    print(f'  curl -s -X POST "{api_gateway}/api/v1/approvals/{approval_id}/reject?thread_id={args.thread_id}" \\')
-    print(f'    -H "Content-Type: application/json" \\')
-    print(f'    -d \'{{"decided_by": "operator@demo"}}\' | python3 -m json.tool')
+    print(
+        f'  curl -s -X POST "{gw}/api/v1/approvals/{approval_id}/reject'
+        f'?thread_id={args.thread_id}" \\'
+    )
+    print('    -H "Content-Type: application/json" \\')
+    print('    -d \'{"decided_by": "operator@demo"}\' | python3 -m json.tool')
     print()
     print("To list pending approvals:")
-    print(f'  curl -s "{api_gateway}/api/v1/approvals?status=pending" | python3 -m json.tool')
+    print(f'  curl -s "{gw}/api/v1/approvals?status=pending" | python3 -m json.tool')
     print()
     print("The approval should now be visible in the Web UI chat stream")
     print("as a ProposalCard with Approve/Reject buttons.")

@@ -50,6 +50,7 @@ from services.api_gateway.foundry import create_foundry_thread
 from services.api_gateway.incidents_list import list_incidents
 from services.api_gateway.models import (
     ApprovalAction,
+    ApprovalCreateRequest,
     ApprovalRecord,
     ApprovalResponse,
     AuditEntry,
@@ -76,6 +77,7 @@ from services.api_gateway.models import (
     SLOHealth,
 )
 from services.api_gateway.approvals import (
+    create_approval,
     get_approval,
     list_approvals_by_status,
     list_approvals_for_thread,
@@ -1523,6 +1525,32 @@ async def get_verification_result(
 
     clean = {k: v for k, v in record.items() if not k.startswith("_")}
     return RemediationAuditRecord(**clean)
+
+
+@app.post("/api/v1/approvals", response_model=ApprovalRecord)
+async def create_approval_endpoint(
+    body: ApprovalCreateRequest,
+    token: dict[str, Any] = Depends(verify_token),
+    cosmos_client: CosmosClient = Depends(get_cosmos_client),
+) -> ApprovalRecord:
+    """Create a synthetic approval record for ops/demo use.
+
+    Allows operators to inject a pending approval directly via the API gateway
+    (which reaches Cosmos via private endpoint) without needing public Cosmos access.
+    The resulting record is identical to one created by the agent's approval_manager,
+    so the UI ProposalCard renders it the same way.
+    """
+    record = await create_approval(
+        thread_id=body.thread_id,
+        incident_id=body.incident_id,
+        agent_name=body.agent_name,
+        proposal=body.proposal,
+        resource_snapshot=body.resource_snapshot,
+        risk_level=body.risk_level,
+        timeout_minutes=body.timeout_minutes,
+        cosmos_client=cosmos_client,
+    )
+    return ApprovalRecord(**{k: v for k, v in record.items() if not k.startswith("_")})
 
 
 @app.get("/api/v1/approvals", response_model=list[ApprovalRecord])

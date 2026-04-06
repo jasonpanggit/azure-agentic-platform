@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from azure.cosmos import ContainerProxy, CosmosClient
@@ -47,6 +48,54 @@ def _is_expired(record: dict) -> bool:
     """Check if an approval record has expired."""
     expires_at = datetime.fromisoformat(record["expires_at"])
     return datetime.now(timezone.utc) > expires_at
+
+
+async def create_approval(
+    thread_id: str,
+    incident_id: str,
+    agent_name: str,
+    proposal: dict,
+    resource_snapshot: dict,
+    risk_level: str,
+    timeout_minutes: Optional[int] = None,
+    cosmos_client: Optional[CosmosClient] = None,
+) -> dict:
+    """Create a pending approval record in Cosmos DB.
+
+    Used by POST /api/v1/approvals for synthetic approval injection (ops/demos).
+    Matches the schema produced by agents/shared/approval_manager.py so the
+    UI ProposalCard renders identically.
+    """
+    now = datetime.now(timezone.utc)
+    effective_timeout = timeout_minutes if timeout_minutes is not None else APPROVAL_TIMEOUT_MINUTES
+    expires_at = now + timedelta(minutes=effective_timeout)
+
+    record: dict[str, Any] = {
+        "id": f"appr_{uuid.uuid4()}",
+        "action_id": f"act_{uuid.uuid4()}",
+        "thread_id": thread_id,
+        "incident_id": incident_id,
+        "agent_name": agent_name,
+        "status": "pending",
+        "risk_level": risk_level,
+        "proposed_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "decided_at": None,
+        "decided_by": None,
+        "executed_at": None,
+        "abort_reason": None,
+        "resource_snapshot": resource_snapshot,
+        "proposal": proposal,
+    }
+
+    container = _get_approvals_container(cosmos_client=cosmos_client)
+    logger.info(
+        "cosmos: creating approval | id=%s incident_id=%s thread_id=%s risk=%s",
+        record["id"], incident_id, thread_id, risk_level,
+    )
+    created = container.create_item(body=record)
+    logger.info("cosmos: approval created | id=%s", record["id"])
+    return created
 
 
 async def get_approval(approval_id: str, thread_id: str, cosmos_client: Optional[CosmosClient] = None) -> dict:
