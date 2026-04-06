@@ -23,7 +23,7 @@ env:
 jobs:
   plan:
     name: Plan (${{ matrix.environment }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +34,6 @@ jobs:
         include:
           - environment: prod
             working_directory: terraform/envs/prod
-            runner: [self-hosted, azure, linux]
 
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
