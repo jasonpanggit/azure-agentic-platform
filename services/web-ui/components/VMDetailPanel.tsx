@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
 import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
@@ -213,6 +213,47 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(DEFAULT_METRICS)
   const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
   const [pollingEvidence, setPollingEvidence] = useState(false)
+
+  // ── Panel resize state ───────────────────────────────────────────────────
+  const PANEL_MIN_WIDTH = 380
+  const PANEL_MAX_WIDTH = 1200
+  const PANEL_DEFAULT_WIDTH = 480
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return PANEL_DEFAULT_WIDTH
+    const saved = localStorage.getItem('vmDetailPanelWidth')
+    const parsed = saved ? parseInt(saved, 10) : NaN
+    return isNaN(parsed) ? PANEL_DEFAULT_WIDTH : Math.min(Math.max(parsed, PANEL_MIN_WIDTH), PANEL_MAX_WIDTH)
+  })
+  const isDraggingRef = useRef(false)
+  const dragStartXRef = useRef(0)
+  const dragStartWidthRef = useRef(0)
+
+  const onDragHandleMouseDown = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    dragStartXRef.current = e.clientX
+    dragStartWidthRef.current = panelWidth
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current) return
+      const delta = dragStartXRef.current - ev.clientX
+      const newWidth = Math.min(Math.max(dragStartWidthRef.current + delta, PANEL_MIN_WIDTH), PANEL_MAX_WIDTH)
+      setPanelWidth(newWidth)
+    }
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false
+      setPanelWidth(w => {
+        localStorage.setItem('vmDetailPanelWidth', String(w))
+        return w
+      })
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [panelWidth])
 
   // ── Diagnostic settings state ────────────────────────────────────────────
   const [diagConfigured, setDiagConfigured] = useState<boolean | null>(null)
@@ -513,12 +554,25 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     <div
       className="fixed inset-y-0 right-0 z-40 flex flex-col overflow-hidden"
       style={{
-        width: '480px',
+        width: `${panelWidth}px`,
         background: 'var(--bg-surface)',
         borderLeft: '1px solid var(--border)',
         boxShadow: '-4px 0 24px rgba(0,0,0,0.2)',
       }}
     >
+      {/* Drag-to-resize handle */}
+      <div
+        onMouseDown={onDragHandleMouseDown}
+        className="absolute left-0 inset-y-0 w-1.5 z-50 cursor-col-resize group"
+        title="Drag to resize"
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          className="absolute left-0 inset-y-0 w-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ background: 'var(--accent-blue)' }}
+        />
+      </div>
+
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3 flex-shrink-0"
