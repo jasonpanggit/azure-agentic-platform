@@ -241,15 +241,12 @@ export function InstalledPatchesPanel({
     }
   }, []);
 
-  // Fetch when panel opens or days changes
+  // Fetch when panel opens or days changes.
+  // Always attempt the fetch — the LAW summary `installedCount` may be 0
+  // (e.g. Arc VMs without Change Tracking) while the detail query still
+  // returns results. The empty-state UI handles truly-empty responses.
   useEffect(() => {
     if (!machine || !open) return;
-    if (machine.installedCount === 0) {
-      setPatches([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
     fetchPatches(machine.id, days);
   }, [machine, open, days, fetchPatches]);
 
@@ -281,8 +278,7 @@ export function InstalledPatchesPanel({
     setDays(value as DaysOption);
   }, []);
 
-  const shouldShowEmpty = !loading && !error && machine !== null && machine.installedCount === 0;
-  const shouldShowFetchedEmpty = !loading && !error && patches.length === 0 && machine !== null && machine.installedCount > 0;
+  const shouldShowEmpty = !loading && !error && machine !== null && patches.length === 0;
 
   if (!open || !machine) return null;
 
@@ -408,11 +404,8 @@ export function InstalledPatchesPanel({
             {/* Error */}
             {!loading && error && <ErrorState onRetry={handleRetry} />}
 
-            {/* Empty — no LAW data */}
-            {shouldShowEmpty && <EmptyState />}
-
             {/* Empty — fetched but no results */}
-            {shouldShowFetchedEmpty && <EmptyState />}
+            {shouldShowEmpty && <EmptyState />}
 
             {/* Patches table */}
             {!loading && !error && patches.length > 0 && (
