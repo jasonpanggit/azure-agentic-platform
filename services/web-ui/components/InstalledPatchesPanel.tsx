@@ -447,17 +447,14 @@ export function InstalledPatchesPanel({
     }
   }, []);
 
-  // Fetch both when panel opens; re-fetch installed when days changes
+  // Fetch when panel opens or days changes.
+  // Always attempt the fetch — the LAW summary `installedCount` may be 0
+  // (e.g. Arc VMs without Change Tracking) while the detail query still
+  // returns results. The empty-state UI handles truly-empty responses.
   useEffect(() => {
     if (!machine || !open) return;
-    fetchPendingPatches(machine.id);
-    fetchInstalledPatches(machine.id, days);
-  }, [machine, open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!machine || !open) return;
-    fetchInstalledPatches(machine.id, days);
-  }, [days]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchPatches(machine.id, days);
+  }, [machine, open, days, fetchPatches]);
 
   // Reset state when panel closes
   useEffect(() => {
@@ -482,6 +479,16 @@ export function InstalledPatchesPanel({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onOpenChange]);
+
+  const handleRetry = useCallback(() => {
+    if (machine) fetchPatches(machine.id, days);
+  }, [machine, days, fetchPatches]);
+
+  const handleDaysChange = useCallback((value: string) => {
+    setDays(value as DaysOption);
+  }, []);
+
+  const shouldShowEmpty = !loading && !error && machine !== null && patches.length === 0;
 
   if (!open || !machine) return null;
 
@@ -602,20 +609,80 @@ export function InstalledPatchesPanel({
         {/* Content */}
         <ScrollArea className="flex-1">
           <div className="px-6 py-4">
-            {activeTab === 'pending' ? (
-              <PendingPatchesTable
-                patches={pendingPatches}
-                loading={pendingLoading}
-                error={pendingError}
-                onRetry={() => machine && fetchPendingPatches(machine.id)}
-              />
-            ) : (
-              <InstalledPatchesTable
-                patches={patches}
-                loading={loading}
-                error={error}
-                onRetry={() => machine && fetchInstalledPatches(machine.id, days)}
-              />
+            {/* Loading */}
+            {loading && (
+              <Table className="w-full text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                    <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <SkeletonRows />
+                </TableBody>
+              </Table>
+            )}
+
+            {/* Error */}
+            {!loading && error && <ErrorState onRetry={handleRetry} />}
+
+            {/* Empty — fetched but no results */}
+            {shouldShowEmpty && <EmptyState />}
+
+            {/* Patches table */}
+            {!loading && !error && patches.length > 0 && (
+              <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+                      <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {patches.map((p, idx) => (
+                      <TableRow
+                        key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`}
+                        className="border-b hover:bg-muted/50 transition-colors"
+                      >
+                        <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
+                          {p.SoftwareName}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                          {p.CurrentVersion || '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle">
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] border"
+                            style={categoryBadgeStyle(p.Category)}
+                          >
+                            {p.Category || 'Other'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
+                          {p.Publisher || '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                          {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
+                        </TableCell>
+                        <TableCell className="h-9 px-3 align-middle">
+                          <CveBadges cves={p.cves ?? []} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         </ScrollArea>
