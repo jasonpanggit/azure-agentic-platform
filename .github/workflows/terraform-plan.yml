@@ -136,10 +136,17 @@ jobs:
                 "^azurerm_cosmosdb_sql_container$|^azurerm_cosmosdb_sql_database$|" +
                 "^azurerm_monitor_diagnostic_setting$|^azurerm_eventhub_consumer_group$|" +
                 "^azurerm_eventhub_namespace_authorization_rule$|^azurerm_eventhub_authorization_rule$|" +
+                "^azurerm_eventhub$|" +
                 "^azurerm_postgresql_flexible_server_configuration$|" +
                 "^azurerm_postgresql_flexible_server_database$|" +
                 "^azurerm_postgresql_flexible_server_active_directory_administrator$|" +
                 "^azurerm_key_vault_secret$|^azurerm_key_vault_access_policy$|" +
+                "^azurerm_network_security_rule$|" +
+                "^azurerm_subnet$|^azurerm_subnet_nat_gateway_association$|" +
+                "^azurerm_subnet_network_security_group_association$|" +
+                "^azurerm_nat_gateway_public_ip_association$|" +
+                "^azurerm_cognitive_deployment$|" +
+                "^azurerm_bot_channel_ms_teams$|" +
                 "^azuread_|^azapi_resource$|^random_|^time_|^null_resource$"
               ) | not) |
               select(
