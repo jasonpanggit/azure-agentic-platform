@@ -269,6 +269,34 @@ class TestGetPatchAssessment:
 
     @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_kql_uses_case_insensitive_split_for_arc_vm_join(self, mock_query, mock_law, client):
+        """KQL split() must lower id before splitting so Arc VM lowercase ids join correctly.
+
+        Arc VMs return ids with lowercase '/patchassessmentresults/' while Azure VMs use
+        camelCase '/patchAssessmentResults/'. The fix is to tolower(id) before split so
+        both variants match 'machineIdLower' on the resources side of the left join.
+
+        Regression test for: split(id, '/patchAssessmentResults/') → case-sensitive miss on Arc VMs
+        Correct form:        split(tolower(id), '/patchassessmentresults/')
+        """
+        mock_query.return_value = []
+
+        client.get("/api/v1/patch/assessment?subscriptions=sub-1")
+
+        call_args = mock_query.call_args
+        kql = call_args[0][2]  # third positional arg (KQL string)
+
+        # The patchMachineId derivation MUST lower the id before splitting to handle
+        # Arc VMs that return lowercase segment names from ARG.
+        assert "split(tolower(id), '/patchassessmentresults/')" in kql, (
+            "KQL must use tolower(id) before split() with a lowercase delimiter "
+            "to correctly join Arc VM patchassessmentresources rows. "
+            "Using split(id, '/patchAssessmentResults/') silently misses Arc VMs "
+            "because KQL split() is case-sensitive."
+        )
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_returns_502_on_arg_failure(self, mock_query, mock_law, client):
         """ARG query failure returns 502."""
         mock_query.side_effect = Exception("ARG timeout")

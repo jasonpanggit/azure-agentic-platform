@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -382,6 +382,18 @@ function InstalledPatchesTable({
 }
 
 // ---------------------------------------------------------------------------
+// Drag state type
+// ---------------------------------------------------------------------------
+
+interface DragState {
+  readonly isDragging: boolean;
+  readonly startX: number;
+  readonly startY: number;
+  readonly originX: number;
+  readonly originY: number;
+}
+
+// ---------------------------------------------------------------------------
 // Main Panel Component
 // ---------------------------------------------------------------------------
 
@@ -402,6 +414,10 @@ export function InstalledPatchesPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<DaysOption>('90');
+
+  // Drag-to-reposition state
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragState = useRef<DragState>({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 });
 
   const fetchPendingPatches = useCallback(async (resourceId: string) => {
     setPendingLoading(true);
@@ -470,8 +486,43 @@ export function InstalledPatchesPanel({
       setError(null);
       setDays('90');
       setActiveTab('pending');
+      setPosition(null);
     }
   }, [open]);
+
+  // Drag handlers — attached to document so drag works even if cursor leaves the handle
+  const handleDragMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Only drag on primary button; ignore clicks on interactive children
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const currentX = position?.x ?? 0;
+    const currentY = position?.y ?? 0;
+    dragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: currentX,
+      originY: currentY,
+    };
+  }, [position]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragState.current.isDragging) return;
+      const dx = e.clientX - dragState.current.startX;
+      const dy = e.clientY - dragState.current.startY;
+      setPosition({ x: dragState.current.originX + dx, y: dragState.current.originY + dy });
+    };
+    const onMouseUp = () => {
+      dragState.current = { ...dragState.current, isDragging: false };
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   // Close on Escape key
   useEffect(() => {
@@ -495,7 +546,7 @@ export function InstalledPatchesPanel({
         style={{ background: 'rgba(0,0,0,0.3)' }}
         onClick={() => onOpenChange(false)}
       />
-      {/* Side panel */}
+      {/* Side panel — translate by drag offset when repositioned */}
       <div
         role="dialog"
         aria-modal="true"
@@ -505,10 +556,15 @@ export function InstalledPatchesPanel({
           background: 'var(--bg-surface)',
           borderLeft: '1px solid var(--border)',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+          transform: position ? `translate(${position.x}px, ${position.y}px)` : undefined,
         }}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+        {/* Header — doubles as drag handle */}
+        <div
+          className="flex items-start justify-between px-6 py-4 flex-shrink-0 select-none"
+          style={{ borderBottom: '1px solid var(--border)', cursor: 'grab' }}
+          onMouseDown={handleDragMouseDown}
+        >
           <div>
             <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
               {machine.machineName}
@@ -532,8 +588,9 @@ export function InstalledPatchesPanel({
           </div>
           <button
             onClick={() => onOpenChange(false)}
+            onMouseDown={(e) => e.stopPropagation()}
             className="rounded-sm p-1 opacity-70 hover:opacity-100 transition-opacity"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: 'var(--text-secondary)', cursor: 'default' }}
             aria-label="Close"
           >
             <X className="h-4 w-4" />
