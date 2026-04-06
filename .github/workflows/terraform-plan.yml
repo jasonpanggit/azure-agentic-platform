@@ -130,6 +130,18 @@ jobs:
           UNTAGGED=$(jq -r '
             [.resource_changes[]? |
               select(.change.actions != ["delete"]) |
+              # Skip resource types that do not support tags
+              select(.type | test(
+                "^azurerm_role_assignment$|^azurerm_cosmosdb_sql_role_assignment$|" +
+                "^azurerm_cosmosdb_sql_container$|^azurerm_cosmosdb_sql_database$|" +
+                "^azurerm_monitor_diagnostic_setting$|^azurerm_eventhub_consumer_group$|" +
+                "^azurerm_eventhub_namespace_authorization_rule$|^azurerm_eventhub_authorization_rule$|" +
+                "^azurerm_postgresql_flexible_server_configuration$|" +
+                "^azurerm_postgresql_flexible_server_database$|" +
+                "^azurerm_postgresql_flexible_server_active_directory_administrator$|" +
+                "^azurerm_key_vault_secret$|^azurerm_key_vault_access_policy$|" +
+                "^azuread_|^azapi_resource$|^random_|^time_|^null_resource$"
+              ) | not) |
               select(
                 (.change.after.tags == null) or
                 ((.change.after.tags | type) != "object") or
