@@ -87,6 +87,16 @@ jobs:
         run: |
           echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
 
+      - name: Enable Key Vault Public Access for Terraform
+        if: matrix.environment == 'prod'
+        run: |
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Enabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access enabled for terraform plan"
+
       - name: Terraform Init
         working-directory: ${{ matrix.working_directory }}
         run: terraform init -input=false
@@ -170,4 +180,13 @@ jobs:
       - name: Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
-# end of file
+
+      - name: Restore Key Vault Public Access to Disabled
+        if: always() && matrix.environment == 'prod'
+        run: |
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Disabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access restored to Disabled"
