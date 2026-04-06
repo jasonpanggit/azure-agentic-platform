@@ -307,7 +307,7 @@ async def get_patch_assessment(
         "    patchassessmentresources\n"
         '    | where type =~ "microsoft.compute/virtualmachines/patchassessmentresults"\n'
         '        or type =~ "microsoft.hybridcompute/machines/patchassessmentresults"\n'
-        "    | extend patchMachineId = tolower(tostring(split(id, '/patchAssessmentResults/')[0]))\n"
+        "    | extend patchMachineId = tostring(split(tolower(id), '/patchassessmentresults/')[0])\n"
         "    | extend\n"
         "        rebootPending = tobool(properties.rebootPending),\n"
         "        lastAssessment = todatetime(properties.lastModifiedDateTime),\n"
