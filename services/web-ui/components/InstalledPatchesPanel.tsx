@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Package, AlertTriangle, RefreshCw, X, ShieldAlert } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
+import { useResizable } from '@/lib/use-resizable';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,6 +416,14 @@ export function InstalledPatchesPanel({
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<DaysOption>('90');
 
+  // Resize (left-edge drag to widen/narrow)
+  const { width: panelWidth, onMouseDown: resizeOnMouseDown } = useResizable({
+    minWidth: 480,
+    maxWidth: 1200,
+    defaultWidth: 672,
+    storageKey: 'patch-panel-width',
+  });
+
   // Drag-to-reposition state
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const dragState = useRef<DragState>({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 });
@@ -564,14 +573,20 @@ export function InstalledPatchesPanel({
         role="dialog"
         aria-modal="true"
         aria-label={machine.machineName}
-        className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden w-full max-w-2xl"
+        className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden"
         style={{
+          width: Math.min(panelWidth, typeof window !== 'undefined' ? window.innerWidth * 0.8 : panelWidth),
           background: 'var(--bg-surface)',
           borderLeft: '1px solid var(--border)',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
           transform: position ? `translate(${position.x}px, ${position.y}px)` : undefined,
         }}
       >
+        {/* Resize handle — left edge */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+          onMouseDown={resizeOnMouseDown}
+        />
         {/* Header — doubles as drag handle */}
         <div
           className="flex items-start justify-between px-6 py-4 flex-shrink-0 select-none"
