@@ -433,6 +433,32 @@ class TestQueryConfigurationData:
         assert "network error" in result["error"]
         assert result["rows"] == []
 
+    @patch("agents.patch.tools.LogsQueryStatus")
+    @patch("agents.patch.tools.LogsQueryClient")
+    @patch("agents.patch.tools.get_credential", return_value=MagicMock())
+    @patch("agents.patch.tools.instrument_tool_call")
+    @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
+    def test_non_default_timespan_forwarded_to_sdk(
+        self, mock_identity, mock_instrument, mock_cred, mock_client_cls, mock_status_cls
+    ):
+        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_response = MagicMock()
+        mock_response.status = mock_status_cls.SUCCESS
+        mock_response.tables = []
+        mock_client_cls.return_value.query_workspace.return_value = mock_response
+
+        from agents.patch.tools import query_configuration_data
+
+        query_configuration_data(
+            workspace_id="/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-1",
+            timespan="P30D",
+        )
+
+        call_kwargs = mock_client_cls.return_value.query_workspace.call_args[1]
+        assert call_kwargs["timespan"] == "P30D"
+
 
 # ---------------------------------------------------------------------------
 # discover_arc_workspace
@@ -636,10 +662,107 @@ class TestDiscoverArcWorkspace:
         assert "ARM unavailable" in result["error"]
         assert result["workspace_ids"] == []
 
+    @patch("agents.patch.tools.MonitorManagementClient")
+    @patch("agents.patch.tools.get_credential", return_value=MagicMock())
+    @patch("agents.patch.tools.instrument_tool_call")
+    @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
+    def test_dcr_with_no_log_analytics_destinations_yields_no_workspace(
+        self, mock_identity, mock_instrument, mock_cred, mock_monitor_cls
+    ):
+        """DCR that routes to Event Hub only (no log_analytics) yields no workspace IDs."""
+        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
 
-# ---------------------------------------------------------------------------
-# Patch agent wiring
-# ---------------------------------------------------------------------------
+        destinations = MagicMock()
+        destinations.log_analytics = None
+        dcr = MagicMock()
+        dcr.destinations = destinations
+
+        mock_monitor_cls.return_value.data_collection_rule_associations.list_by_resource.return_value = [
+            self._make_association(self.DCR_ID)
+        ]
+        mock_monitor_cls.return_value.data_collection_rules.get.return_value = dcr
+
+        from agents.patch.tools import discover_arc_workspace
+
+        result = discover_arc_workspace(machine_resource_id=self.MACHINE_ID)
+
+        assert result["query_status"] == "success"
+        assert result["workspace_ids"] == []
+        assert result["association_count"] == 1
+
+    @patch("agents.patch.tools.MonitorManagementClient")
+    @patch("agents.patch.tools.get_credential", return_value=MagicMock())
+    @patch("agents.patch.tools.instrument_tool_call")
+    @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
+    def test_single_dcr_with_multiple_workspace_destinations(
+        self, mock_identity, mock_instrument, mock_cred, mock_monitor_cls
+    ):
+        """One DCR with two distinct log_analytics destinations yields both workspace IDs."""
+        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+
+        WORKSPACE_A = "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-a"
+        WORKSPACE_B = "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-b"
+
+        la_dest_a = MagicMock()
+        la_dest_a.workspace_resource_id = WORKSPACE_A
+        la_dest_b = MagicMock()
+        la_dest_b.workspace_resource_id = WORKSPACE_B
+        destinations = MagicMock()
+        destinations.log_analytics = [la_dest_a, la_dest_b]
+        dcr = MagicMock()
+        dcr.destinations = destinations
+
+        mock_monitor_cls.return_value.data_collection_rule_associations.list_by_resource.return_value = [
+            self._make_association(self.DCR_ID)
+        ]
+        mock_monitor_cls.return_value.data_collection_rules.get.return_value = dcr
+
+        from agents.patch.tools import discover_arc_workspace
+
+        result = discover_arc_workspace(machine_resource_id=self.MACHINE_ID)
+
+        assert result["query_status"] == "success"
+        assert WORKSPACE_A in result["workspace_ids"]
+        assert WORKSPACE_B in result["workspace_ids"]
+        assert len(result["workspace_ids"]) == 2
+        assert result["association_count"] == 1
+
+
+class TestExtractSubscriptionId:
+    """Verify _extract_subscription_id handles valid and invalid inputs."""
+
+    def test_extracts_from_valid_resource_id(self):
+        from agents.patch.tools import _extract_subscription_id
+
+        result = _extract_subscription_id(
+            "/subscriptions/abc-123/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/vm"
+        )
+        assert result == "abc-123"
+
+    def test_case_insensitive(self):
+        from agents.patch.tools import _extract_subscription_id
+
+        result = _extract_subscription_id(
+            "/Subscriptions/ABC-123/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/vm"
+        )
+        assert result == "abc-123"
+
+    @pytest.mark.parametrize("bad_id", [
+        "",
+        "/no-subs-here/foo",
+        "not/a/resource/id",
+        "/resourceGroups/rg/providers/foo",
+    ])
+    def test_raises_on_invalid_resource_id(self, bad_id):
+        from agents.patch.tools import _extract_subscription_id
+
+        with pytest.raises(ValueError, match="Cannot extract subscription_id"):
+            _extract_subscription_id(bad_id)
+
+
+
 
 
 class TestPatchAgentWiring:
