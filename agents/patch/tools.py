@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import logging
+import time
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
@@ -38,7 +40,19 @@ except ImportError:
     QueryRequest = None  # type: ignore[assignment,misc]
     QueryRequestOptions = None  # type: ignore[assignment,misc]
 
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+except ImportError:
+    LogsQueryClient = None  # type: ignore[assignment,misc]
+    LogsQueryStatus = None  # type: ignore[assignment,misc]
+
+try:
+    from azure.mgmt.monitor import MonitorManagementClient
+except ImportError:
+    MonitorManagementClient = None  # type: ignore[assignment,misc]
+
 tracer = setup_telemetry("aiops-patch-agent")
+logger = logging.getLogger(__name__)
 
 # Explicit MCP tool allowlist — no wildcards permitted (AGENT-001).
 ALLOWED_MCP_TOOLS: List[str] = [
@@ -46,6 +60,34 @@ ALLOWED_MCP_TOOLS: List[str] = [
     "monitor.query_metrics",
     "resourcehealth.get_availability_status",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_subscription_id(resource_id: str) -> str:
+    """Extract subscription ID from an Azure resource ID.
+
+    Args:
+        resource_id: Azure resource ID in the form
+            /subscriptions/{sub}/resourceGroups/{rg}/providers/{type}/{name}
+
+    Returns:
+        Subscription ID string (lowercase).
+
+    Raises:
+        ValueError: If the subscription segment cannot be found.
+    """
+    parts = resource_id.lower().split("/")
+    try:
+        idx = parts.index("subscriptions")
+        return parts[idx + 1]
+    except (ValueError, IndexError):
+        raise ValueError(
+            f"Cannot extract subscription_id from resource_id: {resource_id}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +344,141 @@ def query_patch_installations(
 
 
 @ai_function
+def discover_arc_workspace(
+    machine_resource_id: str,
+) -> Dict[str, Any]:
+    """Discover which Log Analytics workspace(s) an Arc-enabled VM reports to.
+
+    Arc VMs using AMA (Azure Monitor Agent) report to the workspace(s)
+    configured in their Data Collection Rules (DCRs). This tool enumerates
+    DCR associations for the given Arc machine and extracts the Log Analytics
+    workspace resource IDs from each associated DCR's destinations.
+
+    Call this BEFORE `query_configuration_data` when the workspace ID is not
+    known, or when `query_configuration_data` returns no rows for an Arc
+    machine (the machine may report to a different workspace than the central
+    one).
+
+    Args:
+        machine_resource_id: Full ARM resource ID of the Arc-enabled machine.
+            Format: /subscriptions/{sub}/resourceGroups/{rg}/
+                    providers/Microsoft.HybridCompute/machines/{name}
+
+    Returns:
+        Dict with keys:
+            machine_resource_id (str): Machine queried.
+            workspace_ids (list): Discovered LAW resource IDs (may be empty).
+            association_count (int): Number of DCR associations found.
+            query_status (str): "success" or "error".
+    """
+    agent_id = get_agent_identity()
+    tool_params = {"machine_resource_id": machine_resource_id}
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="patch-agent",
+        agent_id=agent_id,
+        tool_name="discover_arc_workspace",
+        tool_parameters=tool_params,
+        correlation_id="",
+        thread_id="",
+    ):
+        start_time = time.monotonic()
+        try:
+            if MonitorManagementClient is None:
+                raise ImportError("azure-mgmt-monitor is not installed")
+
+            credential = get_credential()
+            machine_sub_id = _extract_subscription_id(machine_resource_id)
+            monitor_client = MonitorManagementClient(credential, machine_sub_id)
+
+            associations = list(
+                monitor_client.data_collection_rule_associations.list_by_resource(
+                    resource_uri=machine_resource_id
+                )
+            )
+
+            workspace_ids: List[str] = []
+            association_count = 0
+
+            for assoc in associations:
+                dcr_id = getattr(assoc, "data_collection_rule_id", None)
+                if not dcr_id:
+                    # Association targets a DCE (Data Collection Endpoint), not a DCR — skip
+                    continue
+                association_count += 1
+
+                try:
+                    dcr_sub_id = _extract_subscription_id(dcr_id)
+                    dcr_parts = dcr_id.split("/")
+                    lower_parts = [p.lower() for p in dcr_parts]
+                    try:
+                        rg_idx = lower_parts.index("resourcegroups")
+                        dcr_rg = dcr_parts[rg_idx + 1]
+                        dcr_name = dcr_parts[-1]
+                    except (ValueError, IndexError):
+                        logger.warning(
+                            "discover_arc_workspace: cannot parse DCR resource ID | dcr_id=%s",
+                            dcr_id,
+                        )
+                        continue
+
+                    dcr_client = MonitorManagementClient(credential, dcr_sub_id)
+                    dcr = dcr_client.data_collection_rules.get(dcr_rg, dcr_name)
+
+                    destinations = getattr(dcr, "destinations", None)
+                    if destinations is None:
+                        continue
+
+                    for la_dest in (getattr(destinations, "log_analytics", None) or []):
+                        ws_id = getattr(la_dest, "workspace_resource_id", None)
+                        if ws_id and ws_id not in workspace_ids:
+                            workspace_ids.append(ws_id)
+
+                except Exception as dcr_exc:
+                    # A single unreachable DCR (e.g. 403 on out-of-scope subscription)
+                    # must not abort discovery of remaining associations.
+                    logger.warning(
+                        "discover_arc_workspace: failed to read DCR | dcr_id=%s error=%s",
+                        dcr_id,
+                        dcr_exc,
+                    )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.info(
+                "discover_arc_workspace: complete | machine=%s associations=%d "
+                "workspaces=%d duration_ms=%.0f",
+                machine_resource_id,
+                association_count,
+                len(workspace_ids),
+                duration_ms,
+            )
+            return {
+                "machine_resource_id": machine_resource_id,
+                "workspace_ids": workspace_ids,
+                "association_count": association_count,
+                "query_status": "success",
+            }
+
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "discover_arc_workspace: failed | machine=%s error=%s duration_ms=%.0f",
+                machine_resource_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "machine_resource_id": machine_resource_id,
+                "workspace_ids": [],
+                "association_count": 0,
+                "query_status": "error",
+                "error": str(e),
+            }
+
+
+@ai_function
 def query_configuration_data(
     workspace_id: str,
     computer_names: Optional[List[str]] = None,
@@ -324,8 +501,8 @@ def query_configuration_data(
             workspace_id (str): Workspace queried.
             computer_names (list or None): Computer filter applied.
             timespan (str): Time range applied.
-            rows (list): Query result rows (stub — empty in Phase 11).
-            query_status (str): "success" or "error".
+            rows (list): Query result rows.
+            query_status (str): "success", "partial", "no_workspace", or "error".
     """
     agent_id = get_agent_identity()
     tool_params = {
@@ -343,21 +520,105 @@ def query_configuration_data(
         correlation_id="",
         thread_id="",
     ):
-        # KQL reference (will be executed via Azure Monitor SDK in future):
-        # ConfigurationData
-        # | where ConfigDataType == "Software"
-        # | where SoftwareType == "Update"
-        # | project Computer, SoftwareName, CurrentVersion, Publisher,
-        #          SoftwareType, TimeGenerated, _ResourceId
-        # | order by TimeGenerated desc
-        # If computer_names: | where Computer in~ ("vm-1", "vm-2")
-        return {
-            "workspace_id": workspace_id,
-            "computer_names": computer_names,
-            "timespan": timespan,
-            "rows": [],
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+
+        # Guard: no workspace_id — signal the LLM to call discover_arc_workspace first.
+        # "no_workspace" is a distinct status so the system prompt can pattern-match
+        # and route to workspace discovery before retrying.
+        if not workspace_id:
+            logger.warning("query_configuration_data: no_workspace | workspace_id is empty")
+            return {
+                "workspace_id": workspace_id,
+                "computer_names": computer_names,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "no_workspace",
+            }
+
+        try:
+            if LogsQueryClient is None:
+                raise ImportError("azure-monitor-query is not installed")
+
+            kql_lines = [
+                "ConfigurationData",
+                '| where ConfigDataType == "Software"',
+                '| where SoftwareType == "Update"',
+                "| project Computer, SoftwareName, CurrentVersion, Publisher,",
+                "         SoftwareType, TimeGenerated, _ResourceId",
+                "| order by TimeGenerated desc",
+            ]
+
+            if computer_names:
+                names_str = ", ".join(f'"{n}"' for n in computer_names)
+                # Insert filter early (index 1) so the engine prunes before project/order
+                kql_lines.insert(1, f"| where Computer in~ ({names_str})")
+
+            kql_query = "\n".join(kql_lines)
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql_query,
+                timespan=timespan,
+            )
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                rows: List[Dict[str, Any]] = []
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        rows.append(
+                            dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                        )
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.info(
+                    "query_configuration_data: complete | workspace=%s rows=%d duration_ms=%.0f",
+                    workspace_id,
+                    len(rows),
+                    duration_ms,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "computer_names": computer_names,
+                    "timespan": timespan,
+                    "rows": rows,
+                    "query_status": "success",
+                }
+            else:
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.warning(
+                    "query_configuration_data: partial | workspace=%s duration_ms=%.0f error=%s",
+                    workspace_id,
+                    duration_ms,
+                    response.partial_error,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "computer_names": computer_names,
+                    "timespan": timespan,
+                    "rows": [],
+                    "query_status": "partial",
+                    "partial_error": str(response.partial_error),
+                }
+
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_configuration_data: failed | workspace=%s error=%s duration_ms=%.0f",
+                workspace_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "workspace_id": workspace_id,
+                "computer_names": computer_names,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @lru_cache(maxsize=64)

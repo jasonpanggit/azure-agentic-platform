@@ -31,6 +31,7 @@ from patch.tools import (
     query_activity_log,
     query_patch_assessment,
     query_patch_installations,
+    discover_arc_workspace,
     query_configuration_data,
     lookup_kb_cves,
     query_resource_health,
@@ -70,9 +71,26 @@ You investigate incidents involving:
 3. **Patch Installation History (D-04):** Call `query_patch_installations` with a 7-day window
    to review recent installation runs, success/failure status, and reboot status.
 
-4. **Configuration Data (D-08):** Call `query_configuration_data` to get software inventory from
-   Log Analytics workspaces tied to the affected resources. This provides complementary data
-   to ARG for Arc machines with AMA agent.
+4. **Configuration Data (D-08):**
+
+   a. **Azure VMs** (non-Arc): Call `query_configuration_data` directly with the known
+      workspace_id to get software inventory from Log Analytics.
+
+   b. **Arc servers** (`Microsoft.HybridCompute/machines`) or when workspace_id is
+      unknown: Call `discover_arc_workspace` with the Arc machine's full resource ID
+      FIRST to find which LAW(s) it reports to via AMA Data Collection Rule
+      associations. Then call `query_configuration_data` for each returned
+      workspace_id.
+
+   c. **If `query_configuration_data` returns `query_status: "no_workspace"`**:
+      workspace_id was empty — call `discover_arc_workspace` to find the correct
+      workspace, then retry `query_configuration_data`.
+
+   d. **If `query_configuration_data` returns empty `rows` with
+      `query_status: "success"`** for an Arc machine: the machine likely reports to
+      a different workspace. Call `discover_arc_workspace` to find alternate
+      workspaces and retry. If `workspace_ids` is empty, the machine has no AMA DCR
+      association configured (may have no monitoring agent installed).
 
 5. **KB-to-CVE Enrichment (D-06):** For any Critical or Security patches identified, call
    `lookup_kb_cves` to map KB articles to the CVEs they address. Report which CVEs are
@@ -122,6 +140,7 @@ You investigate incidents involving:
             "query_activity_log",
             "query_patch_assessment",
             "query_patch_installations",
+            "discover_arc_workspace",
             "query_configuration_data",
             "lookup_kb_cves",
             "query_resource_health",
@@ -155,6 +174,7 @@ def create_patch_agent() -> ChatAgent:
         query_activity_log,
         query_patch_assessment,
         query_patch_installations,
+        discover_arc_workspace,
         query_configuration_data,
         lookup_kb_cves,
         query_resource_health,

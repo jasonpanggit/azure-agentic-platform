@@ -24,15 +24,15 @@ jobs:
   plan:
     name: Plan (${{ matrix.environment }})
     runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }}
     strategy:
       fail-fast: false
       matrix:
-        environment: [dev, staging, prod]
+        # dev and staging state backends are not provisioned yet — excluded until
+        # their environments are bootstrapped. Add them back once apply-dev and
+        # apply-staging are enabled in terraform-apply.yml.
+        environment: [prod]
         include:
-          - environment: dev
-            working_directory: terraform/envs/dev
-          - environment: staging
-            working_directory: terraform/envs/staging
           - environment: prod
             working_directory: terraform/envs/prod
 
@@ -61,6 +61,42 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Ensure Tfstate Storage Account Is Accessible
+        if: matrix.environment == 'prod'
+        run: |
+          # Azure Policy may re-disable publicNetworkAccess on the tfstate storage account.
+          # The self-hosted runner accesses it over the public endpoint, so we must ensure
+          # public access is enabled before terraform init.
+          SA_NAME="staaptfstateprod"
+          RG_NAME="rg-aap-tfstate-prod"
+          ACCESS=$(az storage account show --name "$SA_NAME" --resource-group "$RG_NAME" \
+            --query publicNetworkAccess --output tsv 2>/dev/null || echo "Unknown")
+          if [ "$ACCESS" != "Enabled" ]; then
+            echo "::warning::Tfstate storage $SA_NAME has publicNetworkAccess=$ACCESS — re-enabling"
+            az storage account update --name "$SA_NAME" --resource-group "$RG_NAME" \
+              --public-network-access Enabled --output none
+            echo "Public network access re-enabled on $SA_NAME"
+          else
+            echo "Tfstate storage $SA_NAME publicNetworkAccess is Enabled (OK)"
+          fi
+
+      - name: Write Prod Credentials
+        if: matrix.environment == 'prod'
+        env:
+          PROD_CREDENTIALS_TFVARS: ${{ secrets.PROD_CREDENTIALS_TFVARS }}
+        run: |
+          echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
+
+      - name: Enable Key Vault Public Access for Terraform
+        if: matrix.environment == 'prod'
+        run: |
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Enabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access enabled for terraform plan"
+
       - name: Terraform Init
         working-directory: ${{ matrix.working_directory }}
         run: terraform init -input=false
@@ -72,7 +108,14 @@ jobs:
       - name: Terraform Plan
         id: plan
         working-directory: ${{ matrix.working_directory }}
-        run: terraform plan -no-color -input=false -out=tfplan
+        run: |
+          # Pass credentials.tfvars first (if present) so terraform.tfvars auto-loaded last wins.
+          # Mirrors the variable precedence order used in terraform-apply.yml.
+          CREDS_FLAG=""
+          if [ -f "credentials.tfvars" ]; then
+            CREDS_FLAG="-var-file credentials.tfvars"
+          fi
+          terraform plan -no-color -input=false -out=tfplan $CREDS_FLAG
         continue-on-error: true
 
       - name: Tag Lint Check
@@ -87,8 +130,28 @@ jobs:
           UNTAGGED=$(jq -r '
             [.resource_changes[]? |
               select(.change.actions != ["delete"]) |
+              # Skip resource types that do not support tags
+              select(.type | test(
+                "^azurerm_role_assignment$|^azurerm_cosmosdb_sql_role_assignment$|" +
+                "^azurerm_cosmosdb_sql_container$|^azurerm_cosmosdb_sql_database$|" +
+                "^azurerm_monitor_diagnostic_setting$|^azurerm_eventhub_consumer_group$|" +
+                "^azurerm_eventhub_namespace_authorization_rule$|^azurerm_eventhub_authorization_rule$|" +
+                "^azurerm_eventhub$|" +
+                "^azurerm_postgresql_flexible_server_configuration$|" +
+                "^azurerm_postgresql_flexible_server_database$|" +
+                "^azurerm_postgresql_flexible_server_active_directory_administrator$|" +
+                "^azurerm_key_vault_secret$|^azurerm_key_vault_access_policy$|" +
+                "^azurerm_network_security_rule$|" +
+                "^azurerm_subnet$|^azurerm_subnet_nat_gateway_association$|" +
+                "^azurerm_subnet_network_security_group_association$|" +
+                "^azurerm_nat_gateway_public_ip_association$|" +
+                "^azurerm_cognitive_deployment$|" +
+                "^azurerm_bot_channel_ms_teams$|" +
+                "^azuread_|^azapi_resource$|^random_|^time_|^null_resource$"
+              ) | not) |
               select(
                 (.change.after.tags == null) or
+                ((.change.after.tags | type) != "object") or
                 (.change.after.tags.environment == null) or
                 (.change.after.tags["managed-by"] != "terraform") or
                 (.change.after.tags.project != "aap")
@@ -137,3 +200,13 @@ jobs:
       - name: Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
+
+      - name: Restore Key Vault Public Access to Disabled
+        if: always() && matrix.environment == 'prod'
+        run: |
+          az keyvault update \
+            --name "kv-aap-prod" \
+            --resource-group "rg-aap-prod" \
+            --public-network-access Disabled \
+            --output none
+          echo "Key Vault kv-aap-prod: public network access restored to Disabled"

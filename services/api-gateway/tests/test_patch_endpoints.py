@@ -400,12 +400,21 @@ class TestGetPatchInstallations:
 class TestGetInstalledPatches:
     """Tests for GET /api/v1/patch/installed."""
 
-    def test_returns_503_when_workspace_not_configured(self, client):
-        """Returns 503 when LOG_ANALYTICS_WORKSPACE_ID is not set."""
+    def test_returns_empty_patches_when_workspace_not_configured(self, client):
+        """Gracefully degrades with empty patches when LOG_ANALYTICS_WORKSPACE_ID is not set.
+
+        Matches the assessment endpoint's graceful degradation pattern —
+        missing LAW config should never block the UI from opening.
+        """
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
         with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": ""}, clear=False):
-            resp = client.get("/api/v1/patch/installed?resource_id=/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01")
-            assert resp.status_code == 503
-            assert "LOG_ANALYTICS_WORKSPACE_ID" in resp.json()["detail"]
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["patches"] == []
+            assert body["total_count"] == 0
+            assert body["resource_id"] == resource_id
+            assert body["query_status"] == "degraded"
 
     def test_returns_422_when_resource_id_missing(self, client):
         """Missing resource_id returns 422."""
