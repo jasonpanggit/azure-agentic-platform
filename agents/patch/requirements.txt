@@ -1,2 +1,4 @@
-# Patch agent — Azure Resource Graph SDK for ARG queries
+# Patch agent — Azure SDK dependencies
 azure-mgmt-resourcegraph>=8.0.1
+azure-monitor-query>=1.3.0
+azure-mgmt-monitor>=6.0.0
