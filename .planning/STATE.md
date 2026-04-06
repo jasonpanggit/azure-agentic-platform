@@ -13,7 +13,7 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-04-05 - Completed quick task 260405-otu: Fix Select All metrics showing no data in VMDetailPanel by batching or filtering unsupported metrics
+> Last updated: 2026-04-05 - Completed quick task 260406-ahq: Explore how to simulate a real incident with real evidence in the Azure Agentic Platform, and how to trigger remediation flow
 
 > Last updated: 2026-04-04 — Quick task 260405-16u COMPLETE: Import block added to imports.tf to resolve 409 RoleAssignmentExists conflict for api-gateway Reader role. Merged to main (6486586). Will take effect on next successful terraform apply.
 
@@ -336,6 +336,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260405-16u | Import existing Terraform role assignment into state to fix 409 conflict | 2026-04-04 | 6486586 | [260405-16u-import-existing-terraform-role-assignmen](./quick/260405-16u-import-existing-terraform-role-assignmen/) |
 | 260405-hnb | Replace deprecated diagnostic settings with AMA + DCR association approach | 2026-04-05 | 3eca489 | [260405-hnb-replace-deprecated-diagnostic-settings-w](./quick/260405-hnb-replace-deprecated-diagnostic-settings-w/) |
 | 260405-otu | Fix Select All metrics showing no data in VMDetailPanel by batching or filtering unsupported metrics | 2026-04-05 | 696d69a | [260405-otu-fix-select-all-metrics-showing-no-data-i](./quick/260405-otu-fix-select-all-metrics-showing-no-data-i/) |
+| 260406-ahq | Explore how to simulate a real incident with real evidence in the Azure Agentic Platform, and how to trigger remediation flow | 2026-04-05 | c1c77e7 | [260406-ahq-explore-how-to-simulate-a-real-incident-](./quick/260406-ahq-explore-how-to-simulate-a-real-incident-/) |
 
 ---
 
