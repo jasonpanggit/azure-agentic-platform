@@ -460,10 +460,16 @@ async def get_installed_patches(
     """
     workspace_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
     if not workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LOG_ANALYTICS_WORKSPACE_ID not configured",
+        logger.warning(
+            "LOG_ANALYTICS_WORKSPACE_ID not configured — returning empty patches (degraded)"
         )
+        return {
+            "patches": [],
+            "total_count": 0,
+            "resource_id": resource_id,
+            "days": days,
+            "query_status": "degraded",
+        }
 
     patches = await _query_law_installed_detail(
         credential, workspace_id, resource_id, days
@@ -507,4 +513,88 @@ async def get_installed_patches(
         "total_count": len(patches),
         "resource_id": resource_id,
         "days": days,
+    }
+
+
+@router.get("/pending")
+async def get_pending_patches(
+    resource_id: str = Query(...),
+    token: dict[str, Any] = Depends(verify_token),
+    credential: Any = Depends(get_credential),
+) -> Dict[str, Any]:
+    """Return pending (available, not yet installed) patches for a specific VM from ARG.
+
+    Uses patchassessmentresources/softwarepatches table — no LAW dependency.
+
+    Query params:
+        resource_id: Full ARM resource ID of the VM.
+
+    Returns:
+        { patches: [...], total_count: int, resource_id: str }
+    """
+    # Derive subscription ID from resource_id
+    parts = resource_id.split("/")
+    try:
+        sub_idx = next(i for i, p in enumerate(parts) if p.lower() == "subscriptions")
+        subscription_id = parts[sub_idx + 1]
+    except (StopIteration, IndexError):
+        raise HTTPException(status_code=400, detail="Invalid resource_id — cannot extract subscription ID")
+
+    # Determine resource type prefix for both Azure VMs and Arc machines
+    resource_id_lower = resource_id.lower()
+    if "microsoft.hybridcompute/machines" in resource_id_lower:
+        type_filter = 'type == "microsoft.hybridcompute/machines/patchassessmentresults/softwarepatches"'
+    else:
+        type_filter = 'type == "microsoft.compute/virtualmachines/patchassessmentresults/softwarepatches"'
+
+    kql = (
+        "patchassessmentresources\n"
+        f"| where {type_filter}\n"
+        f"| where tolower(id) startswith tolower('{resource_id_lower}')\n"
+        "| project\n"
+        "    patchName = name,\n"
+        "    classifications = properties.classifications,\n"
+        "    rebootRequired = properties.rebootRequired,\n"
+        "    kbid = properties.kbId,\n"
+        "    version = properties.version,\n"
+        "    publishedDateTime = properties.publishedDateTime\n"
+        "| order by tostring(classifications) asc, patchName asc"
+    )
+
+    try:
+        rows = await asyncio.get_event_loop().run_in_executor(
+            None,
+            _run_arg_query,
+            credential,
+            [subscription_id],
+            kql,
+        )
+    except Exception as exc:
+        logger.error("ARG pending patches query failed for %s: %s", resource_id, exc)
+        raise HTTPException(status_code=502, detail=f"ARG query failed: {exc}")
+
+    patches = []
+    for row in rows:
+        # classifications may be a list or a single value
+        raw_cls = row.get("classifications", [])
+        if isinstance(raw_cls, list):
+            classifications = [str(c) for c in raw_cls]
+        elif raw_cls:
+            classifications = [str(raw_cls)]
+        else:
+            classifications = []
+
+        patches.append({
+            "patchName": row.get("patchName") or "",
+            "classifications": classifications,
+            "rebootRequired": bool(row.get("rebootRequired", False)),
+            "kbid": row.get("kbid") or "",
+            "version": row.get("version") or "",
+            "publishedDateTime": str(row.get("publishedDateTime") or "") or None,
+        })
+
+    return {
+        "patches": patches,
+        "total_count": len(patches),
+        "resource_id": resource_id,
     }
