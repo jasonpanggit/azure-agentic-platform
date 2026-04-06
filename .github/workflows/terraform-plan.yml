@@ -79,6 +79,13 @@ jobs:
             echo "Tfstate storage $SA_NAME publicNetworkAccess is Enabled (OK)"
           fi
 
+      - name: Write Prod Credentials
+        if: matrix.environment == 'prod'
+        env:
+          PROD_CREDENTIALS_TFVARS: ${{ secrets.PROD_CREDENTIALS_TFVARS }}
+        run: |
+          echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
+
       - name: Terraform Init
         working-directory: ${{ matrix.working_directory }}
         run: terraform init -input=false
@@ -90,7 +97,14 @@ jobs:
       - name: Terraform Plan
         id: plan
         working-directory: ${{ matrix.working_directory }}
-        run: terraform plan -no-color -input=false -out=tfplan
+        run: |
+          # Pass credentials.tfvars first (if present) so terraform.tfvars auto-loaded last wins.
+          # Mirrors the variable precedence order used in terraform-apply.yml.
+          CREDS_FLAG=""
+          if [ -f "credentials.tfvars" ]; then
+            CREDS_FLAG="-var-file credentials.tfvars"
+          fi
+          terraform plan -no-color -input=false -out=tfplan $CREDS_FLAG
         continue-on-error: true
 
       - name: Tag Lint Check
