@@ -536,7 +536,20 @@ export function InstalledPatchesPanel({
 
   if (!open || !machine) return null;
 
-  const totalPending = (machine.criticalCount ?? 0) + (machine.securityCount ?? 0);
+  // Derive counts from the fetched pendingPatches list rather than the stale
+  // assessment summary fields (criticalCount/securityCount from ARG parent record).
+  // Arc VM assessment summaries are often 0 even when child softwarepatches rows
+  // exist — the two tables can be out of sync in Azure.
+  const derivedCriticalCount = pendingPatches.filter((p) =>
+    p.classifications.some((c) => c.toLowerCase() === 'critical')
+  ).length;
+  const derivedSecurityCount = pendingPatches.filter((p) =>
+    p.classifications.some((c) => c.toLowerCase() === 'security')
+  ).length;
+  // Fall back to assessment counts only when pending patches haven't loaded yet
+  const displayCritical = pendingLoading ? (machine.criticalCount ?? 0) : derivedCriticalCount;
+  const displaySecurity = pendingLoading ? (machine.securityCount ?? 0) : derivedSecurityCount;
+  const totalPending = displayCritical + displaySecurity;
 
   return (
     <>
@@ -600,8 +613,8 @@ export function InstalledPatchesPanel({
         {/* Summary strip */}
         <div className="grid grid-cols-4 gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <StatChip label="Installed" value={machine.installedCount} />
-          <StatChip label="Critical" value={machine.criticalCount} variant={machine.criticalCount > 0 ? 'danger' : 'default'} />
-          <StatChip label="Security" value={machine.securityCount} variant={machine.securityCount > 0 ? 'danger' : 'default'} />
+          <StatChip label="Critical" value={displayCritical} variant={displayCritical > 0 ? 'danger' : 'default'} />
+          <StatChip label="Security" value={displaySecurity} variant={displaySecurity > 0 ? 'danger' : 'default'} />
           <StatChip label="Reboot Pending" value={machine.rebootPending ? 'Yes' : 'No'} variant={machine.rebootPending ? 'warning' : 'default'} />
         </div>
 
