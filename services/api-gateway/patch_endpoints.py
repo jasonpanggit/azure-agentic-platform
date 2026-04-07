@@ -363,7 +363,12 @@ def _query_law_installed_detail_sync(
 
     results: List[Dict[str, Any]] = []
     if response.status == LogsQueryStatus.SUCCESS and response.tables:
-        columns = [col.name for col in response.tables[0].columns]
+        # azure-monitor-query 2.x returns column names as plain strings;
+        # 1.x returned LogsTableColumn objects with a .name attribute.
+        columns = [
+            col if isinstance(col, str) else col.name
+            for col in response.tables[0].columns
+        ]
         for row in response.tables[0].rows:
             record = dict(zip(columns, row))
             # Stringify datetime values

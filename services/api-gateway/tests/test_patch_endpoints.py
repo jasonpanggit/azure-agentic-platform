@@ -807,6 +807,99 @@ class TestKqlSoftwareTypeFilter:
 
 
 # ---------------------------------------------------------------------------
+# _query_law_installed_detail_sync column parsing tests
+# ---------------------------------------------------------------------------
+
+
+class TestQueryLawInstalledDetailSyncColumns:
+    """Regression tests: azure-monitor-query v2.x returns columns as plain strings,
+    not LogsTableColumn objects.  _query_law_installed_detail_sync must handle both.
+
+    Bug: 'str' object has no attribute 'name' — caused total_count: 0 in production.
+    Root cause: azure-monitor-query 2.0.0 changed LogsTable.columns from list[LogsTableColumn]
+    to list[str].  Fixed 2026-04-07.
+    """
+
+    def _build_mock_monitor_query_module(self, columns, rows):
+        """Build a sys.modules-injectable mock for azure.monitor.query."""
+        # LogsQueryStatus sentinel
+        mock_status = MagicMock()
+        mock_status.SUCCESS = "SUCCESS"
+
+        # Table mock
+        table = MagicMock()
+        table.columns = columns
+        table.rows = rows
+
+        # Response mock — .status == LogsQueryStatus.SUCCESS, .tables = [table]
+        mock_response = MagicMock()
+        mock_response.status = mock_status.SUCCESS
+        mock_response.tables = [table]
+
+        # Client mock
+        mock_client_instance = MagicMock()
+        mock_client_instance.query_workspace.return_value = mock_response
+
+        mock_client_cls = MagicMock(return_value=mock_client_instance)
+
+        # Module mock
+        mock_module = MagicMock()
+        mock_module.LogsQueryClient = mock_client_cls
+        mock_module.LogsQueryStatus = mock_status
+
+        return mock_module, mock_client_instance
+
+    def _run_detail_sync(self, mock_module):
+        """Inject mock module and call _query_law_installed_detail_sync."""
+        with patch.dict(sys.modules, {
+            "azure.monitor.query": mock_module,
+        }):
+            # Force reimport of function to pick up mocked module
+            import importlib
+            import services.api_gateway.patch_endpoints as pe
+            importlib.reload(pe)
+            result = pe._query_law_installed_detail_sync(
+                credential=MagicMock(),
+                workspace_id="d6e88b39-4f54-4f95-96f1-8acfedf0129c",
+                resource_id="/subscriptions/sub/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/vm",
+                days=90,
+            )
+        return result
+
+    def test_handles_v2_columns_as_strings(self):
+        """v2.x: columns list contains plain strings — must not raise AttributeError."""
+        columns_v2 = ["SoftwareName", "SoftwareType", "CurrentVersion", "Publisher", "Category", "InstalledDate"]
+        rows = [
+            ["Security Update KB5001234", "Patch", "Installed", "Microsoft Corporation", "Patch", "2026-04-06 03:17:06"],
+        ]
+        mock_module, _ = self._build_mock_monitor_query_module(columns_v2, rows)
+        result = self._run_detail_sync(mock_module)
+
+        assert len(result) == 1
+        assert result[0]["SoftwareName"] == "Security Update KB5001234"
+        assert result[0]["SoftwareType"] == "Patch"
+        assert result[0]["Category"] == "Patch"
+
+    def test_handles_v1_columns_as_objects(self):
+        """v1.x compat: columns list contains objects with .name attribute — must still work."""
+        def make_col(name):
+            col = MagicMock()
+            col.name = name
+            return col
+
+        columns_v1 = [make_col(n) for n in ["SoftwareName", "SoftwareType", "CurrentVersion", "Publisher", "Category", "InstalledDate"]]
+        rows = [
+            ["nginx", "Package", "1.24.0", "Ubuntu", "Package", "2026-04-01 00:00:00"],
+        ]
+        mock_module, _ = self._build_mock_monitor_query_module(columns_v1, rows)
+        result = self._run_detail_sync(mock_module)
+
+        assert len(result) == 1
+        assert result[0]["SoftwareName"] == "nginx"
+        assert result[0]["SoftwareType"] == "Package"
+
+
+# ---------------------------------------------------------------------------
 # _run_arg_query pagination tests
 # ---------------------------------------------------------------------------
 
