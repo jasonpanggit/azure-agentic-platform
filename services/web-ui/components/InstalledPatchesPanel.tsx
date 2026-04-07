@@ -466,7 +466,7 @@ export function InstalledPatchesPanel({
       }
       const data = await res.json();
       setPatches(
-        (data.patches ?? []).filter((p) =>
+        (data.patches ?? []).filter((p: InstalledPatch) =>
           PATCH_SOFTWARE_TYPES.has(p.SoftwareType.toLowerCase())
         )
       );
