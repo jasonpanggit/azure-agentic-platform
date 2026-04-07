@@ -81,6 +81,8 @@ const DAYS_OPTIONS: readonly { readonly value: DaysOption; readonly label: strin
   { value: '365', label: '365 days' },
 ] as const;
 
+const PATCH_SOFTWARE_TYPES = new Set(['patch', 'update', 'hotfix']);
+
 function classificationBadgeStyle(cls: string): React.CSSProperties {
   const lower = cls.toLowerCase();
   if (lower === 'security') {
@@ -463,7 +465,11 @@ export function InstalledPatchesPanel({
         throw new Error(errData.error ?? `Request failed (${res.status})`);
       }
       const data = await res.json();
-      setPatches(data.patches ?? []);
+      setPatches(
+        (data.patches ?? []).filter((p) =>
+          PATCH_SOFTWARE_TYPES.has(p.SoftwareType.toLowerCase())
+        )
+      );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load patch detail');
       setPatches([]);
