@@ -1,24 +1,41 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useRouter } from 'next/navigation';
 
 export default function AuthCallbackPage() {
-  const { instance } = useMsal();
+  const { instance, accounts } = useMsal();
   const router = useRouter();
+  const redirected = useRef(false);
 
+  // Primary: redirect as soon as an account is available (reactive).
+  // This handles the case where providers.tsx already called
+  // handleRedirectPromise() before this page mounted, so accounts
+  // may appear without this page ever seeing a non-null response.
   useEffect(() => {
-    // handleRedirectPromise() may return null if the redirect was already
-    // handled by getMsalInstance() during providers.tsx initialization.
-    // In that case, check accounts directly and redirect either way.
+    if (accounts.length > 0 && !redirected.current) {
+      redirected.current = true;
+      router.replace('/');
+    }
+  }, [accounts, router]);
+
+  // Fallback: if handleRedirectPromise hasn't been called yet (edge case),
+  // call it here and redirect on completion.
+  useEffect(() => {
     instance.handleRedirectPromise()
-      .then(() => {
-        router.replace('/');
+      .then((response) => {
+        if (response && !redirected.current) {
+          redirected.current = true;
+          router.replace('/');
+        }
       })
       .catch((error) => {
         console.error('[Auth Callback]', error);
-        router.replace('/');
+        if (!redirected.current) {
+          redirected.current = true;
+          router.replace('/');
+        }
       });
   }, [instance, router]);
 
@@ -45,3 +62,4 @@ export default function AuthCallbackPage() {
     </div>
   );
 }
+
