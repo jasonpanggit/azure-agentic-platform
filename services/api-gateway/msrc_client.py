@@ -43,7 +43,7 @@ def _fetch_cves_sync(kb_digits: str) -> list[str]:
 
     Returns list of CVE numbers, or empty list on error.
     """
-    url = f"{_MSRC_SUG_BASE}?$filter=kbArticleId eq '{kb_digits}'"
+    url = f"{_MSRC_SUG_BASE}?$filter=kbArticles/any(k:k/articleName eq '{kb_digits}')"
     req = urllib.request.Request(
         url,
         headers={
