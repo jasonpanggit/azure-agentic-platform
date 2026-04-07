@@ -9,8 +9,11 @@ export const msalConfig: Configuration = {
     navigateToLoginRequestUrl: true,
   },
   cache: {
-    cacheLocation: 'localStorage',
-    storeAuthStateInCookie: false,
+    // sessionStorage works in private/incognito browsing; localStorage is blocked
+    // in some browsers in private mode causing redirect auth state loss (AADSTS900144).
+    // storeAuthStateInCookie: true is a fallback for Safari ITP and IE11.
+    cacheLocation: 'sessionStorage',
+    storeAuthStateInCookie: true,
   },
   system: {
     loggerOptions: {
