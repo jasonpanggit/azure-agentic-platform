@@ -8,7 +8,9 @@ export default function LoginPage() {
   const { instance } = useMsal();
 
   useEffect(() => {
-    instance.loginRedirect(loginRequest);
+    instance.loginPopup(loginRequest).catch((err) => {
+      console.error('[LoginPage] loginPopup failed:', err);
+    });
   }, [instance]);
 
   return (

@@ -11,7 +11,9 @@ export function getMsalInstance(): Promise<PublicClientApplication> {
     if (!msalInstance) {
       msalInstance = new PublicClientApplication(msalConfig);
       await msalInstance.initialize();
-      await msalInstance.handleRedirectPromise().catch(() => null);
+      // No handleRedirectPromise needed — using popup flow (not redirect).
+      // Popup flow keeps sessionStorage in the parent window and avoids
+      // AADSTS900144 (missing client_id) caused by sessionStorage loss on redirect in private browsing.
     }
     return msalInstance;
   })();

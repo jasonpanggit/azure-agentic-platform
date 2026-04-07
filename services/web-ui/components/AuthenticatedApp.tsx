@@ -25,7 +25,9 @@ export function AuthenticatedApp() {
   }
 
   const handleLogin = () => {
-    instance.loginRedirect(loginRequest);
+    instance.loginPopup(loginRequest).catch((err) => {
+      console.error('[AuthenticatedApp] loginPopup failed:', err);
+    });
   };
 
   return (
