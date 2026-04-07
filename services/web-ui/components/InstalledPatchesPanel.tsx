@@ -226,10 +226,10 @@ function PendingPatchesTable({
       <Table className="w-full text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Patch Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
@@ -252,10 +252,10 @@ function PendingPatchesTable({
       <Table className="w-full text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Patch Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
@@ -265,6 +265,9 @@ function PendingPatchesTable({
             <TableRow key={`${p.patchName}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
               <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[240px] truncate" style={{ color: 'var(--text-primary)' }}>
                 {p.patchName}
+              </TableCell>
+              <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                {p.kbid ? (p.kbid.toUpperCase().startsWith('KB') ? p.kbid : `KB${p.kbid}`) : '\u2014'}
               </TableCell>
               <TableCell className="h-9 px-3 align-middle">
                 <div className="flex flex-wrap gap-1">
@@ -278,20 +281,7 @@ function PendingPatchesTable({
                 </div>
               </TableCell>
               <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.kbid ? `KB${p.kbid}` : '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                {p.rebootRequired ? (
-                  <Badge className="border text-[11px]" style={{
-                    background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
-                    color: 'var(--accent-orange)',
-                    borderColor: 'color-mix(in srgb, var(--accent-orange) 35%, transparent)',
-                  }}>
-                    Required
-                  </Badge>
-                ) : (
-                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No</span>
-                )}
+                {p.version || '\u2014'}
               </TableCell>
               <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                 {p.publishedDateTime ? formatRelativeTime(p.publishedDateTime) : '\u2014'}
@@ -328,10 +318,10 @@ function InstalledPatchesTable({
         <TableHeader>
           <TableRow>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
@@ -352,38 +342,42 @@ function InstalledPatchesTable({
         <TableHeader>
           <TableRow>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {patches.map((p, idx) => (
-            <TableRow key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
-              <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
-                {p.SoftwareName}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.CurrentVersion || '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                <Badge variant="outline" className="text-[11px] border" style={classificationBadgeStyle(p.Category)}>
-                  {p.Category || 'Other'}
-                </Badge>
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
-                {p.Publisher || '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                <CveBadges cves={p.cves ?? []} />
-              </TableCell>
-            </TableRow>
-          ))}
+          {patches.map((p, idx) => {
+            const kbMatch = /KB(\d+)/i.exec(p.SoftwareName);
+            const kbId = kbMatch ? `KB${kbMatch[1]}` : null;
+            return (
+              <TableRow key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
+                <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
+                  {p.SoftwareName}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {kbId ?? '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle">
+                  <Badge variant="outline" className="text-[11px] border" style={classificationBadgeStyle(p.Category)}>
+                    {p.Category || 'Other'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {p.CurrentVersion || '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle">
+                  <CveBadges cves={p.cves ?? []} />
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
