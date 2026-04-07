@@ -59,6 +59,7 @@ interface PendingPatch {
   readonly kbid: string;
   readonly version: string;
   readonly publishedDateTime: string | null;
+  readonly cves: readonly string[];
 }
 
 interface InstalledPatchesPanelProps {
@@ -230,9 +231,10 @@ function PendingPatchesTable({
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody><SkeletonRows cols={5} /></TableBody>
+        <TableBody><SkeletonRows cols={6} /></TableBody>
       </Table>
     );
   }
@@ -255,6 +257,7 @@ function PendingPatchesTable({
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -292,6 +295,9 @@ function PendingPatchesTable({
               </TableCell>
               <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                 {p.publishedDateTime ? formatRelativeTime(p.publishedDateTime) : '\u2014'}
+              </TableCell>
+              <TableCell className="h-9 px-3 align-middle">
+                <CveBadges cves={p.cves ?? []} />
               </TableCell>
             </TableRow>
           ))}

@@ -538,7 +538,101 @@ class TestGetInstalledPatches:
         # CVE enrichment failed but patch data is still returned
         assert body["patches"][0]["cves"] == []
 
-    def test_installed_days_validation(self, client):
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_cve_enrichment_for_patch_type(self, mock_detail, mock_discover, client):
+        """SoftwareType=='Patch' patches are now enriched with CVEs (not just Hotfix).
+
+        Regression test: previously only SoftwareType=='Hotfix' triggered MSRC lookup.
+        Arc VMs and Azure Update Manager use SoftwareType=='Patch' or 'Update', so
+        those patches always showed empty CVEs.
+        """
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "Security Update KB5034441",
+                "SoftwareType": "Patch",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Patch",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+            {
+                "SoftwareName": "Windows Update KB5035853",
+                "SoftwareType": "Update",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Update",
+                "InstalledDate": "2026-03-29T02:00:00Z",
+            },
+            {
+                "SoftwareName": "nginx",
+                "SoftwareType": "Package",
+                "CurrentVersion": "1.24.0",
+                "Publisher": "Ubuntu",
+                "Category": "Package",
+                "InstalledDate": "2026-03-28T12:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {
+                "KB5034441": ["CVE-2024-21302"],
+                "KB5035853": ["CVE-2024-26234", "CVE-2024-26218"],
+            }
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 3
+
+        # SoftwareType=='Patch' must be enriched
+        p0 = body["patches"][0]
+        assert p0["SoftwareType"] == "Patch"
+        assert p0["cves"] == ["CVE-2024-21302"]
+
+        # SoftwareType=='Update' must be enriched
+        p1 = body["patches"][1]
+        assert p1["SoftwareType"] == "Update"
+        assert p1["cves"] == ["CVE-2024-26234", "CVE-2024-26218"]
+
+        # SoftwareType=='Package' must NOT be enriched
+        p2 = body["patches"][2]
+        assert p2["SoftwareType"] == "Package"
+        assert p2["cves"] == []
+
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_cve_uses_kbid_field_directly(self, mock_detail, mock_discover, client):
+        """KB ID is extracted from the kbid field when present, not just from SoftwareName.
+
+        Regression test: previously only searched SoftwareName for KB\\d+ pattern,
+        missing patches that have kbid as a separate field.
+        """
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "2026-03 Cumulative Update for Windows",
+                "SoftwareType": "Update",
+                "kbid": "5034441",  # numeric kbid field, no KB prefix
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Update",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == ["CVE-2024-21302"]
+
+
         """Days parameter must be between 1 and 365."""
         resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
 
@@ -964,3 +1058,147 @@ class TestRunArgQuery:
 
             assert len(result) == 2
             assert mock_client_instance.resources.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Pending patches endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetPendingPatches:
+    """Tests for GET /api/v1/patch/pending."""
+
+    RESOURCE_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+    SAMPLE_ROWS = [
+        {
+            "patchName": "2026-03 Cumulative Update for Windows Server 2022",
+            "classifications": ["Security", "Critical"],
+            "rebootRequired": True,
+            "kbid": "5034441",
+            "version": "10.0.20348.2340",
+            "publishedDateTime": "2026-03-11T00:00:00Z",
+        },
+        {
+            "patchName": "2026-03 Servicing Stack Update for Windows Server 2022",
+            "classifications": ["Security"],
+            "rebootRequired": False,
+            "kbid": "KB5035853",
+            "version": "10.0.20348.2300",
+            "publishedDateTime": "2026-03-11T00:00:00Z",
+        },
+        {
+            "patchName": "Definition Update for Windows Defender",
+            "classifications": ["Definition"],
+            "rebootRequired": False,
+            "kbid": "",
+            "version": "1.409.100.0",
+            "publishedDateTime": None,
+        },
+    ]
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_returns_pending_patches(self, mock_query, client):
+        """Successful response includes patches array with cves field."""
+        mock_query.return_value = self.SAMPLE_ROWS
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {
+                "KB5034441": ["CVE-2024-21302"],
+                "KB5035853": ["CVE-2024-26234"],
+            }
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 3
+        assert body["resource_id"] == self.RESOURCE_ID
+
+        # All patches must have a cves field
+        for p in body["patches"]:
+            assert "cves" in p, f"patch {p['patchName']!r} missing 'cves' field"
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_cve_enrichment_numeric_kbid(self, mock_query, client):
+        """Numeric kbid (no 'KB' prefix) is normalised to 'KB{id}' for MSRC lookup.
+
+        Regression test: ARG returns kbid as a bare number (e.g. '5034441').
+        The enrichment must prepend 'KB' before calling get_cves_for_kbs.
+        """
+        mock_query.return_value = [
+            {
+                "patchName": "2026-03 Cumulative Update",
+                "classifications": ["Security"],
+                "rebootRequired": True,
+                "kbid": "5034441",
+                "version": "10.0.20348.2340",
+                "publishedDateTime": "2026-03-11T00:00:00Z",
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == ["CVE-2024-21302"]
+
+        # Verify MSRC was called with the KB-prefixed form
+        called_with = mock_cves.call_args[0][0]
+        assert "KB5034441" in called_with
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_cve_enrichment_graceful_degradation(self, mock_query, client):
+        """CVE enrichment failure still returns patches with empty cves list."""
+        mock_query.return_value = [
+            {
+                "patchName": "2026-03 Cumulative Update",
+                "classifications": ["Security"],
+                "rebootRequired": True,
+                "kbid": "5034441",
+                "version": "10.0.20348.2340",
+                "publishedDateTime": "2026-03-11T00:00:00Z",
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.side_effect = Exception("MSRC API unavailable")
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 1
+        assert body["patches"][0]["cves"] == []
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_no_kbid_no_cves(self, mock_query, client):
+        """Patches with no kbid and no KB pattern in name get empty cves."""
+        mock_query.return_value = [
+            {
+                "patchName": "Definition Update for Windows Defender",
+                "classifications": ["Definition"],
+                "rebootRequired": False,
+                "kbid": "",
+                "version": "1.409.100.0",
+                "publishedDateTime": None,
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {}
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == []
+
+    def test_pending_returns_400_for_invalid_resource_id(self, client):
+        """Malformed resource_id (no subscription) returns 400."""
+        resp = client.get("/api/v1/patch/pending?resource_id=not-a-valid-id")
+        assert resp.status_code == 400
+
+    def test_pending_returns_422_when_resource_id_missing(self, client):
+        """Missing resource_id query param returns 422."""
+        resp = client.get("/api/v1/patch/pending")
+        assert resp.status_code == 422
