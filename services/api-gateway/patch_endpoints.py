@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/patch", tags=["patch"])
 
+# Module-level cache: subscription_id -> Change Tracking LAW workspace GUID.
+# Populated lazily by _discover_change_tracking_workspace(); valid for process lifetime.
+_workspace_cache: Dict[str, str] = {}
+
 
 def _run_arg_query(
     credential: Any,
@@ -66,6 +70,111 @@ def _run_arg_query(
             break
 
     return all_rows
+
+
+# ---------------------------------------------------------------------------
+# Change Tracking workspace discovery
+# ---------------------------------------------------------------------------
+
+
+def _discover_change_tracking_workspace(
+    credential: Any,
+    resource_id: str,
+) -> str:
+    """Discover the Log Analytics workspace ID for Change Tracking & Inventory.
+
+    Arc VMs (and Azure VMs enrolled in Change Tracking) write ConfigurationData
+    to a dedicated LAW workspace that is linked to an Automation Account — NOT
+    the platform's LOG_ANALYTICS_WORKSPACE_ID (law-aap-prod).
+
+    Discovery strategy:
+    1. Parse subscription_id from the resource_id.
+    2. Check module-level cache (_workspace_cache) keyed by subscription_id.
+    3. On cache miss: query ARG for microsoft.operationsmanagement/solutions
+       where name startswith 'ChangeTracking(' in the subscription.
+    4. Extract workspace GUID from the workspaceResourceId ARM path.
+    5. Fall back to LOG_ANALYTICS_WORKSPACE_ID env var if ARG returns no results
+       or raises an exception.
+
+    Args:
+        credential: Azure credential (DefaultAzureCredential).
+        resource_id: Full ARM resource ID of the VM being queried.
+
+    Returns:
+        Workspace GUID string (never raises — returns env var fallback on error).
+    """
+    # Parse subscription ID from ARM resource_id
+    # e.g. /subscriptions/{sub}/resourceGroups/{rg}/providers/...
+    parts = resource_id.split("/")
+    subscription_id = ""
+    try:
+        sub_idx = next(i for i, p in enumerate(parts) if p.lower() == "subscriptions")
+        subscription_id = parts[sub_idx + 1]
+    except (StopIteration, IndexError):
+        pass
+
+    fallback = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+
+    if not subscription_id:
+        logger.warning(
+            "Cannot parse subscription_id from resource_id %r — using fallback workspace",
+            resource_id,
+        )
+        return fallback
+
+    # Cache hit
+    if subscription_id in _workspace_cache:
+        return _workspace_cache[subscription_id]
+
+    # ARG query: find the ChangeTracking solution and its linked workspace
+    kql = (
+        "resources\n"
+        "| where type == 'microsoft.operationsmanagement/solutions'\n"
+        "| where name startswith 'ChangeTracking('\n"
+        f"| where subscriptionId == '{subscription_id}'\n"
+        "| project workspaceResourceId = tostring(properties.workspaceResourceId)\n"
+        "| where isnotempty(workspaceResourceId)\n"
+        "| limit 1"
+    )
+
+    try:
+        rows = _run_arg_query(credential, [subscription_id], kql)
+    except Exception as exc:
+        logger.warning(
+            "ARG ChangeTracking workspace discovery failed for sub %s: %s — using fallback",
+            subscription_id,
+            exc,
+        )
+        _workspace_cache[subscription_id] = fallback
+        return fallback
+
+    if not rows:
+        logger.debug(
+            "No ChangeTracking solution found in subscription %s — using fallback workspace",
+            subscription_id,
+        )
+        _workspace_cache[subscription_id] = fallback
+        return fallback
+
+    workspace_resource_id: str = rows[0].get("workspaceResourceId", "")
+    if not workspace_resource_id:
+        _workspace_cache[subscription_id] = fallback
+        return fallback
+
+    # Extract workspace GUID — last non-empty segment of the ARM resource ID
+    # e.g. /subscriptions/.../workspaces/52c2da23-a227-47ee-bec7-a0bc14135c45
+    workspace_guid = workspace_resource_id.rstrip("/").split("/")[-1]
+    if not workspace_guid:
+        _workspace_cache[subscription_id] = fallback
+        return fallback
+
+    logger.info(
+        "Discovered Change Tracking workspace %s for subscription %s",
+        workspace_guid,
+        subscription_id,
+    )
+    _workspace_cache[subscription_id] = workspace_guid
+    return workspace_guid
 
 
 # ---------------------------------------------------------------------------
@@ -359,9 +468,23 @@ async def get_patch_assessment(
             detail=f"ARG query failed: {exc}",
         )
 
-    # Enrich with LAW ConfigurationData (gracefully degraded)
+    # Enrich with LAW ConfigurationData (gracefully degraded).
+    # Use Change Tracking workspace discovery so Arc VMs (which write
+    # ConfigurationData to a dedicated Automation-linked workspace) return
+    # real installedCount values instead of always 0.
+    # We derive the workspace from the first subscription in the query; if the
+    # caller passes multiple subscriptions the summary query still runs against
+    # the first subscription's Change Tracking workspace.  Assessment enrichment
+    # is best-effort and gracefully degraded anyway.
     resource_ids = [m["id"] for m in machines if m.get("id")]
-    workspace_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+    first_resource_id = resource_ids[0] if resource_ids else ""
+    loop = asyncio.get_running_loop()
+    workspace_id = await loop.run_in_executor(
+        None,
+        _discover_change_tracking_workspace,
+        credential,
+        first_resource_id,
+    ) if first_resource_id else os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
     law_summary = await _query_law_installed_summary(
         credential, workspace_id, resource_ids
     )
@@ -461,10 +584,21 @@ async def get_installed_patches(
     Returns:
         { patches: [...], total_count: int, resource_id: str, days: int }
     """
-    workspace_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+    # Discover the Change Tracking LAW workspace for this VM's subscription.
+    # Arc VMs write ConfigurationData to a dedicated workspace linked to their
+    # Automation Account — NOT the platform's LOG_ANALYTICS_WORKSPACE_ID.
+    # Falls back to LOG_ANALYTICS_WORKSPACE_ID if no ChangeTracking solution found.
+    loop = asyncio.get_running_loop()
+    workspace_id = await loop.run_in_executor(
+        None,
+        _discover_change_tracking_workspace,
+        credential,
+        resource_id,
+    )
     if not workspace_id:
         logger.warning(
-            "LOG_ANALYTICS_WORKSPACE_ID not configured — returning empty patches (degraded)"
+            "No LAW workspace found for resource %r — returning empty patches (degraded)",
+            resource_id,
         )
         return {
             "patches": [],
