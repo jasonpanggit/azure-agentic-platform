@@ -558,7 +558,9 @@ export function InstalledPatchesPanel({
   // Fall back to assessment counts only when pending patches haven't loaded yet
   const displayCritical = pendingLoading ? (machine.criticalCount ?? 0) : derivedCriticalCount;
   const displaySecurity = pendingLoading ? (machine.securityCount ?? 0) : derivedSecurityCount;
-  const totalPending = displayCritical + displaySecurity;
+  const totalPending = pendingLoading
+    ? (machine.criticalCount ?? 0) + (machine.securityCount ?? 0)
+    : pendingPatches.length;
 
   return (
     <>
