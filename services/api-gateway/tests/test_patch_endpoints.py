@@ -558,11 +558,13 @@ class TestDiscoverChangeTrackingWorkspace:
         "/resourceGroups/agentic-aiops-demo-rg"
         "/providers/Microsoft.HybridCompute/machines/WIN-JBC7MM2NO8J"
     )
+    # Realistic: ARM path ends with workspace NAME, not a GUID.
+    # This matches real Azure environments (e.g. ChangeTracking(workspace-agentic-aiops-demo)).
     WORKSPACE_ARM_ID = (
         "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
         "/resourceGroups/ct-rg"
         "/providers/Microsoft.OperationalInsights/workspaces"
-        "/aabbccdd-1122-3344-5566-778899aabbcc"
+        "/my-change-tracking-workspace"
     )
     WORKSPACE_GUID = "aabbccdd-1122-3344-5566-778899aabbcc"
 
@@ -571,10 +573,16 @@ class TestDiscoverChangeTrackingWorkspace:
         from services.api_gateway import patch_endpoints
         patch_endpoints._workspace_cache.clear()
 
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_returns_discovered_workspace_guid(self, mock_arg):
-        """Returns the GUID extracted from the ChangeTracking solution's workspaceResourceId."""
+    def test_returns_discovered_workspace_guid(self, mock_arg, mock_customer_id):
+        """Returns the customerId GUID from the ChangeTracking solution's workspace.
+
+        The ARM resource path ends with a workspace NAME, not a GUID. The helper
+        must resolve the customerId via _get_workspace_customer_id.
+        """
         mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = self.WORKSPACE_GUID
         credential = MagicMock()
 
         from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
@@ -582,6 +590,7 @@ class TestDiscoverChangeTrackingWorkspace:
 
         assert result == self.WORKSPACE_GUID
         mock_arg.assert_called_once()
+        mock_customer_id.assert_called_once_with(credential, self.WORKSPACE_ARM_ID)
         # Verify the ARG query scopes to the correct subscription
         call_kql = mock_arg.call_args[0][2]
         assert "ChangeTracking(" in call_kql
@@ -611,22 +620,39 @@ class TestDiscoverChangeTrackingWorkspace:
 
         assert result == "fallback-ws-guid"
 
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
-    def test_caches_result_and_avoids_repeat_arg_call(self, mock_arg):
+    def test_falls_back_to_env_var_when_customer_id_lookup_fails(self, mock_arg, mock_customer_id):
+        """Falls back to env var when _get_workspace_customer_id returns empty string."""
+        mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = ""  # lookup failed
+        credential = MagicMock()
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "fallback-ws-guid"}):
+            from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+            result = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result == "fallback-ws-guid"
+
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_caches_result_and_avoids_repeat_arg_call(self, mock_arg, mock_customer_id):
         """Second call for the same subscription hits the cache, not ARG."""
         mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = self.WORKSPACE_GUID
         credential = MagicMock()
 
         from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
 
-        # First call — hits ARG
+        # First call — hits ARG + customer_id lookup
         result1 = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
         # Second call — same subscription, should use cache
         result2 = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
 
         assert result1 == self.WORKSPACE_GUID
         assert result2 == self.WORKSPACE_GUID
-        assert mock_arg.call_count == 1  # ARG called only once
+        assert mock_arg.call_count == 1      # ARG called only once
+        assert mock_customer_id.call_count == 1  # customer_id lookup only once
 
     @patch("services.api_gateway.patch_endpoints._run_arg_query")
     def test_returns_fallback_for_invalid_resource_id(self, mock_arg):
@@ -669,6 +695,61 @@ class TestDiscoverChangeTrackingWorkspace:
         assert body["patches"] == []
         assert body["total_count"] == 0
         assert body["query_status"] == "degraded"
+
+
+class TestGetWorkspaceCustomerId:
+    """Tests for _get_workspace_customer_id helper."""
+
+    WORKSPACE_ARM_ID = (
+        "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        "/resourceGroups/agentic-aiops-demo-rg"
+        "/providers/Microsoft.OperationalInsights/workspaces"
+        "/workspace-agentic-aiops-demo"
+    )
+    EXPECTED_GUID = "d6e88b39-4f54-4f95-96f1-8acfedf0129c"
+
+    @patch("services.api_gateway.patch_endpoints.LogAnalyticsManagementClient")
+    def test_returns_customer_id_from_management_api(self, mock_law_cls):
+        """Returns the customerId GUID from the workspace management API response."""
+        mock_workspace = MagicMock()
+        mock_workspace.customer_id = self.EXPECTED_GUID
+        mock_client = MagicMock()
+        mock_client.workspaces.get.return_value = mock_workspace
+        mock_law_cls.return_value = mock_client
+
+        credential = MagicMock()
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, self.WORKSPACE_ARM_ID)
+
+        assert result == self.EXPECTED_GUID
+        mock_law_cls.assert_called_once_with(
+            credential, "4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        )
+        mock_client.workspaces.get.assert_called_once_with(
+            "agentic-aiops-demo-rg", "workspace-agentic-aiops-demo"
+        )
+
+    @patch("services.api_gateway.patch_endpoints.LogAnalyticsManagementClient")
+    def test_returns_empty_string_on_exception(self, mock_law_cls):
+        """Returns empty string when the management API call fails (never raises)."""
+        mock_client = MagicMock()
+        mock_client.workspaces.get.side_effect = Exception("API error")
+        mock_law_cls.return_value = mock_client
+
+        credential = MagicMock()
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, self.WORKSPACE_ARM_ID)
+
+        assert result == ""
+
+    def test_returns_empty_string_for_malformed_arm_id(self):
+        """Returns empty string without calling SDK when ARM resource ID is malformed."""
+        credential = MagicMock()
+
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, "not-an-arm-id")
+
+        assert result == ""
 
 
 class TestKqlSoftwareTypeFilter:

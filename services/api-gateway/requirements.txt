@@ -35,6 +35,9 @@ azure-mgmt-resourcegraph>=8.0.0
 # Azure Monitor Query — Log Analytics workspace queries (ConfigurationData enrichment)
 azure-monitor-query>=1.4.0
 
+# Azure Log Analytics management — workspace customerId (GUID) lookup for Change Tracking discovery
+azure-mgmt-loganalytics>=13.0.0
+
 # Diagnostic Pipeline — Azure Monitor + Resource Health (Phase 15)
 azure-mgmt-monitor>=6.0.0
 azure-mgmt-resourcehealth==1.0.0b6

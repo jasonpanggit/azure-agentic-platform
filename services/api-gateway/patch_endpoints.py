@@ -20,6 +20,11 @@ from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential
 from services.api_gateway.os_normalizer import normalize_os
 
+try:
+    from azure.mgmt.loganalytics import LogAnalyticsManagementClient
+except ImportError:  # pragma: no cover
+    LogAnalyticsManagementClient = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/patch", tags=["patch"])
@@ -161,10 +166,15 @@ def _discover_change_tracking_workspace(
         _workspace_cache[subscription_id] = fallback
         return fallback
 
-    # Extract workspace GUID — last non-empty segment of the ARM resource ID
-    # e.g. /subscriptions/.../workspaces/52c2da23-a227-47ee-bec7-a0bc14135c45
-    workspace_guid = workspace_resource_id.rstrip("/").split("/")[-1]
+    # The ARM path ends with the workspace NAME (e.g. "workspace-agentic-aiops-demo"),
+    # NOT the customerId GUID that LogsQueryClient requires.
+    # We must call the ARM management API to get the customerId (GUID).
+    workspace_guid = _get_workspace_customer_id(credential, workspace_resource_id)
     if not workspace_guid:
+        logger.warning(
+            "Could not resolve customerId for workspace %r — using fallback",
+            workspace_resource_id,
+        )
         _workspace_cache[subscription_id] = fallback
         return fallback
 
@@ -175,6 +185,58 @@ def _discover_change_tracking_workspace(
     )
     _workspace_cache[subscription_id] = workspace_guid
     return workspace_guid
+
+
+def _get_workspace_customer_id(credential: Any, workspace_resource_id: str) -> str:
+    """Resolve a Log Analytics workspace ARM resource ID to its customerId (GUID).
+
+    LogsQueryClient.query_workspace() requires the workspace customerId (a GUID),
+    not the workspace name or ARM resource ID. The ARM resource ID path ends with
+    the workspace name (e.g. "workspace-agentic-aiops-demo"), which is NOT the
+    GUID that the Log Analytics query API expects.
+
+    Args:
+        credential: Azure credential (DefaultAzureCredential).
+        workspace_resource_id: Full ARM resource ID of the Log Analytics workspace.
+            e.g. /subscriptions/{sub}/resourceGroups/{rg}/providers/
+                 Microsoft.OperationalInsights/workspaces/{name}
+
+    Returns:
+        The customerId GUID string, or empty string on failure (never raises).
+    """
+    # Parse subscription_id and workspace name from ARM resource ID
+    # /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{name}
+    parts = workspace_resource_id.split("/")
+    try:
+        sub_idx = next(i for i, p in enumerate(parts) if p.lower() == "subscriptions")
+        ws_sub = parts[sub_idx + 1]
+        rg_idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
+        ws_rg = parts[rg_idx + 1]
+        ws_name = parts[-1]
+    except (StopIteration, IndexError):
+        logger.warning(
+            "Cannot parse workspace ARM resource ID %r — cannot resolve customerId",
+            workspace_resource_id,
+        )
+        return ""
+
+    try:
+        if LogAnalyticsManagementClient is None:
+            logger.warning(
+                "azure-mgmt-loganalytics not installed — cannot resolve workspace customerId"
+            )
+            return ""
+        client = LogAnalyticsManagementClient(credential, ws_sub)
+        workspace = client.workspaces.get(ws_rg, ws_name)
+        customer_id: str = workspace.customer_id or ""
+        return customer_id
+    except Exception as exc:
+        logger.warning(
+            "Failed to resolve customerId for workspace %r: %s",
+            workspace_resource_id,
+            exc,
+        )
+        return ""
 
 
 # ---------------------------------------------------------------------------
