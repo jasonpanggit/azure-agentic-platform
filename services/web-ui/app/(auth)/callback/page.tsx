@@ -9,14 +9,17 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    instance.handleRedirectPromise().then((response) => {
-      if (response) {
+    // handleRedirectPromise() may return null if the redirect was already
+    // handled by getMsalInstance() during providers.tsx initialization.
+    // In that case, check accounts directly and redirect either way.
+    instance.handleRedirectPromise()
+      .then(() => {
         router.replace('/');
-      }
-    }).catch((error) => {
-      console.error('[Auth Callback]', error);
-      router.replace('/');
-    });
+      })
+      .catch((error) => {
+        console.error('[Auth Callback]', error);
+        router.replace('/');
+      });
   }, [instance, router]);
 
   return (
