@@ -30,12 +30,18 @@ export function useResizable(options?: UseResizableOptions) {
   const defaultWidth = options?.defaultWidth ?? DEFAULT_DEFAULT_WIDTH;
   const storageKey = options?.storageKey ?? DEFAULT_STORAGE_KEY;
 
-  const [width, setWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') return defaultWidth;
+  // Always initialise with defaultWidth to match the server render.
+  // Read localStorage in useEffect (client-only) to avoid hydration mismatch.
+  const [width, setWidth] = useState<number>(defaultWidth);
+
+  useEffect(() => {
     const stored = localStorage.getItem(storageKey);
     const parsed = stored ? parseInt(stored, 10) : NaN;
-    return isNaN(parsed) ? defaultWidth : Math.min(maxWidth, Math.max(minWidth, parsed));
-  });
+    if (!isNaN(parsed)) {
+      setWidth(Math.min(maxWidth, Math.max(minWidth, parsed)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
   const isDragging = useRef(false);
   const startX = useRef(0);
