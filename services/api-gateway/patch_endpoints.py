@@ -680,6 +680,7 @@ async def get_installed_patches(
     )
 
     # Extract KB IDs from Windows patches for MSRC enrichment
+    import re as _re
     kb_ids_to_lookup: list[str] = []
     patch_kb_map: dict[int, str] = {}  # patch index -> kb_id
 
@@ -688,13 +689,18 @@ async def get_installed_patches(
         software_name = patch.get("SoftwareName", "")
         category = patch.get("Category", "")
 
-        # Only look up CVEs for Windows hotfixes and security patches
-        if software_type == "Hotfix" or "Security" in (category or ""):
-            # Try to extract KB ID from software name (e.g. "KB5034441" or "Update for KB5034441")
-            import re
-            kb_match = re.search(r"KB(\d+)", software_name, re.IGNORECASE)
-            if kb_match:
-                kb_id = f"KB{kb_match.group(1)}"
+        # Enrich CVEs for Hotfix, Patch, Update types and any Security-category patch
+        if software_type in ("Hotfix", "Patch", "Update") or "Security" in (category or ""):
+            # Try kbid field first, then extract from name
+            kb_id = None
+            raw_kbid = patch.get("kbid") or patch.get("KBId") or ""
+            if raw_kbid:
+                kb_id = raw_kbid if str(raw_kbid).upper().startswith("KB") else f"KB{raw_kbid}"
+            else:
+                kb_match = _re.search(r"KB(\d+)", software_name, _re.IGNORECASE)
+                if kb_match:
+                    kb_id = f"KB{kb_match.group(1)}"
+            if kb_id:
                 kb_ids_to_lookup.append(kb_id)
                 patch_kb_map[idx] = kb_id
 
@@ -796,6 +802,38 @@ async def get_pending_patches(
             "version": row.get("version") or "",
             "publishedDateTime": str(row.get("publishedDateTime") or "") or None,
         })
+
+    # Extract KB IDs for MSRC CVE enrichment
+    import re as _re
+    kb_ids_to_lookup: list[str] = []
+    patch_kb_map: dict[int, str] = {}
+
+    for idx, patch in enumerate(patches):
+        kbid = patch.get("kbid") or ""
+        patch_name = patch.get("patchName") or ""
+        kb_id = None
+        if kbid:
+            kb_id = kbid if str(kbid).upper().startswith("KB") else f"KB{kbid}"
+        else:
+            kb_match = _re.search(r"KB(\d+)", patch_name, _re.IGNORECASE)
+            if kb_match:
+                kb_id = f"KB{kb_match.group(1)}"
+        if kb_id:
+            kb_ids_to_lookup.append(kb_id)
+            patch_kb_map[idx] = kb_id
+
+    # Enrich with CVEs (gracefully degraded)
+    cve_map: dict[str, list[str]] = {}
+    if kb_ids_to_lookup:
+        try:
+            from services.api_gateway.msrc_client import get_cves_for_kbs
+            cve_map = await get_cves_for_kbs(list(set(kb_ids_to_lookup)))
+        except Exception as exc:
+            logger.warning("MSRC CVE enrichment failed (degraded): %s", exc)
+
+    for idx, patch in enumerate(patches):
+        kb_id = patch_kb_map.get(idx, "")
+        patch["cves"] = cve_map.get(kb_id, [])
 
     return {
         "patches": patches,
