@@ -774,11 +774,22 @@ class TestKqlSoftwareTypeFilter:
             '"Update" to capture Azure Update Manager installed patches. '
             "Without it, the Installed Patches tab shows empty for Arc VMs."
         )
+        assert '"Patch"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_detail_sync must include "
+            '"Patch" to capture Arc VM Change Tracking installed patches. '
+            "Arc VMs report SoftwareType='Patch', not 'Hotfix' or 'Update'."
+        )
+        assert "SoftwareClassification" not in source, (
+            "KQL in _query_law_installed_detail_sync must not reference SoftwareClassification — "
+            "this column does not exist in Arc VM Change Tracking ConfigurationData. "
+            "Use SoftwareType for Category instead."
+        )
 
     def test_installed_summary_kql_includes_update_type(self):
-        """The summary query KQL must include SoftwareType 'Update' to capture AUM-installed patches.
+        """The summary query KQL must include SoftwareType 'Update' and 'Patch'.
 
         Regression test for: installed-patches-empty bug (2026-04-07).
+        Arc VMs use SoftwareType='Patch'; Azure VMs use 'Update'.
         """
         from services.api_gateway.patch_endpoints import _query_law_installed_summary_sync
 
@@ -788,6 +799,10 @@ class TestKqlSoftwareTypeFilter:
         assert '"Update"' in source, (
             "KQL SoftwareType filter in _query_law_installed_summary_sync must include "
             '"Update" to capture Azure Update Manager installed patches.'
+        )
+        assert '"Patch"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_summary_sync must include "
+            '"Patch" to capture Arc VM Change Tracking installed patches.'
         )
 
 
