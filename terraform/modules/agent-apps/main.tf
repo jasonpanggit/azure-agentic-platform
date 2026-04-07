@@ -239,9 +239,11 @@ resource "azurerm_container_app" "agents" {
           value = var.azure_mcp_server_url
         }
       }
-      # Web UI specific: Log Analytics workspace for Observability tab
+      # Log Analytics workspace ID for:
+      # - web-ui: Observability tab queries
+      # - api-gateway: Patch installed detail, assessment enrichment, audit log queries
       dynamic "env" {
-        for_each = each.key == "web-ui" && var.log_analytics_workspace_customer_id != "" ? [1] : []
+        for_each = contains(["web-ui", "api-gateway"], each.key) && var.log_analytics_workspace_customer_id != "" ? [1] : []
         content {
           name  = "LOG_ANALYTICS_WORKSPACE_ID"
           value = var.log_analytics_workspace_customer_id

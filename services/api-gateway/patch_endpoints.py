@@ -97,7 +97,7 @@ def _query_law_installed_summary_sync(
         "ConfigurationData\n"
         "| where TimeGenerated > ago(90d)\n"
         f"| where tolower(_ResourceId) in~ ({escaped_ids})\n"
-        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix")\n'
+        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix", "Update")\n'
         "| summarize\n"
         "    InstalledCount = count(),\n"
         "    LastInstalled = max(TimeGenerated)\n"
@@ -172,7 +172,7 @@ def _query_law_installed_detail_sync(
         "ConfigurationData\n"
         f"| where TimeGenerated > ago({days}d)\n"
         f"| where _ResourceId =~ '{escaped_resource_id}'\n"
-        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix")\n'
+        '| where SoftwareType in ("Package", "WindowsFeatures", "WindowsPackages", "Hotfix", "Update")\n'
         "| project\n"
         "    SoftwareName,\n"
         "    SoftwareType,\n"

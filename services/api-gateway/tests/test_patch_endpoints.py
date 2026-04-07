@@ -550,6 +550,45 @@ class TestGetInstalledPatches:
             assert resp.status_code == 422
 
 
+class TestKqlSoftwareTypeFilter:
+    """Regression tests: KQL SoftwareType filter must include 'Update' for Azure Update Manager patches."""
+
+    def test_installed_detail_kql_includes_update_type(self):
+        """The detail query KQL must include SoftwareType 'Update' to capture AUM-installed patches.
+
+        Azure Update Manager records installed patches with SoftwareType == "Update" in the
+        ConfigurationData table.  Without this filter, installed patches from AUM are silently
+        excluded, causing the Installed Patches tab to appear empty for Arc VMs.
+
+        Regression test for: installed-patches-empty bug (2026-04-07).
+        """
+        from services.api_gateway.patch_endpoints import _query_law_installed_detail_sync
+
+        import inspect
+        source = inspect.getsource(_query_law_installed_detail_sync)
+
+        assert '"Update"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_detail_sync must include "
+            '"Update" to capture Azure Update Manager installed patches. '
+            "Without it, the Installed Patches tab shows empty for Arc VMs."
+        )
+
+    def test_installed_summary_kql_includes_update_type(self):
+        """The summary query KQL must include SoftwareType 'Update' to capture AUM-installed patches.
+
+        Regression test for: installed-patches-empty bug (2026-04-07).
+        """
+        from services.api_gateway.patch_endpoints import _query_law_installed_summary_sync
+
+        import inspect
+        source = inspect.getsource(_query_law_installed_summary_sync)
+
+        assert '"Update"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_summary_sync must include "
+            '"Update" to capture Azure Update Manager installed patches.'
+        )
+
+
 # ---------------------------------------------------------------------------
 # _run_arg_query pagination tests
 # ---------------------------------------------------------------------------
