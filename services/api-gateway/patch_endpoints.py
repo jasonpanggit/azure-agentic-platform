@@ -891,6 +891,8 @@ async def get_cve_detail(
     cve_title = _str(raw.get("cveTitle", ""))
     severity = _str(raw.get("severity", ""))
     base_score = _str(raw.get("baseScore", ""))
+    temporal_score = _str(raw.get("temporalScore", ""))
+    vector_string = _str(raw.get("vectorString", ""))
     impact = _str(raw.get("impact", ""))
     vuln_type = _str(raw.get("vulnType", ""))
     description = _strip_html(raw.get("description", ""))
@@ -906,6 +908,8 @@ async def get_cve_detail(
         "cveTitle": cve_title,
         "severity": severity,
         "baseScore": base_score,
+        "temporalScore": temporal_score,
+        "vectorString": vector_string,
         "impact": impact,
         "vulnType": vuln_type,
         "description": description,
