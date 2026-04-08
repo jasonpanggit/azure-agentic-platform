@@ -47,7 +47,7 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
           >
             A
           </div>
-          <span className="text-sm font-semibold text-white">Azure AIOps</span>
+          <span className="text-sm font-semibold text-white">Azure Agentic Platform</span>
         </div>
         <div className="w-px h-5" style={{ background: 'var(--border-nav)' }} aria-hidden="true" />
         <span className="text-sm" style={{ color: 'var(--text-muted)' }} aria-current="page">
