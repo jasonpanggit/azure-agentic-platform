@@ -673,6 +673,15 @@ export function InstalledPatchesPanel({
           >
             <Package className="h-3.5 w-3.5" />
             Installed Patches
+            {patches.length > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 ml-1 border" style={{
+                background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                color: 'var(--accent-blue)',
+                borderColor: 'color-mix(in srgb, var(--accent-blue) 35%, transparent)',
+              }}>
+                {patches.length}
+              </Badge>
+            )}
           </button>
 
           {/* Days selector — only shown on installed tab */}
