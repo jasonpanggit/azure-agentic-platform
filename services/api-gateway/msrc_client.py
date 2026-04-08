@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Any
@@ -43,7 +44,8 @@ def _fetch_cves_sync(kb_digits: str) -> list[str]:
 
     Returns list of CVE numbers, or empty list on error.
     """
-    url = f"{_MSRC_SUG_BASE}?$filter=kbArticles/any(k:k/articleName eq '{kb_digits}')"
+    odata_filter = f"kbArticles/any(k:k/articleName eq '{kb_digits}')"
+    url = f"{_MSRC_SUG_BASE}?{urllib.parse.urlencode({'$filter': odata_filter})}"
     req = urllib.request.Request(
         url,
         headers={
@@ -60,7 +62,7 @@ def _fetch_cves_sync(kb_digits: str) -> list[str]:
                 if cve and cve not in cve_numbers:
                     cve_numbers.append(cve)
             return cve_numbers
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as exc:
         logger.warning("MSRC lookup failed for KB %s: %s", kb_digits, exc)
         return []
     except (json.JSONDecodeError, KeyError) as exc:
