@@ -425,7 +425,17 @@ async def list_vms(
     for row in page_rows:
         rid = row.get("id", "")
         power_raw = row.get("powerState", "")
-        power_state = _normalize_power_state(power_raw)
+        vm_type = row.get("vmType", "Azure VM")
+        if vm_type == "Arc VM":
+            raw_lower = power_raw.lower()
+            if "connected" in raw_lower and "disconnected" not in raw_lower:
+                power_state = "connected"
+            elif "disconnected" in raw_lower:
+                power_state = "disconnected"
+            else:
+                power_state = "unknown"
+        else:
+            power_state = _normalize_power_state(power_raw)
         health_state = health_map.get(rid, "Unknown")
         alert_count = alert_map.get(rid.lower(), 0)
 
@@ -444,7 +454,7 @@ async def list_vms(
                 "os_type": os_type,
                 "os_name": os_display,
                 "power_state": power_state,
-                "vm_type": row.get("vmType", "Azure VM"),  # "Azure VM" or "Arc VM"
+                "vm_type": vm_type,  # "Azure VM" or "Arc VM"
                 "health_state": health_state,
                 "ama_status": "unknown",  # Phase 17: AMA extension check
                 "active_alert_count": alert_count,

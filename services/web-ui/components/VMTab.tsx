@@ -32,6 +32,8 @@ function PowerStateBadge({ state }: { state: string }) {
     running: { label: 'Running', color: 'var(--accent-green)' },
     stopped: { label: 'Stopped', color: 'var(--accent-yellow)' },
     deallocated: { label: 'Deallocated', color: 'var(--text-muted)' },
+    connected: { label: 'Connected', color: 'var(--accent-green)' },
+    disconnected: { label: 'Disconnected', color: 'var(--accent-red)' },
   }[state.toLowerCase()] ?? { label: state, color: 'var(--text-muted)' }
 
   return (
