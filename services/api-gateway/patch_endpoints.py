@@ -11,6 +11,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
@@ -839,4 +843,76 @@ async def get_pending_patches(
         "patches": patches,
         "total_count": len(patches),
         "resource_id": resource_id,
+    }
+
+
+@router.get("/cve/{cve_id}")
+async def get_cve_detail(
+    cve_id: str,
+    token: dict[str, Any] = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Return CVE detail from the Microsoft Security Response Center (MSRC) API.
+
+    Path param:
+        cve_id: CVE identifier (e.g. CVE-2024-12345).
+
+    Returns:
+        Cleaned dict with CVE detail fields from MSRC.
+
+    Raises:
+        HTTPException(404): CVE not found.
+        HTTPException(502): Upstream MSRC API error.
+    """
+    encoded_id = urllib.parse.quote(cve_id, safe="")
+    url = f"https://api.msrc.microsoft.com/sug/v2.0/en-US/vulnerability/{encoded_id}"
+
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            import json as _json
+            raw: Dict[str, Any] = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise HTTPException(status_code=404, detail=f"CVE {cve_id} not found")
+        logger.warning("MSRC API HTTP error for %s: %s", cve_id, exc.code)
+        raise HTTPException(status_code=502, detail="MSRC API returned an error")
+    except Exception as exc:
+        logger.warning("MSRC API request failed for %s: %s", cve_id, exc)
+        raise HTTPException(status_code=502, detail="Failed to reach MSRC API")
+
+    def _str(val: Any) -> str:
+        return str(val) if val is not None else ""
+
+    def _strip_html(html: Any) -> str:
+        return re.sub(r"<[^>]+>", "", _str(html)).strip()
+
+    # MSRC vulnerability response top-level fields
+    cve_number = _str(raw.get("cveNumber") or raw.get("cveTitle") or cve_id)
+    cve_title = _str(raw.get("cveTitle", ""))
+    severity = _str(raw.get("severity", ""))
+    base_score = _str(raw.get("baseScore", ""))
+    impact = _str(raw.get("impact", ""))
+    vuln_type = _str(raw.get("vulnType", ""))
+    description = _strip_html(raw.get("description", ""))
+    exploited = _str(raw.get("exploited", ""))
+    publicly_disclosed = _str(raw.get("publiclyDisclosed", ""))
+    release_date = _str(raw.get("releaseDate", ""))
+    mitre_url = _str(raw.get("mitreUrl", ""))
+    latest_software_release = _str(raw.get("latestSoftwareRelease", ""))
+    tag = _str(raw.get("tag", ""))
+
+    return {
+        "cveNumber": cve_number,
+        "cveTitle": cve_title,
+        "severity": severity,
+        "baseScore": base_score,
+        "impact": impact,
+        "vulnType": vuln_type,
+        "description": description,
+        "exploited": exploited,
+        "publiclyDisclosed": publicly_disclosed,
+        "releaseDate": release_date,
+        "mitreUrl": mitre_url,
+        "latestSoftwareRelease": latest_software_release,
+        "tag": tag,
     }

@@ -12,6 +12,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, AlertTriangle, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, X, ShieldAlert, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import { useResizable } from '@/lib/use-resizable';
 
@@ -142,27 +148,143 @@ function StatChip({ label, value, variant }: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// CVE detail types + helpers
+// ---------------------------------------------------------------------------
+
+interface CveDetail {
+  cveNumber: string;
+  cveTitle: string;
+  severity: string;
+  baseScore: string;
+  impact: string;
+  vulnType: string;
+  description: string;
+  exploited: string;
+  publiclyDisclosed: string;
+  releaseDate: string;
+  mitreUrl: string;
+  latestSoftwareRelease: string;
+  tag: string;
+}
+
+function severityColor(severity: string): string {
+  switch (severity.toLowerCase()) {
+    case 'critical': return 'var(--accent-red)';
+    case 'important': return 'var(--accent-orange, #f97316)';
+    case 'moderate': return 'var(--accent-yellow, #eab308)';
+    default: return 'var(--text-muted)';
+  }
+}
+
+function CveDetailDialog({ cveId, onClose }: { readonly cveId: string; readonly onClose: () => void }) {
+  const [detail, setDetail] = React.useState<CveDetail | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/proxy/patch/cve/${encodeURIComponent(cveId)}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { setDetail(d); setLoading(false); })
+      .catch(() => { setError('Failed to load CVE details'); setLoading(false); });
+  }, [cveId]);
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-lg" style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}>
+        <DialogHeader>
+          <DialogTitle className="font-mono text-sm" style={{ color: 'var(--accent-blue)' }}>{cveId}</DialogTitle>
+        </DialogHeader>
+        {loading && <div className="space-y-2 py-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-16 w-full" /></div>}
+        {error && <p className="text-sm py-2" style={{ color: 'var(--accent-red)' }}>{error}</p>}
+        {detail && (
+          <div className="space-y-3 text-sm">
+            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{detail.cveTitle}</p>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="text-[11px]" style={{ background: `color-mix(in srgb, ${severityColor(detail.severity)} 15%, transparent)`, color: severityColor(detail.severity), borderColor: `color-mix(in srgb, ${severityColor(detail.severity)} 35%, transparent)`, border: '1px solid' }}>
+                {detail.severity}
+              </Badge>
+              {detail.baseScore && (
+                <Badge variant="outline" className="text-[11px]" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
+                  CVSS {detail.baseScore}
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-[11px]" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
+                {detail.impact}
+              </Badge>
+            </div>
+            {detail.description && (
+              <p style={{ color: 'var(--text-secondary)' }}>{detail.description}</p>
+            )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <span>Exploited</span><span style={{ color: detail.exploited === 'Yes' ? 'var(--accent-red)' : 'var(--text-secondary)' }}>{detail.exploited}</span>
+              <span>Publicly Disclosed</span><span style={{ color: 'var(--text-secondary)' }}>{detail.publiclyDisclosed}</span>
+              <span>Exploitation</span><span style={{ color: 'var(--text-secondary)' }}>{detail.latestSoftwareRelease}</span>
+              {detail.tag && <><span>Tag</span><span style={{ color: 'var(--text-secondary)' }}>{detail.tag}</span></>}
+            </div>
+            {detail.mitreUrl && (
+              <a href={detail.mitreUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs"
+                style={{ color: 'var(--accent-blue)' }}>
+                View on MITRE <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CveBadges({ cves }: { readonly cves: readonly string[] }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const [selectedCve, setSelectedCve] = React.useState<string | null>(null);
+
   if (cves.length === 0) return <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>;
 
-  const visible = cves.slice(0, MAX_VISIBLE_CVES);
+  const visible = expanded ? cves : cves.slice(0, MAX_VISIBLE_CVES);
   const overflow = cves.length - MAX_VISIBLE_CVES;
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {visible.map((cve) => (
-        <Badge key={cve} variant="outline" className="text-[10px] font-mono px-1.5 py-0"
-          style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
-          {cve}
-        </Badge>
-      ))}
-      {overflow > 0 && (
-        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0"
-          style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-          +{overflow} more
-        </Badge>
-      )}
-    </div>
+    <>
+      {selectedCve && <CveDetailDialog cveId={selectedCve} onClose={() => setSelectedCve(null)} />}
+      <div className="flex flex-wrap gap-1 items-center">
+        {visible.map((cve) => (
+          <button
+            key={cve}
+            onClick={() => setSelectedCve(cve)}
+            className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80 cursor-pointer"
+            style={{
+              color: 'var(--accent-blue)',
+              borderColor: 'color-mix(in srgb, var(--accent-blue) 35%, transparent)',
+              background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+            }}
+          >
+            {cve}
+          </button>
+        ))}
+        {!expanded && overflow > 0 && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            +{overflow} more <ChevronDown className="h-2.5 w-2.5" />
+          </button>
+        )}
+        {expanded && overflow > 0 && (
+          <button
+            onClick={() => setExpanded(false)}
+            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            Show less <ChevronUp className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
