@@ -15,16 +15,17 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
+    const { id } = await params;
     const apiGatewayUrl = getApiGatewayUrl();
-    log.info('proxy request', { method: 'GET', cveId: params.id });
+    log.info('proxy request', { method: 'GET', cveId: id });
 
     const upstreamHeaders = buildUpstreamHeaders(request.headers.get('Authorization'), false);
 
     const res = await fetch(
-      `${apiGatewayUrl}/api/v1/patch/cve/${encodeURIComponent(params.id)}`,
+      `${apiGatewayUrl}/api/v1/patch/cve/${encodeURIComponent(id)}`,
       {
         headers: upstreamHeaders,
         signal: AbortSignal.timeout(15000),
