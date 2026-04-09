@@ -116,6 +116,7 @@ from services.api_gateway.pattern_analyzer import (
     analyze_patterns,
     run_pattern_analysis_loop,
 )
+from services.api_gateway.eol_endpoints import router as eol_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -475,6 +476,7 @@ app.include_router(topology_router)
 app.include_router(forecast_router)
 app.include_router(resources_inventory_router)
 app.include_router(topology_tree_router)
+app.include_router(eol_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
