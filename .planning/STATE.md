@@ -13,6 +13,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-10 - Completed quick task 260410-15h: Fix phase naming inconsistencies — all 26 active phases now report correctly to GSD tooling. Renamed files across phases 05, 12, 13, 21, 22–26; added missing summary stubs for phases 05-06, 16-03, 27-1/2/3 (code was already done). Updated memory/quality-testing.md with canonical naming convention.
+
 > Last updated: 2026-04-10 - Completed quick task 260410-0yi: Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx
 
 > Last updated: 2026-04-04 — Quick task 260405-16u COMPLETE: Import block added to imports.tf to resolve 409 RoleAssignmentExists conflict for api-gateway Reader role. Merged to main (6486586). Will take effect on next successful terraform apply.
@@ -342,6 +344,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260407-hmo | Fix InstalledPatchesPanel pending patch count to show all patches not just security | 2026-04-07 | 048053d | [260407-hmo-fix-installedpatchespanel-pending-patch-](./quick/260407-hmo-fix-installedpatchespanel-pending-patch-/) |
 | 260409-00u | Show connection status instead of power state for Arc VMs in VM tab | 2026-04-08 | 83f5c4a | [260409-00u-show-connection-status-instead-of-power-](./quick/260409-00u-show-connection-status-instead-of-power-/) |
 | 260410-0yi | Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx | 2026-04-10 | 8cfeb69 | [260410-0yi-add-eol-date-column-to-vm-tab-new-api-v1](./quick/260410-0yi-add-eol-date-column-to-vm-tab-new-api-v1/) |
+| 260410-15h | Fix phase naming inconsistencies and update memory — renamed files across phases 05/12/13/21/22–26, added missing summary stubs for 05-06/16-03/27, all 26 active phases now report correctly | 2026-04-10 | 12a6227 | [260410-15h-fix-phase-naming-inconsistencies-and-upd](./quick/260410-15h-fix-phase-naming-inconsistencies-and-upd/) |
 
 ---
 
