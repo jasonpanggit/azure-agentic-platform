@@ -685,21 +685,21 @@ function PendingPatchesTable({
 
   return (
     <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <Table className="w-full text-sm">
+      <Table className="w-full text-sm table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)', width: '35%' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {patches.map((p, idx) => (
             <TableRow key={`${p.patchName}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
-              <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[240px] truncate" style={{ color: 'var(--text-primary)' }}>
+              <TableCell className="h-9 px-3 align-middle text-[13px]" style={{ color: 'var(--text-primary)', maxWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.patchName}>
                 {p.patchName}
               </TableCell>
               <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
@@ -774,15 +774,15 @@ function InstalledPatchesTable({
 
   return (
     <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <Table className="w-full text-sm">
+      <Table className="w-full text-sm table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)', width: '35%' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -791,7 +791,7 @@ function InstalledPatchesTable({
             const kbId = kbMatch ? `KB${kbMatch[1]}` : null;
             return (
               <TableRow key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
-                <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
+                <TableCell className="h-9 px-3 align-middle text-[13px]" style={{ color: 'var(--text-primary)', maxWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.SoftwareName}>
                   {p.SoftwareName}
                 </TableCell>
                 <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
