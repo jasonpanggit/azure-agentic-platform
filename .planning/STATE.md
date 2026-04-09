@@ -13,7 +13,7 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last updated: 2026-04-08 - Completed quick task 260409-00u: Show connection status instead of power state for Arc VMs in VM tab
+> Last updated: 2026-04-10 - Completed quick task 260410-0yi: Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx
 
 > Last updated: 2026-04-04 — Quick task 260405-16u COMPLETE: Import block added to imports.tf to resolve 409 RoleAssignmentExists conflict for api-gateway Reader role. Merged to main (6486586). Will take effect on next successful terraform apply.
 
@@ -341,6 +341,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260407-9ep | make PatchDetailPanel resizable by dragging its left edge to extend the panel width | 2026-04-06 | b78c4f7 | [260407-9ep-make-patchdetailpanel-resizable-by-dragg](./quick/260407-9ep-make-patchdetailpanel-resizable-by-dragg/) |
 | 260407-hmo | Fix InstalledPatchesPanel pending patch count to show all patches not just security | 2026-04-07 | 048053d | [260407-hmo-fix-installedpatchespanel-pending-patch-](./quick/260407-hmo-fix-installedpatchespanel-pending-patch-/) |
 | 260409-00u | Show connection status instead of power state for Arc VMs in VM tab | 2026-04-08 | 83f5c4a | [260409-00u-show-connection-status-instead-of-power-](./quick/260409-00u-show-connection-status-instead-of-power-/) |
+| 260410-0yi | Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx | 2026-04-10 | 8cfeb69 | [260410-0yi-add-eol-date-column-to-vm-tab-new-api-v1](./quick/260410-0yi-add-eol-date-column-to-vm-tab-new-api-v1/) |
 
 ---
 
