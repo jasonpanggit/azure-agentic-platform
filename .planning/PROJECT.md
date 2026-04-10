@@ -182,4 +182,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 — Phase 19: Production Stabilisation complete (5/5 plans, PROD-001/002/003/005 code-complete). Azure MCP Server secured (internal-only ingress, auth bypass removed), Entra auth enabled in Terraform, MCP tool group connections registered via azapi, runbook seeding script + docs created, Teams alerting operator runbooks created. All changes await operator `terraform apply` + activation steps.*
+*Last updated: 2026-04-10 — Phase 20: network-security-agent-depth complete (4/4 plans, PROD-003). Network agent: 7 real SDK tools (azure-mgmt-network). Security agent: 7 real SDK tools (Defender, Key Vault, RBAC, policy). SRE agent: 7 real SDK tools (Monitor, ResourceHealth, Advisor, ChangeAnalysis). 99 new unit+integration tests, 407 total passing.*
