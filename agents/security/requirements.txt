@@ -1,2 +1,12 @@
-# Security agent — no additional requirements beyond the base image.
-# All shared dependencies are installed in agents/Dockerfile.base.
+# Security agent — azure-mgmt-security for Defender/Secure Score,
+# azure-mgmt-authorization for RBAC assignments,
+# azure-mgmt-policyinsights for policy compliance,
+# azure-mgmt-monitor for Activity Log (IAM changes),
+# azure-monitor-query for Key Vault diagnostic KQL,
+# azure-mgmt-network for public endpoint scanning.
+azure-mgmt-security>=5.0.0
+azure-mgmt-authorization>=4.0.0
+azure-mgmt-policyinsights>=1.0.0
+azure-mgmt-monitor>=6.0.0
+azure-monitor-query>=1.3.0
+azure-mgmt-network>=27.0.0
