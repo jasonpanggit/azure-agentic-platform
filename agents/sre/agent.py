@@ -23,9 +23,13 @@ from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
 from sre.tools import (
     ALLOWED_MCP_TOOLS,
+    correlate_cross_domain,
     propose_remediation,
+    query_advisor_recommendations,
     query_availability_metrics,
+    query_change_analysis,
     query_performance_baselines,
+    query_service_health,
 )
 
 tracer = setup_telemetry("aiops-sre-agent")
@@ -59,24 +63,32 @@ troubleshooting across all Azure subscriptions. You act as the fallback agent fo
 
 3. **Resource Health (TRIAGE-002, MONITOR-003):** Use `resourcehealth.get_availability_status`
    for affected resources and `resourcehealth.list_events` for Azure Service Health platform
-   events. Diagnosis is INVALID without this signal.
+   events. Diagnosis is INVALID without this signal. Call `query_service_health` to check
+   for active Azure platform events (ServiceIssue, PlannedMaintenance, HealthAdvisory) —
+   this directly satisfies MONITOR-003.
 
-4. **Application Insights (MONITOR-001):** Use `applicationinsights.query` for end-to-end
-   transaction traces and failure rates when web or API resources are involved.
+4. **Advisor recommendations:** Call `query_advisor_recommendations` for affected resources
+   — filter by HighAvailability or Performance category. Also use `advisor.list_recommendations`
+   via MCP for additional coverage.
 
-5. **Advisor recommendations:** Use `advisor.list_recommendations` for affected resources.
+5. **Change Analysis:** Call `query_change_analysis` for detected infrastructure changes
+   in the prior timespan — this supplements Activity Log with deeper property-level diffs.
 
 6. **Availability and baselines:** Call `query_availability_metrics` and
    `query_performance_baselines` for SLA/SLO breach assessment.
 
-7. **Correlate and hypothesise (TRIAGE-004):** Combine cross-domain findings into a
+7. **Cross-domain correlation:** Call `correlate_cross_domain` to build a unified
+   cross-domain correlation view aggregating platform events, changes, availability,
+   and advisor recommendations.
+
+8. **Correlate and hypothesise (TRIAGE-004):** Combine cross-domain findings into a
    root-cause hypothesis with confidence score between 0.0 and 1.0. Include:
    - `hypothesis`, `evidence`, `confidence_score`
    - SLA/SLO impact assessment (severity, affected resources, breach duration)
    - `needs_cross_domain`: true if a domain specialist is appropriate
    - `suspected_domain`: domain to recommend if needs_cross_domain is true
 
-8. **Remediation proposal (REMEDI-001):** Call `propose_remediation` with escalation or
+9. **Remediation proposal (REMEDI-001):** Call `propose_remediation` with escalation or
    remediation path. **MUST NOT execute without explicit human approval (REMEDI-001).**
 
 ## Arc Fallback (Phase 2)
@@ -104,6 +116,10 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 """.format(allowed_tools="\n".join(f"- `{t}`" for t in ALLOWED_MCP_TOOLS + [
     "query_availability_metrics",
     "query_performance_baselines",
+    "query_service_health",
+    "query_advisor_recommendations",
+    "query_change_analysis",
+    "correlate_cross_domain",
     "propose_remediation",
 ]))
 
@@ -130,6 +146,10 @@ def create_sre_agent() -> ChatAgent:
         tools=[
             query_availability_metrics,
             query_performance_baselines,
+            query_service_health,
+            query_advisor_recommendations,
+            query_change_analysis,
+            correlate_cross_domain,
             propose_remediation,
         ],
     )
