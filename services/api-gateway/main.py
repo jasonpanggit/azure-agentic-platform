@@ -1234,6 +1234,7 @@ async def search_runbooks_endpoint(
 async def start_chat(
     payload: ChatRequest,
     token: dict[str, Any] = Depends(verify_token),
+    credential: Any = Depends(get_credential),
 ) -> ChatResponse:
     """Start an operator-initiated chat conversation.
 
@@ -1246,7 +1247,7 @@ async def start_chat(
     logger.info("Chat request from user %s: %s", user_id, payload.message[:100])
 
     try:
-        result = await create_chat_thread(payload, user_id)
+        result = await create_chat_thread(payload, user_id, credential=credential)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

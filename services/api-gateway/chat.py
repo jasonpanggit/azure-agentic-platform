@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from agents.shared.routing import classify_query_text
 
+from services.api_gateway.arg_helper import run_arg_query
 from services.api_gateway.foundry import _get_foundry_client
 from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
@@ -44,11 +45,52 @@ if not _DOMAIN_AGENT_IDS:
     )
 
 
+# ARG KQL: lightweight VM inventory for agent resource resolution.
+# Only VMs — keeps thread context small. Agents use this to resolve
+# "jumphost VM" → full resource ID without guessing the resource group.
+_VM_INVENTORY_KQL = """
+Resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| project
+    id          = tolower(id),
+    name,
+    resourceGroup,
+    location,
+    subscriptionId
+| order by name asc
+"""
+
+
+def _fetch_vm_inventory(credential: Any, subscription_ids: list[str]) -> list[dict]:
+    """Fetch a lightweight VM inventory from ARG for agent grounding.
+
+    Returns a list of {id, name, resourceGroup, location, subscriptionId} dicts.
+    Returns [] on any error — resource context is best-effort, never blocks chat.
+    """
+    try:
+        rows = run_arg_query(credential, subscription_ids, _VM_INVENTORY_KQL)
+        return [
+            {
+                "id": r.get("id", ""),
+                "name": r.get("name", ""),
+                "resourceGroup": r.get("resourceGroup", ""),
+                "location": r.get("location", ""),
+                "subscriptionId": r.get("subscriptionId", ""),
+            }
+            for r in rows
+            if r.get("name")
+        ]
+    except Exception as exc:
+        logger.warning("_fetch_vm_inventory: ARG query failed — agents will lack VM context | error=%s", exc)
+        return []
+
+
 def _build_operator_query_envelope(
     *,
     thread_id: str,
     request: ChatRequest,
     initiated_by: str,
+    credential: Any = None,
 ) -> str:
     """Build a structured operator-query envelope for orchestrator routing."""
     classification = classify_query_text(request.message)
@@ -69,6 +111,19 @@ def _build_operator_query_envelope(
             subscription_ids = [default_sub]
     if subscription_ids:
         payload["subscription_ids"] = subscription_ids
+
+    # Inject VM inventory so all domain agents can resolve resource names to IDs
+    # without guessing resource groups. Best-effort: skipped if ARG unavailable.
+    if credential is not None:
+        vms = _fetch_vm_inventory(credential, subscription_ids)
+        if vms:
+            payload["resource_context"] = {
+                "virtual_machines": vms,
+                "note": (
+                    "Use 'id' from this list as the resource_id parameter when a user "
+                    "refers to a VM by name. Never guess or fabricate a resource group."
+                ),
+            }
 
     envelope = {
         "correlation_id": request.incident_id or thread_id,
@@ -105,7 +160,11 @@ async def _lookup_thread_by_incident(incident_id: str) -> Optional[str]:
     return None
 
 
-async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, str]:
+async def create_chat_thread(
+    request: ChatRequest,
+    user_id: str,
+    credential: Any = None,
+) -> dict[str, str]:
     """Create or continue a Foundry thread for an operator chat session.
 
     Supports three modes (TEAMS-004):
@@ -116,6 +175,7 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
     Args:
         request: Validated chat request.
         user_id: Authenticated operator's user ID from Entra token.
+        credential: Azure credential for ARG VM inventory lookup (best-effort).
 
     Returns:
         Dict with "thread_id" and "run_id" keys.
@@ -175,6 +235,7 @@ async def create_chat_thread(request: ChatRequest, user_id: str) -> dict[str, st
         thread_id=thread_id,
         request=request,
         initiated_by=effective_user_id,
+        credential=credential,
     )
 
     with foundry_span("post_message", thread_id=thread_id) as span:
