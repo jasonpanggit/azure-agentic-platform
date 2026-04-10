@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-04-10T16:22:19.557Z",
+  "phase": null,
+  "phase_name": "backlog-operator-actions",
+  "phase_dir": ".planning",
+  "plan": null,
+  "task": null,
+  "total_tasks": 3,
+  "status": "paused",
+  "context": "operator-actions",
+  "summary": "Validated all Phase 8 BACKLOG.md items against Phases 9-28 codebase. All 11 code-level findings resolved. Running 3 operator actions: (1) terraform apply DONE, (2) seed runbooks BLOCKED on VM creation error, (3) ACR rebuild still uploading.",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Rewrite BACKLOG.md to reflect resolved vs pending items",
+      "status": "done",
+      "notes": "All Phase 8 F-01 through F-11 + OTel audited. BACKLOG.md rewritten with RESOLVED and OPERATOR ACTIONS PENDING sections."
+    },
+    {
+      "id": 2,
+      "name": "terraform apply on prod",
+      "status": "done",
+      "notes": "Applied successfully. 2 added, 7 changed, 2 destroyed. rbac_assignment_count=30. Activated F-01 RBAC, F-09/F-10/F-11 MCP connections, CORS, TEAMS_CHANNEL_ID wiring. Key Vault restored to Disabled after apply."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 3,
+      "name": "Seed runbooks (pgvector) via jumphost/VM",
+      "status": "blocked",
+      "blocker": "az vm create fails with 'ERROR: Extra data: line 1 column 4 (char 3)' on both snet-container-apps and snet-reserved-1 subnets. Jumphost VM exists in aml-rg (southeastasia region, not eastus2) — different region from prod VNet. Need to diagnose VM creation error or find alternative seeding path.",
+      "alternative": "Use existing jumphost in aml-rg via az vm run-command if it can reach prod PostgreSQL (cross-region VNet peering?), or trigger seeding via GitHub Actions workflow that runs on the self-hosted runner (which IS in the VNet)."
+    },
+    {
+      "id": 4,
+      "name": "Rebuild ca-api-gateway-prod Container App (OTel spans)",
+      "status": "in_progress",
+      "notes": "ACR build triggered (run ch6a failed — wrong build context. ch6b/correct run triggered with repo root as context, --no-wait, still uploading ~700KB tarball to ACR as of pause). Run ID will be visible in ACR portal or via 'az acr task logs --registry aapcrprodjgmjti'. After build completes, Container App revision will auto-update if revision-mode is 'Multiple', otherwise: az containerapp update --name ca-api-gateway-prod --resource-group rg-aap-prod --image aapcrprodjgmjti.azurecr.io/services/api-gateway:<tag>"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "az vm create fails with JSON parse error 'Extra data: line 1 column 4 (char 3)' on both subnets in rg-aap-prod",
+      "type": "technical",
+      "workaround": "Use GitHub Actions workflow with self-hosted runner (runs inside VNet) to seed. Or use Azure Container Instances inside VNet. Or use az vm run-command on the existing jumphost if cross-region peering exists."
+    },
+    {
+      "description": "ACR build ch6b upload still in progress at pause time",
+      "type": "external",
+      "workaround": "Check ACR portal for latest run status. If failed, re-trigger: cd repo-root && az acr build --registry aapcrprodjgmjti --image services/api-gateway:<tag> --agent-pool aap-builder-prod --file services/api-gateway/Dockerfile ."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Add GitHub Actions staging environment secrets: E2E_CLIENT_ID, E2E_CLIENT_SECRET, E2E_API_AUDIENCE",
+      "context": "Workflow is wired but values not yet created in GitHub UI. See docs/ops/e2e-service-principal.md",
+      "blocking": false
+    },
+    {
+      "action": "Complete Teams Bot channel install",
+      "context": "Azure Bot Service is in Terraform. Package manifest, install in Teams channel, capture TEAMS_CHANNEL_ID. See scripts/ops/19-5-package-manifest.sh",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Used scripts/ops/terraform-local-apply.sh with SP credentials from credentials.tfvars",
+      "rationale": "terraform init 403 due to storage firewall — script exports ARM_* env vars from credentials.tfvars and uses ARM_USE_AZUREAD=true. Had to also temporarily enable KV public access before apply and restore after.",
+      "phase": "operator-actions"
+    },
+    {
+      "decision": "ACR build context must be repo root (.), not services/api-gateway/",
+      "rationale": "Dockerfile uses COPY services/api-gateway/requirements.txt which requires repo root as context. Build ch6a failed with this exact error.",
+      "phase": "operator-actions"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/BACKLOG.md"
+  ],
+  "next_action": "1. Check ACR build status: az acr task logs --registry aapcrprodjgmjti (latest run). 2. If build succeeded, update Container App: az containerapp update --name ca-api-gateway-prod --resource-group rg-aap-prod --image <new-image>. 3. Fix runbook seeding: trigger via GitHub Actions runner (already in VNet) instead of temporary VM.",
+  "context_notes": "All code-level backlog items are already fixed in the codebase (Phases 9-28). The only remaining work is operator actions. terraform apply succeeded and activated RBAC + MCP connections. Seed and OTel rebuild are the two remaining items. The VM creation error is blocking the seed — GitHub Actions runner approach is the clean alternative."
+}
