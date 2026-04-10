@@ -20,11 +20,11 @@ from __future__ import annotations
 import logging
 import os
 
-from agent_framework import Agent, MCPStreamableHTTPTool
+from agent_framework import ChatAgent, MCPTool
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
-from agents.eol.tools import (
+from eol.tools import (
     ALLOWED_MCP_TOOLS,
     query_activity_log,
     query_os_inventory,
@@ -162,16 +162,16 @@ the tool automatically falls through to endoflife.date. Do not retry manually.
 # ---------------------------------------------------------------------------
 
 
-def create_eol_agent() -> Agent:
+def create_eol_agent() -> ChatAgent:
     """Create and configure the EOL Agent instance.
 
-    Mounts the Azure MCP Server as an MCPStreamableHTTPTool if AZURE_MCP_SERVER_URL
-    is set. The Azure MCP Server provides correlated monitoring signals via
+    Mounts the Azure MCP Server as an MCPTool if AZURE_MCP_SERVER_URL is set.
+    The Azure MCP Server provides correlated monitoring signals via
     monitor.query_logs, monitor.query_metrics, and
     resourcehealth.get_availability_status.
 
     Returns:
-        Agent configured with EOL-domain tools and system prompt.
+        ChatAgent configured with EOL-domain tools and system prompt.
     """
     azure_mcp_url = os.environ.get("AZURE_MCP_SERVER_URL", "")
     logger.info("create_eol_agent: initialising Foundry client")
@@ -190,35 +190,27 @@ def create_eol_agent() -> Agent:
     ]
 
     if azure_mcp_url:
-        logger.info("create_eol_agent: AZURE_MCP_SERVER_URL set, mounting Azure MCP Server (MCPStreamableHTTPTool)")
-        # NOTE (G-02): EOL agent uses MCPStreamableHTTPTool from `agent_framework` here,
-        # while agents/patch/agent.py and agents/arc/agent.py use MCPTool from
-        # `azure.ai.projects.models`. The constructor signatures differ:
-        #   MCPStreamableHTTPTool: name="azure-mcp", url=<url>
-        #   MCPTool:               server_label="azure-mcp", server_url=<url>
-        # TODO: Verify MCPStreamableHTTPTool works correctly with the Azure MCP Server in prod.
-        # If not, switch to MCPTool from azure.ai.projects.models for consistency.
-        # See: .planning/quick/260401-e74-validate-orchestrator-wiring-and-routing/
-        azure_mcp_tool = MCPStreamableHTTPTool(
-            name="azure-mcp",
-            url=azure_mcp_url,
+        logger.info("create_eol_agent: AZURE_MCP_SERVER_URL set, mounting Azure MCP Server")
+        azure_mcp_tool = MCPTool(
+            server_label="azure-mcp",
+            server_url=azure_mcp_url,
             allowed_tools=ALLOWED_MCP_TOOLS,
         )
         tools.append(azure_mcp_tool)
     else:
         logger.warning("create_eol_agent: AZURE_MCP_SERVER_URL not set — Azure MCP tools unavailable")
 
-    agent = Agent(
-        client,
-        EOL_AGENT_SYSTEM_PROMPT,
+    agent = ChatAgent(
         name="eol-agent",
         description=(
             "End-of-Life lifecycle specialist — EOL detection, software lifecycle "
             "status, upgrade planning across Azure VMs, Arc servers, and Arc K8s."
         ),
+        instructions=EOL_AGENT_SYSTEM_PROMPT,
+        chat_client=client,
         tools=tools,
     )
-    logger.info("create_eol_agent: Agent created successfully")
+    logger.info("create_eol_agent: ChatAgent created successfully")
     return agent
 
 

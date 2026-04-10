@@ -2,7 +2,7 @@
 PostgreSQL cache helpers, ARG OS/software inventory, proactive estate scan,
 Activity Log wrapper, Resource Health wrapper, and runbook search wrapper.
 
-Provides @tool functions for querying EOL status from two external sources
+Provides @ai_function functions for querying EOL status from two external sources
 (endoflife.date API and Microsoft Product Lifecycle API), caching results
 in PostgreSQL (24h TTL), and discovering software inventory via ARG and
 Log Analytics ConfigurationData.
@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -349,11 +349,11 @@ def _run_async(coro: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# @tool functions
+# @ai_function functions
 # ---------------------------------------------------------------------------
 
 
-@tool
+@ai_function
 def query_activity_log(
     resource_ids: List[str],
     timespan_hours: int = 2,
@@ -396,7 +396,7 @@ def query_activity_log(
         }
 
 
-@tool
+@ai_function
 def query_os_inventory(
     subscription_ids: List[str],
     resource_ids: Optional[List[str]] = None,
@@ -511,7 +511,7 @@ def query_os_inventory(
             }
 
 
-@tool
+@ai_function
 def query_software_inventory(
     workspace_id: str,
     computer_names: Optional[List[str]] = None,
@@ -570,7 +570,7 @@ def query_software_inventory(
         }
 
 
-@tool
+@ai_function
 def query_k8s_versions(
     subscription_ids: List[str],
 ) -> Dict[str, Any]:
@@ -652,7 +652,7 @@ def query_k8s_versions(
             }
 
 
-@tool
+@ai_function
 def query_endoflife_date(
     product: str,
     version: str,
@@ -796,7 +796,7 @@ def query_endoflife_date(
             }
 
 
-@tool
+@ai_function
 def query_ms_lifecycle(
     product: str,
     version: str = "",
@@ -970,7 +970,7 @@ def query_ms_lifecycle(
             }
 
 
-@tool
+@ai_function
 def query_resource_health(
     resource_id: str,
 ) -> Dict[str, Any]:
@@ -1010,7 +1010,7 @@ def query_resource_health(
         }
 
 
-@tool
+@ai_function
 def search_runbooks(
     query: str,
     domain: str = "eol",
@@ -1021,9 +1021,9 @@ def search_runbooks(
     Retrieves the top runbooks by semantic similarity for the given query,
     filtered to the eol domain by default. Results are cited in triage responses.
 
-    This is a sync @tool wrapper around the async retrieve_runbooks
+    This is a sync @ai_function wrapper around the async retrieve_runbooks
     from shared.runbook_tool. The shared retrieve_runbooks is an
-    async def without @tool — it cannot be registered directly in
+    async def without @ai_function — it cannot be registered directly in
     Agent(tools=[...]). This wrapper bridges the gap.
 
     Args:
@@ -1071,7 +1071,7 @@ def search_runbooks(
         }
 
 
-@tool
+@ai_function
 def scan_estate_eol(
     subscription_ids: List[str],
 ) -> Dict[str, Any]:
