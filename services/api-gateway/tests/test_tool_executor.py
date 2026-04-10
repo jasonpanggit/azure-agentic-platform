@@ -326,3 +326,275 @@ def test_exec_query_log_analytics_no_workspace():
     result = _exec_query_log_analytics({"kql_query": "Heartbeat | take 5"})
     assert result["query_status"] == "skipped"
     assert result["rows"] == []
+
+
+# ---------------------------------------------------------------------------
+# EOL tool executor tests
+# ---------------------------------------------------------------------------
+
+
+class TestExecQueryEndoflifeDate:
+    """Tests for _exec_query_endoflife_date gateway-side tool."""
+
+    @patch("services.api_gateway.tool_executor._fetch_endoflife_date")
+    def test_success_with_date_eol(self, mock_fetch):
+        """Successful API call with date-type eol field."""
+        from services.api_gateway.tool_executor import _exec_query_endoflife_date
+
+        mock_fetch.return_value = {
+            "eol": "2034-10-10",
+            "latest": "10.0.26100",
+            "lts": True,
+            "support": "2029-10-09",
+        }
+
+        result = _exec_query_endoflife_date({"product": "windows-server", "version": "2025"})
+
+        assert result["query_status"] == "success"
+        assert result["eol_date"] == "2034-10-10"
+        assert result["is_eol"] is False
+        assert result["source"] == "endoflife.date"
+
+    @patch("services.api_gateway.tool_executor._fetch_endoflife_date")
+    def test_not_found_returns_not_found_status(self, mock_fetch):
+        """API returns None (404) -> query_status=not_found."""
+        from services.api_gateway.tool_executor import _exec_query_endoflife_date
+
+        mock_fetch.return_value = None
+
+        result = _exec_query_endoflife_date({"product": "nonexistent", "version": "1.0"})
+
+        assert result["query_status"] == "not_found"
+        assert result["eol_date"] is None
+
+    @patch("services.api_gateway.tool_executor._fetch_endoflife_date")
+    def test_boolean_true_eol(self, mock_fetch):
+        """eol=True means already EOL with no specific date."""
+        from services.api_gateway.tool_executor import _exec_query_endoflife_date
+
+        mock_fetch.return_value = {
+            "eol": True,
+            "latest": "18.04.6",
+            "lts": True,
+        }
+
+        result = _exec_query_endoflife_date({"product": "ubuntu", "version": "18.04"})
+
+        assert result["query_status"] == "success"
+        assert result["is_eol"] is True
+        assert result["eol_date"] is None
+
+    def test_httpx_missing_returns_error(self):
+        """When httpx is not installed, returns error status."""
+        from services.api_gateway import tool_executor
+
+        original = tool_executor._httpx
+        tool_executor._httpx = None
+        try:
+            result = tool_executor._exec_query_endoflife_date(
+                {"product": "ubuntu", "version": "22.04"}
+            )
+            assert result["query_status"] == "error"
+            assert "not installed" in result["error"]
+        finally:
+            tool_executor._httpx = original
+
+
+class TestNormalizeEolProduct:
+    """Tests for _normalize_eol_product slug normalization."""
+
+    def test_windows_server_2025_datacenter(self):
+        """Full Windows Server display name normalizes correctly."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product(
+            "Windows Server 2025 Datacenter Azure Edition", "10.0.26100.3981"
+        )
+        assert product == "windows-server"
+        assert cycle == "2025"
+
+    def test_windows_server_plain(self):
+        """Plain Windows Server year normalizes correctly."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product("Windows Server 2022", "")
+        assert product == "windows-server"
+        assert cycle == "2022"
+
+    def test_ubuntu(self):
+        """Ubuntu display name normalizes correctly."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product("Ubuntu 22.04 LTS", "")
+        assert product == "ubuntu"
+        assert cycle == "22.04"
+
+    def test_sql_server(self):
+        """SQL Server normalizes to mssqlserver slug."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product("SQL Server 2019", "")
+        assert product == "mssqlserver"
+        assert cycle == "2019"
+
+    def test_already_valid_slug(self):
+        """Already-valid slug passes through."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product("python", "3.12")
+        assert product == "python"
+        assert cycle == "3.12"
+
+    def test_windows_server_2012_r2(self):
+        """Windows Server 2012 R2 normalizes correctly."""
+        from services.api_gateway.tool_executor import _normalize_eol_product
+
+        product, cycle = _normalize_eol_product("Windows Server 2012 R2", "")
+        assert product == "windows-server"
+        assert cycle == "2012-r2"
+
+
+class TestExecQueryMsLifecycle:
+    """Tests for _exec_query_ms_lifecycle gateway-side tool."""
+
+    @patch("services.api_gateway.tool_executor._exec_query_endoflife_date")
+    @patch("services.api_gateway.tool_executor._httpx")
+    def test_ms_api_empty_falls_through_to_endoflife(self, mock_httpx, mock_eol):
+        """Empty MS API response triggers endoflife.date fallback."""
+        from services.api_gateway.tool_executor import _exec_query_ms_lifecycle
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"products": []}
+        mock_response.raise_for_status.return_value = None
+        mock_httpx.get.return_value = mock_response
+
+        mock_eol.return_value = {
+            "product": "Windows Server 2025",
+            "version": "",
+            "eol_date": "2034-10-10",
+            "is_eol": False,
+            "source": "endoflife.date",
+            "query_status": "success",
+        }
+
+        result = _exec_query_ms_lifecycle({"product": "Windows Server 2025", "version": ""})
+
+        mock_eol.assert_called_once()
+        assert result["source"] == "endoflife.date"
+
+    def test_httpx_missing_returns_error(self):
+        """When httpx is not installed, returns error status."""
+        from services.api_gateway import tool_executor
+
+        original = tool_executor._httpx
+        tool_executor._httpx = None
+        try:
+            result = tool_executor._exec_query_ms_lifecycle(
+                {"product": "Windows Server 2025", "version": ""}
+            )
+            assert result["query_status"] == "error"
+            assert "not installed" in result["error"]
+        finally:
+            tool_executor._httpx = original
+
+
+class TestEolToolsInToolMap:
+    """Verify EOL tools are registered in TOOL_MAP."""
+
+    def test_query_endoflife_date_in_tool_map(self):
+        from services.api_gateway.tool_executor import TOOL_MAP
+
+        assert "query_endoflife_date" in TOOL_MAP
+
+    def test_query_ms_lifecycle_in_tool_map(self):
+        from services.api_gateway.tool_executor import TOOL_MAP
+
+        assert "query_ms_lifecycle" in TOOL_MAP
+
+    def test_query_os_inventory_in_tool_map(self):
+        from services.api_gateway.tool_executor import TOOL_MAP
+
+        assert "query_os_inventory" in TOOL_MAP
+
+    def test_search_runbooks_in_tool_map(self):
+        from services.api_gateway.tool_executor import TOOL_MAP
+
+        assert "search_runbooks" in TOOL_MAP
+
+    def test_execute_tool_call_dispatches_eol_tool(self):
+        """execute_tool_call routes query_endoflife_date correctly."""
+        from services.api_gateway import tool_executor
+
+        called = {}
+
+        def fake_eol(args: dict) -> dict:
+            called["fn"] = "endoflife_date"
+            called["args"] = args
+            return {"query_status": "success", "eol_date": "2034-10-10"}
+
+        original = tool_executor.TOOL_MAP["query_endoflife_date"]
+        tool_executor.TOOL_MAP["query_endoflife_date"] = fake_eol
+        try:
+            result = json.loads(
+                tool_executor.execute_tool_call(
+                    "query_endoflife_date",
+                    json.dumps({"product": "windows-server", "version": "2025"}),
+                )
+            )
+            assert called["fn"] == "endoflife_date"
+            assert result["query_status"] == "success"
+        finally:
+            tool_executor.TOOL_MAP["query_endoflife_date"] = original
+
+
+class TestExecSearchRunbooks:
+    """Tests for _exec_search_runbooks gateway-side stub."""
+
+    def test_returns_empty_results(self):
+        from services.api_gateway.tool_executor import _exec_search_runbooks
+
+        result = _exec_search_runbooks({"query": "eol upgrade", "domain": "eol"})
+        assert result["query_status"] == "empty"
+        assert result["runbooks"] == []
+        assert result["runbook_count"] == 0
+
+    def test_default_domain(self):
+        from services.api_gateway.tool_executor import _exec_search_runbooks
+
+        result = _exec_search_runbooks({"query": "test"})
+        assert result["domain"] == "eol"
+
+
+class TestClassifyEolStatus:
+    """Tests for _classify_eol_status helper in tool_executor."""
+
+    def test_already_eol(self):
+        from services.api_gateway.tool_executor import _classify_eol_status
+        from datetime import date, timedelta
+
+        past = (date.today() - timedelta(days=30)).isoformat()
+        result = _classify_eol_status(past, False)
+        assert result["status"] == "already_eol"
+        assert result["risk_level"] == "high"
+
+    def test_not_eol(self):
+        from services.api_gateway.tool_executor import _classify_eol_status
+        from datetime import date, timedelta
+
+        future = (date.today() + timedelta(days=365)).isoformat()
+        result = _classify_eol_status(future, False)
+        assert result["status"] == "not_eol"
+        assert result["risk_level"] == "none"
+
+    def test_none_date_not_eol(self):
+        from services.api_gateway.tool_executor import _classify_eol_status
+
+        result = _classify_eol_status(None, False)
+        assert result["status"] == "not_eol"
+
+    def test_is_eol_flag_true(self):
+        from services.api_gateway.tool_executor import _classify_eol_status
+
+        result = _classify_eol_status(None, True)
+        assert result["status"] == "already_eol"
