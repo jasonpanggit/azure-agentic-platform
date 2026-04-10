@@ -1,6 +1,6 @@
 # Azure AIOps Agentic Platform — Architecture
 
-> Version: 1.0 | Stack: Microsoft Agent Framework 1.0.0rc5 · Azure AI Foundry · FastMCP 1.26.0 · Next.js App Router · Terraform azurerm ~>4.65 + azapi ~>2.9
+> Version: 2.0 | Stack: Microsoft Agent Framework 1.0.0rc5 · Azure AI Foundry · FastMCP 1.26.0 · Next.js App Router · Terraform azurerm ~>4.65 + azapi ~>2.9
 
 ---
 
@@ -19,6 +19,26 @@
 └─────────────────────────────────┬───────────────────────────────────────────────┘
                                   │
 ┌─────────────────────────────────▼───────────────────────────────────────────────┐
+│                   API GATEWAY (FastAPI — api-gateway Container App)             │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  Incident Intelligence Pipeline (runs as BackgroundTask per incident)   │   │
+│  │  1. Noise Reducer   → causal suppression + temporal/topological correl  │   │
+│  │  2. Dedup Check     → ETag-guarded dedup against Cosmos incidents        │   │
+│  │  3. Change Correl.  → Activity Log + topology neighbor change scoring    │   │
+│  │  4. Memory Search   → pgvector historical incident pattern matching      │   │
+│  │  5. Foundry Dispatch → POST to Orchestrator agent thread                 │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  Background Services (started in lifespan):                                     │
+│  • TopologyClient — ARG bootstrap + 15-min sync loop → Cosmos topology         │
+│  • ForecasterClient — resource metric baselines + exhaustion forecasting        │
+│  • PatternAnalyzer — weekly incident pattern analysis + FinOps estimates        │
+│  • WAL Stale Monitor — alerts on pending remediation WAL records > 15 min      │
+│                                                                                 │
+└─────────────────────────────────┬───────────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────────┐
 │                          AGENT PLATFORM                                         │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
@@ -26,23 +46,23 @@
 │  │                                                                         │   │
 │  │   ┌──────────────────────────────────────────────────────────────────┐  │   │
 │  │   │                    Orchestrator Agent                             │  │   │
-│  │   │          (Microsoft Agent Framework — HandoffOrchestrator)       │  │   │
-│  │   └────┬──────┬──────┬──────┬──────┬──────┬───────────────────────┘  │   │
-│  │        │      │      │      │      │      │                            │   │
-│  │   ┌────▼─┐ ┌──▼──┐ ┌─▼───┐ ┌▼────┐ ┌▼───┐ ┌▼────┐                  │   │
-│  │   │Compu-│ │Net- │ │Stor-│ │Secu-│ │Arc │ │SRE  │                  │   │
-│  │   │ te   │ │work │ │age  │ │rity │ │    │ │     │   domain agents   │   │
-│  │   └──┬───┘ └──┬──┘ └──┬──┘ └──┬──┘ └─┬──┘ └──┬──┘                  │   │
-│  │      │        │        │        │       │       │                      │   │
-│  └──────┼────────┼────────┼────────┼───────┼───────┼──────────────────────┘   │
-│         │        │        │        │       │       │                            │
-│  ┌──────▼────────▼────────▼────────▼───────▼───────▼──────────────────────┐   │
-│  │                        MCP Tool Layer                                   │   │
-│  │   ┌─────────────────────┐      ┌───────────────────────────────────┐   │   │
-│  │   │  Azure MCP Server   │      │    Custom Arc MCP Server          │   │   │
-│  │   │  (msmcp-azure GA)   │      │    (FastMCP / Container App)      │   │   │
-│  │   └─────────────────────┘      └───────────────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
+│  │   │          (Microsoft Agent Framework — ChatAgent + @ai_function)  │  │   │
+│  │   └────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬─────────┘  │   │
+│  │        │      │      │      │      │      │      │      │              │   │
+│  │   ┌────▼─┐ ┌──▼──┐ ┌─▼───┐ ┌▼────┐ ┌▼───┐ ┌▼────┐ ┌▼────┐ ┌▼────┐  │   │
+│  │   │Compu-│ │Net- │ │Stor-│ │Secu-│ │Arc │ │SRE  │ │Patch│ │EOL  │  │   │
+│  │   │ te   │ │work │ │age  │ │rity │ │    │ │     │ │     │ │     │  │   │
+│  │   └──┬───┘ └──┬──┘ └──┬──┘ └──┬──┘ └─┬──┘ └──┬──┘ └──┬──┘ └──┬──┘  │   │
+│  │      │        │        │        │       │       │        │        │    │   │
+│  └──────┼────────┼────────┼────────┼───────┼───────┼────────┼────────┼────┘   │
+│         │        │        │        │       │       │        │        │         │
+│  ┌──────▼────────▼────────▼────────▼───────▼───────▼────────▼────────▼──────┐  │
+│  │                        MCP Tool Layer                                     │  │
+│  │   ┌─────────────────────┐      ┌───────────────────────────────────┐     │  │
+│  │   │  Azure MCP Server   │      │    Custom Arc MCP Server          │     │  │
+│  │   │  (msmcp-azure GA)   │      │    (FastMCP / Container App)      │     │  │
+│  │   └─────────────────────┘      └───────────────────────────────────┘     │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                   │
 ┌─────────────────────────────────▼───────────────────────────────────────────────┐
@@ -59,12 +79,19 @@
 ┌─────────────────────────────────▼───────────────────────────────────────────────┐
 │                             DATA LAYER                                          │
 │                                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  ┌────────────────┐  │
-│  │ Foundry      │  │ Cosmos DB    │  │ PostgreSQL +     │  │ Fabric         │  │
-│  │ Threads      │  │ (hot-path    │  │ pgvector         │  │ OneLake        │  │
-│  │ (agent       │  │  incident    │  │ (operational /   │  │ (analytics /   │  │
-│  │  memory)     │  │  state)      │  │  RAG embeddings) │  │  audit)        │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  └────────────────┘  │
+│  ┌──────────────┐  ┌────────────────────────────────┐  ┌──────────────────────┐ │
+│  │ Foundry      │  │ Cosmos DB (hot-path)            │  │ PostgreSQL + pgvector│ │
+│  │ Threads      │  │  • incidents + approvals        │  │  • runbooks (RAG)    │ │
+│  │ (agent       │  │  • sessions                     │  │  • eol_cache         │ │
+│  │  memory)     │  │  • topology (ARG graph)         │  │  • incident_memory   │ │
+│  └──────────────┘  │  • baselines (forecasting)      │  │  • slo_definitions   │ │
+│                    │  • remediation_audit (WAL)       │  └──────────────────────┘ │
+│  ┌──────────────┐  │  • pattern_analysis             │  ┌──────────────────────┐ │
+│  │ Fabric       │  │  • business_tiers               │  │ Azure Resource Graph │ │
+│  │ OneLake      │  └────────────────────────────────┘  │  (ARG — topology     │ │
+│  │ (analytics / │                                       │   bootstrap source)  │ │
+│  │  audit)      │                                       └──────────────────────┘ │
+│  └──────────────┘                                                                │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                   │
 ┌─────────────────────────────────▼───────────────────────────────────────────────┐
@@ -85,55 +112,51 @@
 
 ### 2.1 Orchestrator Routing Pattern
 
-The Orchestrator uses the Microsoft Agent Framework `HandoffOrchestrator` pattern. Domain agents register themselves as `AgentTarget` instances. The Orchestrator classifies incoming incidents and hands off to the correct domain agent, which can further hand back for cross-domain issues.
+The Orchestrator uses the Microsoft Agent Framework `ChatAgent` with `@ai_function`-decorated connected-agent tools. Each domain agent is registered as a callable tool on the Orchestrator. The Orchestrator classifies incoming incidents and calls the correct domain agent tool, which can trigger further cross-domain calls.
 
 ```
                          ┌─────────────────────────────┐
     Incident payload ───►│       Orchestrator Agent      │
-                         │  HandoffOrchestrator          │
+                         │  ChatAgent + @ai_function     │
                          │  - classify_incident()        │
                          │  - route_to_domain()          │
                          │  - collect_human_approval()   │
                          └──────────────┬────────────────┘
                                         │
-               ┌────────────────────────┼────────────────────────┐
-               │      route by          │    incident.domain      │
-               ▼                        ▼                         ▼
-   ┌─────────────────┐    ┌─────────────────────┐   ┌─────────────────────┐
-   │  ComputeAgent   │    │   NetworkAgent       │   │   SecurityAgent     │
-   │  AgentTarget    │    │   AgentTarget        │   │   AgentTarget       │
-   │                 │    │                      │   │                     │
-   │  - diagnose()   │    │  - diagnose()        │   │  - diagnose()       │
-   │  - remediate()  │    │  - remediate()       │   │  - remediate()      │
-   └────────┬────────┘    └──────────┬───────────┘   └──────────┬──────────┘
-            │                        │                           │
-            └────────────────────────▼───────────────────────────┘
-                              HandoffResult
-                         {needs_cross_domain: true}
-                                    │
-                                    ▼
-                         Orchestrator re-routes
-                         to secondary domain agent
+          ┌──────────┬──────────────────┼──────────────┬──────────┬──────────┐
+          │          │                  │              │          │          │
+          ▼          ▼                  ▼              ▼          ▼          ▼
+   ┌──────────┐ ┌──────────┐   ┌──────────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+   │ Compute  │ │ Network  │   │   Security   │ │  Arc   │ │  SRE   │ │ Patch  │
+   │ Agent    │ │ Agent    │   │   Agent      │ │ Agent  │ │ Agent  │ │ Agent  │
+   └──────────┘ └──────────┘   └──────────────┘ └────────┘ └────────┘ └────────┘
+                                                                       ┌────────┐
+                                                                       │ EOL    │
+                                                                       │ Agent  │
+                                                                       └────────┘
+              ┌────────────────────────────────────────────────────────────┐
+              │ Storage Agent  (also available — storage account domain)   │
+              └────────────────────────────────────────────────────────────┘
 ```
 
-**Python registration pattern:**
+**Python registration pattern (actual implementation):**
 
 ```python
-# agent_graph.py
-from agent_framework import HandoffOrchestrator, AgentTarget, HandoffMessage
+# agents/orchestrator/agent.py
+from agent_framework import ChatAgent, ai_function
+from shared.auth import get_foundry_client
 
-orchestrator = HandoffOrchestrator(
-    name="aiops-orchestrator",
-    client=azure_ai_client,          # AzureAIAgentClient
-    instructions=ORCHESTRATOR_PROMPT,
-)
+# Domain agents are registered as @ai_function connected-agent tools
+# Each tool calls the corresponding Foundry Hosted Agent by agent_id
+@ai_function
+def call_compute_agent(incident_json: str) -> str:
+    """Route incident to Compute domain agent for VM/VMSS/AKS diagnostics."""
+    ...
 
-for domain, agent_id in DOMAIN_AGENT_IDS.items():
-    orchestrator.add_target(AgentTarget(
-        name=f"{domain}-agent",
-        agent_id=agent_id,           # Foundry Hosted Agent ID
-        description=AGENT_DESCRIPTIONS[domain],
-    ))
+@ai_function
+def call_network_agent(incident_json: str) -> str:
+    """Route incident to Network domain agent for NSG/VNet/LB/ExpressRoute diagnostics."""
+    ...
 ```
 
 ### 2.2 Message Contract
@@ -219,9 +242,15 @@ Entra Tenant
 │                                    → Kubernetes Extension Contributor
 │                                    → Arc Data Services Contributor
 │
-└── aiops-sre-agent-id               → Reader on all subscriptions
-                                     → Log Analytics Reader
-                                     → Action Group Contributor
+├── aiops-sre-agent-id               → Reader on all subscriptions
+│                                    → Log Analytics Reader
+│                                    → Action Group Contributor
+│
+├── aiops-patch-agent-id             → Reader on all subscriptions
+│                                    → Log Analytics Reader (patch assessment data)
+│
+└── aiops-eol-agent-id               → Reader on all subscriptions
+                                     → Log Analytics Reader (OS inventory)
 ```
 
 **Container Apps managed identity binding:**
@@ -360,66 +389,61 @@ export async function GET(req: NextRequest) {
 
 ### 3.3 Tailwind CSS + shadcn/ui Rendering
 
+The web UI is built with Next.js 15 App Router, Tailwind CSS v3, and shadcn/ui (New York preset). **Fluent UI has been fully removed** — all components use Tailwind utility classes with CSS semantic tokens (`var(--accent-*)`, `var(--bg-canvas)`, etc.).
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  Incident Dashboard  (Next.js page)                                      │
+│  Dashboard  (Next.js page)  — 7 tabs                                     │
+│                                                                          │
+│  [Alerts] [Audit] [Topology] [Resources] [VMs] [Observability] [Patch]  │
 │                                                                          │
 │  ┌───────────────────────────────┐  ┌─────────────────────────────────┐  │
-│  │  Chat Bubble Panel            │  │  Agent Trace Panel              │  │
-│  │  (token stream renderer)      │  │  (trace stream renderer)        │  │
+│  │  Chat Drawer (ChatFAB)        │  │  Agent Trace Panel (TraceTree)  │  │
+│  │  (floating, slide-in)        │  │  (trace stream renderer)        │  │
 │  │                               │  │                                 │  │
 │  │  ┌──────────────────────────┐ │  │  ┌─────────────────────────┐   │  │
 │  │  │ [orchestrator]           │ │  │  │ ▶ tool_call             │   │  │
-│  │  │ Analysing VM cpu         │ │  │  │   azure-mcp/list-vms    │   │  │
-│  │  │ utilisation...           │ │  │  │   { "subscription":     │   │  │
-│  │  └──────────────────────────┘ │  │  │     "sub-compute" }     │   │  │
-│  │  ┌──────────────────────────┐ │  │  └─────────────────────────┘   │  │
-│  │  │ [compute]                │ │  │  ┌─────────────────────────┐   │  │
-│  │  │ Found 3 VMs above 95%... │ │  │  │ ▶ handoff               │   │  │
-│  │  │ ▌ (streaming cursor)     │ │  │  │   compute → orchestrator│   │  │
+│  │  │ Analysing VM cpu         │ │  │  │   query_monitor_metrics  │   │  │
+│  │  │ utilisation...           │ │  │  │   { "resource_id": ... } │   │  │
 │  │  └──────────────────────────┘ │  │  └─────────────────────────┘   │  │
-│  │                               │  │  ┌─────────────────────────┐   │  │
-│  │  [Approve] [Reject] (HITL)    │  │  │ ⏸ approval_gate         │   │  │
-│  │                               │  │  │   act_01: restart VM    │   │  │
-│  └───────────────────────────────┘  │  └─────────────────────────┘   │  │
-│                                     └─────────────────────────────────┘  │
+│  │  ┌──────────────────────────┐ │  │  ┌─────────────────────────┐   │  │
+│  │  │ [compute]                │ │  │  │ ▶ approval_gate          │   │  │
+│  │  │ Found 3 VMs above 95%... │ │  │  │   act_01: restart VM    │   │  │
+│  │  │ ▌ (streaming cursor)     │ │  │  └─────────────────────────┘   │  │
+│  │  └──────────────────────────┘ │  └─────────────────────────────────┘  │
+│  │  [Approve] [Reject] (HITL)    │                                        │
+│  └───────────────────────────────┘                                        │
+│                                                                          │
+│  VM Detail Panel (slide-in) — resource-scoped chat per VM               │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Component architecture:**
+**Chat is non-streaming (polling model):** `POST /api/v1/chat` returns `thread_id` immediately (202); client polls `GET /api/v1/chat/{thread_id}/result` until terminal state. No persistent SSE connection is held open.
+
+**Component architecture (actual):**
 
 ```typescript
-// components/incident/IncidentStream.tsx
+// components/ChatDrawer.tsx  (Tailwind + shadcn/ui)
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { ChatMessage } from '@fluentui/react-components';   // Fluent UI 2
-import { AgentTraceTree } from './AgentTraceTree';
+import { useState } from 'react';
+import { ChatBubble } from './ChatBubble';
+import { ChatInput } from './ChatInput';
+import { TraceTree } from './TraceTree';
 
-export function IncidentStream({ threadId }: { threadId: string }) {
-  const [tokens, setTokens] = useState<TokenChunk[]>([]);
-  const [traces, setTraces] = useState<TraceEvent[]>([]);
+export function ChatDrawer({ incidentId }: { incidentId: string }) {
+  const [messages, setMessages] = useState<Message[]>([]);
 
-  useEffect(() => {
-    const es = new EventSource(`/api/stream?thread_id=${threadId}`);
-
-    es.addEventListener('token', (e) => {
-      const chunk: TokenChunk = JSON.parse(e.data);
-      setTokens(prev => mergeTokenChunk(prev, chunk));   // append delta to last bubble
-    });
-
-    es.addEventListener('trace', (e) => {
-      const event: TraceEvent = JSON.parse(e.data);
-      setTraces(prev => [...prev, event]);               // append to trace tree
-    });
-
-    es.addEventListener('done', () => es.close());
-    return () => es.close();
-  }, [threadId]);
+  async function handleSend(text: string) {
+    const { thread_id } = await postChat(incidentId, text);
+    // Poll until done
+    const result = await pollResult(thread_id);
+    setMessages(prev => [...prev, result]);
+  }
 
   return (
-    <div className="incident-stream-layout">
-      <ChatBubblePanel tokens={tokens} />
-      <AgentTraceTree events={traces} />
+    <div className="chat-drawer bg-[var(--bg-canvas)] border-[var(--border)]">
+      {messages.map(m => <ChatBubble key={m.id} message={m} />)}
+      <ChatInput onSend={handleSend} />
     </div>
   );
 }
@@ -476,25 +500,72 @@ agents/
 │   ├── Dockerfile.base          # Python 3.12-slim + shared deps
 │   └── requirements-base.txt   # agent-framework==1.0.0rc5, azure-ai-projects, etc.
 │
+├── shared/                      # Shared utilities imported by all agents
+│   ├── auth.py                  # get_credential(), get_foundry_client(), get_agent_identity()
+│   ├── otel.py                  # setup_telemetry(), instrument_tool_call()
+│   ├── envelope.py              # IncidentMessage, validate_envelope()
+│   └── routing.py               # classify_query_text()
+│
 ├── compute/
 │   ├── Dockerfile               # FROM base
-│   ├── agent.py                 # ComputeAgent definition
-│   ├── tools.py                 # compute-specific tool wrappers
-│   ├── prompts/
-│   │   └── system.md
-│   └── requirements.txt
+│   ├── agent.py                 # ChatAgent + @ai_function tools
+│   ├── tools.py                 # 5 tools: query_activity_log, query_log_analytics,
+│   │                            #   query_resource_health, query_monitor_metrics,
+│   │                            #   query_os_version
+│   └── prompts/system.md
 │
 ├── network/
-│   └── ... (same structure)
-├── storage/
-├── security/
-├── arc/
-│   ├── Dockerfile
 │   ├── agent.py
-│   ├── tools.py                 # wraps Arc MCP Server tools
-│   └── prompts/
-│       └── system.md
-└── sre/
+│   ├── tools.py                 # 7 tools: query_nsg_rules, query_vnet_topology,
+│   │                            #   query_load_balancer_health, query_peering_status,
+│   │                            #   query_flow_logs, query_expressroute_health,
+│   │                            #   check_connectivity
+│   └── prompts/system.md
+│
+├── storage/
+│   ├── agent.py
+│   ├── tools.py                 # 3 tools: query_storage_metrics, query_blob_diagnostics,
+│   │                            #   query_file_sync_health
+│   └── prompts/system.md
+│
+├── security/
+│   ├── agent.py
+│   ├── tools.py                 # 7 tools: query_defender_alerts, query_keyvault_diagnostics,
+│   │                            #   query_iam_changes, query_secure_score,
+│   │                            #   query_rbac_assignments, query_policy_compliance,
+│   │                            #   scan_public_endpoints
+│   └── prompts/system.md
+│
+├── arc/
+│   ├── agent.py
+│   ├── tools.py                 # 3 tools: query_activity_log, query_log_analytics,
+│   │                            #   query_resource_health (+ Arc MCP Server via MCP)
+│   └── prompts/system.md
+│
+├── sre/
+│   ├── agent.py
+│   ├── tools.py                 # 7 tools: query_availability_metrics,
+│   │                            #   query_performance_baselines, propose_remediation,
+│   │                            #   query_service_health, query_advisor_recommendations,
+│   │                            #   query_change_analysis, correlate_cross_domain
+│   └── prompts/system.md
+│
+├── patch/
+│   ├── agent.py
+│   ├── tools.py                 # 8 tools: query_activity_log, query_patch_assessment,
+│   │                            #   query_patch_installations, discover_arc_workspace,
+│   │                            #   query_configuration_data, lookup_kb_cves,
+│   │                            #   query_resource_health, search_runbooks
+│   └── prompts/system.md
+│
+└── eol/
+    ├── agent.py
+    ├── tools.py                 # 9 tools: query_activity_log, query_os_inventory,
+    │                            #   query_software_inventory, query_k8s_versions,
+    │                            #   query_endoflife_date, query_ms_lifecycle,
+    │                            #   query_resource_health, search_runbooks,
+    │                            #   scan_estate_eol
+    └── prompts/system.md
 ```
 
 **Base Dockerfile:**
@@ -533,60 +604,54 @@ CMD ["python", "-m", "agent"]    # entrypoint called by Foundry runtime
 ### 4.2 AzureAIAgentClient Registration
 
 ```python
-# agents/compute/agent.py
+# agents/compute/agent.py (actual pattern)
 import os
-from azure.identity import DefaultAzureCredential
-from azure.ai.projects import AIProjectClient
-from agent_framework import AgentDefinition, tool
+from agent_framework import ChatAgent, ai_function
+from shared.auth import get_foundry_client, get_agent_identity
+from shared.otel import setup_telemetry
 
-credential = DefaultAzureCredential()   # resolves Container Apps managed identity
+tracer = setup_telemetry("aiops-compute-agent")
 
-project_client = AIProjectClient(
-    subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
-    resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
-    project_name=os.environ["FOUNDRY_PROJECT_NAME"],
-    credential=credential,
-)
+# All tools declared with @ai_function decorator (replaces manual JSON schema)
+@ai_function
+def query_activity_log(resource_id: str, hours: int = 24) -> dict:
+    """Query Azure Activity Log for resource operations."""
+    ...
 
-# Register or retrieve the hosted agent definition
-compute_agent = project_client.agents.create_or_update(
-    agent_id=os.environ.get("FOUNDRY_AGENT_ID"),   # idempotent
-    model=os.environ["FOUNDRY_MODEL_DEPLOYMENT"],   # gpt-4o
+@ai_function
+def query_monitor_metrics(resource_id: str, metric_names: list[str]) -> dict:
+    """Query Azure Monitor metrics for a resource."""
+    ...
+
+# Agent is registered/retrieved via Foundry client using env-injected FOUNDRY_AGENT_ID
+agent = ChatAgent(
     name="aiops-compute-agent",
     instructions=open("prompts/system.md").read(),
-    tools=get_compute_tools(),    # MCP tool descriptors + custom tools
-    tool_resources=get_mcp_resources(),
-    metadata={"domain": "compute", "version": "1.0.0"},
+    client=get_foundry_client(),
+    functions=[query_activity_log, query_log_analytics,
+               query_resource_health, query_monitor_metrics, query_os_version],
 )
 ```
 
-### 4.3 Inter-Agent A2A Handoff
+### 4.3 Tool Implementation Pattern
+
+All agent tools follow a standard pattern: lazy SDK imports, `_log_sdk_availability()` at module level, `_extract_subscription_id()` helper, `start_time = time.monotonic()` at entry, `duration_ms` in both success and error paths, and tools **never raise** — they return structured error dicts instead.
 
 ```python
-# agents/compute/agent.py  (continued)
-from agent_framework import HandoffAction, AgentTarget
-
-# Define handoff targets this agent can route to
-handoff_targets = [
-    AgentTarget(
-        name="network-agent",
-        agent_id=os.environ["NETWORK_AGENT_ID"],
-        description="Handle network-related root causes: NIC, NSG, VNet, DNS",
-        handoff_condition="root cause involves network configuration",
-    ),
-    AgentTarget(
-        name="orchestrator",
-        agent_id=os.environ["ORCHESTRATOR_AGENT_ID"],
-        description="Return to orchestrator when diagnosis is complete or needs cross-domain coordination",
-        handoff_condition="diagnosis complete OR needs multiple domains",
-    ),
-]
-
-@tool(name="request_cross_domain_analysis")
-def request_cross_domain_analysis(target_domain: str, context: str) -> HandoffAction:
-    """Trigger a handoff to another domain agent for cross-domain issues."""
-    target = next(t for t in handoff_targets if target_domain in t.name)
-    return HandoffAction(target=target, message=context)
+# Standard tool pattern (all agents)
+@ai_function
+def query_nsg_rules(resource_id: str, ...) -> dict:
+    """Query NSG rules for a network security group."""
+    start_time = time.monotonic()
+    try:
+        client = NetworkManagementClient(get_credential(), sub_id)
+        # ... real SDK call ...
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        return {"rules": [...], "duration_ms": duration_ms}
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        logger.error("query_nsg_rules failed | error=%s duration_ms=%d", exc, duration_ms)
+        return {"error": str(exc), "duration_ms": duration_ms}
 ```
 
 ---
@@ -778,17 +843,17 @@ Domain Agent
 ┌──────────────────────┐        ┌──────────────────────┐
 │   Teams Conversation │        │   Web UI Session      │
 │                      │        │                       │
-│  thread_id stored in │◄──────►│  thread_id in URL:    │
-│  Teams conversation  │        │  /incidents/inc_01?   │
-│  activity.value      │        │  thread=thread_abc123 │
-│                      │        │                       │
-│  Bot posts:          │        │  SSE stream reads     │
-│  "View in AIOps →    │        │  same Foundry thread  │
-│   [link with         │        │  — both surfaces show │
-│    thread_id]"       │        │  same conversation    │
+│  thread_id stored in │◄──────►│  thread_id used by    │
+│  Teams conversation  │        │  polling loop:        │
+│  activity.value      │        │  GET /api/v1/chat/    │
+│                      │        │  {thread_id}/result   │
+│  Bot posts:          │        │                       │
+│  "View in AIOps →    │        │  Both surfaces share  │
+│   [link with         │        │  same Foundry thread  │
+│    thread_id]"       │        │  — single source of   │
+│                      │        │  truth for state      │
 └──────────────────────┘        └──────────────────────┘
                   Both share: Foundry thread_abc123
-                  Single source of truth for conversation state
 ```
 
 ---
@@ -800,21 +865,25 @@ Domain Agent
 ```
 Entra ID Tenant (single)
 │
-├── Managed Identities (Entra Agent IDs — system-assigned via Container Apps)
+├── Managed Identities (system-assigned via Container Apps)
+│   ├── aiops-orchestrator      → principal ID: uuid-orch
 │   ├── aiops-compute-agent     → principal ID: uuid-compute
 │   ├── aiops-network-agent     → principal ID: uuid-network
 │   ├── aiops-storage-agent     → principal ID: uuid-storage
 │   ├── aiops-security-agent    → principal ID: uuid-security
 │   ├── aiops-arc-agent         → principal ID: uuid-arc
 │   ├── aiops-sre-agent         → principal ID: uuid-sre
-│   └── aiops-orchestrator      → principal ID: uuid-orch
+│   ├── aiops-patch-agent       → principal ID: uuid-patch
+│   └── aiops-eol-agent         → principal ID: uuid-eol
 │
 └── App Registration (web UI)
-    └── aiops-web-ui             → OAuth2 PKCE flow for browser users
+    └── aiops-web-ui             → OAuth2 popup flow (MSAL) for browser users
         ├── Redirect: https://aiops.internal/auth/callback
         └── Scopes: api://aiops-web-ui/incidents.read
                     api://aiops-web-ui/approvals.write
 ```
+
+**Note on auth:** The API gateway currently runs with auth **disabled** in prod (`verify_token` is a no-op). Entra auth was implemented but caused 401s; it is wired but toggled off via env var pending cert rotation.
 
 ### 7.2 Cross-Subscription RBAC Pattern
 
@@ -875,7 +944,7 @@ resource "azurerm_role_assignment" "agent_rbac" {
 ### 7.3 MSAL User Auth (Web UI)
 
 ```typescript
-// lib/auth/msal.ts
+// lib/msal-instance.ts  (actual — popup flow, not redirect)
 import { PublicClientApplication } from '@azure/msal-browser';
 
 export const msalConfig = {
@@ -884,16 +953,24 @@ export const msalConfig = {
     authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_TENANT_ID}`,
     redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI!,
   },
+  // Popup flow used (not redirect) — redirect loses sessionStorage in private browsing
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false },
 };
 
-// Token acquisition for API calls
+// Token acquisition via popup (acquireTokenPopup as fallback to silent)
 export async function getApiToken(): Promise<string> {
-  const result = await msalInstance.acquireTokenSilent({
-    scopes: ['api://aiops-web-ui/incidents.read'],
-    account: msalInstance.getAllAccounts()[0],
-  });
-  return result.accessToken;
+  try {
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: ['api://aiops-web-ui/incidents.read'],
+      account: msalInstance.getAllAccounts()[0],
+    });
+    return result.accessToken;
+  } catch {
+    const result = await msalInstance.acquireTokenPopup({
+      scopes: ['api://aiops-web-ui/incidents.read'],
+    });
+    return result.accessToken;
+  }
 }
 ```
 
@@ -1141,20 +1218,24 @@ arc_mcp_tool = McpTool(
 ```
 User (browser)
     │
-    │  1. MSAL token acquired (PKCE)
+    │  1. MSAL token acquired (popup flow)
     │  POST /api/v1/chat  { message, incident_id }
     ▼
-Next.js API Route Handler (Container App: web-frontend)
+Next.js proxy route handler (app/api/proxy/*/route.ts)
     │
-    │  2. Validate JWT (Entra)
-    │  3. POST to api-gateway
+    │  2. buildUpstreamHeaders() + AbortSignal.timeout(15000)
+    │  3. Forward to api-gateway
     ▼
 API Gateway (Container App: api-gateway)
     │
-    │  4. Auth: validate Entra token
-    │  5. Rate limit check (Redis / Cosmos)
-    │  6. Create or resume Foundry thread
-    │  7. Return { thread_id }
+    │  4. Noise reducer — causal suppression check
+    │  5. Rate limit check (in-memory + Cosmos)
+    │  6. Create Foundry thread + dispatch to Orchestrator (BackgroundTask)
+    │  7. Return { thread_id } immediately (202 Accepted)
+    ▼
+Client polls GET /api/v1/chat/{thread_id}/result
+    │
+    │  (polls until terminal state: complete | failed | awaiting_approval)
     ▼
 Azure AI Foundry — Responses API
     │
@@ -1162,29 +1243,47 @@ Azure AI Foundry — Responses API
     ▼
 Orchestrator Agent
     │
-    │  9. Classify domain, handoff
+    │  9. Classify domain, call domain agent @ai_function tool
     ▼
-Domain Agent (e.g., Compute)
+Domain Agent (e.g., Network)
     │
-    │  10. Call MCP tool
+    │  10. Call @ai_function SDK tools (azure-mgmt-network, etc.)
+    │      OR call Azure MCP Server / Arc MCP Server tools
     ▼
-Azure MCP Server / Arc MCP Server
+Azure Resource (e.g., NetworkManagementClient → NSG API)
     │
-    │  11. Managed identity → Azure REST API
+    │  11. Response → agent → Foundry thread result
     ▼
-Azure Resource (e.g., VM API)
+API Gateway returns result to client on next poll
     │
-    │  12. Response → MCP → Agent → token stream
+    │  12. Client renders ChatBubble + TraceTree components
     ▼
-Foundry Thread (SSE output)
+Browser — Tailwind CSS + shadcn/ui components update
+```
+
+### 9.1b Incident Intelligence Pipeline (per inbound incident)
+
+```
+POST /api/v1/incidents received
     │
-    │  13. SSE: event:token + event:trace multiplexed
-    ▼
-Next.js SSE Route Handler  (/api/stream)
+    │  (synchronous — before 202 return)
+    ├─► Noise Reducer
+    │     • check_causal_suppression() — suppress cascade alerts
+    │     • check_temporal_correlation() — route to existing thread
+    │     • composite_severity_score() — re-weight with blast radius
     │
-    │  14. Forward SSE to browser
-    ▼
-Browser — Fluent UI 2 components update in real-time
+    │  (BackgroundTask — after 202 return)
+    ├─► Dedup Check (Cosmos ETag)
+    ├─► Topology Prefetch (blast-radius via TopologyClient)
+    ├─► Change Correlator
+    │     • Query Activity Log for resource + topology neighbors
+    │     • Score by temporal proximity + topological distance
+    │     • Store top-3 correlations on incident document
+    ├─► Incident Memory Search (pgvector)
+    │     • Embed incident title+description
+    │     • Search incident_memory table for similar resolved incidents
+    │     • Attach historical_matches to incident context
+    └─► Foundry Dispatch → Orchestrator agent thread
 ```
 
 ### 9.2 Audit Flow
@@ -1283,7 +1382,10 @@ terraform/
 │   ├── cosmos/                  # azurerm
 │   │   ├── main.tf              # azurerm_cosmosdb_account (serverless, multi-region)
 │   │   │                        # azurerm_cosmosdb_sql_database
-│   │   │                        # azurerm_cosmosdb_sql_container: incidents, approvals
+│   │   │                        # azurerm_cosmosdb_sql_container:
+│   │   │                        #   incidents, approvals, sessions,
+│   │   │                        #   topology, baselines, remediation_audit,
+│   │   │                        #   pattern_analysis, business_tiers
 │   │   ├── variables.tf
 │   │   └── outputs.tf
 │   │
@@ -1361,131 +1463,64 @@ terraform/
 
 ---
 
-## 11. Build Order (Critical Path)
+## 11. Delivery Summary (28 Phases Complete)
 
-The Arc MCP Server is the **longest pole** because it requires: Arc API research + SDK wrapping + FastMCP integration + auth passthrough + Container App deployment + agent integration testing. It gates the ArcAgent, which gates full incident routing.
+All 28 planned phases of the v2.0 milestone have been delivered. The platform is running in production.
 
 ```
-Phase 0: Foundation (Week 1) — ALL parallel
-┌─────────────────────────────────────────────────────────────────────┐
-│  P0-A: Terraform networking + monitoring (azurerm)                  │
-│         → VNet, subnets, private endpoints, Event Hub, App Insights  │
-│                                                                     │
-│  P0-B: Entra App Registration (web UI) + MSAL config               │
-│         → Client ID, redirect URIs, API scopes defined              │
-│                                                                     │
-│  P0-C: Azure Container Registry provisioned                        │
-│         → ACR ready for agent image pushes                          │
-└─────────────────────────────────────────────────────────────────────┘
-         All P0 must complete before P1
-
-Phase 1: Core Infrastructure (Week 1-2) — parallel tracks
-┌─────────────────────────────────────┐  ┌─────────────────────────────┐
-│  P1-A: Foundry workspace + project  │  │  P1-B: Cosmos DB + Postgres │
-│         (azapi)                     │  │         (azurerm)            │
-│         → Model deployment (gpt-4o) │  │         → pgvector extension │
-│         → Hosted Agent slots        │  │         → schemas applied    │
-│         → Thread API enabled        │  │                              │
-└─────────────────────────────────────┘  └─────────────────────────────┘
-
-         P1-A must complete before P2 (agents need Foundry)
-         P1-B must complete before P2 (agents write to Cosmos)
-
-Phase 2: Agent Identities + RBAC (Week 2) — sequential within
-┌─────────────────────────────────────────────────────────────────────┐
-│  P2-A: agent-identities module (azapi)                              │
-│         → 7 managed identities provisioned, principal IDs captured  │
-│                          ↓                                          │
-│  P2-B: rbac module (azurerm)                                        │
-│         → Cross-subscription role assignments applied               │
-│         → Verify with: az role assignment list --assignee {id}      │
-└─────────────────────────────────────────────────────────────────────┘
-         Must complete before P3 (agents can't call Azure APIs without RBAC)
-
-Phase 3: MCP Servers (Week 2-3) — parallel but Arc is longest pole
-┌─────────────────────────────────────┐  ┌─────────────────────────────┐
-│  P3-A: Azure MCP Server (msmcp-azure│  │  ★ P3-B: Arc MCP Server     │
-│         GA) validation              │  │    (FastMCP — LONGEST POLE) │
-│         → Confirm tool coverage     │  │                              │
-│         → Test with dev Foundry     │  │  Week 2: Arc SDK research    │
-│           agent                     │  │  Week 2: arc_servers tools   │
-│         → 2-3 days                  │  │  Week 3: arc_k8s tools       │
-│                                     │  │  Week 3: arc_data tools      │
-│                                     │  │  Week 3: auth passthrough    │
-│                                     │  │  Week 3: Container App deploy│
-│                                     │  │  Week 3: integration tests   │
-└─────────────────────────────────────┘  └─────────────────────────────┘
-         P3-A gates ComputeAgent, NetworkAgent, StorageAgent, SecurityAgent, SREAgent
-         P3-B gates ArcAgent exclusively — do not block other agents on Arc MCP
-
-Phase 4: Domain Agents (Week 3-4) — Arc agent last due to P3-B dependency
-┌──────────────────────────────────────────────────────────────────────┐
-│  P4-A (Week 3): Orchestrator + Compute + Network agents              │
-│         → Uses Azure MCP Server (GA, available from P3-A)           │
-│         → HandoffOrchestrator wired up                              │
-│         → Unit tests + message contract validation                  │
-│                                                                      │
-│  P4-B (Week 3): Storage + Security + SRE agents                     │
-│         → Parallel with P4-A                                        │
-│                                                                      │
-│  P4-C (Week 4): Arc Agent                                            │
-│         → Blocked on P3-B (Arc MCP Server) completion               │
-│         → Arc-specific tool wiring + Foundry registration           │
-└──────────────────────────────────────────────────────────────────────┘
-
-Phase 5: Detection Pipeline (Week 3-4) — parallel with P4
-┌──────────────────────────────────────────────────────────────────────┐
-│  P5-A: Fabric Eventhouse + Activator (azapi)                        │
-│         → KQL tables, update policies, detection rules              │
-│  P5-B: Azure Monitor Action Groups → Event Hub wiring               │
-│  P5-C: Power Automate flow / User Data Function                     │
-│         → REST POST to api-gateway on trigger                       │
-└──────────────────────────────────────────────────────────────────────┘
-         Must complete before system E2E testing (Phase 7)
-
-Phase 6: UI Layer (Week 4-5) — parallel with P4 + P5
-┌─────────────────────────────────────┐  ┌─────────────────────────────┐
-│  P6-A: Next.js App Router           │  │  P6-B: Teams Bot            │
-│         → SSE Route Handler         │  │  → @microsoft/teams.js      │
-│         → Fluent UI 2 components    │  │  → Adaptive Card builder    │
-│         → MSAL integration          │  │  → Approval webhook handler │
-│         → Dual SSE rendering        │  │  → Thread ID sync           │
-└─────────────────────────────────────┘  └─────────────────────────────┘
-
-Phase 7: Integration + E2E (Week 5-6)
-┌──────────────────────────────────────────────────────────────────────┐
-│  P7-A: API Gateway Container App + Container Apps environment        │
-│  P7-B: End-to-end incident flow test (Playwright)                   │
-│         → Inject synthetic alert → Eventhouse → Activator            │
-│            → api-gateway → Orchestrator → Domain Agent               │
-│            → SSE stream → UI renders correctly                       │
-│  P7-C: Teams approval flow E2E test                                  │
-│  P7-D: Cross-subscription auth validation per domain agent          │
-│  P7-E: HITL approval gate test (approve + reject paths)             │
-└──────────────────────────────────────────────────────────────────────┘
-
-Phase 8: Hardening + Prod Deploy (Week 6)
-┌──────────────────────────────────────────────────────────────────────┐
-│  P8-A: Security review (all managed identities, no secrets in code)  │
-│  P8-B: Terraform prod environment apply                              │
-│  P8-C: Playwright E2E suite in CI (GitHub Actions)                  │
-│  P8-D: Load test SSE streaming under concurrent incidents            │
-└──────────────────────────────────────────────────────────────────────┘
-
-Critical Path (gates everything):
-  networking → foundry → agent-identities → rbac → [Arc MCP Server]
-                                                        → Arc Agent
-                                                        → E2E tests
-                                                        → prod deploy
-
-Why Arc MCP Server is the longest pole:
-  1. No official SDK for arc-data, arc-k8s in one client — must compose 3 SDKs
-  2. FastMCP streamable-http transport requires testing in Container Apps
-  3. Managed identity passthrough needs validation across 3 Arc resource types
-  4. Arc resources span multiple subscriptions — RBAC complexity highest here
-  5. GitOps/Flux status requires azure-mgmt-kubernetesconfiguration with preview API
-  6. Integration testing requires actual Arc-onboarded resources (can't mock easily)
+Phase 01: Foundation         — Terraform infra, VNet, ACR, Foundry, Cosmos, Postgres
+Phase 03: Arc MCP Server     — FastMCP server, 9 tools, Container App deployment
+Phase 04: Detection Plane    — Fabric Eventhouse, Activator, Event Hub wiring
+Phase 05: Web UI (Triage)    — Next.js App Router, Tailwind/shadcn, chat + approval flow
+Phase 06: Teams Integration  — @microsoft/teams.js, Adaptive Card approvals, proactive alerts
+Phase 08: Azure Validation   — Production deployment, agent registration, E2E incident flow
+Phase 09: Web UI Revamp      — Fluent UI → Tailwind/shadcn migration, 6 dashboard tabs
+Phase 10: API Security       — Auth hardening, audit trail, HMAC approval webhook
+Phase 11: Patch Agent        — ARG patch assessment, Update Manager, KB CVE lookup
+Phase 12: EOL Agent          — endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache
+Phase 13: Patch Tab          — Patch management dashboard tab, VMs patch status UI
+Phase 14: (archived)
+Phase 19: Production Stab.   — Azure MCP Server security, MCP tool group registration,
+                               runbook RAG seeding, Teams proactive alerting scaffold
+Phase 20: Agent Depth        — Network (7 tools), Security (7 tools), SRE (7 tools),
+                               93 unit tests + 6 integration triage tests
+Phase 21: Detection Plane    — Terraform activation, pipeline health monitoring
+           Activation
+Phase 22: Resource Topology  — ARG-based graph, Cosmos topology container, blast-radius API,
+           Graph               15-min background sync, TopologyTab UI
+Phase 23: Change Correlation — Activity Log correlator, topology-neighbor scoring,
+           Engine              top-3 changes stored on incident documents
+Phase 24: Alert Intelligence — Noise reducer (causal suppression + temporal correlation),
+                               composite severity scoring, INTEL-001 simulation test
+Phase 25: Institutional      — Incident memory (pgvector), SLO tracking + burn rate,
+           Memory              /api/v1/slos endpoints, slo_definitions table
+Phase 26: Predictive Ops     — Forecaster service, Cosmos baselines container,
+                               /api/v1/forecasts endpoints, INTEL-005 accuracy validation
+Phase 27: Closed-Loop        — Remediation executor (WAL + verification + auto-rollback),
+           Remediation         /api/v1/approvals/{id}/execute endpoint, WAL stale monitor
+Phase 28: Platform           — Pattern analyzer (30-day lookback, FinOps estimates),
+           Intelligence        /api/v1/intelligence/patterns + platform-health endpoints,
+                               business tiers, admin endpoints
 ```
+
+**Current Container App inventory (prod):**
+
+| App | Purpose |
+|-----|---------|
+| `ca-orchestrator-prod` | Orchestrator Agent |
+| `ca-compute-prod` | Compute Agent |
+| `ca-network-prod` | Network Agent |
+| `ca-storage-prod` | Storage Agent |
+| `ca-security-prod` | Security Agent |
+| `ca-arc-prod` | Arc Agent |
+| `ca-sre-prod` | SRE Agent |
+| `ca-patch-prod` | Patch Agent |
+| `ca-eol-prod` | EOL Agent |
+| `ca-api-gateway-prod` | API Gateway (FastAPI) |
+| `ca-web-frontend-prod` | Next.js Web UI |
+| `ca-teams-bot-prod` | Teams Bot |
+| `ca-azure-mcp-prod` | Azure MCP Server (internal) |
+| `ca-arc-mcp-prod` | Arc MCP Server (internal) |
 
 ---
 
@@ -1660,20 +1695,189 @@ When the agent creates a PR for manifest remediation:
 
 ---
 
+## 15. Intelligence Layer (Phases 22–28)
+
+The platform includes a stateful intelligence layer built into the API gateway that operates continuously in the background, independent of the Foundry agent threads.
+
+### 15.1 Resource Topology Graph
+
+```
+ARG (Azure Resource Graph)
+    │  bootstrap query on startup + every 15 min
+    ▼
+TopologyClient (services/api-gateway/topology.py)
+    │  adjacency-list property graph
+    ▼
+Cosmos DB — topology container
+    │  TopologyDocument per resource node
+    │  { id, resource_id, resource_type, name, location,
+    │    relationships: [{target_id, rel_type, weight}] }
+    ▼
+API Endpoints:
+  GET /api/v1/topology/blast-radius   → resources affected by an incident
+  GET /api/v1/topology/path           → shortest path between two resources
+  GET /api/v1/topology/snapshot       → full graph snapshot
+  GET /api/v1/topology/tree           → hierarchical tree for UI TopologyTab
+  POST /api/v1/topology/bootstrap     → manual re-bootstrap trigger
+```
+
+Resource types tracked: VMs, NICs, VNets, Subnets, Public IPs, NSGs, Load Balancers, Disks, Storage Accounts, Key Vaults, AKS clusters, App Services, SQL Servers/DBs, Redis, Event Hubs, Service Bus.
+
+### 15.2 Alert Intelligence (Noise Reduction)
+
+Three mechanisms applied synchronously before incident dedup:
+
+| Mechanism | How |
+|---|---|
+| **Causal suppression** | If a known root-cause incident is active, suppress downstream cascade alerts for topology neighbors |
+| **Temporal correlation** | Route new alert to existing active incident thread if same resource within correlation window |
+| **Composite severity** | Re-weight severity using blast-radius count + domain SLO risk score |
+
+### 15.3 Change Correlation Engine
+
+```
+POST /api/v1/incidents received
+    │  (BackgroundTask, fires after 202 return)
+    ▼
+ChangeCorrelator (services/api-gateway/change_correlator.py)
+    │  Query Activity Log for primary resource
+    │  + topology neighbors within blast radius
+    │  Score each change by:
+    │    • temporal_score  = exp(-delta_minutes / 30)
+    │    • topology_score  = 1 / (1 + topological_distance)
+    │    • type_score      = weight by change_type (config > restart > tag)
+    │    • final_score     = temporal * topology * type
+    ▼
+Top-3 ChangeCorrelation objects stored on incident Cosmos document
+    │  field: top_changes
+    ▼
+Surfaced in UI evidence panel + agent context injection
+```
+
+### 15.4 Institutional Memory
+
+```
+Incident resolved (POST /api/v1/incidents/{id}/resolve)
+    │
+    ▼
+store_incident_memory() — embed title+description via ada-002 (1536-dim)
+    │  INSERT INTO incident_memory (domain, severity, resource_type,
+    │    title, summary, resolution, embedding)
+    ▼
+PostgreSQL incident_memory table (ivfflat cosine index, lists=50)
+
+New incident arrives:
+    │
+    ▼
+search_incident_memory() — embed query, cosine similarity search
+    │  threshold: 0.35 similarity
+    ▼
+historical_matches[] attached to incident context for Orchestrator
+```
+
+### 15.5 SLO Tracking
+
+```
+slo_definitions table (PostgreSQL):
+  id, name, domain, metric, target_pct, window_hours,
+  current_value, error_budget_pct, burn_rate_1h, burn_rate_15min, status
+
+API:
+  POST /api/v1/slos              → create SLO definition
+  GET  /api/v1/slos              → list all SLOs
+  GET  /api/v1/slos/{id}/health  → current burn rate + status
+
+SloTracker updates burn rates on each incident resolution.
+Status: healthy | at_risk | breached
+```
+
+### 15.6 Predictive Operations
+
+```
+ForecasterClient (services/api-gateway/forecaster.py)
+    │  Background sweep every FORECAST_SWEEP_INTERVAL_SECONDS
+    ▼
+Cosmos DB — baselines container
+    │  BaselineDocument per resource: metric_name, p50/p95/p99,
+    │  trend_slope, forecast_exhaustion_minutes, breach_imminent
+    ▼
+API Endpoints:
+  GET /api/v1/forecasts?resource_id=<id>  → ForecastResult
+  GET /api/v1/forecasts/imminent          → list[ForecastResult] (breach_imminent only)
+
+Alerts injected into incident stream when forecast_exhaustion_minutes < threshold.
+```
+
+### 15.7 Closed-Loop Remediation
+
+```
+POST /api/v1/approvals/{id}/execute (after human approves in Teams/UI)
+    │
+    ▼
+RemediationExecutor (services/api-gateway/remediation_executor.py)
+    │
+    ├─ Pre-flight: blast-radius check + new active incident scan
+    ├─ Write WAL record (status=pending) to remediation_audit container
+    ├─ Execute ARM action (ComputeManagementClient: restart/start/stop/resize)
+    ├─ Update WAL record (status=complete|failed)
+    └─ Schedule verification BackgroundTask (fires after VERIFICATION_DELAY_MINUTES)
+           │
+           ▼
+       Verification: classify RESOLVED / IMPROVED / DEGRADED / TIMEOUT
+           │  via Azure Resource Health
+           │
+           ├── DEGRADED → auto-rollback (inverse ARM action)
+           └── All outcomes → stored on remediation_audit document
+
+WAL stale monitor: alerts on pending records > 15 min (run_wal_stale_monitor)
+```
+
+### 15.8 Platform Intelligence
+
+```
+PatternAnalyzer (services/api-gateway/pattern_analyzer.py)
+    │  Background loop every 7 days (604800s)
+    │  Lookback: 30 days of incidents
+    ▼
+Groups by (domain, resource_type, detection_rule)
+Scores by count × avg_severity
+Computes FinOps savings estimate (remediation_count × avg_minutes × hourly_rate)
+    ▼
+Cosmos DB — pattern_analysis container
+
+API Endpoints:
+  GET /api/v1/intelligence/patterns         → top recurring patterns + FinOps
+  GET /api/v1/intelligence/platform-health  → aggregated SLO + incident throughput
+  POST/GET /api/v1/admin/business-tiers     → revenue tier weighting for severity scoring
+```
+
+---
+
 ## Appendix: Key Package Versions
 
 | Package | Version | Usage |
 |---|---|---|
-| `agent-framework` | `1.0.0rc5` | Multi-agent orchestration, HandoffOrchestrator |
-| `azure-ai-projects` | latest GA | AzureAIAgentClient, Foundry Responses API |
+| `agent-framework` | `1.0.0rc5` | Multi-agent orchestration, ChatAgent + @ai_function |
+| `azure-ai-projects` | `2.0.1` (GA) | AzureAIAgentClient, Foundry Responses API |
+| `azure-mgmt-network` | latest | Network Agent SDK tools (NSG, VNet, LB, ExpressRoute) |
+| `azure-mgmt-security` | latest | Security Agent (Defender alerts, secure score) |
+| `azure-mgmt-monitor` | latest | SRE Agent + Security Agent metrics/logs |
+| `azure-mgmt-advisor` | latest | SRE Agent advisor recommendations |
+| `azure-mgmt-changeanalysis` | latest | SRE Agent change analysis |
+| `azure-mgmt-resourcehealth` | latest | SRE Agent + Patch Agent resource health |
+| `azure-mgmt-authorization` | latest | Security Agent RBAC assignments |
+| `azure-mgmt-policyinsights` | latest | Security Agent policy compliance |
+| `azure-monitor-query` | latest | Log Analytics queries (Patch Agent) |
 | `mcp[cli]` | `1.26.0` | Arc MCP Server (FastMCP) |
-| `msmcp-azure` | GA | Azure MCP Server (managed, no deployment needed) |
+| `msmcp-azure` | GA | Azure MCP Server (managed) |
 | `@microsoft/teams.js` | latest | Teams bot, Adaptive Cards |
 | `azurerm` | `~>4.65` | Core Azure Terraform provider |
 | `azapi` | `~>2.9` | Foundry, Fabric, Entra Agent ID resources |
-| `@azure/msal-browser` | latest | User auth (PKCE) in Next.js |
+| `@azure/msal-browser` | latest | User auth (popup flow) in Next.js |
+| `tailwindcss` | `v3.4.19` | Web UI styling |
+| `shadcn/ui` | New York | Web UI component library |
 | `opentelemetry-sdk` | latest | Agent action tracing → App Insights + OneLake |
-| `@fluentui/react-components` | v9 (Fluent UI 2) | UI component library |
+| `pgvector` | `0.3.x` | Runbook RAG + incident memory embeddings |
 
 ## Appendix: Environment Variables Per Agent Container
 
@@ -1686,11 +1890,19 @@ AZURE_RESOURCE_GROUP=rg-aiops-platform
 ORCHESTRATOR_AGENT_ID=<from Terraform output>
 APPLICATIONINSIGHTS_CONNECTION_STRING=<from Key Vault ref>
 
-# Per-domain agents (example: compute)
-FOUNDRY_AGENT_ID=<compute-agent-id from Terraform>
-NETWORK_AGENT_ID=<for handoff targeting>
+# Per-domain agents (example: network)
+FOUNDRY_AGENT_ID=<network-agent-id from Terraform>
 AZURE_CLIENT_ID=<injected by Container Apps runtime>
+SUBSCRIPTION_IDS=<comma-separated subscription IDs to monitor>
 
 # Arc agent only
 ARC_MCP_SERVER_URL=https://arc-mcp-server.internal.azurecontainerapps.io
+
+# API Gateway
+COSMOS_ENDPOINT=<Cosmos DB endpoint>
+COSMOS_DATABASE=aap
+POSTGRES_DSN=<PostgreSQL connection string from Key Vault ref>
+SUBSCRIPTION_IDS=<comma-separated>
+FORECAST_ENABLED=true
+PATTERN_ANALYSIS_ENABLED=true
 ```

@@ -41,10 +41,10 @@ class TestAllowedMcpTools:
 class TestProductSlugMap:
     """Verify key entries in PRODUCT_SLUG_MAP."""
 
-    def test_windows_server_maps_to_ms_lifecycle(self):
+    def test_windows_server_maps_to_endoflife_date(self):
         from agents.eol.tools import PRODUCT_SLUG_MAP
 
-        assert PRODUCT_SLUG_MAP["windows server 2016"] == ("ms-lifecycle", "windows-server-2016")
+        assert PRODUCT_SLUG_MAP["windows server 2016"] == ("endoflife.date", "windows-server")
 
     def test_ubuntu_maps_to_endoflife_date(self):
         from agents.eol.tools import PRODUCT_SLUG_MAP
@@ -55,6 +55,11 @@ class TestProductSlugMap:
         from agents.eol.tools import PRODUCT_SLUG_MAP
 
         assert PRODUCT_SLUG_MAP["mssqlserver"] == ("endoflife.date", "mssqlserver")
+
+    def test_sql_server_year_maps_to_mssqlserver(self):
+        from agents.eol.tools import PRODUCT_SLUG_MAP
+
+        assert PRODUCT_SLUG_MAP["sql server 2019"] == ("endoflife.date", "mssqlserver")
 
     def test_python_maps_to_endoflife_date(self):
         from agents.eol.tools import PRODUCT_SLUG_MAP
@@ -83,8 +88,10 @@ class TestNormalizeProductSlug:
     def test_exact_match_windows_server(self):
         from agents.eol.tools import normalize_product_slug
 
-        result = normalize_product_slug("Windows Server 2016", "")
-        assert result == ("ms-lifecycle", "windows-server-2016", "")
+        source, slug, cycle = normalize_product_slug("Windows Server 2016", "")
+        assert source == "endoflife.date"
+        assert slug == "windows-server"
+        assert cycle == "2016"
 
     def test_exact_match_ubuntu(self):
         from agents.eol.tools import normalize_product_slug
@@ -92,12 +99,16 @@ class TestNormalizeProductSlug:
         result = normalize_product_slug("ubuntu", "22.04")
         assert result == ("endoflife.date", "ubuntu", "22.04")
 
-    def test_prefix_match_ms_product(self):
+    def test_prefix_match_windows_server_with_edition(self):
+        """Windows Server 2025 Datacenter Azure Edition resolves correctly."""
         from agents.eol.tools import normalize_product_slug
 
-        # Any product starting with "windows server" routes to ms-lifecycle
-        source, slug, cycle = normalize_product_slug("windows server 2026", "")
-        assert source == "ms-lifecycle"
+        source, slug, cycle = normalize_product_slug(
+            "Windows Server 2025 Datacenter Azure Edition", "10.0.26100.3981"
+        )
+        assert source == "endoflife.date"
+        assert slug == "windows-server"
+        assert cycle == "2025"
 
     def test_unknown_product_defaults_to_endoflife_date(self):
         from agents.eol.tools import normalize_product_slug
@@ -120,6 +131,22 @@ class TestNormalizeProductSlug:
         source, slug, cycle = normalize_product_slug("red hat enterprise linux", "8")
         assert source == "endoflife.date"
         assert slug == "rhel"
+
+    def test_dotnet_maps_to_endoflife_date(self):
+        from agents.eol.tools import normalize_product_slug
+
+        source, slug, cycle = normalize_product_slug(".net 8", "")
+        assert source == "endoflife.date"
+        assert slug == "dotnet"
+        assert cycle == "8"
+
+    def test_sql_server_extracts_year_as_cycle(self):
+        from agents.eol.tools import normalize_product_slug
+
+        source, slug, cycle = normalize_product_slug("sql server 2019", "")
+        assert source == "endoflife.date"
+        assert slug == "mssqlserver"
+        assert cycle == "2019"
 
 
 # ---------------------------------------------------------------------------

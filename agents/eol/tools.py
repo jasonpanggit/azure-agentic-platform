@@ -59,25 +59,25 @@ CACHE_TTL_HOURS = 24
 # Product slug normalization map (ARG/ConfigurationData name -> (source, slug))
 # Source: "ms-lifecycle" for Microsoft products, "endoflife.date" for others
 PRODUCT_SLUG_MAP: Dict[str, Tuple[str, str]] = {
-    # Windows Server
-    "windows server 2012": ("ms-lifecycle", "windows-server-2012"),
-    "windows server 2016": ("ms-lifecycle", "windows-server-2016"),
-    "windows server 2019": ("ms-lifecycle", "windows-server-2019"),
-    "windows server 2022": ("ms-lifecycle", "windows-server-2022"),
-    "windows server 2025": ("ms-lifecycle", "windows-server-2025"),
-    # SQL Server
-    "sql server 2016": ("ms-lifecycle", "sql-server-2016"),
-    "sql server 2019": ("ms-lifecycle", "sql-server-2019"),
-    "sql server 2022": ("ms-lifecycle", "sql-server-2022"),
-    # .NET
-    "dotnet 6": ("ms-lifecycle", ".net-6.0"),
-    "dotnet 7": ("ms-lifecycle", ".net-7.0"),
-    "dotnet 8": ("ms-lifecycle", ".net-8.0"),
-    "dotnet 9": ("ms-lifecycle", ".net-9.0"),
-    ".net 6": ("ms-lifecycle", ".net-6.0"),
-    ".net 7": ("ms-lifecycle", ".net-7.0"),
-    ".net 8": ("ms-lifecycle", ".net-8.0"),
-    ".net 9": ("ms-lifecycle", ".net-9.0"),
+    # Windows Server — endoflife.date uses "windows-server" with year as cycle
+    "windows server 2012": ("endoflife.date", "windows-server"),
+    "windows server 2016": ("endoflife.date", "windows-server"),
+    "windows server 2019": ("endoflife.date", "windows-server"),
+    "windows server 2022": ("endoflife.date", "windows-server"),
+    "windows server 2025": ("endoflife.date", "windows-server"),
+    # SQL Server — endoflife.date uses "mssqlserver" with year as cycle
+    "sql server 2016": ("endoflife.date", "mssqlserver"),
+    "sql server 2019": ("endoflife.date", "mssqlserver"),
+    "sql server 2022": ("endoflife.date", "mssqlserver"),
+    # .NET — endoflife.date uses "dotnet" with major version as cycle
+    "dotnet 6": ("endoflife.date", "dotnet"),
+    "dotnet 7": ("endoflife.date", "dotnet"),
+    "dotnet 8": ("endoflife.date", "dotnet"),
+    "dotnet 9": ("endoflife.date", "dotnet"),
+    ".net 6": ("endoflife.date", "dotnet"),
+    ".net 7": ("endoflife.date", "dotnet"),
+    ".net 8": ("endoflife.date", "dotnet"),
+    ".net 9": ("endoflife.date", "dotnet"),
     # Linux
     "ubuntu": ("endoflife.date", "ubuntu"),
     "rhel": ("endoflife.date", "rhel"),
@@ -250,6 +250,10 @@ def _fetch_with_retry(
 def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, str, str]:
     """Normalize ARG/ConfigurationData product name to (source, slug, cycle).
 
+    For products in PRODUCT_SLUG_MAP, extracts the year/version from the
+    product name itself to use as the cycle (e.g., "Windows Server 2025
+    Datacenter Azure Edition" -> slug="windows-server", cycle="2025").
+
     Returns:
         (source, product_slug, version_cycle) tuple.
         source is "ms-lifecycle" or "endoflife.date".
@@ -260,7 +264,15 @@ def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, s
     for key in [f"{lower} {version}".strip(), lower]:
         if key in PRODUCT_SLUG_MAP:
             source, slug = PRODUCT_SLUG_MAP[key]
-            return (source, slug, version)
+            # Extract year from the key for use as cycle
+            cycle = _extract_version_cycle(key, version)
+            return (source, slug, cycle)
+
+    # Try prefix matching — check if any slug map key is a prefix of lower
+    for key, (source, slug) in PRODUCT_SLUG_MAP.items():
+        if lower.startswith(key):
+            cycle = _extract_version_cycle(key, version)
+            return (source, slug, cycle)
 
     # Try prefix matching for MS products
     for ms_prefix in MS_PRODUCTS:
@@ -272,6 +284,25 @@ def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, s
     # Default to endoflife.date with lowered product name
     slug = lower.replace(" ", "-")
     return ("endoflife.date", slug, version)
+
+
+def _extract_version_cycle(slug_map_key: str, fallback_version: str) -> str:
+    """Extract a version/year cycle from a slug map key.
+
+    For "windows server 2025" -> "2025"
+    For "sql server 2019" -> "2019"
+    For "ubuntu" -> fallback_version
+    """
+    import re as _re
+    # Look for a 4-digit year at the end of the key
+    m = _re.search(r"(\d{4}(?:\s*r\d)?)$", slug_map_key)
+    if m:
+        return m.group(1).replace(" ", "-")
+    # Look for a version number pattern (e.g., "6", "8.0")
+    m = _re.search(r"(\d+(?:\.\d+)?)$", slug_map_key)
+    if m:
+        return m.group(1)
+    return fallback_version
 
 
 def classify_eol_status(eol_date: Optional[date], is_eol: bool) -> Dict[str, Any]:
