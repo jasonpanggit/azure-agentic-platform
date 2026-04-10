@@ -179,10 +179,15 @@ SOPs are stored entirely within Foundry using the `openai.vector_stores` API via
 
 ```python
 # agents/shared/sop_store.py — provision SOP vector store in Foundry
+# This module is called by scripts/upload_sops.py (the single upload entry point).
+# Do NOT call provision_sop_vector_store directly from agent code —
+# only scripts/upload_sops.py invokes it during Phase 30 setup and SOP updates.
 from azure.ai.projects import AIProjectClient
 
 async def provision_sop_vector_store(project: AIProjectClient, sop_files: list[Path]) -> str:
-    """Upload all SOP markdown files to a Foundry-managed vector store."""
+    """Upload all SOP markdown files to a Foundry-managed vector store.
+    Called exclusively by scripts/upload_sops.py — not from agent runtime.
+    """
     openai = project.get_openai_client()
 
     # Create or reuse named vector store
@@ -202,11 +207,12 @@ async def provision_sop_vector_store(project: AIProjectClient, sop_files: list[P
 
 **Foundry portal visibility:** Navigate to **Project → Files** to browse all uploaded SOP files. The vector store and its files are visible in the portal — no external storage to manage.
 
-**SOP update pattern** (when an SOP is revised):
+**SOP update pattern** (when an SOP is revised — handled by `scripts/upload_sops.py`):
 ```python
-# Delete old file, re-upload revised version — no DB migration needed
+# upload_sops.py detects hash change and handles replace automatically:
 openai.vector_stores.files.delete(vector_store_id=vs_id, file_id=old_file_id)
-openai.vector_stores.files.upload_and_poll(vector_store_id=vs_id, file=open("vm-high-cpu-v2.md","rb"))
+with open("vm-high-cpu-v2.md", "rb") as f:
+    openai.vector_stores.files.upload_and_poll(vector_store_id=vs_id, file=f)
 ```
 
 **Limits (all well within range for SOP files):**
