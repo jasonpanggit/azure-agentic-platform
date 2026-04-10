@@ -339,6 +339,7 @@ CREATE TABLE sops (
     scenario_tags      TEXT[],
     foundry_filename   TEXT NOT NULL UNIQUE,  -- e.g. "vm-high-cpu.md" (name in vector store)
     foundry_file_id    TEXT,                  -- openai file object ID; populated on upload
+    content_hash       TEXT,                  -- SHA-256 of file content; used for idempotent upload
     version            TEXT NOT NULL DEFAULT '1.0',
     description        TEXT,
     severity_threshold TEXT DEFAULT 'P2',
@@ -376,16 +377,23 @@ async def select_sop_for_incident(
     Select the best SOP filename from the metadata table.
     The agent will retrieve full content via FileSearchTool at runtime.
     """
-    # 1. Try to find scenario-specific SOP by domain + resource_type + tags
+    # 1. Try to find scenario-specific SOP by domain + resource_type + tag overlap
+    # Extract keywords from incident for tag matching
+    incident_tags = _extract_incident_tags(incident)  # alert_title words + resource_type fragments
     row = await pg_conn.fetchrow(
-        """SELECT foundry_filename, title, version, is_generic
+        """SELECT foundry_filename, title, version, is_generic,
+                  array_length(
+                    ARRAY(SELECT unnest(scenario_tags) INTERSECT SELECT unnest($3::text[])),
+                    1
+                  ) AS tag_overlap
            FROM sops
            WHERE domain = $1
              AND is_generic = FALSE
              AND ($2 = ANY(resource_types) OR resource_types IS NULL)
-           ORDER BY array_length(scenario_tags, 1) DESC NULLS LAST
+           ORDER BY tag_overlap DESC NULLS LAST,
+                    array_length(scenario_tags, 1) DESC NULLS LAST
            LIMIT 1""",
-        domain, incident.get("resource_type", "")
+        domain, incident.get("resource_type", ""), incident_tags
     )
 
     if row is None:
@@ -440,6 +448,10 @@ async def handle_incident(incident: IncidentMessage) -> AgentResponse:
     sop = await select_sop_for_incident(incident, domain="compute", pg_conn=pg_conn)
 
     # 2. Inject grounding instruction — agent fetches SOP content via FileSearchTool
+    # ⚠️ P0 VALIDATION: test `additional_instructions` in dev before Phase 30 executes.
+    # If the field is rejected for hosted agent references, fall back to:
+    #   instructions_override = base_system_prompt + "\n\n" + sop.grounding_instruction
+    # set at agent startup via SOP_GROUNDING_INSTRUCTIONS env var refreshed per-request.
     response = openai.responses.create(
         input=build_incident_message(incident),
         extra_body={
@@ -460,7 +472,7 @@ New `@ai_function` added to **all agents**. Agents call this whenever a SOP step
 async def sop_notify(
     message: str,
     severity: Literal["info", "warning", "critical"],
-    channels: list[Literal["teams", "email", "both"]],
+    channels: list[Literal["teams", "email"]],   # pass ["teams","email"] for both; no "both" shorthand
     incident_id: str,
     resource_name: str,
     sop_step: str,       # e.g. "Step 2: Notify operator of CPU threshold breach"
@@ -469,11 +481,12 @@ async def sop_notify(
     Send a notification as required by the active SOP.
     Call this whenever the SOP specifies a [NOTIFY] step.
     Always use this tool — never skip notification steps.
+    Pass channels=["teams","email"] to notify on both channels simultaneously.
     """
     results = {}
-    if "teams" in channels or "both" in channels:
+    if "teams" in channels:
         results["teams"] = await _send_teams_notification(...)
-    if "email" in channels or "both" in channels:
+    if "email" in channels:
         results["email"] = await _send_email_notification(...)
     return {"status": "sent", "channels": results, "sop_step": sop_step}
 ```
@@ -531,16 +544,22 @@ Generate ≥30 production-quality SOP markdown files covering all domains. Each 
 New script: `scripts/upload_sops.py` — runs once after Phase 31 content is authored, and again whenever SOPs are updated:
 
 ```python
-# scripts/upload_sops.py
-# 1. Upload each .md file to the Foundry vector store (aap-sops-v1)
-#    openai.vector_stores.files.upload_and_poll(vector_store_id, file)
-# 2. Parse YAML front matter from each file
-# 3. Upsert metadata row into PostgreSQL sops table
-#    (foundry_filename, foundry_file_id, title, domain, scenario_tags, etc.)
-# Idempotent: skips unchanged files, replaces changed ones
+# scripts/upload_sops.py — idempotent SOP upload
+# Idempotency mechanism: SHA-256 content hash stored in PostgreSQL sops.content_hash
+# Skip upload if file hash matches stored hash; replace if hash differs.
+#
+# 1. For each .md file in sops/:
+#    a. Compute SHA-256 hash of file content
+#    b. Look up existing row in PostgreSQL sops table by foundry_filename
+#    c. If row exists AND content_hash matches → skip (no change)
+#    d. If row exists AND hash differs → delete old foundry file, re-upload, update row
+#    e. If no row → upload to Foundry vector store (aap-sops-v1), insert row
+# 2. openai.vector_stores.files.upload_and_poll(vector_store_id, file)
+# 3. Parse YAML front matter → upsert PostgreSQL sops row
+#    (foundry_filename, foundry_file_id, content_hash, title, domain, scenario_tags, ...)
 ```
 
-No pgvector embeddings needed — the Foundry vector store handles all semantic indexing. The PostgreSQL `sops` table is a lightweight metadata registry only (domain, tags, filename → Foundry file ID).
+No pgvector embeddings needed — the Foundry vector store handles all semantic indexing. The PostgreSQL `sops` table is a lightweight metadata registry only (domain, tags, filename → Foundry file ID + content hash for idempotency).
 
 ---
 
@@ -568,10 +587,13 @@ Bring the VM domain (Azure VM, Arc VM, VMSS, AKS) and the Patch/EOL agents to wo
 |------|-------------|-----|
 | `query_vm_extensions` | List extensions on a VM, health state, provisioning status | `ComputeManagementClient.virtual_machine_extensions.list()` |
 | `query_boot_diagnostics` | Retrieve boot diagnostics screenshot URI and serial log | `ComputeManagementClient.virtual_machines.retrieve_boot_diagnostics_data()` |
+| `query_vm_sku_options` | List available VM SKUs in the same region/family for rightsizing | `ComputeManagementClient.resource_skus.list()` — diagnostic read only |
 | `propose_vm_restart` | Create HITL ApprovalRecord for VM restart | `approval_manager.create_approval_record()` — no ARM call |
-| `propose_vm_resize` | Create HITL ApprovalRecord for VM resize with SKU recommendation | `ComputeManagementClient.resource_skus.list()` for next-tier options |
-| `propose_vm_redeploy` | Create HITL ApprovalRecord for VM redeploy (host-level issue) | `approval_manager.create_approval_record()` |
+| `propose_vm_resize` | Create HITL ApprovalRecord for VM resize; accepts `target_sku` resolved by agent after calling `query_vm_sku_options` | `approval_manager.create_approval_record()` — no ARM call |
+| `propose_vm_redeploy` | Create HITL ApprovalRecord for VM redeploy (host-level issue) | `approval_manager.create_approval_record()` — no ARM call |
 | `query_disk_health` | Disk IOPS/throughput metrics, disk state, encryption status | `ComputeManagementClient.disks.get()` + Monitor metrics |
+
+> **HITL rule:** All `propose_*` tools call only `approval_manager.create_approval_record()`. No ARM mutations. SKU lookup for resize is a separate diagnostic tool (`query_vm_sku_options`) called before `propose_vm_resize`.
 
 **VMSS tools:**
 
@@ -597,7 +619,7 @@ Bring the VM domain (Azure VM, Arc VM, VMSS, AKS) and the Patch/EOL agents to wo
 | Tool | Description | SDK |
 |------|-------------|-----|
 | `query_arc_extension_health` | List Arc extensions, provisioning state, error details | `azure-mgmt-hybridcompute` → `HybridComputeManagementClient.machine_extensions.list()` |
-| `query_arc_guest_config` | Guest configuration assignments and compliance state | `azure-mgmt-hybridcompute` → `machine_run_commands` + policy assignments |
+| `query_arc_guest_config` | Guest configuration assignments and compliance state | `azure-mgmt-guestconfiguration` → `GuestConfigurationClient.guest_configuration_assignment_reports.list()` |
 | `query_arc_connectivity` | Agent connectivity status, last heartbeat, disconnect reason | `HybridComputeManagementClient.machines.get()` → `properties.agentConfiguration` |
 | `propose_arc_assessment` | HITL ApprovalRecord for triggering a new patch assessment on Arc VM | `approval_manager.create_approval_record()` |
 
@@ -666,8 +688,16 @@ result = evaluate(
 )
 
 # CI gate: fail if any metric drops below threshold
-assert result["metrics"]["task_adherence"] >= 4.0, "TaskAdherence below threshold"
-assert result["metrics"]["triage_completeness"] >= 0.95, "Triage completeness below 95%"
+# Note: azure-ai-evaluation SDK returns metrics with evaluator-name prefix,
+# e.g. "task_adherence.task_adherence" or "task_adherence.score" depending on version.
+# Use .get() with explicit error to catch key mismatches on first run.
+ta_score = result.get("metrics", {}).get("task_adherence.task_adherence") \
+           or result.get("metrics", {}).get("task_adherence.score") \
+           or result["metrics"]["task_adherence"]  # fallback for flat key
+tc_score = result.get("metrics", {}).get("triage_completeness.triage_completeness") \
+           or result["metrics"]["triage_completeness"]
+assert ta_score >= 4.0, f"TaskAdherence {ta_score} below threshold 4.0"
+assert tc_score >= 0.95, f"TriageCompleteness {tc_score} below threshold 0.95"
 ```
 
 ### 7.4 Foundry Portal — Continuous Evaluation Rules
@@ -685,34 +715,35 @@ In the Foundry portal (Evaluate → Continuous evaluation):
 
 Replace the current pgvector-only runbook RAG with Azure AI Search (portal-native). Attach SOP files as a `FileSearchTool` vector store on every agent definition. Operators can manage knowledge sources directly in the Foundry portal.
 
-### 8.2 FileSearch Vector Store — SOPs
+### 8.2 FileSearch Vector Store — SOPs (Phase 30 provisioned, Phase 34 attaches)
+
+The Foundry vector store `aap-sops-v1` is **provisioned in Phase 30** via `agents/shared/sop_store.py` and `scripts/upload_sops.py`. Phase 34 attaches it to every agent definition via `FileSearchTool`:
 
 ```python
-# agents/shared/knowledge.py
-from azure.ai.projects import AIProjectClient
+# agents/compute/agent.py — attach SOP vector store (Phase 34 addition)
+from azure.ai.projects.models import FileSearchTool
 
-def provision_sop_vector_store(project: AIProjectClient, sop_blobs: list[str]) -> str:
-    openai = project.get_openai_client()
-    vs = openai.vector_stores.create(name="aap-sops")
-    
-    for blob_path in sop_blobs:
-        content = fetch_sop_blob(blob_path)
-        openai.vector_stores.files.upload_and_poll(
-            vector_store_id=vs.id,
-            file=io.BytesIO(content.encode()),
-            filename=blob_path.replace("/", "_"),
+def create_compute_agent(project: AIProjectClient) -> AgentVersion:
+    return project.agents.create_version(
+        agent_name="aap-compute-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ["AGENT_MODEL_DEPLOYMENT"],
+            instructions=COMPUTE_AGENT_SYSTEM_PROMPT,
+            tools=[
+                FileSearchTool(vector_store_ids=[os.environ["SOP_VECTOR_STORE_ID"]]),
+                AzureAISearchTool(...),   # runbook RAG — Phase 34
+            ],
         )
-    
-    return vs.id   # stored as env var SOP_VECTOR_STORE_ID
+    )
 ```
 
-Agents with `FileSearchTool(vector_store_ids=[SOP_VECTOR_STORE_ID])` can now retrieve SOP content natively via the Foundry file search tool — visible in portal traces as `file_search` tool calls.
+`SOP_VECTOR_STORE_ID` is the `vs.id` written to the environment by `scripts/upload_sops.py` and set on all Container Apps. No blob storage, no re-upload in Phase 34 — the vector store already exists. Agents can now use `file_search` to retrieve any SOP by filename, visible as named spans in the Foundry portal trace waterfall.
 
 ### 8.3 Azure AI Search — Runbook RAG Migration
 
 ```python
 # Migration: index existing pgvector runbooks into Azure AI Search
-# services/api-gateway/migrations/004_migrate_runbooks_to_ai_search.py
+# scripts/migrate_runbooks_to_ai_search.py
 
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
