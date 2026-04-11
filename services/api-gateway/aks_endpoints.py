@@ -33,9 +33,26 @@ except ImportError:
     _ARG_AVAILABLE = False
     logger.warning("azure-mgmt-resourcegraph not available — AKS list returns empty")
 
+try:
+    from azure.mgmt.containerservice import ContainerServiceClient as _AKSClient  # type: ignore[import]
+except ImportError:
+    _AKSClient = None  # type: ignore[assignment,misc]
+
+# AKS metric names for Azure Monitor queries
+_AKS_METRIC_NAMES = [
+    "Percentage CPU",
+    "Network In Total",
+    "Network Out Total",
+    "node_cpu_usage_percentage",
+    "node_memory_rss_percentage",
+]
+
 
 def _log_sdk_availability() -> None:
-    logger.info("aks_endpoints: azure-mgmt-resourcegraph available=%s", _ARG_AVAILABLE)
+    logger.info(
+        "aks_endpoints: azure-mgmt-resourcegraph available=%s containerservice available=%s",
+        _ARG_AVAILABLE, _AKSClient is not None,
+    )
 
 
 _log_sdk_availability()
@@ -59,6 +76,54 @@ def _extract_subscription_id(resource_id: str) -> str:
         if part.lower() == "subscriptions" and i + 1 < len(parts):
             return parts[i + 1]
     return ""
+
+
+def _fetch_single_metric(
+    client: Any,
+    resource_id: str,
+    metric_name: str,
+    timespan: str,
+    interval: str,
+) -> Optional[Dict[str, Any]]:
+    """Fetch a single metric from Azure Monitor for an AKS resource.
+
+    Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
+    the metric is unsupported or returns no data.  Exceptions are caught
+    per-metric so one unsupported metric cannot poison the whole batch.
+    """
+    try:
+        response = client.metrics.list(
+            resource_uri=resource_id,
+            metricnames=metric_name,
+            timespan=timespan,
+            interval=interval,
+            aggregation="Average,Maximum,Minimum",
+        )
+        for metric in response.value:
+            timeseries = []
+            for ts in metric.timeseries:
+                for dp in ts.data:
+                    if dp.time_stamp:
+                        timeseries.append({
+                            "timestamp": dp.time_stamp.isoformat(),
+                            "average": dp.average,
+                            "maximum": dp.maximum,
+                            "minimum": dp.minimum,
+                        })
+            name_val = (
+                metric.name.value if hasattr(metric.name, "value")
+                else str(metric.name) if metric.name else None
+            )
+            unit_val = (
+                metric.unit.value if hasattr(metric.unit, "value")
+                else str(metric.unit) if metric.unit else None
+            )
+            return {"name": name_val, "unit": unit_val, "timeseries": timeseries}
+        # response.value was empty — metric unsupported for this resource type
+        return None
+    except Exception as exc:
+        logger.warning("aks_metrics: skipping metric=%r error=%s", metric_name, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -217,22 +282,59 @@ async def get_aks_detail(
         ready_nodes = 0
         pools_ready = 0
 
-        for pool in (cluster.agent_pool_profiles or []):
-            pool_count = pool.count or 0
-            total_nodes += pool_count
-            ready_nodes += pool_count  # ARM does not expose per-pool node health; assumes all nodes ready
-            pools_ready += 1
-            node_pools.append({
-                "name": pool.name or "",
-                "vm_size": pool.vm_size or "",
-                "node_count": pool_count,
-                "ready_node_count": pool_count,
-                "mode": str(pool.mode or "User"),
-                "os_type": str(pool.os_type or "Linux"),
-                "min_count": pool.min_count,
-                "max_count": pool.max_count,
-                "provisioning_state": pool.provisioning_state or "unknown",
-            })
+        # Use agent_pools.list() for accurate ready_node_count via provisioning_state + power_state
+        # Fall back to cluster.agent_pool_profiles if _AKSClient shim is unavailable
+        try:
+            if _AKSClient is not None:
+                pools_iter = aks_client.agent_pools.list(resource_group, cluster_name)
+            else:
+                raise ImportError("ContainerServiceClient shim unavailable")
+
+            for pool in pools_iter:
+                pool_count = pool.count or 0
+                total_nodes += pool_count
+                # A pool is ready when provisioning succeeded and its nodes are powered on
+                power_code = getattr(getattr(pool, "power_state", None), "code", None)
+                if pool.provisioning_state == "Succeeded" and power_code == "Running":
+                    pool_ready_count = pool_count
+                else:
+                    pool_ready_count = 0
+                ready_nodes += pool_ready_count
+                if pool_ready_count > 0:
+                    pools_ready += 1
+                node_pools.append({
+                    "name": pool.name or "",
+                    "vm_size": pool.vm_size or "",
+                    "node_count": pool_count,
+                    "ready_node_count": pool_ready_count,
+                    "mode": str(pool.mode or "User"),
+                    "os_type": str(pool.os_type or "Linux"),
+                    "min_count": pool.min_count,
+                    "max_count": pool.max_count,
+                    "provisioning_state": pool.provisioning_state or "unknown",
+                })
+        except Exception as pool_exc:
+            logger.warning("aks_detail: agent_pools.list failed, falling back to agent_pool_profiles error=%s", pool_exc)
+            node_pools = []
+            total_nodes = 0
+            ready_nodes = 0
+            pools_ready = 0
+            for pool in (cluster.agent_pool_profiles or []):
+                pool_count = pool.count or 0
+                total_nodes += pool_count
+                ready_nodes += pool_count
+                pools_ready += 1
+                node_pools.append({
+                    "name": pool.name or "",
+                    "vm_size": pool.vm_size or "",
+                    "node_count": pool_count,
+                    "ready_node_count": pool_count,
+                    "mode": str(pool.mode or "User"),
+                    "os_type": str(pool.os_type or "Linux"),
+                    "min_count": pool.min_count,
+                    "max_count": pool.max_count,
+                    "provisioning_state": pool.provisioning_state or "unknown",
+                })
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
@@ -271,16 +373,65 @@ async def get_aks_metrics(
     interval: str = Query("PT5M"),
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Get Azure Monitor metrics for an AKS cluster."""
+    """Get Azure Monitor metrics for an AKS cluster.
+
+    Each metric is fetched concurrently.  AKS-specific metrics (node_cpu_usage_percentage,
+    node_memory_rss_percentage) will surface as empty timeseries if the cluster does not
+    emit them — acceptable graceful degradation.  Falls back to empty metrics list on error.
+    """
     start_time = time.monotonic()
     try:
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError:
         return {"resource_id": "", "timespan": timespan, "interval": interval, "metrics": []}
 
-    duration_ms = (time.monotonic() - start_time) * 1000
-    logger.info("aks_metrics: resource_id=%s timespan=%s duration_ms=%.1f", resource_id[:60], timespan, duration_ms)
-    return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+    sub_id = _extract_subscription_id(resource_id)
+    if not sub_id:
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+
+    try:
+        import asyncio
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.monitor import MonitorManagementClient  # type: ignore[import]
+
+        credential = DefaultAzureCredential()
+        client = MonitorManagementClient(credential, sub_id)
+        loop = asyncio.get_event_loop()
+
+        tasks = [
+            loop.run_in_executor(
+                None,
+                _fetch_single_metric,
+                client,
+                resource_id,
+                name,
+                timespan,
+                interval,
+            )
+            for name in _AKS_METRIC_NAMES
+        ]
+        results = await asyncio.gather(*tasks)
+        metrics_out = [r for r in results if r is not None]
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "aks_metrics: resource=%s requested=%d returned=%d duration_ms=%.0f",
+            resource_id[-60:], len(_AKS_METRIC_NAMES), len(metrics_out), duration_ms,
+        )
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "interval": interval,
+            "metrics": metrics_out,
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "aks_metrics: failed resource=%s error=%s duration_ms=%.0f",
+            resource_id[-60:], exc, duration_ms,
+        )
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
 
 
 @router.post("/{resource_id_base64}/chat")

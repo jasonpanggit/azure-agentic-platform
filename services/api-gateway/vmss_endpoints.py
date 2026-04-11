@@ -33,9 +33,29 @@ except ImportError:
     _ARG_AVAILABLE = False
     logger.warning("azure-mgmt-resourcegraph not available — VMSS list returns empty")
 
+try:
+    from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as _RHClient  # type: ignore[import]
+except ImportError:
+    try:
+        from azure.mgmt.resourcehealth import MicrosoftResourceHealth as _RHClient  # type: ignore[import,no-redef]
+    except ImportError:
+        _RHClient = None  # type: ignore[assignment,misc]
+
+# VMSS metric names for Azure Monitor queries
+_VMSS_METRIC_NAMES = [
+    "Percentage CPU",
+    "Network In Total",
+    "Network Out Total",
+    "Disk Read Bytes",
+    "Disk Write Bytes",
+]
+
 
 def _log_sdk_availability() -> None:
-    logger.info("vmss_endpoints: azure-mgmt-resourcegraph available=%s", _ARG_AVAILABLE)
+    logger.info(
+        "vmss_endpoints: azure-mgmt-resourcegraph available=%s resource-health available=%s",
+        _ARG_AVAILABLE, _RHClient is not None,
+    )
 
 
 _log_sdk_availability()
@@ -59,6 +79,102 @@ def _extract_subscription_id(resource_id: str) -> str:
         if part.lower() == "subscriptions" and i + 1 < len(parts):
             return parts[i + 1]
     return ""
+
+
+def _get_vmss_health_states(
+    resource_ids: List[str],
+    credential: Any,
+) -> Dict[str, str]:
+    """Fetch Resource Health availability states for a list of VMSS resource IDs.
+
+    Modelled on vm_inventory._get_health_states_sync().  Returns a dict mapping
+    resource_id.lower() → availability_state string (e.g. "Available",
+    "Unavailable", "Unknown").  Returns {} when the Resource Health SDK is
+    unavailable or any unrecoverable error occurs.
+    """
+    if _RHClient is None:
+        return {}
+
+    results: Dict[str, str] = {}
+    for rid in resource_ids:
+        parts = rid.split("/")
+        try:
+            idx = [p.lower() for p in parts].index("subscriptions")
+            sub_id = parts[idx + 1]
+        except (ValueError, IndexError):
+            results[rid.lower()] = "Unknown"
+            continue
+        try:
+            client = _RHClient(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=rid,
+                expand="recommendedActions",
+            )
+            raw_state = (
+                status.properties.availability_state
+                if status.properties and status.properties.availability_state
+                else None
+            )
+            if raw_state is None:
+                state = "Unknown"
+            elif hasattr(raw_state, "value"):
+                state = raw_state.value
+            else:
+                state = str(raw_state)
+            results[rid.lower()] = state
+        except Exception as exc:
+            logger.debug("vmss_health: failed resource=%s error=%s", rid[:80], exc)
+            results[rid.lower()] = "Unknown"
+
+    return results
+
+
+def _fetch_single_metric(
+    client: Any,
+    resource_id: str,
+    metric_name: str,
+    timespan: str,
+    interval: str,
+) -> Optional[Dict[str, Any]]:
+    """Fetch a single metric from Azure Monitor for a VMSS resource.
+
+    Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
+    the metric is unsupported or returns no data.  Exceptions are caught
+    per-metric so one unsupported metric cannot poison the whole batch.
+    """
+    try:
+        response = client.metrics.list(
+            resource_uri=resource_id,
+            metricnames=metric_name,
+            timespan=timespan,
+            interval=interval,
+            aggregation="Average,Maximum,Minimum",
+        )
+        for metric in response.value:
+            timeseries = []
+            for ts in metric.timeseries:
+                for dp in ts.data:
+                    if dp.time_stamp:
+                        timeseries.append({
+                            "timestamp": dp.time_stamp.isoformat(),
+                            "average": dp.average,
+                            "maximum": dp.maximum,
+                            "minimum": dp.minimum,
+                        })
+            name_val = (
+                metric.name.value if hasattr(metric.name, "value")
+                else str(metric.name) if metric.name else None
+            )
+            unit_val = (
+                metric.unit.value if hasattr(metric.unit, "value")
+                else str(metric.unit) if metric.unit else None
+            )
+            return {"name": name_val, "unit": unit_val, "timeseries": timeseries}
+        # response.value was empty — metric unsupported for this SKU
+        return None
+    except Exception as exc:
+        logger.warning("vmss_metrics: skipping metric=%r error=%s", metric_name, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +266,23 @@ async def list_vmss(
             }
             for r in rows
         ]
+
+        # Enrich health_state from Resource Health API (best-effort, falls back to "unknown")
+        if vmss_list:
+            import asyncio
+            resource_ids = [item["id"] for item in vmss_list if item["id"]]
+            loop = asyncio.get_event_loop()
+            health_map = await loop.run_in_executor(
+                None, _get_vmss_health_states, resource_ids, credential
+            )
+            for item in vmss_list:
+                state = health_map.get(item["id"].lower(), "unknown")
+                item["health_state"] = state.lower()
+                # Derive power_state from health_state
+                if state.lower() == "available":
+                    item["power_state"] = "Running"
+                elif state.lower() != "unknown":
+                    item["power_state"] = state.capitalize()
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_list: total=%d duration_ms=%.1f", len(vmss_list), duration_ms)
@@ -298,17 +431,64 @@ async def get_vmss_metrics(
     interval: str = Query("PT5M"),
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Get Azure Monitor metrics for a VMSS."""
+    """Get Azure Monitor metrics for a VMSS.
+
+    Each metric is fetched concurrently.  Falls back to empty metrics list when
+    the Monitor SDK is unavailable or the resource returns no data.
+    """
     start_time = time.monotonic()
     try:
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError:
         return {"resource_id": "", "timespan": timespan, "interval": interval, "metrics": []}
 
-    # Return empty metrics stub — real metrics implementation deferred to Phase 36
-    duration_ms = (time.monotonic() - start_time) * 1000
-    logger.info("vmss_metrics: resource_id=%s timespan=%s duration_ms=%.1f", resource_id[:60], timespan, duration_ms)
-    return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+    sub_id = _extract_subscription_id(resource_id)
+    if not sub_id:
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+
+    try:
+        import asyncio
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.monitor import MonitorManagementClient  # type: ignore[import]
+
+        credential = DefaultAzureCredential()
+        client = MonitorManagementClient(credential, sub_id)
+        loop = asyncio.get_event_loop()
+
+        tasks = [
+            loop.run_in_executor(
+                None,
+                _fetch_single_metric,
+                client,
+                resource_id,
+                name,
+                timespan,
+                interval,
+            )
+            for name in _VMSS_METRIC_NAMES
+        ]
+        results = await asyncio.gather(*tasks)
+        metrics_out = [r for r in results if r is not None]
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "vmss_metrics: resource=%s requested=%d returned=%d duration_ms=%.0f",
+            resource_id[-60:], len(_VMSS_METRIC_NAMES), len(metrics_out), duration_ms,
+        )
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "interval": interval,
+            "metrics": metrics_out,
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "vmss_metrics: failed resource=%s error=%s duration_ms=%.0f",
+            resource_id[-60:], exc, duration_ms,
+        )
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
 
 
 @router.post("/{resource_id_base64}/chat")

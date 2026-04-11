@@ -47,6 +47,9 @@ azure-mgmt-loganalytics>=13.0.0
 azure-mgmt-monitor>=6.0.0
 azure-mgmt-resourcehealth==1.0.0b6
 
+# AKS node pool detail — agent_pools.list() for accurate ready_node_count (Task x45)
+azure-mgmt-containerservice>=21.0.0
+
 # VM Cost Summary — Azure Advisor rightsizing recommendations (Phase 39)
 azure-mgmt-advisor>=9.0.0
 
