@@ -117,8 +117,8 @@ async def list_vmss(
         tostring(properties.virtualMachineProfile.storageProfile.imageReference.sku)
     ),
     power_state = 'running',
-    health_state = 'unknown',
-    autoscale_enabled = false,
+    health_state = iff(tostring(properties.provisioningState) =~ 'Succeeded', 'available', iff(tostring(properties.provisioningState) =~ 'Failed', 'degraded', 'unknown')),
+    autoscale_enabled = tobool(coalesce(tobool(properties.automaticRepairsPolicy.enabled), false)),
     active_alert_count = 0"""
 
         if search:
@@ -253,10 +253,23 @@ async def get_vmss_detail(
             "sku": vmss.sku.name if vmss.sku else "",
             "instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
             "healthy_instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
-            "os_type": "",
-            "os_image_version": "",
+            "os_type": (vmss.virtual_machine_profile.storage_profile.os_disk.os_type.value
+                        if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
+                        and vmss.virtual_machine_profile.storage_profile.os_disk
+                        and vmss.virtual_machine_profile.storage_profile.os_disk.os_type
+                        else ""),
+            "os_image_version": " ".join(filter(None, [
+                (vmss.virtual_machine_profile.storage_profile.image_reference.offer
+                 if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
+                 and vmss.virtual_machine_profile.storage_profile.image_reference else ""),
+                (vmss.virtual_machine_profile.storage_profile.image_reference.sku
+                 if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
+                 and vmss.virtual_machine_profile.storage_profile.image_reference else ""),
+            ])).strip(),
             "power_state": "running",
-            "health_state": "unknown",
+            "health_state": ("available" if vmss.provisioning_state == "Succeeded"
+                             else "degraded" if vmss.provisioning_state == "Failed"
+                             else "unknown"),
             "autoscale_enabled": autoscale_settings.get("enabled", False),
             "active_alert_count": 0,
             "min_count": autoscale_settings["min_count"],
