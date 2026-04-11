@@ -519,6 +519,10 @@ resource "azapi_resource" "a2a_connection" {
   name      = "aap-${each.key}-agent-connection"
   parent_id = var.foundry_project_id
 
+  # schema_validation_enabled = false required: azapi 2.9.0 schema for
+  # 2025-04-01-preview does not recognise the RemoteA2A body shape.
+  schema_validation_enabled = false
+
   body = {
     properties = {
       category    = "RemoteA2A"

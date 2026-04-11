@@ -121,16 +121,21 @@ def run_eval_pipeline(
     }
 
     if not dry_run and evaluate is not None:
-        try:
-            std_evaluators = build_eval_config(
-                model_config=model_config,
-                credential=credential,
-                azure_ai_project=azure_ai_project,
-                include_safety=include_safety,
-            )
-            evaluators.update(std_evaluators)
-        except ImportError:
-            logger.warning("Standard evaluators unavailable -- running custom evaluators only")
+        # Only add standard LLM-based evaluators when a project endpoint is
+        # configured. Without it they fail with credential/config errors and
+        # the "Conversation must be a dictionary" shape mismatch against our
+        # JSONL format (which uses a list, not an OpenAI dict).
+        if azure_ai_project or os.environ.get("AZURE_PROJECT_ENDPOINT"):
+            try:
+                std_evaluators = build_eval_config(
+                    model_config=model_config,
+                    credential=credential,
+                    azure_ai_project=azure_ai_project,
+                    include_safety=include_safety,
+                )
+                evaluators.update(std_evaluators)
+            except Exception:
+                logger.warning("Standard evaluators unavailable -- running custom evaluators only")
 
         eval_kwargs: dict[str, Any] = {
             "data": data_path,
