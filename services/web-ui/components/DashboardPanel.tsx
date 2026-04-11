@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -13,10 +13,12 @@ import { VMTab } from './VMTab'
 import { VMDetailPanel } from './VMDetailPanel'
 import { VMSSTab } from './VMSSTab'
 import { VMSSDetailPanel } from './VMSSDetailPanel'
+import { AKSTab } from './AKSTab'
+import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'cost' | 'observability' | 'patch'
+type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch'
 
 interface FilterState {
   severity?: string
@@ -31,6 +33,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'resources', label: 'Resources', Icon: Server },
   { id: 'vms', label: 'VMs', Icon: Monitor },
   { id: 'vmss', label: 'VMSS', Icon: Scaling },
+  { id: 'aks', label: 'AKS', Icon: Container },
   { id: 'cost', label: 'Cost', Icon: TrendingDown },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
@@ -74,6 +77,19 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
   function closeVMSSDetail() {
     setVMSSDetailOpen(false)
     setSelectedVMSS(null)
+  }
+
+  const [aksDetailOpen, setAKSDetailOpen] = useState(false)
+  const [selectedAKS, setSelectedAKS] = useState<{ resourceId: string; resourceName: string } | null>(null)
+
+  function openAKSDetail(resourceId: string, resourceName: string) {
+    setSelectedAKS({ resourceId, resourceName })
+    setAKSDetailOpen(true)
+  }
+
+  function closeAKSDetail() {
+    setAKSDetailOpen(false)
+    setSelectedAKS(null)
   }
 
   function handleTabChange(tab: TabId) {
@@ -146,7 +162,16 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
               <AlertFilters filters={filters} onChange={setFilters} />
             </div>
-            <AlertFeed filters={filters} subscriptions={selectedSubscriptions} onInvestigate={(incidentId, resourceId, resourceName) => openVMDetail(incidentId, resourceId ?? null, resourceName ?? null)} />
+            <AlertFeed filters={filters} subscriptions={selectedSubscriptions} onInvestigate={(incidentId, resourceId, resourceName) => {
+              const resId = (resourceId ?? '').toLowerCase()
+              if (resId.includes('virtualmachinescalesets')) {
+                if (resourceId && resourceName) openVMSSDetail(resourceId, resourceName)
+              } else if (resId.includes('managedclusters')) {
+                if (resourceId && resourceName) openAKSDetail(resourceId, resourceName)
+              } else {
+                openVMDetail(incidentId, resourceId ?? null, resourceName ?? null)
+              }
+            }} />
           </div>
         </div>
 
@@ -177,6 +202,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         <div id="tabpanel-vmss" role="tabpanel" aria-labelledby="tab-vmss" hidden={activeTab !== 'vmss'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <VMSSTab subscriptions={selectedSubscriptions} onVMSSClick={openVMSSDetail} />
+          </div>
+        </div>
+
+        <div id="tabpanel-aks" role="tabpanel" aria-labelledby="tab-aks" hidden={activeTab !== 'aks'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <AKSTab subscriptions={selectedSubscriptions} onAKSClick={openAKSDetail} />
           </div>
         </div>
 
@@ -228,6 +259,22 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
             resourceId={selectedVMSS.resourceId}
             resourceName={selectedVMSS.resourceName}
             onClose={closeVMSSDetail}
+          />
+        </>
+      )}
+
+      {/* AKS Detail Panel + backdrop */}
+      {aksDetailOpen && selectedAKS && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            style={{ background: 'rgba(0,0,0,0.3)' }}
+            onClick={closeAKSDetail}
+          />
+          <AKSDetailPanel
+            resourceId={selectedAKS.resourceId}
+            resourceName={selectedAKS.resourceName}
+            onClose={closeAKSDetail}
           />
         </>
       )}

@@ -119,6 +119,7 @@ from services.api_gateway.pattern_analyzer import (
 from services.api_gateway.eol_endpoints import router as eol_router
 from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
+from services.api_gateway.aks_endpoints import router as aks_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -492,6 +493,7 @@ app.include_router(resources_inventory_router)
 app.include_router(topology_tree_router)
 app.include_router(eol_router)
 app.include_router(vmss_router)
+app.include_router(aks_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
