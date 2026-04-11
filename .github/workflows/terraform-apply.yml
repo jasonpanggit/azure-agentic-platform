@@ -262,9 +262,11 @@ jobs:
         env:
           AZURE_PROJECT_ENDPOINT: ${{ secrets.FOUNDRY_PROJECT_ENDPOINT }}
         run: |
-          # Ensure python3-venv is available (required on Debian/Ubuntu runners)
-          if ! python3 -m venv --help &>/dev/null; then
-            PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          # Ensure python3-venv is available (required on Debian/Ubuntu runners).
+          # Check ensurepip directly — `python3 -m venv --help` succeeds even when
+          # ensurepip is missing (the venv module imports but can't seed pip).
+          PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          if ! python3 -c "import ensurepip" &>/dev/null; then
             sudo apt-get install -y -qq "python${PYVER}-venv" || sudo apt-get install -y -qq python3-venv
           fi
           python3 -m venv .venv-foundry
