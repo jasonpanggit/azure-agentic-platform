@@ -316,6 +316,35 @@ async def _cancel_active_runs(client: Any, thread_id: str) -> None:
         logger.warning("_cancel_active_runs: failed to list/cancel runs on thread %s: %s", thread_id, exc)
 
 
+_VERIFICATION_INSTRUCTIONS: dict[str, str] = {
+    "RESOLVED": (
+        "The remediation action has RESOLVED the issue. "
+        "Confirm the resource is healthy, summarize the root cause and fix, "
+        "and recommend this incident be closed."
+    ),
+    "IMPROVED": (
+        "The remediation action has IMPROVED the resource health but the issue "
+        "is not fully resolved. Re-diagnose the current state and determine if "
+        "a follow-up action is needed."
+    ),
+    "DEGRADED": (
+        "The remediation action has DEGRADED the resource. Auto-rollback has been triggered. "
+        "Re-diagnose the issue with fresh signals and propose an alternative approach. "
+        "Do NOT re-propose the same action that caused degradation."
+    ),
+    "TIMEOUT": (
+        "Verification timed out — resource health status is unknown. "
+        "Re-check the resource health manually and report the current state. "
+        "If the resource is healthy, recommend closure. If not, propose next steps."
+    ),
+}
+
+
+def _build_verification_instruction(verification_result: str) -> str:
+    """Build the re-diagnosis instruction based on verification outcome."""
+    return _VERIFICATION_INSTRUCTIONS.get(verification_result, _VERIFICATION_INSTRUCTIONS["TIMEOUT"])
+
+
 async def _verify_remediation(
     execution_id: str,
     resource_id: str,
