@@ -30,7 +30,9 @@ except ImportError:
     PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from compute.tools import (
     ALLOWED_MCP_TOOLS,
+    detect_performance_drift,
     execute_run_command,
+    get_vm_forecast,
     parse_boot_diagnostics_serial_log,
     propose_aks_node_pool_scale,
     propose_vm_redeploy,
@@ -50,6 +52,7 @@ from compute.tools import (
     query_resource_health,
     query_vm_extensions,
     query_vm_guest_health,
+    query_vm_performance_baseline,
     query_vm_sku_options,
     query_vmss_autoscale,
     query_vmss_instances,
@@ -142,6 +145,9 @@ AKS node-level issues, App Service, and Azure Functions.
     "parse_boot_diagnostics_serial_log",
     "query_vm_guest_health",
     "query_ama_guest_metrics",
+    "get_vm_forecast",
+    "query_vm_performance_baseline",
+    "detect_performance_drift",
 ]))
 
 
@@ -189,6 +195,9 @@ def create_compute_agent() -> ChatAgent:
             parse_boot_diagnostics_serial_log,
             query_vm_guest_health,
             query_ama_guest_metrics,
+            get_vm_forecast,
+            query_vm_performance_baseline,
+            detect_performance_drift,
         ],
     )
     logger.info("create_compute_agent: ChatAgent created successfully")
@@ -243,6 +252,9 @@ def create_compute_agent_version(project: "AIProjectClient") -> object:
                 parse_boot_diagnostics_serial_log,
                 query_vm_guest_health,
                 query_ama_guest_metrics,
+                get_vm_forecast,
+                query_vm_performance_baseline,
+                detect_performance_drift,
             ],
         ),
     )

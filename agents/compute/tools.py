@@ -14,6 +14,7 @@ Allowed MCP tools (explicit allowlist — no wildcards):
 from __future__ import annotations
 
 import logging
+import os
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -65,6 +66,18 @@ try:
     from azure.mgmt.containerservice import ContainerServiceClient
 except ImportError:
     ContainerServiceClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-cosmos may not be installed in all envs
+try:
+    from azure.cosmos import CosmosClient
+except ImportError:
+    CosmosClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — ForecasterClient from api-gateway (co-located in container image)
+try:
+    from services.api_gateway.forecaster import ForecasterClient
+except ImportError:
+    ForecasterClient = None  # type: ignore[assignment,misc]
 
 from shared.approval_manager import create_approval_record
 
@@ -2155,6 +2168,523 @@ def query_ama_guest_metrics(
             return {
                 "error": str(exc),
                 "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+@ai_function
+def get_vm_forecast(
+    resource_id: str,
+    subscription_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Return capacity exhaustion forecasts for a VM from the Cosmos baselines store.
+
+    Wraps ForecasterClient.get_forecasts() to surface time-to-breach estimates,
+    Holt smoothing level/trend, MAPE confidence, and an imminent_breach flag
+    for CPU, memory, and disk metrics collected by the background sweep loop.
+
+    Args:
+        resource_id: ARM resource ID of the VM.
+        subscription_id: Azure subscription ID (used for tracing only).
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with forecasts list. Each forecast includes: metric_name,
+        time_to_breach_minutes, confidence, mape, level, trend,
+        imminent_breach (bool: time_to_breach_minutes < 60).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="get_vm_forecast",
+        tool_parameters={"resource_id": resource_id, "subscription_id": subscription_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+            if not cosmos_endpoint:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "COSMOS_ENDPOINT environment variable is not set",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            if CosmosClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-cosmos not installed",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            if ForecasterClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "ForecasterClient not available (services.api_gateway not installed)",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            cosmos_client = CosmosClient(url=cosmos_endpoint, credential=credential)
+            forecaster = ForecasterClient(cosmos_client=cosmos_client, credential=credential)
+
+            raw_forecasts = forecaster.get_forecasts(resource_id)
+
+            forecasts: List[Dict[str, Any]] = []
+            for item in raw_forecasts:
+                ttb = item.get("time_to_breach_minutes")
+                forecasts.append({
+                    "metric_name": item.get("metric_name"),
+                    "time_to_breach_minutes": ttb,
+                    "confidence": item.get("confidence"),
+                    "mape": item.get("mape"),
+                    "level": item.get("level"),
+                    "trend": item.get("trend"),
+                    "threshold": item.get("threshold"),
+                    "imminent_breach": ttb is not None and ttb < 60,
+                    "last_updated": item.get("last_updated"),
+                })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            imminent_count = sum(1 for f in forecasts if f["imminent_breach"])
+            logger.info(
+                "get_vm_forecast: complete | resource=%s forecasts=%d imminent=%d duration_ms=%d",
+                resource_id,
+                len(forecasts),
+                imminent_count,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "forecasts": forecasts,
+                "total_forecasts": len(forecasts),
+                "imminent_breach_count": imminent_count,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("get_vm_forecast error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+@ai_function
+def query_vm_performance_baseline(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    workspace_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Query 30-day performance baseline percentiles (P50/P95/P99) for a VM.
+
+    Queries the Log Analytics `Perf` table for CPU %, Memory Available MB,
+    and Disk Reads/sec. Falls back to `InsightsMetrics` if the Perf table
+    returns no rows (VM uses AMA instead of MMA).
+
+    Args:
+        resource_group: Azure resource group name.
+        vm_name: VM name (used to filter Perf table by Computer field).
+        subscription_id: Azure subscription ID.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with per-metric percentile stats: {metric: {p50, p95, p99,
+        sample_count, trend_direction}} and query_status.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_performance_baseline",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=f"{subscription_id}/{resource_group}/{vm_name}",
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is required for performance baseline query",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # Primary: Perf table (MMA/AMA with Performance collection rule)
+            perf_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(30d)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize"
+                "     p50  = percentile(CounterValue, 50),"
+                "     p95  = percentile(CounterValue, 95),"
+                "     p99  = percentile(CounterValue, 99),"
+                "     sample_count = count()"
+                "     by ObjectName, CounterName"
+            )
+
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=perf_kql,
+                timespan="P30D",
+            )
+
+            metrics: Dict[str, Any] = {}
+            used_fallback = False
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        counter = row_dict.get("CounterName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk" and "Disk Reads" in counter:
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        metrics[key] = {
+                            "p50": _safe_float(row_dict.get("p50")),
+                            "p95": _safe_float(row_dict.get("p95")),
+                            "p99": _safe_float(row_dict.get("p99")),
+                            "sample_count": int(row_dict.get("sample_count") or 0),
+                            "trend_direction": "unknown",
+                        }
+
+            # Fallback: InsightsMetrics (AMA without Perf DCR)
+            if not metrics:
+                used_fallback = True
+                resource_id = (
+                    f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
+                    f"/providers/Microsoft.Compute/virtualMachines/{vm_name}"
+                )
+                fallback_kql = (
+                    "InsightsMetrics"
+                    f' | where _ResourceId =~ "{resource_id}"'
+                    " | where TimeGenerated > ago(30d)"
+                    ' | where (Namespace == "Processor" and Name == "UtilizationPercentage")'
+                    '     or (Namespace == "Memory" and Name == "AvailableMB")'
+                    '     or (Namespace == "LogicalDisk" and Name == "ReadsPerSecond")'
+                    " | summarize"
+                    "     p50  = percentile(Val, 50),"
+                    "     p95  = percentile(Val, 95),"
+                    "     p99  = percentile(Val, 99),"
+                    "     sample_count = count()"
+                    "     by Namespace, Name"
+                )
+                fallback_resp = client.query_workspace(
+                    workspace_id=workspace_id,
+                    query=fallback_kql,
+                    timespan="P30D",
+                )
+                if fallback_resp.status == LogsQueryStatus.SUCCESS:
+                    for table in fallback_resp.tables:
+                        col_names = [col.name for col in table.columns]
+                        for row in table.rows:
+                            row_dict = dict(zip(col_names, row))
+                            ns = row_dict.get("Namespace", "")
+                            name = row_dict.get("Name", "")
+                            if ns == "Processor":
+                                key = "cpu_pct"
+                            elif ns == "Memory":
+                                key = "memory_available_mb"
+                            elif ns == "LogicalDisk" and "Reads" in name:
+                                key = "disk_reads_per_sec"
+                            else:
+                                continue
+                            metrics[key] = {
+                                "p50": _safe_float(row_dict.get("p50")),
+                                "p95": _safe_float(row_dict.get("p95")),
+                                "p99": _safe_float(row_dict.get("p99")),
+                                "sample_count": int(row_dict.get("sample_count") or 0),
+                                "trend_direction": "unknown",
+                            }
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_vm_performance_baseline: complete | vm=%s metrics=%d fallback=%s duration_ms=%d",
+                vm_name,
+                len(metrics),
+                used_fallback,
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "resource_group": resource_group,
+                "subscription_id": subscription_id,
+                "workspace_id": workspace_id,
+                "baseline_window_days": 30,
+                "metrics": metrics,
+                "metric_count": len(metrics),
+                "used_fallback_table": used_fallback,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_performance_baseline error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+@ai_function
+def detect_performance_drift(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    workspace_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Detect performance drift by comparing last 24h against 30-day baseline.
+
+    Computes a drift score (0–100) per metric. A score of 0 means no drift;
+    100 means the recent P95 is 2x the baseline P95.
+    Flags the VM as drifting when any metric drift_score exceeds 30.
+
+    Drift score formula: min(100, int((recent_p95 / baseline_p95 - 1) * 100))
+
+    Args:
+        resource_group: Azure resource group name.
+        vm_name: VM name.
+        subscription_id: Azure subscription ID.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with per-metric drift_score, recent_p95, baseline_p95, narrative,
+        is_drifting (bool), and query_status.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="detect_performance_drift",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=f"{subscription_id}/{resource_group}/{vm_name}",
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is required for drift detection",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # 30-day baseline: P95 per metric
+            baseline_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(30d)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize baseline_p95 = percentile(CounterValue, 95) by ObjectName, CounterName"
+            )
+            baseline_resp = client.query_workspace(
+                workspace_id=workspace_id,
+                query=baseline_kql,
+                timespan="P30D",
+            )
+
+            # 24h recent: avg and P95 per metric
+            recent_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(24h)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize"
+                "     recent_avg = avg(CounterValue),"
+                "     recent_p95 = percentile(CounterValue, 95)"
+                "     by ObjectName, CounterName"
+            )
+            recent_resp = client.query_workspace(
+                workspace_id=workspace_id,
+                query=recent_kql,
+                timespan="PT24H",
+            )
+
+            # Parse baseline
+            baseline_p95: Dict[str, float] = {}
+            if baseline_resp.status == LogsQueryStatus.SUCCESS:
+                for table in baseline_resp.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk":
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        val = _safe_float(row_dict.get("baseline_p95"))
+                        if val is not None:
+                            baseline_p95[key] = val
+
+            # Parse recent
+            recent_avg: Dict[str, float] = {}
+            recent_p95_vals: Dict[str, float] = {}
+            if recent_resp.status == LogsQueryStatus.SUCCESS:
+                for table in recent_resp.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk":
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        avg_val = _safe_float(row_dict.get("recent_avg"))
+                        p95_val = _safe_float(row_dict.get("recent_p95"))
+                        if avg_val is not None:
+                            recent_avg[key] = avg_val
+                        if p95_val is not None:
+                            recent_p95_vals[key] = p95_val
+
+            # Compute drift scores
+            drift_metrics: Dict[str, Any] = {}
+            narrative_parts: List[str] = []
+            is_drifting = False
+
+            all_keys = set(baseline_p95.keys()) | set(recent_p95_vals.keys())
+            for key in sorted(all_keys):
+                b_p95 = baseline_p95.get(key)
+                r_p95 = recent_p95_vals.get(key)
+                r_avg = recent_avg.get(key)
+
+                # Guard against zero/None baseline
+                if b_p95 is None or b_p95 == 0.0:
+                    drift_score = 0
+                elif r_p95 is None:
+                    drift_score = 0
+                else:
+                    drift_score = min(100, int((r_p95 / b_p95 - 1) * 100))
+                    drift_score = max(0, drift_score)
+
+                drifting_metric = drift_score > 30
+                if drifting_metric:
+                    is_drifting = True
+
+                drift_metrics[key] = {
+                    "drift_score": drift_score,
+                    "recent_avg": r_avg,
+                    "recent_p95": r_p95,
+                    "baseline_p95": b_p95,
+                    "is_drifting": drifting_metric,
+                }
+
+                # Build narrative fragment
+                metric_label = {
+                    "cpu_pct": "CPU",
+                    "memory_available_mb": "Memory Available",
+                    "disk_reads_per_sec": "Disk Reads/sec",
+                }.get(key, key)
+
+                if r_p95 is not None and b_p95 is not None and b_p95 > 0:
+                    if drifting_metric:
+                        narrative_parts.append(
+                            f"{metric_label} P95 is {r_p95:.1f} (baseline {b_p95:.1f}) "
+                            f"— {drift_score}% above normal."
+                        )
+                    else:
+                        narrative_parts.append(f"{metric_label} within normal range.")
+                else:
+                    narrative_parts.append(f"{metric_label} — insufficient data.")
+
+            narrative = " ".join(narrative_parts) if narrative_parts else "No performance data available."
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "detect_performance_drift: complete | vm=%s is_drifting=%s metrics=%d duration_ms=%d",
+                vm_name,
+                is_drifting,
+                len(drift_metrics),
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "resource_group": resource_group,
+                "subscription_id": subscription_id,
+                "workspace_id": workspace_id,
+                "is_drifting": is_drifting,
+                "drift_metrics": drift_metrics,
+                "narrative": narrative,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("detect_performance_drift error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
