@@ -2283,3 +2283,188 @@ def get_vm_forecast(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+@ai_function
+def query_vm_performance_baseline(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    workspace_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Query 30-day performance baseline percentiles (P50/P95/P99) for a VM.
+
+    Queries the Log Analytics `Perf` table for CPU %, Memory Available MB,
+    and Disk Reads/sec. Falls back to `InsightsMetrics` if the Perf table
+    returns no rows (VM uses AMA instead of MMA).
+
+    Args:
+        resource_group: Azure resource group name.
+        vm_name: VM name (used to filter Perf table by Computer field).
+        subscription_id: Azure subscription ID.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with per-metric percentile stats: {metric: {p50, p95, p99,
+        sample_count, trend_direction}} and query_status.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_performance_baseline",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=f"{subscription_id}/{resource_group}/{vm_name}",
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is required for performance baseline query",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # Primary: Perf table (MMA/AMA with Performance collection rule)
+            perf_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(30d)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize"
+                "     p50  = percentile(CounterValue, 50),"
+                "     p95  = percentile(CounterValue, 95),"
+                "     p99  = percentile(CounterValue, 99),"
+                "     sample_count = count()"
+                "     by ObjectName, CounterName"
+            )
+
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=perf_kql,
+                timespan="P30D",
+            )
+
+            metrics: Dict[str, Any] = {}
+            used_fallback = False
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        counter = row_dict.get("CounterName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk" and "Disk Reads" in counter:
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        metrics[key] = {
+                            "p50": _safe_float(row_dict.get("p50")),
+                            "p95": _safe_float(row_dict.get("p95")),
+                            "p99": _safe_float(row_dict.get("p99")),
+                            "sample_count": int(row_dict.get("sample_count") or 0),
+                            "trend_direction": "unknown",
+                        }
+
+            # Fallback: InsightsMetrics (AMA without Perf DCR)
+            if not metrics:
+                used_fallback = True
+                resource_id = (
+                    f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
+                    f"/providers/Microsoft.Compute/virtualMachines/{vm_name}"
+                )
+                fallback_kql = (
+                    "InsightsMetrics"
+                    f' | where _ResourceId =~ "{resource_id}"'
+                    " | where TimeGenerated > ago(30d)"
+                    ' | where (Namespace == "Processor" and Name == "UtilizationPercentage")'
+                    '     or (Namespace == "Memory" and Name == "AvailableMB")'
+                    '     or (Namespace == "LogicalDisk" and Name == "ReadsPerSecond")'
+                    " | summarize"
+                    "     p50  = percentile(Val, 50),"
+                    "     p95  = percentile(Val, 95),"
+                    "     p99  = percentile(Val, 99),"
+                    "     sample_count = count()"
+                    "     by Namespace, Name"
+                )
+                fallback_resp = client.query_workspace(
+                    workspace_id=workspace_id,
+                    query=fallback_kql,
+                    timespan="P30D",
+                )
+                if fallback_resp.status == LogsQueryStatus.SUCCESS:
+                    for table in fallback_resp.tables:
+                        col_names = [col.name for col in table.columns]
+                        for row in table.rows:
+                            row_dict = dict(zip(col_names, row))
+                            ns = row_dict.get("Namespace", "")
+                            name = row_dict.get("Name", "")
+                            if ns == "Processor":
+                                key = "cpu_pct"
+                            elif ns == "Memory":
+                                key = "memory_available_mb"
+                            elif ns == "LogicalDisk" and "Reads" in name:
+                                key = "disk_reads_per_sec"
+                            else:
+                                continue
+                            metrics[key] = {
+                                "p50": _safe_float(row_dict.get("p50")),
+                                "p95": _safe_float(row_dict.get("p95")),
+                                "p99": _safe_float(row_dict.get("p99")),
+                                "sample_count": int(row_dict.get("sample_count") or 0),
+                                "trend_direction": "unknown",
+                            }
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_vm_performance_baseline: complete | vm=%s metrics=%d fallback=%s duration_ms=%d",
+                vm_name,
+                len(metrics),
+                used_fallback,
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "resource_group": resource_group,
+                "subscription_id": subscription_id,
+                "workspace_id": workspace_id,
+                "baseline_window_days": 30,
+                "metrics": metrics,
+                "metric_count": len(metrics),
+                "used_fallback_table": used_fallback,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_performance_baseline error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
