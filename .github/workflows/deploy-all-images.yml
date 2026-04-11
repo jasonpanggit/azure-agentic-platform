@@ -18,16 +18,14 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Phase 1: Build agent base image (all agent images depend on this)
+  # Phase 0: Resolve the image tag once (github.sha when input is empty)
   # ---------------------------------------------------------------------------
-  build-agent-base:
-    name: Build Agent Base Image
+  resolve-tag:
+    name: Resolve Image Tag
     runs-on: [self-hosted, azure, linux]
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
       - name: Resolve image tag
         id: meta
         run: |
@@ -43,86 +41,38 @@ jobs:
 
           printf 'image_tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve Azure auth mode
-        id: auth
-        env:
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: |
-          if [ -n "$AZURE_CLIENT_SECRET" ]; then
-            echo "mode=client-secret" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=oidc" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Azure Login (client secret)
-        if: steps.auth.outputs.mode == 'client-secret'
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          timeout 60 az login --service-principal \
-            --username "$AZURE_CLIENT_ID" \
-            --password "$AZURE_CLIENT_SECRET" \
-            --tenant "$AZURE_TENANT_ID" \
-            --output none
-          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
-
-      - name: Azure Login (OIDC)
-        if: steps.auth.outputs.mode == 'oidc'
-        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Login to ACR
-        run: |
-          ACR_NAME="${{ vars.ACR_LOGIN_SERVER }}"
-          if [ -z "$ACR_NAME" ]; then
-            echo "::error::ACR_LOGIN_SERVER repository variable is not set"
-            exit 1
-          fi
-
-          ACR_NAME="${ACR_NAME%%.azurecr.io}"
-          if [[ ! "$ACR_NAME" =~ ^[a-z0-9][a-z0-9-]{3,48}[a-z0-9]$ ]]; then
-            echo "::error::Resolved ACR name has an invalid format: $ACR_NAME"
-            exit 1
-          fi
-
-          az acr login --name "$ACR_NAME"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Build and push base image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: agents/
-          file: agents/Dockerfile.base
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ steps.meta.outputs.image_tag }}
-            ${{ vars.ACR_LOGIN_SERVER }}/agents/base:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  # ---------------------------------------------------------------------------
+  # Phase 1: Build agent base image (all agent images depend on this)
+  # ---------------------------------------------------------------------------
+  build-agent-base:
+    name: Build Agent Base Image
+    needs: resolve-tag
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/base
+      dockerfile_path: agents/Dockerfile.base
+      build_context: agents/
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   # ---------------------------------------------------------------------------
   # Phase 2a: Agent images (depend on base image, build in parallel)
   # ---------------------------------------------------------------------------
   build-orchestrator:
     name: Build Orchestrator
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/orchestrator
       dockerfile_path: agents/orchestrator/Dockerfile
       build_context: agents/orchestrator/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -131,15 +81,15 @@ jobs:
 
   build-compute:
     name: Build Compute Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/compute
       dockerfile_path: agents/compute/Dockerfile
       build_context: agents/compute/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -148,15 +98,15 @@ jobs:
 
   build-network:
     name: Build Network Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/network
       dockerfile_path: agents/network/Dockerfile
       build_context: agents/network/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -165,15 +115,15 @@ jobs:
 
   build-storage:
     name: Build Storage Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/storage
       dockerfile_path: agents/storage/Dockerfile
       build_context: agents/storage/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -182,15 +132,15 @@ jobs:
 
   build-security:
     name: Build Security Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/security
       dockerfile_path: agents/security/Dockerfile
       build_context: agents/security/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -199,15 +149,15 @@ jobs:
 
   build-sre:
     name: Build SRE Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/sre
       dockerfile_path: agents/sre/Dockerfile
       build_context: agents/sre/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -216,15 +166,15 @@ jobs:
 
   build-arc:
     name: Build Arc Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/arc
       dockerfile_path: agents/arc/Dockerfile
       build_context: agents/arc/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -233,15 +183,15 @@ jobs:
 
   build-patch:
     name: Build Patch Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/patch
       dockerfile_path: agents/patch/Dockerfile
       build_context: agents/patch/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -250,15 +200,15 @@ jobs:
 
   build-eol:
     name: Build EOL Agent
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/eol
       dockerfile_path: agents/eol/Dockerfile
       build_context: agents/eol/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
       build_args: |
-        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.build-agent-base.outputs.image_tag }}
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -270,13 +220,13 @@ jobs:
   # ---------------------------------------------------------------------------
   build-api-gateway:
     name: Build API Gateway
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/api-gateway
       dockerfile_path: services/api-gateway/Dockerfile
       build_context: .
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -285,13 +235,13 @@ jobs:
 
   build-arc-mcp-server:
     name: Build Arc MCP Server
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/arc-mcp-server
       dockerfile_path: services/arc-mcp-server/Dockerfile
       build_context: services/arc-mcp-server/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -300,13 +250,13 @@ jobs:
 
   build-teams-bot:
     name: Build Teams Bot
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/teams-bot
       dockerfile_path: services/teams-bot/Dockerfile
       build_context: services/teams-bot/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -315,13 +265,13 @@ jobs:
 
   build-web-ui:
     name: Build Web UI
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/web-ui
       dockerfile_path: services/web-ui/Dockerfile
       build_context: services/web-ui/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -330,13 +280,13 @@ jobs:
 
   build-azure-mcp-server:
     name: Build Azure MCP Server
-    needs: build-agent-base
+    needs: [resolve-tag, build-agent-base]
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/azure-mcp-server
       dockerfile_path: services/azure-mcp-server/Dockerfile
       build_context: services/azure-mcp-server/
-      image_tag: ${{ needs.build-agent-base.outputs.image_tag }}
+      image_tag: ${{ needs.resolve-tag.outputs.image_tag }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -351,6 +301,7 @@ jobs:
     runs-on: [self-hosted, azure, linux]
     if: always()
     needs:
+      - resolve-tag
       - build-agent-base
       - build-orchestrator
       - build-compute
@@ -367,20 +318,11 @@ jobs:
       - build-web-ui
       - build-azure-mcp-server
     steps:
-      - name: Resolve tag
-        id: tag
-        run: |
-          TAG="${{ inputs.image_tag }}"
-          if [ -z "$TAG" ]; then
-            TAG="${{ github.sha }}"
-          fi
-          printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
-
       - name: Print summary
         run: |
           echo "## Deploy All Images — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Tag:** \`${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** \`${{ needs.resolve-tag.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Agent Images" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
