@@ -370,6 +370,7 @@ def query_resource_health(
             summary (str): Human-readable health summary.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"resource_id": resource_id}
 
@@ -382,12 +383,60 @@ def query_resource_health(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_id": resource_id,
-            "availability_state": "Unknown",
-            "summary": "Resource Health query pending.",
-            "query_status": "success",
-        }
+        try:
+            if MicrosoftResourceHealth is None:
+                raise ImportError("azure-mgmt-resourcehealth is not installed")
+
+            credential = get_credential()
+            sub_id = _extract_subscription_id(resource_id)
+            client = MicrosoftResourceHealth(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=resource_id,
+                expand="recommendedActions",
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+            availability_state = (
+                status.properties.availability_state.value
+                if status.properties.availability_state
+                else "Unknown"
+            )
+            logger.info(
+                "query_resource_health: complete | resource=%s state=%s duration_ms=%.0f",
+                resource_id,
+                availability_state,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": availability_state,
+                "summary": status.properties.summary,
+                "reason_type": status.properties.reason_type,
+                "occurred_time": (
+                    status.properties.occurred_time.isoformat()
+                    if status.properties.occurred_time
+                    else None
+                ),
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_resource_health: failed | resource=%s error=%s duration_ms=%.0f",
+                resource_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": "Unknown",
+                "summary": None,
+                "reason_type": None,
+                "occurred_time": None,
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 # ---------------------------------------------------------------------------
