@@ -14,7 +14,9 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design — 5 tabs: Overview, Metrics, Evidence, Patches, AI Chat
+> Last activity: 2026-04-11 - Completed quick task 260411-wyg: Fix VMSS and AKS detail panel data bugs — error response guard in VMSSDetailPanel/AKSDetailPanel, real healthy_instance_count/health_state derived from instance power states, autoscale warning logging
+
+> Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design
 
 > Last activity: 2026-04-11 - Completed quick task 260411-wm8: move chat button from right to left and chat panel as well
 
@@ -403,6 +405,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260410-amq | Create summary stub for superseded Phase 14 — Phase 14 was absorbed into Phase 19 before execution; all phases now report correctly, progress at 100% | 2026-04-10 | 59e3706 | [260410-amq-create-summary-stub-for-superseded-phase](./quick/260410-amq-create-summary-stub-for-superseded-phase/) |
 | 260411-wm8 | move chat button from right to left and chat panel as well | 2026-04-11 | 5f80f38 | [260411-wm8-move-chat-button-from-right-to-left-and-](./quick/260411-wm8-move-chat-button-from-right-to-left-and-/) |
 | 260411-wps | update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design with overview tab, ai chat tab and whatever tab you deem suitable | 2026-04-11 | d493ca3 | [260411-wps-update-vmdetailpanel-to-follow-vmss-and-](./quick/260411-wps-update-vmdetailpanel-to-follow-vmss-and-/) |
+| 260411-wyg | Fix VMSS and AKS tab and detail panel data bugs — error response guard, hardcoded health/instance stubs, autoscale, metrics | 2026-04-11 | 0295f3c | [260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da](./quick/260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da/) |
 
 ---
 
