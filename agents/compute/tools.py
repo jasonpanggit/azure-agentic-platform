@@ -2858,8 +2858,6 @@ def query_vm_cost_7day(
                     "duration_ms": duration_ms,
                 }
 
-            from datetime import datetime, timedelta, timezone
-
             credential = get_credential()
             client = CostManagementClient(credential)
 
@@ -2996,7 +2994,7 @@ def propose_vm_sku_downsize(
                 incident_id="",  # Cost proposals may have no incident context
                 agent_name="compute-agent",
                 proposal=proposal,
-                resource_snapshot={"vm_name": vm_name, "target_sku": target_sku},
+                resource_snapshot={"vm_name": vm_name, "resource_id": resource_id, "target_sku": target_sku},
                 risk_level="medium",  # Downsize = medium (same risk class as restart)
             )
 

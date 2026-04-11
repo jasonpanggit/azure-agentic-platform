@@ -108,11 +108,12 @@ async def get_vm_cost_summary(
 
         # Sort by highest monthly savings, take top-N
         vms.sort(key=lambda v: v["estimated_monthly_savings"], reverse=True)
+        total_recommendations = len(vms)
         vms = vms[:top]
 
         return {
             "subscription_id": subscription_id,
-            "total_recommendations": len(vms),
+            "total_recommendations": total_recommendations,
             "vms": vms,
             "data_lag_note": "Advisor recommendations are refreshed every 24 hours.",
         }
