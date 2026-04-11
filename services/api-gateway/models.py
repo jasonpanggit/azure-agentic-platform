@@ -326,6 +326,13 @@ class IncidentSummary(BaseModel):
         default=None,
         description="True when severity was escalated to Sev0 due to domain SLO burn-rate alert.",
     )
+    re_diagnosis_count: int = Field(
+        default=0,
+        description=(
+            "Number of times the agent has re-diagnosed this incident after remediation "
+            "verification. Capped at MAX_RE_DIAGNOSIS_COUNT (default 3) to prevent infinite loops."
+        ),
+    )
 
 
 class AuditEntry(BaseModel):
