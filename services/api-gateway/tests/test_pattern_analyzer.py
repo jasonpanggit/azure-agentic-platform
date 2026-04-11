@@ -350,3 +350,175 @@ class TestFeedbackAggregation:
         assert common_feedback[0] == "false_positive"
         # At most 3 tags returned
         assert len(common_feedback) <= 3
+
+
+# ---------------------------------------------------------------------------
+# Tests 14–19: compute_mttr_by_issue_type (LOOP-003)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeMttrByIssueType:
+    """compute_mttr_by_issue_type computes P50/P95/mean MTTR grouped by issue type."""
+
+    def test_compute_mttr_empty_incidents(self):
+        """Empty incident list returns empty dict."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        result = compute_mttr_by_issue_type([])
+        assert result == {}
+
+    def test_compute_mttr_no_resolved_incidents(self):
+        """Incidents with status != resolved return empty dict."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        incidents = [
+            {
+                "status": "new",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": "2026-04-01T10:00:00+00:00",
+            },
+            {
+                "status": "open",
+                "domain": "network",
+                "detection_rule": "NSGDrop",
+                "severity": "Sev2",
+                "created_at": "2026-04-01T11:00:00+00:00",
+            },
+            {
+                "status": "investigating",
+                "domain": "security",
+                "detection_rule": "DefenderAlert",
+                "severity": "Sev0",
+                "created_at": "2026-04-01T12:00:00+00:00",
+            },
+        ]
+        result = compute_mttr_by_issue_type(incidents)
+        assert result == {}
+
+    def test_compute_mttr_single_resolved(self):
+        """Single resolved incident with 30-minute MTTR returns correct stats."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        incidents = [
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": "2026-04-01T10:00:00+00:00",
+                "resolved_at": "2026-04-01T10:30:00+00:00",
+            }
+        ]
+        result = compute_mttr_by_issue_type(incidents)
+        assert "compute:HighCPU:Sev1" in result
+        stats = result["compute:HighCPU:Sev1"]
+        assert stats["count"] == 1
+        assert stats["p50_min"] == 30.0
+        assert stats["p95_min"] == 30.0
+        assert stats["mean_min"] == 30.0
+
+    def test_compute_mttr_multiple_resolved(self):
+        """4 resolved incidents (10, 20, 30, 60 min) → correct P50/P95/mean."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        base_created = "2026-04-01T10:00:00+00:00"
+        incidents = [
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": base_created,
+                "resolved_at": "2026-04-01T10:10:00+00:00",  # 10 min
+            },
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": base_created,
+                "resolved_at": "2026-04-01T10:20:00+00:00",  # 20 min
+            },
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": base_created,
+                "resolved_at": "2026-04-01T10:30:00+00:00",  # 30 min
+            },
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": base_created,
+                "resolved_at": "2026-04-01T11:00:00+00:00",  # 60 min
+            },
+        ]
+        result = compute_mttr_by_issue_type(incidents)
+        assert "compute:HighCPU:Sev1" in result
+        stats = result["compute:HighCPU:Sev1"]
+        assert stats["count"] == 4
+        # sorted: [10, 20, 30, 60]; p50_idx = int(4*0.50) = 2 → 30.0
+        assert stats["p50_min"] == 30.0
+        # p95_idx = min(int(4*0.95), 3) = min(3, 3) = 3 → 60.0
+        assert stats["p95_min"] == 60.0
+        # mean = (10+20+30+60)/4 = 30.0
+        assert stats["mean_min"] == 30.0
+
+    def test_compute_mttr_groups_by_issue_type(self):
+        """Incidents from different domains produce separate keys in result."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        incidents = [
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": "2026-04-01T10:00:00+00:00",
+                "resolved_at": "2026-04-01T10:30:00+00:00",
+            },
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                "created_at": "2026-04-01T11:00:00+00:00",
+                "resolved_at": "2026-04-01T11:45:00+00:00",
+            },
+            {
+                "status": "resolved",
+                "domain": "network",
+                "detection_rule": "NSGDrop",
+                "severity": "Sev2",
+                "created_at": "2026-04-01T12:00:00+00:00",
+                "resolved_at": "2026-04-01T12:20:00+00:00",
+            },
+        ]
+        result = compute_mttr_by_issue_type(incidents)
+        assert len(result) == 2
+        assert "compute:HighCPU:Sev1" in result
+        assert "network:NSGDrop:Sev2" in result
+        assert result["compute:HighCPU:Sev1"]["count"] == 2
+
+    def test_compute_mttr_skips_negative_mttr(self):
+        """Incident where resolved_at < created_at is skipped."""
+        from services.api_gateway.pattern_analyzer import compute_mttr_by_issue_type
+
+        incidents = [
+            {
+                "status": "resolved",
+                "domain": "compute",
+                "detection_rule": "HighCPU",
+                "severity": "Sev1",
+                # resolved_at is BEFORE created_at — negative MTTR
+                "created_at": "2026-04-01T10:30:00+00:00",
+                "resolved_at": "2026-04-01T10:00:00+00:00",
+            }
+        ]
+        result = compute_mttr_by_issue_type(incidents)
+        assert result == {}

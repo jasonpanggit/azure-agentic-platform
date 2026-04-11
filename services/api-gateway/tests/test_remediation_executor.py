@@ -716,3 +716,80 @@ class TestMissedVerificationSweep:
         assert call_kwargs["execution_id"] == "exec-stale-1"
         assert call_kwargs["thread_id"] == "thread-stale-1"
         assert call_kwargs["incident_id"] == "inc-stale-1"
+
+
+# ---------------------------------------------------------------------------
+# Auto-resolve tests (LOOP-003)
+# ---------------------------------------------------------------------------
+
+
+class TestAutoResolveOnVerification:
+    """Tests for auto-resolve logic in _inject_verification_result (LOOP-003)."""
+
+    async def test_auto_resolve_sets_resolved_at(self):
+        """RESOLVED verification result patches resolved_at and auto_resolved=True on the incident."""
+        from services.api_gateway.remediation_executor import _inject_verification_result
+
+        # Mock Cosmos: re_diagnosis_count query returns count=0, patch_item records calls
+        mock_incidents_container = MagicMock()
+        mock_incidents_container.query_items.return_value = [{"re_diagnosis_count": 0}]
+        mock_incidents_container.patch_item.return_value = None
+
+        mock_cosmos = MagicMock()
+        mock_cosmos.get_database_client.return_value.get_container_client.return_value = (
+            mock_incidents_container
+        )
+
+        mock_foundry_client = MagicMock()
+        mock_foundry_client.runs.list.return_value = []
+
+        with patch(
+            "services.api_gateway.remediation_executor._cancel_active_runs",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.api_gateway.foundry._get_foundry_client",
+            return_value=mock_foundry_client,
+        ), patch(
+            "services.api_gateway.instrumentation.foundry_span",
+        ) as mock_fspan, patch(
+            "services.api_gateway.instrumentation.agent_span",
+        ) as mock_aspan, patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "asst_test123"}):
+            mock_fspan.return_value.__enter__ = MagicMock(return_value=MagicMock())
+            mock_fspan.return_value.__exit__ = MagicMock(return_value=False)
+            mock_aspan.return_value.__enter__ = MagicMock(return_value=MagicMock())
+            mock_aspan.return_value.__exit__ = MagicMock(return_value=False)
+
+            await _inject_verification_result(
+                thread_id="thread-test-1",
+                execution_id="exec-test-1",
+                verification_result="RESOLVED",
+                resource_id="/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+                proposed_action="restart_vm",
+                rolled_back=False,
+                incident_id="inc-test-1",
+                cosmos_client=mock_cosmos,
+            )
+
+        # patch_item should have been called at least twice:
+        # once for re_diagnosis_count increment, once for auto-resolve
+        assert mock_incidents_container.patch_item.call_count >= 2
+
+        # Find the auto-resolve call — it contains /resolved_at and /auto_resolved paths
+        all_calls = mock_incidents_container.patch_item.call_args_list
+        auto_resolve_call = None
+        for call in all_calls:
+            ops = call[1].get("patch_operations", [])
+            paths = [op.get("path") for op in ops]
+            if "/resolved_at" in paths and "/auto_resolved" in paths:
+                auto_resolve_call = call
+                break
+
+        assert auto_resolve_call is not None, "No patch_item call found with /resolved_at and /auto_resolved"
+
+        # Verify the ops values
+        ops = auto_resolve_call[1]["patch_operations"]
+        ops_by_path = {op["path"]: op["value"] for op in ops}
+        assert ops_by_path["/auto_resolved"] is True
+        assert ops_by_path["/status"] == "resolved"
+        assert "/resolved_at" in ops_by_path
+        assert ops_by_path["/resolved_at"] is not None
