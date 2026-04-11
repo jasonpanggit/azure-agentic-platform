@@ -766,7 +766,7 @@ Plans:
 **Goal:** Make per-VM security posture a first-class diagnostic signal alongside metrics and logs. Add tools: Defender TVM CVE count, JIT access status + active sessions, effective NSG rules at NIC level, Azure Backup RPO/last-backup, Azure Site Recovery replication health. Surface VM compliance score in the VM detail panel.
 **Depends on:** Phase 34
 **Status:** 🔲 Not started
-**Plans:** 0/1 plans complete
+**Plans:** 3/3 plans complete
 
 ---
 
@@ -862,6 +862,16 @@ Plans:
 | PLATINT-002 | FinOps integration tracks incident cost impact and automation savings |
 | PLATINT-003 | Operator feedback (approve/reject) captured and fed to learning loop |
 | PLATINT-004 | POST /api/v1/admin/business-tiers available; zero-value default config seeded on Phase 28 deployment |
+
+### Phase 42: surface runbooks in web-ui
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 42 to break down)
 
 ---
 

@@ -7,8 +7,8 @@ last_updated: "2026-04-11T13:46:34.571Z"
 progress:
   total_phases: 35
   completed_phases: 31
-  total_plans: 97
-  completed_plans: 98
+  total_plans: 99
+  completed_plans: 100
   percent: 100
 ---
 
@@ -410,6 +410,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 12 added: EOL Domain Agent with multi-source internet search and PostgreSQL caching
 - Phase 13 added: add a new patch management tab and show all the patch related information
 - Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
+- Phase 42 added: surface runbooks in web-ui
 
 ---
 
