@@ -5,12 +5,23 @@ import { buildAlertCard } from "../cards/alert-card";
 import { buildApprovalCard } from "../cards/approval-card";
 import { buildOutcomeCard } from "../cards/outcome-card";
 import { buildReminderCard } from "../cards/reminder-card";
+import { buildSopNotificationCard } from "../cards/sop-notification-card";
+import { buildSopEscalationCard } from "../cards/sop-escalation-card";
+import { buildSopSummaryCard } from "../cards/sop-summary-card";
 import {
   sendProactiveCard,
   hasConversationReference,
 } from "../services/proactive";
 
-const VALID_CARD_TYPES = ["alert", "approval", "outcome", "reminder"] as const;
+const VALID_CARD_TYPES = [
+  "alert",
+  "approval",
+  "outcome",
+  "reminder",
+  "sop_notification",
+  "sop_escalation",
+  "sop_summary",
+] as const;
 
 export function createNotifyRouter(config: AppConfig): Router {
   const router = Router();
@@ -78,6 +89,21 @@ export function createNotifyRouter(config: AppConfig): Router {
             card = buildReminderCard(
               body.payload as Parameters<typeof buildReminderCard>[0],
               config.webUiPublicUrl,
+            );
+            break;
+          case "sop_notification":
+            card = buildSopNotificationCard(
+              body.payload as Parameters<typeof buildSopNotificationCard>[0],
+            );
+            break;
+          case "sop_escalation":
+            card = buildSopEscalationCard(
+              body.payload as Parameters<typeof buildSopEscalationCard>[0],
+            );
+            break;
+          case "sop_summary":
+            card = buildSopSummaryCard(
+              body.payload as Parameters<typeof buildSopSummaryCard>[0],
             );
             break;
           default:
