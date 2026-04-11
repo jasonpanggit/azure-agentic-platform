@@ -285,6 +285,37 @@ def _classify_verification(
     return "TIMEOUT"
 
 
+async def _cancel_active_runs(client: Any, thread_id: str) -> None:
+    """Cancel all active runs on a Foundry thread before injecting a new message.
+
+    Follows the same pattern as chat.py create_chat_thread:
+    - Lists runs on the thread
+    - Cancels any with status in {"queued", "in_progress", "requires_action", "cancelling"}
+    - Sleeps 1s if any were cancelled to allow propagation
+
+    Uses client.runs.* namespace (not client.agents.*).
+    """
+    try:
+        runs = list(client.runs.list(thread_id=thread_id))
+        active_statuses = {"queued", "in_progress", "requires_action", "cancelling"}
+        cancelled_any = False
+        for run in runs:
+            if run.status in active_statuses:
+                logger.info(
+                    "_cancel_active_runs: cancelling run %s (status=%s) on thread %s",
+                    run.id, run.status, thread_id,
+                )
+                try:
+                    client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                    cancelled_any = True
+                except Exception as cancel_exc:
+                    logger.warning("_cancel_active_runs: failed to cancel run %s: %s", run.id, cancel_exc)
+        if cancelled_any:
+            await asyncio.sleep(1)
+    except Exception as exc:
+        logger.warning("_cancel_active_runs: failed to list/cancel runs on thread %s: %s", thread_id, exc)
+
+
 async def _verify_remediation(
     execution_id: str,
     resource_id: str,
