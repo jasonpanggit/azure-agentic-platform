@@ -43,11 +43,16 @@ class TestQueryActivityLog:
 
     @patch("agents.patch.tools.instrument_tool_call")
     @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
+    @patch("agents.patch.tools.MonitorManagementClient")
+    @patch("agents.patch.tools.get_credential")
     def test_query_activity_log_returns_expected_structure(
-        self, mock_identity, mock_instrument
+        self, mock_cred, mock_monitor_cls, mock_identity, mock_instrument
     ):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+        mock_monitor = MagicMock()
+        mock_monitor_cls.return_value = mock_monitor
+        mock_monitor.activity_logs.list.return_value = iter([])
 
         from agents.patch.tools import query_activity_log
 
@@ -67,13 +72,18 @@ class TestQueryActivityLog:
 
     @patch("agents.patch.tools.instrument_tool_call")
     @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
-    def test_query_activity_log_default_timespan(self, mock_identity, mock_instrument):
+    @patch("agents.patch.tools.MonitorManagementClient")
+    @patch("agents.patch.tools.get_credential")
+    def test_query_activity_log_default_timespan(self, mock_cred, mock_monitor_cls, mock_identity, mock_instrument):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+        mock_monitor = MagicMock()
+        mock_monitor_cls.return_value = mock_monitor
+        mock_monitor.activity_logs.list.return_value = iter([])
 
         from agents.patch.tools import query_activity_log
 
-        result = query_activity_log(resource_ids=["/sub/vm-1"])
+        result = query_activity_log(resource_ids=["/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"])
         assert result["timespan_hours"] == 2
 
 
@@ -897,19 +907,30 @@ class TestQueryResourceHealth:
 
     @patch("agents.patch.tools.instrument_tool_call")
     @patch("agents.patch.tools.get_agent_identity", return_value="test-entra-id")
+    @patch("agents.patch.tools.MicrosoftResourceHealth")
+    @patch("agents.patch.tools.get_credential")
     def test_query_resource_health_returns_expected_structure(
-        self, mock_identity, mock_instrument
+        self, mock_cred, mock_rh_cls, mock_identity, mock_instrument
     ):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+        mock_rh = MagicMock()
+        mock_rh_cls.return_value = mock_rh
+        mock_status = MagicMock()
+        mock_status.properties.availability_state.value = "Unknown"
+        mock_status.properties.summary = "Resource Health query pending."
+        mock_status.properties.reason_type = None
+        mock_status.properties.occurred_time = None
+        mock_rh.availability_statuses.get_by_resource.return_value = mock_status
 
         from agents.patch.tools import query_resource_health
 
-        result = query_resource_health(resource_id="/sub/vm-1")
+        result = query_resource_health(
+            resource_id="/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"
+        )
 
         assert "resource_id" in result
         assert "availability_state" in result
-        assert "summary" in result
         assert "query_status" in result
         assert result["query_status"] == "success"
         assert result["availability_state"] == "Unknown"

@@ -494,9 +494,14 @@ class TestQueryActivityLog:
 
     @patch("agents.eol.tools.instrument_tool_call")
     @patch("agents.eol.tools.get_agent_identity", return_value="test-entra-id")
-    def test_returns_success_structure(self, mock_identity, mock_instrument):
+    @patch("agents.eol.tools.MonitorManagementClient")
+    @patch("agents.eol.tools.get_credential")
+    def test_returns_success_structure(self, mock_cred, mock_monitor_cls, mock_identity, mock_instrument):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+        mock_monitor = MagicMock()
+        mock_monitor_cls.return_value = mock_monitor
+        mock_monitor.activity_logs.list.return_value = iter([])
 
         from agents.eol.tools import query_activity_log
 

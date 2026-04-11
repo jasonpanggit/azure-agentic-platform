@@ -1,0 +1,48 @@
+name: Agent Evaluation Quality Gates
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Weekly on Monday at 6am UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - "services/api-gateway/evaluation/**"
+      - "tests/eval/**"
+
+jobs:
+  agent-eval:
+    runs-on: ubuntu-latest
+    environment: production-readonly
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install evaluation dependencies
+        run: |
+          pip install azure-ai-evaluation azure-ai-projects azure-identity
+          pip install -e .
+
+      - name: Run evaluation pipeline
+        env:
+          AZURE_PROJECT_ENDPOINT: ${{ secrets.AZURE_PROJECT_ENDPOINT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          EVAL_MODEL_DEPLOYMENT: gpt-4.1
+        run: |
+          python -m services.api_gateway.evaluation.eval_pipeline \
+            --data tests/eval/agent_traces_sample.jsonl \
+            --output eval-results.json
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json
