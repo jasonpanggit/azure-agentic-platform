@@ -2,21 +2,21 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: complete
-last_updated: "2026-04-11T07:22:00.000Z"
+status: in_progress
+last_updated: "2026-04-11T08:00:00.000Z"
 progress:
-  total_phases: 33
-  completed_phases: 33
-  total_plans: 109
-  completed_plans: 109
-  percent: 100
+  total_phases: 40
+  completed_phases: 34
+  total_plans: 110
+  completed_plans: 110
+  percent: 85
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last activity: 2026-04-11 - Phase 29–33 merged to main via PR #41 (49 commits, 127 files, 11,387 insertions). All 33 phases complete. 1,073 Python test functions across 92 test files + 15 TypeScript test files. ROADMAP.md updated to reflect all phases. Branch: main.
+> Last activity: 2026-04-11 - Phase 34 complete. Wired all 20 compute agent tools (15 Phase 32 tools were implemented but unregistered). Fixed AMA status hardcoded "unknown" with ARG extension join. 1,278 tests passing. Phases 35-40 planned (VM world-class AIOps roadmap). Branch: gsd/phase-34-activate-phase-32-vm-tools.
 
-> Last activity: 2026-04-10 - Completed quick task 260410-amq: Create summary stub for superseded Phase 14 — Phase 14 was absorbed into Phase 19 before execution. All phases now report correctly; progress bar at 100%.
+> Last activity: 2026-04-11 - Phase 29–33 merged to main via PR #41 (49 commits, 127 files, 11,387 insertions). All 33 phases complete. ROADMAP.md updated with phases 34-40 (world-class VM AIOps roadmap).
 
 > Last updated: 2026-04-10 - Completed quick task 260410-0yi: Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx
 
