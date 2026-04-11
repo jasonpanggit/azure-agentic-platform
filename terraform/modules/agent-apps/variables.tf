@@ -223,3 +223,57 @@ variable "api_gateway_tenant_id" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# Phase 29: A2A connection endpoints — internal HTTPS URLs for domain agents
+# Used by azapi_resource.a2a_connection to register A2A connections in Foundry.
+# Default empty string = connection resource skipped (no-op in dev).
+# ---------------------------------------------------------------------------
+
+variable "compute_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Compute agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "arc_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Arc agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "eol_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the EOL agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "network_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Network agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "patch_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Patch agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "security_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Security agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "sre_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the SRE agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
+variable "storage_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Storage agent Container App (A2A)"
+  type        = string
+  default     = ""
+}

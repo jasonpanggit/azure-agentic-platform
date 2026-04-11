@@ -257,6 +257,30 @@ resource "azurerm_container_app" "agents" {
           value = var.api_gateway_internal_url != "" ? var.api_gateway_internal_url : "https://ca-api-gateway-${var.environment}.internal.${var.environment}.azurecontainerapps.io"
         }
       }
+      # Phase 29: GenAI tracing env vars for Foundry portal OTel trace waterfall.
+      # Applied to all agent Container Apps (not web-ui or api-gateway services).
+      dynamic "env" {
+        for_each = contains(keys(local.agents), each.key) ? [1] : []
+        content {
+          name  = "AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING"
+          value = "true"
+        }
+      }
+      dynamic "env" {
+        for_each = contains(keys(local.agents), each.key) ? [1] : []
+        content {
+          name  = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+          value = "true"
+        }
+      }
+      # Phase 29: Orchestrator agent name for Responses API dispatch.
+      dynamic "env" {
+        for_each = contains(["orchestrator", "api-gateway"], each.key) ? [1] : []
+        content {
+          name  = "ORCHESTRATOR_AGENT_NAME"
+          value = "aap-orchestrator"
+        }
+      }
     }
   }
 
@@ -442,5 +466,41 @@ resource "azurerm_container_app" "teams_bot" {
       secret,
       template[0].container[0].image,
     ]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Phase 29: A2A connections — one per domain agent
+# These register each domain agent as an A2A connection in the Foundry
+# project so the Orchestrator can wire them as A2APreviewTool targets.
+# ---------------------------------------------------------------------------
+
+locals {
+  a2a_domains = {
+    compute  = var.compute_agent_endpoint
+    arc      = var.arc_agent_endpoint
+    eol      = var.eol_agent_endpoint
+    network  = var.network_agent_endpoint
+    patch    = var.patch_agent_endpoint
+    security = var.security_agent_endpoint
+    sre      = var.sre_agent_endpoint
+    storage  = var.storage_agent_endpoint
+  }
+}
+
+resource "azapi_resource" "a2a_connection" {
+  for_each = local.a2a_domains
+
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-05-01-preview"
+  name      = "aap-${each.key}-agent-connection"
+  parent_id = var.foundry_project_id
+
+  body = {
+    properties = {
+      category    = "RemoteA2A"
+      target      = each.value
+      authType    = "ManagedIdentity"
+      displayName = "AAP ${title(each.key)} Agent (A2A)"
+    }
   }
 }
