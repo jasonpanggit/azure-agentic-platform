@@ -543,6 +543,18 @@ class PlatformHealth(BaseModel):
     agent_p50_ms: Optional[float] = None
     agent_p95_ms: Optional[float] = None
     error_budget_portfolio: list[dict] = []
+    mttr_p50_minutes: Optional[float] = Field(
+        default=None,
+        description="P50 MTTR across all resolved incidents in the last 30 days (LOOP-003).",
+    )
+    mttr_p95_minutes: Optional[float] = Field(
+        default=None,
+        description="P95 MTTR across all resolved incidents in the last 30 days (LOOP-003).",
+    )
+    mttr_by_issue_type: dict = Field(
+        default_factory=dict,
+        description="MTTR breakdown by 'domain:detection_rule:severity' key (LOOP-003).",
+    )
     generated_at: str
 
 
