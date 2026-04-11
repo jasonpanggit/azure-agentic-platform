@@ -2468,3 +2468,223 @@ def query_vm_performance_baseline(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+@ai_function
+def detect_performance_drift(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    workspace_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Detect performance drift by comparing last 24h against 30-day baseline.
+
+    Computes a drift score (0–100) per metric. A score of 0 means no drift;
+    100 means the recent P95 is 2x the baseline P95.
+    Flags the VM as drifting when any metric drift_score exceeds 30.
+
+    Drift score formula: min(100, int((recent_p95 / baseline_p95 - 1) * 100))
+
+    Args:
+        resource_group: Azure resource group name.
+        vm_name: VM name.
+        subscription_id: Azure subscription ID.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with per-metric drift_score, recent_p95, baseline_p95, narrative,
+        is_drifting (bool), and query_status.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="detect_performance_drift",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=f"{subscription_id}/{resource_group}/{vm_name}",
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is required for drift detection",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # 30-day baseline: P95 per metric
+            baseline_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(30d)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize baseline_p95 = percentile(CounterValue, 95) by ObjectName, CounterName"
+            )
+            baseline_resp = client.query_workspace(
+                workspace_id=workspace_id,
+                query=baseline_kql,
+                timespan="P30D",
+            )
+
+            # 24h recent: avg and P95 per metric
+            recent_kql = (
+                "Perf"
+                f' | where Computer =~ "{vm_name}"'
+                " | where TimeGenerated > ago(24h)"
+                ' | where (ObjectName == "Processor" and CounterName == "% Processor Time" and InstanceName == "_Total")'
+                '     or (ObjectName == "Memory" and CounterName == "Available MBytes")'
+                '     or (ObjectName == "LogicalDisk" and CounterName == "Disk Reads/sec" and InstanceName == "_Total")'
+                " | summarize"
+                "     recent_avg = avg(CounterValue),"
+                "     recent_p95 = percentile(CounterValue, 95)"
+                "     by ObjectName, CounterName"
+            )
+            recent_resp = client.query_workspace(
+                workspace_id=workspace_id,
+                query=recent_kql,
+                timespan="PT24H",
+            )
+
+            # Parse baseline
+            baseline_p95: Dict[str, float] = {}
+            if baseline_resp.status == LogsQueryStatus.SUCCESS:
+                for table in baseline_resp.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk":
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        val = _safe_float(row_dict.get("baseline_p95"))
+                        if val is not None:
+                            baseline_p95[key] = val
+
+            # Parse recent
+            recent_avg: Dict[str, float] = {}
+            recent_p95_vals: Dict[str, float] = {}
+            if recent_resp.status == LogsQueryStatus.SUCCESS:
+                for table in recent_resp.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        obj = row_dict.get("ObjectName", "")
+                        if obj == "Processor":
+                            key = "cpu_pct"
+                        elif obj == "Memory":
+                            key = "memory_available_mb"
+                        elif obj == "LogicalDisk":
+                            key = "disk_reads_per_sec"
+                        else:
+                            continue
+                        avg_val = _safe_float(row_dict.get("recent_avg"))
+                        p95_val = _safe_float(row_dict.get("recent_p95"))
+                        if avg_val is not None:
+                            recent_avg[key] = avg_val
+                        if p95_val is not None:
+                            recent_p95_vals[key] = p95_val
+
+            # Compute drift scores
+            drift_metrics: Dict[str, Any] = {}
+            narrative_parts: List[str] = []
+            is_drifting = False
+
+            all_keys = set(baseline_p95.keys()) | set(recent_p95_vals.keys())
+            for key in sorted(all_keys):
+                b_p95 = baseline_p95.get(key)
+                r_p95 = recent_p95_vals.get(key)
+                r_avg = recent_avg.get(key)
+
+                # Guard against zero/None baseline
+                if b_p95 is None or b_p95 == 0.0:
+                    drift_score = 0
+                elif r_p95 is None:
+                    drift_score = 0
+                else:
+                    drift_score = min(100, int((r_p95 / b_p95 - 1) * 100))
+                    drift_score = max(0, drift_score)
+
+                drifting_metric = drift_score > 30
+                if drifting_metric:
+                    is_drifting = True
+
+                drift_metrics[key] = {
+                    "drift_score": drift_score,
+                    "recent_avg": r_avg,
+                    "recent_p95": r_p95,
+                    "baseline_p95": b_p95,
+                    "is_drifting": drifting_metric,
+                }
+
+                # Build narrative fragment
+                metric_label = {
+                    "cpu_pct": "CPU",
+                    "memory_available_mb": "Memory Available",
+                    "disk_reads_per_sec": "Disk Reads/sec",
+                }.get(key, key)
+
+                if r_p95 is not None and b_p95 is not None and b_p95 > 0:
+                    if drifting_metric:
+                        narrative_parts.append(
+                            f"{metric_label} P95 is {r_p95:.1f} (baseline {b_p95:.1f}) "
+                            f"— {drift_score}% above normal."
+                        )
+                    else:
+                        narrative_parts.append(f"{metric_label} within normal range.")
+                else:
+                    narrative_parts.append(f"{metric_label} — insufficient data.")
+
+            narrative = " ".join(narrative_parts) if narrative_parts else "No performance data available."
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "detect_performance_drift: complete | vm=%s is_drifting=%s metrics=%d duration_ms=%d",
+                vm_name,
+                is_drifting,
+                len(drift_metrics),
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "resource_group": resource_group,
+                "subscription_id": subscription_id,
+                "workspace_id": workspace_id,
+                "is_drifting": is_drifting,
+                "drift_metrics": drift_metrics,
+                "narrative": narrative,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("detect_performance_drift error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
