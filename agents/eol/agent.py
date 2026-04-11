@@ -24,6 +24,13 @@ from agent_framework import ChatAgent, MCPTool
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from eol.tools import (
     ALLOWED_MCP_TOOLS,
     query_activity_log,
@@ -212,6 +219,41 @@ def create_eol_agent() -> ChatAgent:
     )
     logger.info("create_eol_agent: ChatAgent created successfully")
     return agent
+
+
+def create_eol_agent_version(project: "AIProjectClient") -> object:
+    """Register the EOL Agent as a versioned PromptAgentDefinition in Foundry.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-eol-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=EOL_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_activity_log,
+                query_os_inventory,
+                query_software_inventory,
+                query_k8s_versions,
+                query_endoflife_date,
+                query_ms_lifecycle,
+                query_resource_health,
+                search_runbooks,
+                scan_estate_eol,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

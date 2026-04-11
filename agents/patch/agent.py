@@ -26,6 +26,13 @@ from azure.ai.projects.models import MCPTool
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from patch.tools import (
     ALLOWED_MCP_TOOLS,
     query_activity_log,
@@ -203,6 +210,40 @@ def create_patch_agent() -> ChatAgent:
     )
     logger.info("create_patch_agent: ChatAgent created successfully")
     return agent
+
+
+def create_patch_agent_version(project: "AIProjectClient") -> object:
+    """Register the Patch Agent as a versioned PromptAgentDefinition in Foundry.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-patch-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=PATCH_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_activity_log,
+                query_patch_assessment,
+                query_patch_installations,
+                discover_arc_workspace,
+                query_configuration_data,
+                lookup_kb_cves,
+                query_resource_health,
+                search_runbooks,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
