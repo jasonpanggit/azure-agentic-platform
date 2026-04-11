@@ -471,6 +471,7 @@ async def _verify_remediation(
     execution_id: str,
     resource_id: str,
     incident_id: str,
+    thread_id: str,
     proposed_action: str,
     credential: Any,
     cosmos_client: Optional[Any],
@@ -478,7 +479,8 @@ async def _verify_remediation(
     """Verify the result of a remediation action via Azure Resource Health (REMEDI-009).
 
     Queries resource health, classifies result, updates WAL record,
-    and triggers rollback if DEGRADED (REMEDI-012).
+    triggers rollback if DEGRADED (REMEDI-012), and injects verification
+    result into Foundry thread for re-diagnosis (LOOP-001).
     """
     subscription_id, _, _ = _parse_arm_resource_id(resource_id)
 
@@ -523,6 +525,7 @@ async def _verify_remediation(
         execution_id, classification,
     )
 
+    rollback_id = None
     if classification == "DEGRADED":
         logger.warning(
             "_verify_remediation: DEGRADED — triggering rollback | execution_id=%s",
@@ -549,6 +552,20 @@ async def _verify_remediation(
                     "rollback_execution_id": rollback_id,
                 },
             )
+
+    # --- Inject verification result into originating Foundry thread (LOOP-001) ---
+    if thread_id:
+        rolled_back = classification == "DEGRADED" and rollback_id is not None
+        await _inject_verification_result(
+            thread_id=thread_id,
+            execution_id=execution_id,
+            verification_result=classification,
+            resource_id=resource_id,
+            proposed_action=proposed_action,
+            rolled_back=rolled_back if classification == "DEGRADED" else False,
+            incident_id=incident_id,
+            cosmos_client=cosmos_client,
+        )
 
     return classification
 
@@ -627,6 +644,7 @@ async def _delayed_verify(
     execution_id: str,
     resource_id: str,
     incident_id: str,
+    thread_id: str,
     proposed_action: str,
     credential: Any,
     cosmos_client: Optional[Any],
@@ -639,6 +657,7 @@ async def _delayed_verify(
             execution_id=execution_id,
             resource_id=resource_id,
             incident_id=incident_id,
+            thread_id=thread_id,
             proposed_action=proposed_action,
             credential=credential,
             cosmos_client=cosmos_client,
@@ -811,6 +830,7 @@ async def execute_remediation(
             execution_id=execution_id,
             resource_id=resource_id,
             incident_id=incident_id,
+            thread_id=thread_id,
             proposed_action=proposed_action,
             credential=credential,
             cosmos_client=cosmos_client,
