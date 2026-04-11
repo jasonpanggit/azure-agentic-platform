@@ -888,3 +888,76 @@ async def run_wal_stale_monitor(
             raise
         except Exception as exc:
             logger.error("run_wal_stale_monitor: error | %s", exc)
+
+
+async def run_missed_verification_sweep(
+    cosmos_client: Optional[Any],
+    credential: Any,
+) -> None:
+    """Startup sweep: re-verify WAL records that completed execution but never got verified.
+
+    Catches records where:
+    - status = 'complete'
+    - verification_result IS NULL
+    - executed_at > 20 minutes ago (verification should have completed by now)
+
+    For each missed record, runs _verify_remediation immediately.
+    """
+    if cosmos_client is None:
+        return
+
+    try:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(minutes=20)
+        ).isoformat()
+        container = _get_remediation_audit_container(cosmos_client)
+        query = (
+            "SELECT * FROM c "
+            "WHERE c.status = 'complete' "
+            "AND NOT IS_DEFINED(c.verification_result) "
+            "AND c.executed_at < @cutoff "
+            "AND c.action_type = 'execute'"
+        )
+        missed = list(container.query_items(
+            query=query,
+            parameters=[{"name": "@cutoff", "value": cutoff}],
+            enable_cross_partition_query=True,
+        ))
+
+        if not missed:
+            logger.info("run_missed_verification_sweep: no missed verifications found")
+            return
+
+        logger.warning(
+            "run_missed_verification_sweep: found %d missed verifications", len(missed)
+        )
+
+        for record in missed:
+            execution_id = record.get("id", "")
+            resource_id = record.get("resource_id", "")
+            incident_id = record.get("incident_id", "")
+            thread_id = record.get("thread_id", "")
+            proposed_action = record.get("proposed_action", "")
+
+            logger.info(
+                "run_missed_verification_sweep: re-verifying | execution_id=%s",
+                execution_id,
+            )
+            try:
+                await _verify_remediation(
+                    execution_id=execution_id,
+                    resource_id=resource_id,
+                    incident_id=incident_id,
+                    thread_id=thread_id,
+                    proposed_action=proposed_action,
+                    credential=credential,
+                    cosmos_client=cosmos_client,
+                )
+            except Exception as exc:
+                logger.error(
+                    "run_missed_verification_sweep: failed | execution_id=%s error=%s",
+                    execution_id, exc,
+                )
+
+    except Exception as exc:
+        logger.error("run_missed_verification_sweep: sweep failed | %s", exc)

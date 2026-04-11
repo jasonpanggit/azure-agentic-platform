@@ -362,6 +362,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("startup: WAL stale monitor not started (COSMOS_ENDPOINT not set)")
 
+    # Startup sweep for missed verifications (LOOP-001)
+    from services.api_gateway.remediation_executor import run_missed_verification_sweep
+    asyncio.create_task(run_missed_verification_sweep(
+        cosmos_client=app.state.cosmos_client if hasattr(app.state, "cosmos_client") else None,
+        credential=app.state.credential,
+    ))
+    logger.info("startup: missed verification sweep queued")
+
     # Seed default business tier if container is empty (PLATINT-004)
     if app.state.cosmos_client is not None:
         try:
