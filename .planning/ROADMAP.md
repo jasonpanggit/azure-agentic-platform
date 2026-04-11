@@ -775,7 +775,7 @@ Plans:
 **Goal:** Surface wasteful spend and enable operators to act on it through the existing HITL approval workflow. Add tools: Azure Advisor rightsizing recommendations with estimated monthly savings, Azure Cost Management 7-day spend per VM, HITL-gated `propose_vm_sku_downsize`. Add fleet cost dashboard showing top-10 underutilized VMs. Add cost-aware SOP for <5% CPU VMs.
 **Depends on:** Phase 34
 **Status:** 🔲 Not started
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 ---
 

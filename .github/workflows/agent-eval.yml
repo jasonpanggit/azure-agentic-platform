@@ -35,8 +35,9 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           EVAL_MODEL_DEPLOYMENT: gpt-4.1
+          PYTHONPATH: .
         run: |
-          python -m services.api_gateway.evaluation.eval_pipeline \
+          python services/api-gateway/evaluation/eval_pipeline.py \
             --data tests/eval/agent_traces_sample.jsonl \
             --output eval-results.json
 

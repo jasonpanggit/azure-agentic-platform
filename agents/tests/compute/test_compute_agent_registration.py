@@ -39,6 +39,16 @@ _TOOL_NAMES = [
     "query_aks_node_pools",
     "query_aks_upgrade_profile",
     "propose_aks_node_pool_scale",
+    "execute_run_command",
+    "parse_boot_diagnostics_serial_log",
+    "query_vm_guest_health",
+    "query_ama_guest_metrics",
+    "get_vm_forecast",
+    "query_vm_performance_baseline",
+    "detect_performance_drift",
+    "query_advisor_rightsizing_recommendations",  # Phase 39
+    "query_vm_cost_7day",                         # Phase 39
+    "propose_vm_sku_downsize",                    # Phase 39
 ]
 
 _PHASE_32_TOOL_NAMES = [
@@ -144,9 +154,9 @@ class TestComputeAgentToolRegistration:
                 f"Registered {len(registered)} tool(s)."
             )
 
-    def test_exactly_27_tools_registered(self):
+    def test_exactly_30_tools_registered(self):
         _, registered = _load_compute_tools_and_agent()
-        assert len(registered) == 27, f"Expected 27 tools, got {len(registered)}"
+        assert len(registered) == 30, f"Expected 30 tools, got {len(registered)}"
 
     def test_phase_32_tools_now_registered(self):
         tools_mod, registered = _load_compute_tools_and_agent()

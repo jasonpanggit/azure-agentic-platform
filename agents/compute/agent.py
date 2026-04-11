@@ -38,11 +38,13 @@ from compute.tools import (
     propose_vm_redeploy,
     propose_vm_resize,
     propose_vm_restart,
+    propose_vm_sku_downsize,
     propose_vmss_scale,
     query_aks_cluster_health,
     query_aks_node_pools,
     query_aks_upgrade_profile,
     query_activity_log,
+    query_advisor_rightsizing_recommendations,
     query_ama_guest_metrics,
     query_boot_diagnostics,
     query_disk_health,
@@ -50,6 +52,7 @@ from compute.tools import (
     query_monitor_metrics,
     query_os_version,
     query_resource_health,
+    query_vm_cost_7day,
     query_vm_extensions,
     query_vm_guest_health,
     query_vm_performance_baseline,
@@ -117,6 +120,19 @@ AKS node-level issues, App Service, and Azure Functions.
 - MUST NOT use wildcard tool permissions.
 - RBAC scope: Virtual Machine Contributor + Monitoring Reader on compute subscription only.
 
+## VM Cost Intelligence Tools
+
+Use these tools together for cost rightsizing investigations:
+
+1. Call `query_advisor_rightsizing_recommendations` to check if Azure Advisor has flagged
+   the VM as underutilized. Note the recommended target_sku and estimated monthly savings.
+2. Call `query_vm_cost_7day` to confirm actual 7-day spend for the VM.
+3. Only call `propose_vm_sku_downsize` when ALL of the following are true:
+   - Advisor has a cost recommendation with a specific target_sku
+   - Average CPU utilization is consistently below 5% (verify with query_monitor_metrics)
+   - Estimated monthly savings exceed $20
+   - The VM is not tagged as 'protected'
+
 ## Allowed Tools
 
 {allowed_tools}
@@ -148,6 +164,9 @@ AKS node-level issues, App Service, and Azure Functions.
     "get_vm_forecast",
     "query_vm_performance_baseline",
     "detect_performance_drift",
+    "query_advisor_rightsizing_recommendations",  # Phase 39
+    "query_vm_cost_7day",                         # Phase 39
+    "propose_vm_sku_downsize",                    # Phase 39
 ]))
 
 
@@ -198,6 +217,9 @@ def create_compute_agent() -> ChatAgent:
             get_vm_forecast,
             query_vm_performance_baseline,
             detect_performance_drift,
+            query_advisor_rightsizing_recommendations,
+            query_vm_cost_7day,
+            propose_vm_sku_downsize,
         ],
     )
     logger.info("create_compute_agent: ChatAgent created successfully")
@@ -255,6 +277,9 @@ def create_compute_agent_version(project: "AIProjectClient") -> object:
                 get_vm_forecast,
                 query_vm_performance_baseline,
                 detect_performance_drift,
+                query_advisor_rightsizing_recommendations,
+                query_vm_cost_7day,
+                propose_vm_sku_downsize,
             ],
         ),
     )

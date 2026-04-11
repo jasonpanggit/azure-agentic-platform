@@ -79,6 +79,36 @@ try:
 except ImportError:
     ForecasterClient = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-advisor may not be installed in all envs
+try:
+    from azure.mgmt.advisor import AdvisorManagementClient
+    from azure.mgmt.advisor.models import ResourceRecommendationBase
+except ImportError:
+    AdvisorManagementClient = None  # type: ignore[assignment,misc]
+    ResourceRecommendationBase = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-costmanagement may not be installed in all envs
+try:
+    from azure.mgmt.costmanagement import CostManagementClient
+    from azure.mgmt.costmanagement.models import (
+        QueryDefinition,
+        QueryTimePeriod,
+        QueryDataset,
+        QueryAggregation,
+        QueryGrouping,
+        GranularityType,
+        TimeframeType,
+    )
+except ImportError:
+    CostManagementClient = None  # type: ignore[assignment,misc]
+    QueryDefinition = None  # type: ignore[assignment,misc]
+    QueryTimePeriod = None  # type: ignore[assignment,misc]
+    QueryDataset = None  # type: ignore[assignment,misc]
+    QueryAggregation = None  # type: ignore[assignment,misc]
+    QueryGrouping = None  # type: ignore[assignment,misc]
+    GranularityType = None  # type: ignore[assignment,misc]
+    TimeframeType = None  # type: ignore[assignment,misc]
+
 from shared.approval_manager import create_approval_record
 
 tracer = setup_telemetry("aiops-compute-agent")
@@ -2688,3 +2718,294 @@ def detect_performance_drift(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+# ---------------------------------------------------------------------------
+# Phase 39 — VM Cost Intelligence tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_advisor_rightsizing_recommendations(
+    vm_name: str,
+    subscription_id: str,
+    resource_group: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query Azure Advisor Cost recommendations for a specific VM.
+
+    Returns rightsizing recommendations including target SKU and estimated
+    monthly savings. Use this tool BEFORE proposing a SKU downsize to confirm
+    Advisor has flagged the VM as underutilized.
+
+    NOTE: Azure Advisor recommendations are refreshed every 24 hours.
+    If no recommendations appear, the VM may not yet be assessed.
+
+    Returns:
+        Dict with recommendation_count, recommendations list, and duration_ms.
+        Each recommendation contains: target_sku, estimated_monthly_savings,
+        savings_currency, impact, description, extended_properties (raw dict).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_advisor_rightsizing_recommendations",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if AdvisorManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-mgmt-advisor not installed",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = AdvisorManagementClient(credential, subscription_id)
+
+            recommendations = []
+            for rec in client.recommendations.list():
+                # Filter: Cost category only
+                if rec.category != "Cost":
+                    continue
+                # Filter: virtualMachines resource type
+                if not rec.impacted_field or "virtualmachines" not in rec.impacted_field.lower():
+                    continue
+                # Filter: matches this VM name (check impacted_value and resource_metadata)
+                impacted_value = (rec.impacted_value or "").lower()
+                resource_id_str = ""
+                if rec.resource_metadata and rec.resource_metadata.resource_id:
+                    resource_id_str = rec.resource_metadata.resource_id.lower()
+
+                if vm_name.lower() not in impacted_value and vm_name.lower() not in resource_id_str:
+                    continue
+                # Also filter by resource_group if provided
+                if resource_group and resource_group.lower() not in resource_id_str:
+                    continue
+
+                ext = rec.extended_properties or {}
+                recommendations.append({
+                    "recommendation_id": rec.id or "",
+                    "target_sku": ext.get("recommendedSkuName", ""),
+                    "estimated_monthly_savings": float(ext.get("savingsAmount", 0) or 0),
+                    "annual_savings": float(ext.get("annualSavingsAmount", 0) or 0),
+                    "savings_currency": ext.get("savingsCurrency", "USD"),
+                    "impact": rec.impact or "Medium",
+                    "description": (rec.short_description.solution if rec.short_description else ""),
+                    "impacted_value": rec.impacted_value or "",
+                    "last_updated": rec.last_updated.isoformat() if rec.last_updated else "",
+                    "extended_properties": dict(ext),
+                })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "query_status": "success",
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "recommendation_count": len(recommendations),
+                "recommendations": recommendations,
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_advisor_rightsizing_recommendations error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def query_vm_cost_7day(
+    resource_id: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query Azure Cost Management for a VM's actual cost over the last 7 days.
+
+    Returns daily cost breakdown and 7-day total spend for the specified VM.
+
+    IMPORTANT: Azure Cost Management data has a 24-48 hour lag. Today's cost
+    may not yet be reflected. Use this for trend analysis, not real-time spend.
+
+    Requires 'Cost Management Reader' role on the subscription scope (Terraform
+    RBAC must be applied before this tool will succeed in production).
+
+    Returns:
+        Dict with total_cost_7d, currency, daily_costs list [{date, cost}],
+        data_lag_note, and duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_cost_7day",
+        tool_parameters={"resource_id": resource_id, "subscription_id": subscription_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if CostManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-mgmt-costmanagement not installed",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = CostManagementClient(credential)
+
+            # 7-day window (yesterday - 7 days to yesterday to account for 24-48h lag)
+            to_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            from_dt = to_dt - timedelta(days=7)
+
+            scope = f"/subscriptions/{subscription_id}"
+
+            query = QueryDefinition(
+                type="ActualCost",
+                timeframe=TimeframeType.CUSTOM,
+                time_period=QueryTimePeriod(
+                    from_property=from_dt,
+                    to=to_dt,
+                ),
+                dataset=QueryDataset(
+                    granularity=GranularityType.DAILY,
+                    aggregation={
+                        "totalCost": QueryAggregation(name="Cost", function="Sum")
+                    },
+                    grouping=[
+                        QueryGrouping(type="Dimension", name="ResourceId"),
+                    ],
+                    filter={
+                        "dimensions": {
+                            "name": "ResourceId",
+                            "operator": "In",
+                            "values": [resource_id],
+                        }
+                    },
+                ),
+            )
+
+            result = client.query.usage(scope=scope, parameters=query)
+
+            # Parse columns to determine index positions
+            columns = [col.name.lower() if hasattr(col, "name") else col.get("name", "").lower()
+                       for col in (result.columns or [])]
+
+            cost_idx = next((i for i, c in enumerate(columns) if "cost" in c), 0)
+            date_idx = next((i for i, c in enumerate(columns) if "date" in c or "usage" in c.lower()), 1)
+            currency_idx = next((i for i, c in enumerate(columns) if "currency" in c), None)
+
+            daily_costs: List[Dict[str, Any]] = []
+            total_cost = 0.0
+            currency = "USD"
+            for row in (result.rows or []):
+                cost_val = float(row[cost_idx]) if len(row) > cost_idx else 0.0
+                date_val = str(row[date_idx]) if len(row) > date_idx else ""
+                if currency_idx is not None and len(row) > currency_idx:
+                    currency = str(row[currency_idx])
+                total_cost += cost_val
+                daily_costs.append({"date": date_val, "cost": round(cost_val, 4)})
+
+            # Sort daily_costs ascending by date
+            daily_costs.sort(key=lambda x: x["date"])
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "query_status": "success",
+                "resource_id": resource_id,
+                "subscription_id": subscription_id,
+                "total_cost_7d": round(total_cost, 4),
+                "currency": currency,
+                "daily_costs": daily_costs,
+                "period_from": from_dt.strftime("%Y-%m-%d"),
+                "period_to": to_dt.strftime("%Y-%m-%d"),
+                "data_lag_note": "Azure Cost Management data has a 24-48 hour lag. Recent costs may not be reflected.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_cost_7day error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_vm_sku_downsize(
+    resource_id: str,
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    target_sku: str,
+    justification: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Propose a VM SKU downsize — creates HITL ApprovalRecord (no ARM call).
+
+    Call query_advisor_rightsizing_recommendations and query_vm_cost_7day
+    BEFORE calling this tool to confirm the downsize is warranted.
+
+    REMEDI-001: This tool ONLY creates an approval record. The SKU change
+    is executed by RemediationExecutor AFTER human approval.
+
+    Use this tool when:
+    - Azure Advisor has flagged the VM as underutilized (target_sku from Advisor)
+    - CPU utilization is consistently below 5% over the last 7 days
+    - Estimated monthly savings exceed $20
+
+    Returns:
+        Dict with status="pending_approval", approval_id, message, and duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vm_sku_downsize",
+        tool_parameters={"vm_name": vm_name, "target_sku": target_sku},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vm_sku_downsize",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "target_sku": target_sku,
+                "justification": justification,
+                "description": f"Downsize VM '{vm_name}' to {target_sku}: {justification}",
+                "target_resources": [resource_id],
+                "estimated_impact": "~5-10 min downtime (deallocate/resize/start)",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id="",  # Cost proposals may have no incident context
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vm_name": vm_name, "resource_id": resource_id, "target_sku": target_sku},
+                risk_level="medium",  # Downsize = medium (same risk class as restart)
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"SKU downsize proposal created for '{vm_name}' → {target_sku}. Awaiting human approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vm_sku_downsize error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}

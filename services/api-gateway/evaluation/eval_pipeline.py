@@ -16,7 +16,47 @@ import json
 import logging
 import os
 import sys
+import types
+from pathlib import Path
 from typing import Any, Optional
+
+# ---------------------------------------------------------------------------
+# Bootstrap: register services/api-gateway as services.api_gateway
+#
+# When invoked via `python -m services.api_gateway.evaluation.eval_pipeline`
+# from the repo root, Python cannot resolve the hyphenated directory name.
+# This shim mirrors the conftest.py logic so the module is importable in
+# both pytest (conftest handles it) and direct `python -m` invocations
+# (this block handles it).
+# ---------------------------------------------------------------------------
+def _bootstrap_api_gateway_package() -> None:
+    root = Path(__file__).resolve().parent.parent.parent.parent  # repo root
+    pkg_name = "services.api_gateway"
+    if pkg_name in sys.modules:
+        return
+
+    parts = pkg_name.split(".")
+    for i in range(1, len(parts)):
+        parent_name = ".".join(parts[:i])
+        if parent_name not in sys.modules:
+            parent_mod = types.ModuleType(parent_name)
+            parent_mod.__path__ = [str(root / Path(*parts[:i]))]
+            parent_mod.__package__ = parent_name
+            sys.modules[parent_name] = parent_mod
+
+    api_gw_path = root / "services" / "api-gateway"
+    mod = types.ModuleType(pkg_name)
+    mod.__path__ = [str(api_gw_path)]
+    mod.__package__ = pkg_name
+    mod.__file__ = str(api_gw_path / "__init__.py")
+    sys.modules[pkg_name] = mod
+
+    parent_mod = sys.modules.get("services")
+    if parent_mod is not None:
+        setattr(parent_mod, "api_gateway", mod)
+
+
+_bootstrap_api_gateway_package()
 
 logger = logging.getLogger(__name__)
 
