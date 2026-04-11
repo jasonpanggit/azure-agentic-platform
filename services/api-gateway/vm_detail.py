@@ -443,13 +443,21 @@ def _is_arc_vm(resource_id: str) -> bool:
 
 
 def _check_ama_installed(credential: Any, resource_id: str, os_type: str) -> bool:
-    """Check if the Azure Monitor Agent extension is installed on the VM."""
+    """Check if the Azure Monitor Agent extension is installed on the VM.
+
+    Handles both Azure VMs (Microsoft.Compute) and Arc-enabled servers
+    (Microsoft.HybridCompute).  The URL pattern is the same
+    (``{resource_id}/extensions/{ext_name}``) but the API version differs:
+    - Azure VMs:  ``2023-03-01``
+    - Arc VMs:    ``2024-07-10``  (HybridCompute extensions API)
+    """
     token = _arm_token(credential)
     ext_name = "AzureMonitorWindowsAgent" if os_type.lower() == "windows" else "AzureMonitorLinuxAgent"
+    api_version = "2024-07-10" if _is_arc_vm(resource_id) else "2023-03-01"
     url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
     resp = requests.get(
         url,
-        params={"api-version": "2023-03-01"},
+        params={"api-version": api_version},
         headers={"Authorization": f"Bearer {token}"},
         timeout=15,
     )
@@ -643,15 +651,6 @@ async def get_diagnostic_settings(
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
-    # Arc VMs: return not-configured without making API calls
-    if _is_arc_vm(resource_id):
-        duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info(
-            "diag_settings: arc_vm_skip | resource=%s duration_ms=%.0f",
-            resource_id[-60:], duration_ms,
-        )
-        return {"ama_installed": False, "dcr_associated": False, "configured": False}
 
     import asyncio
 

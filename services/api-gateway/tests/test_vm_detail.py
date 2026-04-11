@@ -350,6 +350,49 @@ def test_create_dcr_association_failure(mock_token, mock_put):
 
 
 # ---------------------------------------------------------------------------
+# Unit tests: _check_ama_installed — Arc VM API version
+# ---------------------------------------------------------------------------
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_arc_vm_uses_correct_api_version(mock_token, mock_get):
+    """Arc VM AMA check uses HybridCompute extensions API version 2024-07-10."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    arc_rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/arc-srv"
+    result = _check_ama_installed(cred, arc_rid, "Linux")
+
+    assert result is True
+    call_kwargs = mock_get.call_args
+    assert call_kwargs[1]["params"]["api-version"] == "2024-07-10"
+    assert "AzureMonitorLinuxAgent" in call_kwargs[0][0]
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_azure_vm_uses_compute_api_version(mock_token, mock_get):
+    """Azure VM AMA check uses Compute extensions API version 2023-03-01."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    vm_rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-001"
+    result = _check_ama_installed(cred, vm_rid, "Linux")
+
+    assert result is True
+    call_kwargs = mock_get.call_args
+    assert call_kwargs[1]["params"]["api-version"] == "2023-03-01"
+
+
+# ---------------------------------------------------------------------------
 # Unit tests: _install_ama_extension
 # ---------------------------------------------------------------------------
 
@@ -489,8 +532,41 @@ def test_get_diag_settings_not_configured(mock_ama, mock_dcr):
     assert data["configured"] is False
 
 
-def test_get_diag_settings_arc_vm_returns_false():
-    """Arc VM resource IDs return configured=false without API calls."""
+@patch("services.api_gateway.vm_detail._list_dcr_associations")
+@patch("services.api_gateway.vm_detail._check_ama_installed")
+def test_get_diag_settings_arc_vm_with_dcr_returns_configured(mock_ama, mock_dcr):
+    """Arc VM with AMA installed and DCR associated returns configured=true."""
+    mock_ama.return_value = True
+    mock_dcr.return_value = [{"id": "assoc-1"}]
+
+    from services.api_gateway.main import app
+    from fastapi.testclient import TestClient
+
+    app.state.credential = MagicMock()
+    app.state.cosmos_client = None
+    client = TestClient(app)
+
+    arc_rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/arc-srv"
+    encoded = _encode(arc_rid)
+    resp = client.get(
+        f"/api/v1/vms/{encoded}/diagnostic-settings?os_type=Linux",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ama_installed"] is True
+    assert data["dcr_associated"] is True
+    assert data["configured"] is True
+
+
+@patch("services.api_gateway.vm_detail._list_dcr_associations")
+@patch("services.api_gateway.vm_detail._check_ama_installed")
+def test_get_diag_settings_arc_vm_not_configured(mock_ama, mock_dcr):
+    """Arc VM without AMA or DCR returns configured=false."""
+    mock_ama.return_value = False
+    mock_dcr.return_value = []
+
     from services.api_gateway.main import app
     from fastapi.testclient import TestClient
 
