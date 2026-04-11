@@ -3228,10 +3228,9 @@ def query_jit_access_status(
                 }
 
             credential = get_credential()
-            # SecurityCenter requires a subscription_id and asc_location;
-            # location is derived from the resource group location or defaults to "eastus".
+            # SecurityCenter requires subscription_id; asc_location was removed in >= 7.0.0.
             # We use list() to enumerate policies in the resource group.
-            client = SecurityCenter(credential, subscription_id, asc_location="eastus")
+            client = SecurityCenter(credential, subscription_id)
 
             vm_resource_id = (
                 f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
@@ -3379,10 +3378,22 @@ def query_effective_nsg_rules(
             nics = getattr(vm, "network_profile", None)
             nic_id = ""
             nic_name = ""
+            nic_resource_group = resource_group  # default; overridden when NIC is in a different RG
             for nic_ref in (getattr(nics, "network_interfaces", None) or []):
                 nic_id = getattr(nic_ref, "id", "") or ""
-                # Extract NIC name from resource ID
-                nic_name = nic_id.split("/")[-1] if nic_id else ""
+                if nic_id:
+                    # ARM resource ID segments:
+                    # /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/networkInterfaces/{name}
+                    parts = nic_id.split("/")
+                    nic_name = parts[-1] if parts else ""
+                    # Extract NIC's own resource group (may differ from VM's RG in hub/spoke topologies)
+                    try:
+                        rg_idx = next(
+                            i for i, p in enumerate(parts) if p.lower() == "resourcegroups"
+                        )
+                        nic_resource_group = parts[rg_idx + 1]
+                    except StopIteration:
+                        pass  # fallback to VM's resource group already set above
                 break  # Use first (primary) NIC
 
             if not nic_name:
@@ -3401,8 +3412,9 @@ def query_effective_nsg_rules(
                 }
 
             # Get effective NSG rules — this is a long-running operation (LRO)
+            # Use the NIC's own resource group (not the VM's) — these differ in hub/spoke topologies
             poller = network_client.network_interfaces.begin_list_effective_network_security_groups(
-                resource_group, nic_name
+                nic_resource_group, nic_name
             )
             result = poller.result()
 
@@ -3635,8 +3647,11 @@ def query_backup_rpo(
                                 "query_status": "success",
                                 "duration_ms": duration_ms,
                             }
-                except Exception:
-                    # Swallow per-vault errors and continue to next vault
+                except Exception as vault_exc:
+                    # Log per-vault errors (permissions, throttle) then continue to next vault
+                    logger.debug(
+                        "query_backup_rpo: vault %s error (skipping): %s", vault_name, vault_exc
+                    )
                     continue
 
             # No protected item found across all vaults
@@ -3791,7 +3806,9 @@ def query_asr_replication_health(
                         fabric_obj_id = str(
                             getattr(prov_info, "fabric_object_id", "") or ""
                         ).lower()
-                        if fabric_obj_id == vm_resource_id_lower or vm_name.lower() in fabric_obj_id:
+                        # Use strict equality match only; avoid fuzzy suffix match that can
+                        # false-positive on similarly-named VMs (e.g. "web-vm" in "web-vmss-001")
+                        if fabric_obj_id == vm_resource_id_lower:
                             replication_health = str(
                                 getattr(props, "replication_health", "Unknown") or "Unknown"
                             )
@@ -3828,8 +3845,12 @@ def query_asr_replication_health(
                                 "query_status": "success",
                                 "duration_ms": duration_ms,
                             }
-                except Exception:
-                    # Swallow per-vault errors and continue to next vault
+                except Exception as vault_exc:
+                    # Log per-vault errors (permissions, throttle) then continue to next vault
+                    logger.debug(
+                        "query_asr_replication_health: vault %s error (skipping): %s",
+                        vault_name, vault_exc,
+                    )
                     continue
 
             # No ASR item found across all vaults
