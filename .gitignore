@@ -67,3 +67,4 @@ tasks/
 .github/prompts/
 .dockerignore
 .worktrees/
+.superpowers/
