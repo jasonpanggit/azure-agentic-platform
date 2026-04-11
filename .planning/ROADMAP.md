@@ -784,7 +784,7 @@ Plans:
 **Goal:** Bring Arc-connected resources to feature parity with Azure-native VMs. Replace the 3 stub tools in `agents/arc/tools.py` (`query_activity_log`, `query_log_analytics`, `query_resource_health`) with real implementations via the Arc MCP server. Add Arc-specific tools: connectivity status, extension inventory, guest configuration compliance, HITL-gated extension install. Arc VM detail panel matches Azure-native VM panel.
 **Depends on:** Phase 34
 **Status:** 🔲 Not started
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 ---
 
