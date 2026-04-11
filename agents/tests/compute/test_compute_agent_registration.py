@@ -154,9 +154,9 @@ class TestComputeAgentToolRegistration:
                 f"Registered {len(registered)} tool(s)."
             )
 
-    def test_exactly_30_tools_registered(self):
+    def test_exactly_35_tools_registered(self):
         _, registered = _load_compute_tools_and_agent()
-        assert len(registered) == 30, f"Expected 30 tools, got {len(registered)}"
+        assert len(registered) == 35, f"Expected 35 tools, got {len(registered)}"
 
     def test_phase_32_tools_now_registered(self):
         tools_mod, registered = _load_compute_tools_and_agent()

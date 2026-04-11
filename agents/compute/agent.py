@@ -60,6 +60,11 @@ from compute.tools import (
     query_vmss_autoscale,
     query_vmss_instances,
     query_vmss_rolling_upgrade,
+    query_defender_tvm_cve_count,
+    query_jit_access_status,
+    query_effective_nsg_rules,
+    query_backup_rpo,
+    query_asr_replication_health,
 )
 
 tracer = setup_telemetry("aiops-compute-agent")
@@ -109,6 +114,24 @@ AKS node-level issues, App Service, and Azure Functions.
    - `description`, `target_resources`, `estimated_impact`, `risk_level` (low/medium/high),
      `reversible` (bool)
    - **MUST NOT execute without explicit human approval (REMEDI-001)**
+
+## VM Security & Compliance Tools
+
+These tools provide per-VM security posture signals:
+
+- `query_defender_tvm_cve_count`: Retrieve CVE counts by severity from
+  Defender TVM. The `vm_risk_score` (critical×10 + high×5 + medium×2 + low×1)
+  provides a single comparable number.
+- `query_jit_access_status`: Check whether JIT access is configured for the
+  VM and list any active sessions. `jit_enabled: false` is an expected
+  "not configured" state, not an error.
+- `query_effective_nsg_rules`: Get the evaluated NSG rules at the NIC level
+  (includes both NIC and subnet NSGs). Rules with `priority < 200` are flagged
+  as `high_priority` — investigate these first.
+- `query_backup_rpo`: Check Azure Backup last backup time and RPO. If
+  `backup_enabled` is false, the VM is unprotected.
+- `query_asr_replication_health`: Check Azure Site Recovery replication health.
+  If `asr_enabled` is false, the VM has no DR replication configured.
 
 ## Safety Constraints
 
@@ -167,6 +190,11 @@ Use these tools together for cost rightsizing investigations:
     "query_advisor_rightsizing_recommendations",  # Phase 39
     "query_vm_cost_7day",                         # Phase 39
     "propose_vm_sku_downsize",                    # Phase 39
+    "query_defender_tvm_cve_count",
+    "query_jit_access_status",
+    "query_effective_nsg_rules",
+    "query_backup_rpo",
+    "query_asr_replication_health",
 ]))
 
 
@@ -220,6 +248,11 @@ def create_compute_agent() -> ChatAgent:
             query_advisor_rightsizing_recommendations,
             query_vm_cost_7day,
             propose_vm_sku_downsize,
+            query_defender_tvm_cve_count,
+            query_jit_access_status,
+            query_effective_nsg_rules,
+            query_backup_rpo,
+            query_asr_replication_health,
         ],
     )
     logger.info("create_compute_agent: ChatAgent created successfully")
@@ -280,6 +313,11 @@ def create_compute_agent_version(project: "AIProjectClient") -> object:
                 query_advisor_rightsizing_recommendations,
                 query_vm_cost_7day,
                 propose_vm_sku_downsize,
+                query_defender_tvm_cve_count,
+                query_jit_access_status,
+                query_effective_nsg_rules,
+                query_backup_rpo,
+                query_asr_replication_health,
             ],
         ),
     )
