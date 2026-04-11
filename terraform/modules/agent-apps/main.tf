@@ -515,9 +515,13 @@ locals {
 resource "azapi_resource" "a2a_connection" {
   for_each = local.a2a_domains
 
-  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-05-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview"
   name      = "aap-${each.key}-agent-connection"
   parent_id = var.foundry_project_id
+
+  # schema_validation_enabled = false required: azapi 2.9.0 schema for
+  # 2025-04-01-preview does not recognise the RemoteA2A body shape.
+  schema_validation_enabled = false
 
   body = {
     properties = {

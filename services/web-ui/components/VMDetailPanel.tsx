@@ -530,8 +530,20 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     fetchVM()
     fetchEvidence()
     fetchMetrics()
-    fetchDiagSettings()
+    // NOTE: fetchDiagSettings is NOT called here — it depends on vm.os_type
+    // which is only available after fetchVM completes.  A separate useEffect
+    // below triggers it once `vm` is set.
   }, [resourceId, incidentId, fetchVM, fetchEvidence, fetchMetrics])
+
+  // Fetch diagnostic settings AFTER vm data is available so os_type is correct.
+  // Without this, os_type defaults to "windows" on the backend and Linux VMs
+  // (including most Arc VMs) get a false-negative AMA detection.
+  useEffect(() => {
+    if (vm) {
+      fetchDiagSettings()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vm])
 
   // Poll evidence if still pending
   useEffect(() => {

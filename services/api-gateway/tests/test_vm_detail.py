@@ -166,17 +166,20 @@ def test_is_arc_vm_false():
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _check_ama_installed
+# Unit tests: _check_ama_installed (list-based monitoring agent detection)
 # ---------------------------------------------------------------------------
 
 @patch("services.api_gateway.vm_detail.requests.get")
 @patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
-def test_check_ama_installed_windows_200(mock_token, mock_get):
-    """AMA Windows agent found → returns True."""
+def test_check_ama_installed_windows_ama_found(mock_token, mock_get):
+    """AMA Windows agent in extension list → returns True."""
     from services.api_gateway.vm_detail import _check_ama_installed
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "AzureMonitorWindowsAgent"},
+    ]}
     mock_get.return_value = mock_resp
 
     cred = MagicMock()
@@ -184,15 +187,55 @@ def test_check_ama_installed_windows_200(mock_token, mock_get):
     result = _check_ama_installed(cred, rid, "Windows")
 
     assert result is True
-    # Verify correct extension name in URL
     call_url = mock_get.call_args[0][0]
-    assert "AzureMonitorWindowsAgent" in call_url
+    assert call_url.endswith("/extensions")
 
 
 @patch("services.api_gateway.vm_detail.requests.get")
 @patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
-def test_check_ama_installed_linux_404(mock_token, mock_get):
-    """AMA Linux agent not found → returns False."""
+def test_check_ama_installed_linux_ama_found(mock_token, mock_get):
+    """AMA Linux agent in extension list → returns True."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "SomeOtherExtension"},
+        {"name": "AzureMonitorLinuxAgent"},
+    ]}
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-001"
+    result = _check_ama_installed(cred, rid, "Linux")
+
+    assert result is True
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_no_agent_found(mock_token, mock_get):
+    """No monitoring agent in extension list → returns False."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "CustomScriptExtension"},
+    ]}
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-001"
+    result = _check_ama_installed(cred, rid, "Linux")
+
+    assert result is False
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_list_api_404(mock_token, mock_get):
+    """Extensions list API returns non-200 → returns False."""
     from services.api_gateway.vm_detail import _check_ama_installed
 
     mock_resp = MagicMock()
@@ -204,8 +247,67 @@ def test_check_ama_installed_linux_404(mock_token, mock_get):
     result = _check_ama_installed(cred, rid, "Linux")
 
     assert result is False
-    call_url = mock_get.call_args[0][0]
-    assert "AzureMonitorLinuxAgent" in call_url
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_legacy_mma_detected(mock_token, mock_get):
+    """Legacy MicrosoftMonitoringAgent (MMA) detected → returns True."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "MicrosoftMonitoringAgent"},
+    ]}
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-001"
+    result = _check_ama_installed(cred, rid, "Windows")
+
+    assert result is True
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_legacy_oms_detected(mock_token, mock_get):
+    """Legacy OmsAgentForLinux (OMS) detected → returns True."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "OmsAgentForLinux"},
+    ]}
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/arc-srv"
+    result = _check_ama_installed(cred, rid, "Linux")
+
+    assert result is True
+
+
+@patch("services.api_gateway.vm_detail.requests.get")
+@patch("services.api_gateway.vm_detail._arm_token", return_value="fake-token")
+def test_check_ama_installed_os_type_irrelevant(mock_token, mock_get):
+    """os_type does not affect detection — list approach finds any agent."""
+    from services.api_gateway.vm_detail import _check_ama_installed
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "AzureMonitorLinuxAgent"},
+    ]}
+    mock_get.return_value = mock_resp
+
+    cred = MagicMock()
+    rid = "/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-001"
+    # Even with wrong os_type, the list approach still finds the Linux agent
+    result = _check_ama_installed(cred, rid, "Windows")
+
+    assert result is True
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +463,9 @@ def test_check_ama_installed_arc_vm_uses_correct_api_version(mock_token, mock_ge
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "AzureMonitorLinuxAgent"},
+    ]}
     mock_get.return_value = mock_resp
 
     cred = MagicMock()
@@ -370,7 +475,7 @@ def test_check_ama_installed_arc_vm_uses_correct_api_version(mock_token, mock_ge
     assert result is True
     call_kwargs = mock_get.call_args
     assert call_kwargs[1]["params"]["api-version"] == "2024-07-10"
-    assert "AzureMonitorLinuxAgent" in call_kwargs[0][0]
+    assert call_kwargs[0][0].endswith("/extensions")
 
 
 @patch("services.api_gateway.vm_detail.requests.get")
@@ -381,6 +486,9 @@ def test_check_ama_installed_azure_vm_uses_compute_api_version(mock_token, mock_
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    mock_resp.json.return_value = {"value": [
+        {"name": "AzureMonitorLinuxAgent"},
+    ]}
     mock_get.return_value = mock_resp
 
     cred = MagicMock()
