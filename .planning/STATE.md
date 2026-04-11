@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-11 - Completed quick task 260411-x45: Fix VMSS list health from Resource Health API, VMSS/AKS real metrics via Azure Monitor, AKS ready_node_count from agent_pools.list() provisioning_state — 797 tests passing
+
 > Last activity: 2026-04-11 - Completed quick task 260411-wyg: Fix VMSS and AKS detail panel data bugs — error response guard in VMSSDetailPanel/AKSDetailPanel, real healthy_instance_count/health_state derived from instance power states, autoscale warning logging
 
 > Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design
@@ -406,6 +408,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260411-wm8 | move chat button from right to left and chat panel as well | 2026-04-11 | 5f80f38 | [260411-wm8-move-chat-button-from-right-to-left-and-](./quick/260411-wm8-move-chat-button-from-right-to-left-and-/) |
 | 260411-wps | update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design with overview tab, ai chat tab and whatever tab you deem suitable | 2026-04-11 | d493ca3 | [260411-wps-update-vmdetailpanel-to-follow-vmss-and-](./quick/260411-wps-update-vmdetailpanel-to-follow-vmss-and-/) |
 | 260411-wyg | Fix VMSS and AKS tab and detail panel data bugs — error response guard, hardcoded health/instance stubs, autoscale, metrics | 2026-04-11 | 0295f3c | [260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da](./quick/260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da/) |
+| 260411-x45 | Fix VMSS list health column, VMSS/AKS metrics tabs, and AKS node health — resolve known limitations from previous fix | 2026-04-11 | 83f181e | [260411-x45-fix-vmss-list-health-column-vmss-aks-met](./quick/260411-x45-fix-vmss-list-health-column-vmss-aks-met/) |
 
 ---
 
