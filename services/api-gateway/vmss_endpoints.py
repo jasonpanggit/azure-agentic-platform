@@ -239,11 +239,29 @@ async def get_vmss_detail(
                         autoscale_settings["max_count"] = int(profile.capacity.maximum or 10)
                     autoscale_settings["enabled"] = True
                     break
-        except Exception:
-            pass
+        except Exception as autoscale_exc:
+            logger.warning("vmss_detail: autoscale query failed error=%s", autoscale_exc)
+
+        # Derive healthy_instance_count from running instances (power_state contains "running")
+        total = int(vmss.sku.capacity or 0) if vmss.sku else 0
+        running_count = sum(
+            1 for inst in instances
+            if "running" in (inst.get("power_state") or "").lower()
+        )
+        healthy_instance_count = running_count if instances else total
+
+        # Derive health_state from healthy ratio
+        if total == 0:
+            health_state = "unknown"
+        elif healthy_instance_count == total:
+            health_state = "available"
+        elif healthy_instance_count == 0:
+            health_state = "unavailable"
+        else:
+            health_state = "degraded"
 
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("vmss_detail: resource_id=%s instances=%d duration_ms=%.1f", resource_id[:60], len(instances), duration_ms)
+        logger.info("vmss_detail: resource_id=%s instances=%d healthy=%d health_state=%s duration_ms=%.1f", resource_id[:60], len(instances), healthy_instance_count, health_state, duration_ms)
         return {
             "id": resource_id,
             "name": vmss.name or vmss_name,
@@ -251,12 +269,12 @@ async def get_vmss_detail(
             "subscription_id": subscription_id,
             "location": vmss.location or "",
             "sku": vmss.sku.name if vmss.sku else "",
-            "instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
-            "healthy_instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
+            "instance_count": total,
+            "healthy_instance_count": healthy_instance_count,
             "os_type": "",
             "os_image_version": "",
             "power_state": "running",
-            "health_state": "unknown",
+            "health_state": health_state,
             "autoscale_enabled": autoscale_settings.get("enabled", False),
             "active_alert_count": 0,
             "min_count": autoscale_settings["min_count"],
