@@ -114,9 +114,9 @@ async def list_aks_clusters(
     network_plugin = tostring(properties.networkProfile.networkPlugin),
     rbac_enabled = tobool(properties.enableRBAC),
     node_pool_count = array_length(properties.agentPoolProfiles),
-    total_nodes = 0,
-    ready_nodes = 0,
-    node_pools_ready = 0,
+    total_nodes = toint(coalesce(toint(properties.agentPoolProfiles[0].count), 0)),
+    ready_nodes = toint(coalesce(toint(properties.agentPoolProfiles[0].count), 0)),
+    node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(properties.agentPoolProfiles), 0),
     system_pod_health = 'unknown',
     active_alert_count = 0"""
 
@@ -140,9 +140,9 @@ async def list_aks_clusters(
                 "kubernetes_version": r.get("kubernetes_version", ""),
                 "latest_available_version": None,  # Simplified — same as current means up to date
                 "node_pool_count": r.get("node_pool_count", 0),
-                "node_pools_ready": r.get("node_pool_count", 0),
-                "total_nodes": 0,
-                "ready_nodes": 0,
+                "node_pools_ready": r.get("node_pools_ready", 0),
+                "total_nodes": r.get("total_nodes", 0),
+                "ready_nodes": r.get("ready_nodes", 0),
                 "system_pod_health": "unknown",
                 "fqdn": r.get("fqdn") or None,
                 "network_plugin": r.get("network_plugin", ""),
@@ -261,7 +261,28 @@ async def get_aks_detail(
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.error("aks_detail: error=%s duration_ms=%.1f", exc, duration_ms)
-        return {"error": str(exc)}
+        return {
+            "id": resource_id,
+            "name": resource_id.split("/")[-1],
+            "resource_group": "",
+            "subscription_id": _extract_subscription_id(resource_id),
+            "location": "",
+            "kubernetes_version": "",
+            "latest_available_version": None,
+            "node_pool_count": 0,
+            "node_pools_ready": 0,
+            "total_nodes": 0,
+            "ready_nodes": 0,
+            "system_pod_health": "unknown",
+            "fqdn": None,
+            "network_plugin": "",
+            "rbac_enabled": False,
+            "active_alert_count": 0,
+            "node_pools": [],
+            "workload_summary": None,
+            "active_incidents": [],
+            "fetch_error": str(exc),
+        }
 
 
 @router.get("/{resource_id_base64}/metrics")
