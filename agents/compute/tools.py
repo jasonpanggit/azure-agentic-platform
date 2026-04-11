@@ -14,6 +14,7 @@ Allowed MCP tools (explicit allowlist — no wildcards):
 from __future__ import annotations
 
 import logging
+import os
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -65,6 +66,18 @@ try:
     from azure.mgmt.containerservice import ContainerServiceClient
 except ImportError:
     ContainerServiceClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-cosmos may not be installed in all envs
+try:
+    from azure.cosmos import CosmosClient
+except ImportError:
+    CosmosClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — ForecasterClient from api-gateway (co-located in container image)
+try:
+    from services.api_gateway.forecaster import ForecasterClient
+except ImportError:
+    ForecasterClient = None  # type: ignore[assignment,misc]
 
 from shared.approval_manager import create_approval_record
 
