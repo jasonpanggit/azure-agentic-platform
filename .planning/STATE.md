@@ -2,21 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: complete
-last_updated: "2026-04-11T07:22:00.000Z"
+status: unknown
+last_updated: "2026-04-11T09:18:18.300Z"
 progress:
-  total_phases: 33
-  completed_phases: 33
-  total_plans: 109
-  completed_plans: 109
+  total_phases: 35
+  completed_phases: 28
+  total_plans: 90
+  completed_plans: 91
   percent: 100
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last activity: 2026-04-11 - Phase 29–33 merged to main via PR #41 (49 commits, 127 files, 11,387 insertions). All 33 phases complete. 1,073 Python test functions across 92 test files + 15 TypeScript test files. ROADMAP.md updated to reflect all phases. Branch: main.
+> Last activity: 2026-04-11 - Added Phase 42: SOP Tab Web UI to ROADMAP.md. Live runbook library tab with semantic search, domain filters, step-progress execution tracker, inline HITL approval for REMEDIATION steps, and incident linkage. Depends on Phase 30 (SOP engine) + Phase 31 (34 SOPs). 2 plans (42-1: list+detail viewer; 42-2: live execution tracking+incident integration). Total phases: 42, total plans: 113.
 
-> Last activity: 2026-04-10 - Completed quick task 260410-amq: Create summary stub for superseded Phase 14 — Phase 14 was absorbed into Phase 19 before execution. All phases now report correctly; progress bar at 100%.
+> Last activity: 2026-04-11 - Phase 34 complete. Wired all 20 compute agent tools (15 Phase 32 tools were implemented but unregistered). Fixed AMA status hardcoded "unknown" with ARG extension join. 1,278 tests passing. Phases 35-42 planned (VM world-class AIOps roadmap + VMSS/AKS/SOP tabs). Branch: gsd/phase-34-activate-phase-32-vm-tools.
+
+> Last activity: 2026-04-11 - Phase 29–33 merged to main via PR #41 (49 commits, 127 files, 11,387 insertions). All 33 phases complete. ROADMAP.md updated with phases 34-40 (world-class VM AIOps roadmap).
 
 > Last updated: 2026-04-10 - Completed quick task 260410-0yi: Add EOL date column to VM tab — new /api/v1/vms/eol endpoint in api-gateway querying eol_cache PostgreSQL table with endoflife.date API fallback, plus EOL Date column in VMTab.tsx
 
@@ -153,13 +155,12 @@ All 8 domain agents migrated to Microsoft Agent Framework (`agent-framework 1.0.
 Phases 29–33 merged to main via PR #41 (2026-04-11, 49 commits, 127 files, 11,387 insertions).
 
 **Codebase stats (as of 2026-04-11):**
+
 - 33 phase directories, 109 PLAN files, 109 SUMMARY files
 - 1,073 Python test functions across 92 test files
 - 15 TypeScript test files
 - 34 production SOPs in `sops/`
 - 11 modules in `agents/shared/`
-
-
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 

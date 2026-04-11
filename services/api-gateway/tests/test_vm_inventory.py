@@ -2,7 +2,8 @@
 
 Tests cover:
 - _normalize_power_state: canonical mapping for all known states
-- _build_vm_kql: KQL generation with no filter, status filter, search filter, injection safety
+- _build_vm_kql: KQL generation with no filter, status filter, search filter, injection safety, AMA status join
+- ama_status: installed/not_installed for Azure VMs, unknown for Arc VMs
 - list_vms route: success response shape, ARG failure degrades to empty list, pagination
 - OS normalization: raw Azure SKU strings → human-readable OS names via normalize_os
 """
@@ -491,3 +492,108 @@ def test_list_vms_normalizes_windows_2025_datacenter_azure_edition(
     assert resp.status_code == 200
     vm = resp.json()["vms"][0]
     assert vm["os_name"] == "Windows Server 2025 Datacenter"
+
+
+# ---------------------------------------------------------------------------
+# Phase 34 — AMA status tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_vm_kql_includes_ama_extension_join():
+    """KQL must include a join for AMA extension presence on Azure VMs."""
+    from services.api_gateway.vm_inventory import _build_vm_kql
+
+    kql = _build_vm_kql("all", None)
+    assert "AzureMonitorWindowsAgent" in kql or "AzureMonitorLinuxAgent" in kql, (
+        "KQL must join against AMA extension resources"
+    )
+    assert "amaStatus" in kql, "KQL must project an amaStatus column"
+
+
+def test_build_vm_kql_arc_vms_return_unknown_ama_status():
+    """KQL must set amaStatus='unknown' for Arc VMs."""
+    from services.api_gateway.vm_inventory import _build_vm_kql
+
+    kql = _build_vm_kql("all", None)
+    # The KQL iff() expression must mark Arc VMs as 'unknown'
+    assert "'unknown'" in kql, "KQL must set amaStatus to 'unknown' for Arc VMs"
+    assert "Arc VM" in kql, "KQL must reference 'Arc VM' vmType for the unknown branch"
+
+
+def test_build_vm_kql_azure_vms_return_installed_or_not_installed():
+    """KQL must return 'installed'/'not_installed' for Azure VMs based on extension presence."""
+    from services.api_gateway.vm_inventory import _build_vm_kql
+
+    kql = _build_vm_kql("all", None)
+    assert "'installed'" in kql, "KQL must return 'installed' when AMA extension found"
+    assert "'not_installed'" in kql, "KQL must return 'not_installed' when AMA extension absent"
+
+
+@patch("services.api_gateway.vm_inventory._get_health_states_sync")
+@patch("services.api_gateway.vm_inventory._run_arg_query")
+def test_list_vms_ama_status_installed(mock_arg, mock_health, client):
+    """When ARG returns amaStatus='installed', the VM response includes ama_status='installed'."""
+    row = _sample_arg_row()
+    row["amaStatus"] = "installed"
+    mock_arg.return_value = [row]
+    mock_health.return_value = {}
+
+    resp = client.get("/api/v1/vms?subscriptions=sub1")
+
+    assert resp.status_code == 200
+    vm = resp.json()["vms"][0]
+    assert vm["ama_status"] == "installed", (
+        f"Expected ama_status='installed', got '{vm['ama_status']}'"
+    )
+
+
+@patch("services.api_gateway.vm_inventory._get_health_states_sync")
+@patch("services.api_gateway.vm_inventory._run_arg_query")
+def test_list_vms_ama_status_not_installed(mock_arg, mock_health, client):
+    """When ARG returns amaStatus='not_installed', the VM response reflects that."""
+    row = _sample_arg_row()
+    row["amaStatus"] = "not_installed"
+    mock_arg.return_value = [row]
+    mock_health.return_value = {}
+
+    resp = client.get("/api/v1/vms?subscriptions=sub1")
+
+    assert resp.status_code == 200
+    vm = resp.json()["vms"][0]
+    assert vm["ama_status"] == "not_installed"
+
+
+@patch("services.api_gateway.vm_inventory._get_health_states_sync")
+@patch("services.api_gateway.vm_inventory._run_arg_query")
+def test_list_vms_ama_status_unknown_for_arc(mock_arg, mock_health, client):
+    """Arc VMs should return ama_status='unknown' (ARG doesn't cover Arc extensions)."""
+    row = _sample_arg_row()
+    row["vmType"] = "Arc VM"
+    row["amaStatus"] = "unknown"
+    mock_arg.return_value = [row]
+    mock_health.return_value = {}
+
+    resp = client.get("/api/v1/vms?subscriptions=sub1")
+
+    assert resp.status_code == 200
+    vm = resp.json()["vms"][0]
+    assert vm["ama_status"] == "unknown"
+
+
+@patch("services.api_gateway.vm_inventory._get_health_states_sync")
+@patch("services.api_gateway.vm_inventory._run_arg_query")
+def test_list_vms_ama_status_defaults_unknown_when_key_missing(mock_arg, mock_health, client):
+    """If ARG row lacks amaStatus key, ama_status falls back to 'unknown' (graceful degradation)."""
+    row = _sample_arg_row()
+    # Deliberately omit amaStatus key to test fallback
+    row.pop("amaStatus", None)
+    mock_arg.return_value = [row]
+    mock_health.return_value = {}
+
+    resp = client.get("/api/v1/vms?subscriptions=sub1")
+
+    assert resp.status_code == 200
+    vm = resp.json()["vms"][0]
+    assert vm["ama_status"] == "unknown", (
+        "ama_status must default to 'unknown' when key missing from ARG row"
+    )

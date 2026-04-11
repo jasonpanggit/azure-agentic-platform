@@ -326,6 +326,13 @@ class IncidentSummary(BaseModel):
         default=None,
         description="True when severity was escalated to Sev0 due to domain SLO burn-rate alert.",
     )
+    re_diagnosis_count: int = Field(
+        default=0,
+        description=(
+            "Number of times the agent has re-diagnosed this incident after remediation "
+            "verification. Capped at MAX_RE_DIAGNOSIS_COUNT (default 3) to prevent infinite loops."
+        ),
+    )
 
 
 class AuditEntry(BaseModel):
@@ -515,6 +522,13 @@ class PatternAnalysisResult(BaseModel):
     total_incidents_analyzed: int
     top_patterns: list[IncidentPattern]
     finops_summary: dict
+    mttr_summary: dict = Field(
+        default_factory=dict,
+        description=(
+            "MTTR statistics grouped by 'domain:detection_rule:severity' key. "
+            "Each value contains count, p50_min, p95_min, mean_min (LOOP-003)."
+        ),
+    )
     generated_at: str
 
 
@@ -529,6 +543,18 @@ class PlatformHealth(BaseModel):
     agent_p50_ms: Optional[float] = None
     agent_p95_ms: Optional[float] = None
     error_budget_portfolio: list[dict] = []
+    mttr_p50_minutes: Optional[float] = Field(
+        default=None,
+        description="P50 MTTR across all resolved incidents in the last 30 days (LOOP-003).",
+    )
+    mttr_p95_minutes: Optional[float] = Field(
+        default=None,
+        description="P95 MTTR across all resolved incidents in the last 30 days (LOOP-003).",
+    )
+    mttr_by_issue_type: dict = Field(
+        default_factory=dict,
+        description="MTTR breakdown by 'domain:detection_rule:severity' key (LOOP-003).",
+    )
     generated_at: str
 
 

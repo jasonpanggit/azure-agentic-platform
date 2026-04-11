@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useResizable } from '@/lib/use-resizable'
 import { MessageSquare, X } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
@@ -15,6 +15,8 @@ import { UserBubble } from './UserBubble'
 import { ChatInput } from './ChatInput'
 import { ThinkingIndicator } from './ThinkingIndicator'
 import { ProposalCard } from './ProposalCard'
+import { VerificationCard } from './VerificationCard'
+import { useVerificationPoll } from '@/lib/use-verification-poll'
 
 const QUICK_EXAMPLES = [
   'Show my virtual machines',
@@ -55,6 +57,22 @@ export function ChatDrawer() {
       return null
     }
   }, [instance, accounts])
+
+  // ── Verification tracking (LOOP-002) ──
+  const [executedApproval, setExecutedApproval] = useState<{
+    approvalId: string;
+    incidentId: string;
+    executedAt: string;
+    action: string;
+    resourceIds: string[];
+  } | null>(null)
+
+  const { result: verificationResult, isPolling: isVerificationPolling } = useVerificationPoll({
+    approvalId: executedApproval?.approvalId ?? null,
+    executedAt: executedApproval?.executedAt ?? null,
+    delayMinutes: 5,
+    getAccessToken,
+  })
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -129,8 +147,8 @@ export function ChatDrawer() {
   useSSE({ threadId, runId, streamType: 'trace', onEvent: handleTraceEvent, runKey })
 
   // ── Send message ──
-  const handleSend = useCallback(async () => {
-    const message = input.trim()
+  const handleSend = useCallback(async (messageOverride?: string) => {
+    const message = (messageOverride ?? input).trim()
     if (!message || isStreaming) return
     setInput('')
     setMessages((prev) => [...prev, {
@@ -189,8 +207,21 @@ export function ChatDrawer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decided_by: 'current_user' }),
       })
+      // Track for verification polling (LOOP-002)
+      // Find the approval gate context from the messages state
+      const approvalMsg = messages.find(m => m.approvalGate?.approval_id === approvalId)
+      const gate = approvalMsg?.approvalGate
+      if (gate) {
+        setExecutedApproval({
+          approvalId: gate.approval_id,
+          incidentId: gate.action_id,
+          executedAt: new Date().toISOString(),
+          action: gate.proposal.description,
+          resourceIds: gate.proposal.target_resources,
+        })
+      }
     } catch { /* ProposalCard handles its own error state */ }
-  }, [])
+  }, [messages])
 
   const handleReject = useCallback(async (approvalId: string) => {
     try {
@@ -201,6 +232,14 @@ export function ChatDrawer() {
       })
     } catch { /* ProposalCard handles its own error state */ }
   }, [])
+
+  // ── Verification re-diagnosis handler (LOOP-005) ──
+  // Delegates to handleSend with a message override so the re-diagnosis
+  // message is injected into the existing Foundry thread (via thread_id in
+  // the chat proxy request body) rather than creating an orphan thread.
+  const handleVerificationChatMessage = useCallback((message: string) => {
+    handleSend(message)
+  }, [handleSend])
 
   return (
     <>
@@ -332,6 +371,20 @@ export function ChatDrawer() {
                 )
               ))}
               {isStreaming && !messages[messages.length - 1]?.isStreaming && <ThinkingIndicator />}
+              {executedApproval && (
+                <VerificationCard
+                  approvalId={executedApproval.approvalId}
+                  incidentId={executedApproval.incidentId}
+                  threadId={threadId || ''}
+                  verificationResult={verificationResult?.verification_result ?? null}
+                  isPolling={isVerificationPolling}
+                  proposedAction={executedApproval.action}
+                  resourceId={executedApproval.resourceIds?.[0] || ''}
+                  rolledBack={verificationResult?.rolled_back}
+                  getAccessToken={getAccessToken}
+                  onChatMessage={handleVerificationChatMessage}
+                />
+              )}
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>

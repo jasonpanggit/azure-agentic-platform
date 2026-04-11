@@ -362,6 +362,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("startup: WAL stale monitor not started (COSMOS_ENDPOINT not set)")
 
+    # Startup sweep for missed verifications (LOOP-001)
+    from services.api_gateway.remediation_executor import run_missed_verification_sweep
+    asyncio.create_task(run_missed_verification_sweep(
+        cosmos_client=app.state.cosmos_client if hasattr(app.state, "cosmos_client") else None,
+        credential=app.state.credential,
+    ))
+    logger.info("startup: missed verification sweep queued")
+
     # Seed default business tier if container is empty (PLATINT-004)
     if app.state.cosmos_client is not None:
         try:
@@ -1854,6 +1862,37 @@ async def get_platform_health(
     except Exception as exc:
         logger.debug("platform_health: SLO compliance query failed | error=%s", exc)
 
+    # 6. MTTR from latest pattern analysis (LOOP-003)
+    mttr_p50 = None
+    mttr_p95 = None
+    mttr_by_type: dict = {}
+    if cosmos is not None:
+        try:
+            db_name = os.environ.get("COSMOS_DATABASE", "aap")
+            pattern_analysis_container = cosmos.get_database_client(db_name).get_container_client(
+                COSMOS_PATTERN_ANALYSIS_CONTAINER
+            )
+            latest_results = list(
+                pattern_analysis_container.query_items(
+                    query="SELECT TOP 1 * FROM c ORDER BY c.generated_at DESC",
+                    enable_cross_partition_query=True,
+                )
+            )
+            latest_analysis = latest_results[0] if latest_results else {}
+            if latest_analysis:
+                mttr_summary = latest_analysis.get("mttr_summary", {})
+                mttr_by_type = mttr_summary
+                # Compute aggregate P50/P95 across all issue types
+                # approximation: mean of per-issue-type P50s, not true population P50
+                all_p50s = [v.get("p50_min", 0) for v in mttr_summary.values() if v.get("count", 0) > 0]
+                all_p95s = [v.get("p95_min", 0) for v in mttr_summary.values() if v.get("count", 0) > 0]
+                if all_p50s:
+                    mttr_p50 = round(sum(all_p50s) / len(all_p50s), 1)
+                if all_p95s:
+                    mttr_p95 = round(max(all_p95s), 1)
+        except Exception as exc:
+            logger.debug("platform_health: MTTR query failed | error=%s", exc)
+
     return PlatformHealth(
         detection_pipeline_lag_seconds=detection_pipeline_lag_seconds,
         auto_remediation_success_rate=auto_remediation_success_rate,
@@ -1863,6 +1902,9 @@ async def get_platform_health(
         agent_p50_ms=None,
         agent_p95_ms=None,
         error_budget_portfolio=error_budget_portfolio,
+        mttr_p50_minutes=mttr_p50,
+        mttr_p95_minutes=mttr_p95,
+        mttr_by_issue_type=mttr_by_type,
         generated_at=now_iso,
     )
 

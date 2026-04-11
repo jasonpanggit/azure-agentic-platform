@@ -725,6 +725,98 @@ Plans:
 
 ---
 
+### Phase 34: Activate Phase 32 VM Tools
+
+**Goal:** Wire all 15 unregistered Phase 32 tools into `compute/agent.py` so the compute agent can actually use them. Fix AMA status hardcoded "unknown" in the fleet inventory endpoint. This is a zero-new-code phase — the tools are fully implemented in `tools.py` but the agent never sees them.
+**Depends on:** Phase 32
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 35: Post-Remediation Intelligence Loop
+
+**Goal:** Close the verification feedback loop between `remediation_executor.py` and the originating Foundry agent thread. After human approval → execution → verification, the originating agent receives the outcome and re-diagnoses: "Did the CPU spike resolve? Did the disk error clear?" Adds iterative hypothesis testing, MTTR tracking per issue type, and a "Did it work?" UI prompt 5 minutes post-execution.
+**Depends on:** Phase 27, Phase 34
+**Status:** 🔲 Not started
+**Plans:** 3/3 plans complete
+
+---
+
+### Phase 36: OS-Level In-Guest VM Diagnostics
+
+**Goal:** See inside the VM, not just around it. Add Azure Run Command tool for safe in-guest script execution. Parse Azure boot diagnostics serial log for kernel panics, OOM kills, disk errors. Add VM Guest Health heartbeat/memory/CPU/disk pressure tools. Resolve AMA heartbeat status from ARM (replacing hardcoded "unknown"). Surface guest OS metrics via AMA → Log Analytics.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 37: VM Performance Intelligence & Forecasting
+
+**Goal:** Shift from reactive to predictive. Expose `forecaster.py` as an agent-callable `@ai_function` tool. Add `query_vm_performance_baseline` (P50/P95/P99 over 30 days) and `detect_performance_drift` (drift score + narrative vs baseline). Surface anomaly scoring in the VM detail panel. Add weekly fleet performance digest SOP.
+**Depends on:** Phase 26, Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 38: VM Security & Compliance Depth
+
+**Goal:** Make per-VM security posture a first-class diagnostic signal alongside metrics and logs. Add tools: Defender TVM CVE count, JIT access status + active sessions, effective NSG rules at NIC level, Azure Backup RPO/last-backup, Azure Site Recovery replication health. Surface VM compliance score in the VM detail panel.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 39: VM Cost Intelligence & Rightsizing
+
+**Goal:** Surface wasteful spend and enable operators to act on it through the existing HITL approval workflow. Add tools: Azure Advisor rightsizing recommendations with estimated monthly savings, Azure Cost Management 7-day spend per VM, HITL-gated `propose_vm_sku_downsize`. Add fleet cost dashboard showing top-10 underutilized VMs. Add cost-aware SOP for <5% CPU VMs.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 40: Arc Agent Completion
+
+**Goal:** Bring Arc-connected resources to feature parity with Azure-native VMs. Replace the 3 stub tools in `agents/arc/tools.py` (`query_activity_log`, `query_log_analytics`, `query_resource_health`) with real implementations via the Arc MCP server. Add Arc-specific tools: connectivity status, extension inventory, guest configuration compliance, HITL-gated extension install. Arc VM detail panel matches Azure-native VM panel.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 41: VMSS + AKS Web UI Tabs
+
+**Goal:** Add dedicated VMSS and AKS tabs to the web UI dashboard, giving operators first-class visibility into Virtual Machine Scale Sets and AKS clusters. Follows the established VMTab → VMDetailPanel pattern: list view with badges → click opens a tabbed detail panel with AI chat. Tab order becomes: Alerts · Audit · Topology · Resources · VMs · VMSS · AKS · Observability · Patch.
+**Design spec:** `docs/superpowers/specs/2026-04-11-vmss-aks-tabs-design.md`
+**Depends on:** Phase 34 (backend VMSS/AKS agent tools), Phase 9 (Tailwind/shadcn UI foundation)
+**Status:** 🔲 Not started
+**Plans:** 0/2 plans complete
+
+**Deliverables:**
+- `VMSSTab.tsx` — list view: name, SKU, instance health count badge, power state, health, alerts
+- `VMSSDetailPanel.tsx` — 5 tabs: Overview / Instances / Metrics / Scaling / AI Chat
+- `AKSTab.tsx` — list view: cluster, K8s version badge, node pool health, system pod health, upgrade badge, alerts
+- `AKSDetailPanel.tsx` — 5 tabs: Overview / Node Pools / Workloads / Metrics / AI Chat
+- 8 new proxy routes (`/api/proxy/vmss/**`, `/api/proxy/aks/**`)
+- `types/azure-resources.ts` — shared type definitions extracted from inline component types
+- `DashboardPanel.tsx` + `AlertFeed.tsx` updates to register and route to new tabs
+
+**Backend prerequisite note:** Proxy routes call `/api/v1/vmss/...` and `/api/v1/aks/...` endpoints that must be implemented in `services/api-gateway/`. Phase 32 agent tools exist; gateway REST endpoints are the remaining backend work. Frontend can be built first — proxy routes gracefully return empty arrays when upstream is unavailable.
+
+**Out of scope (deferred to future phases):**
+- VMSS instance-level drill-down chat
+- AKS log streaming / kubectl-style output
+- Arc-connected AKS clusters (Arc agent, separate tab)
+- Command palette (Cmd+K) global resource search
+- Resource relationship graph view
+- Bulk alert actions, CSV export on all tabs, one-click patch remediation from PatchTab
+
+---
+
 ## v2.0 Requirements
 
 ### PROD (Production Readiness)
@@ -775,7 +867,7 @@ Plans:
 
 ## World-Class Success Criteria
 
-When all phases 19–28 complete:
+When all phases 19–33 complete (v2.0 milestone):
 
 | Metric | Target |
 |--------|--------|
@@ -787,3 +879,17 @@ When all phases 19–28 complete:
 | Audit completeness | Every automated action attributable, reviewable, exportable |
 | Predictive prevention | ≥30% of incidents caught in forecast state before alerting |
 | Institutional memory recall | Historical pattern match for >50% of repeating incident types |
+
+## World-Class VM AIOps — Extended Criteria (Phases 34–40)
+
+When all phases 34–40 complete:
+
+| Metric | Target |
+|--------|--------|
+| Compute agent tool coverage | All 20 tools in `tools.py` registered and reachable by the agent |
+| Remediation loop closure | Originating agent receives verification outcome for every executed remediation |
+| In-guest diagnostics | Run Command + serial log parsing + Guest Health available for all Azure VMs |
+| Forecasting agent access | Forecaster exposed as `@ai_function`; agents can query time-to-breach for any metric |
+| Per-VM security posture | TVM CVE count, JIT status, effective NSG, Backup RPO surfaced in triage |
+| Cost visibility | Rightsizing recommendations surfaced via HITL proposal for all underutilized VMs |
+| Arc parity | Arc agent 0 stubs; tool quality matches Azure-native compute agent |
