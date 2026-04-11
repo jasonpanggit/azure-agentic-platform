@@ -522,6 +522,13 @@ class PatternAnalysisResult(BaseModel):
     total_incidents_analyzed: int
     top_patterns: list[IncidentPattern]
     finops_summary: dict
+    mttr_summary: dict = Field(
+        default_factory=dict,
+        description=(
+            "MTTR statistics grouped by 'domain:detection_rule:severity' key. "
+            "Each value contains count, p50_min, p95_min, mean_min (LOOP-003)."
+        ),
+    )
     generated_at: str
 
 

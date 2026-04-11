@@ -439,6 +439,9 @@ def _run_analysis_sync(cosmos_client: Any) -> Optional[Dict[str, Any]]:
     # --- FinOps summary ---
     finops_dict = _compute_finops_summary(incidents, remediation_records)
 
+    # --- MTTR summary ---
+    mttr_dict = compute_mttr_by_issue_type(incidents)
+
     # --- Build result doc ---
     doc = {
         "id": f"pattern-{analysis_date}",
@@ -448,6 +451,7 @@ def _run_analysis_sync(cosmos_client: Any) -> Optional[Dict[str, Any]]:
         "total_incidents_analyzed": len(incidents),
         "top_patterns": top_patterns,
         "finops_summary": finops_dict,
+        "mttr_summary": mttr_dict,
         "generated_at": now.isoformat(),
     }
 
