@@ -109,6 +109,30 @@ except ImportError:
     GranularityType = None  # type: ignore[assignment,misc]
     TimeframeType = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-security may not be installed in all envs
+try:
+    from azure.mgmt.security import SecurityCenter
+except ImportError:
+    SecurityCenter = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-network may not be installed in all envs
+try:
+    from azure.mgmt.network import NetworkManagementClient
+except ImportError:
+    NetworkManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-recoveryservicesbackup may not be installed in all envs
+try:
+    from azure.mgmt.recoveryservicesbackup import RecoveryServicesBackupClient
+except ImportError:
+    RecoveryServicesBackupClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-recoveryservicessiterecovery may not be installed in all envs
+try:
+    from azure.mgmt.recoveryservicessiterecovery import SiteRecoveryManagementClient
+except ImportError:
+    SiteRecoveryManagementClient = None  # type: ignore[assignment,misc]
+
 from shared.approval_manager import create_approval_record
 
 tracer = setup_telemetry("aiops-compute-agent")
@@ -135,6 +159,10 @@ def _log_sdk_availability() -> None:
         "azure-monitor-query": "azure.monitor.query",
         "azure-mgmt-resourcehealth": "azure.mgmt.resourcehealth",
         "azure-mgmt-resourcegraph": "azure.mgmt.resourcegraph",
+        "azure-mgmt-security": "azure.mgmt.security",
+        "azure-mgmt-network": "azure.mgmt.network",
+        "azure-mgmt-recoveryservicesbackup": "azure.mgmt.recoveryservicesbackup",
+        "azure-mgmt-recoveryservicessiterecovery": "azure.mgmt.recoveryservicessiterecovery",
     }
     for pkg, module in packages.items():
         try:
