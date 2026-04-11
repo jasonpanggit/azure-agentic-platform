@@ -479,6 +479,10 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(patch_router)
 app.include_router(vm_inventory_router)
+# vm_cost_router MUST be registered before vm_detail_router because
+# vm_detail_router defines a wildcard path /{resource_id_base64} that would
+# otherwise swallow the fixed /cost-summary path.
+app.include_router(vm_cost_router)
 app.include_router(vm_detail_router)
 app.include_router(vm_chat_router)
 app.include_router(topology_router)
@@ -486,7 +490,6 @@ app.include_router(forecast_router)
 app.include_router(resources_inventory_router)
 app.include_router(topology_tree_router)
 app.include_router(eol_router)
-app.include_router(vm_cost_router)
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
