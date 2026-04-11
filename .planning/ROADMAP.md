@@ -873,6 +873,16 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 42 to break down)
 
+### Phase 43: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 43 to break down)
+
 ---
 
 ## World-Class Success Criteria

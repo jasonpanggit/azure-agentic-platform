@@ -423,6 +423,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 13 added: add a new patch management tab and show all the patch related information
 - Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
 - Phase 42 added: surface runbooks in web-ui
+- Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
 
 ---
 
