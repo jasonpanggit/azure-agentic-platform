@@ -277,3 +277,25 @@ variable "storage_agent_endpoint" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# Phase 30: SOP Engine — vector store ID + notification env vars
+# ---------------------------------------------------------------------------
+
+variable "sop_vector_store_id" {
+  description = "Foundry vector store ID for SOP files (set after running upload_sops.py)"
+  type        = string
+  default     = ""
+}
+
+variable "notification_email_from" {
+  description = "Sender email address for ACS email notifications (SOP engine)"
+  type        = string
+  default     = ""
+}
+
+variable "notification_email_to" {
+  description = "Default recipient email address for ACS email notifications (SOP engine)"
+  type        = string
+  default     = ""
+}

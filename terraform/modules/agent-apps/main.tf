@@ -281,6 +281,30 @@ resource "azurerm_container_app" "agents" {
           value = "aap-orchestrator"
         }
       }
+      # Phase 30: SOP Engine — vector store ID for all domain agents (not orchestrator/services).
+      # Domain agents use this to attach the SOP vector store via FileSearchTool.
+      dynamic "env" {
+        for_each = contains(keys(local.agents), each.key) && each.key != "orchestrator" && var.sop_vector_store_id != "" ? [1] : []
+        content {
+          name  = "SOP_VECTOR_STORE_ID"
+          value = var.sop_vector_store_id
+        }
+      }
+      # Phase 30: SOP Engine — notification email config for sop_notify @ai_function.
+      dynamic "env" {
+        for_each = contains(keys(local.agents), each.key) && each.key != "orchestrator" && var.notification_email_from != "" ? [1] : []
+        content {
+          name  = "NOTIFICATION_EMAIL_FROM"
+          value = var.notification_email_from
+        }
+      }
+      dynamic "env" {
+        for_each = contains(keys(local.agents), each.key) && each.key != "orchestrator" && var.notification_email_to != "" ? [1] : []
+        content {
+          name  = "NOTIFICATION_EMAIL_TO"
+          value = var.notification_email_to
+        }
+      }
     }
   }
 
