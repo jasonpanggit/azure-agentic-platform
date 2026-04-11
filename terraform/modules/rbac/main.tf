@@ -34,6 +34,21 @@ locals {
       }
     },
 
+    # Compute Agent: Cost Management Reader on compute sub + platform sub
+    # Required for query_vm_cost_7day tool (Phase 39)
+    {
+      "compute-costmgmtreader-compute" = {
+        principal_id         = var.agent_principal_ids["compute"]
+        role_definition_name = "Cost Management Reader"
+        scope                = "/subscriptions/${local.compute_sub}"
+      }
+      "compute-costmgmtreader-platform" = {
+        principal_id         = var.agent_principal_ids["compute"]
+        role_definition_name = "Cost Management Reader"
+        scope                = "/subscriptions/${var.platform_subscription_id}"
+      }
+    },
+
     # Network Agent: Network Contributor on network sub + Reader on compute sub for correlation
     {
       "network-netcontributor-network" = {
