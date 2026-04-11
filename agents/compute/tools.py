@@ -2718,3 +2718,101 @@ def detect_performance_drift(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+# ---------------------------------------------------------------------------
+# Phase 39 — VM Cost Intelligence tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_advisor_rightsizing_recommendations(
+    vm_name: str,
+    subscription_id: str,
+    resource_group: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query Azure Advisor Cost recommendations for a specific VM.
+
+    Returns rightsizing recommendations including target SKU and estimated
+    monthly savings. Use this tool BEFORE proposing a SKU downsize to confirm
+    Advisor has flagged the VM as underutilized.
+
+    NOTE: Azure Advisor recommendations are refreshed every 24 hours.
+    If no recommendations appear, the VM may not yet be assessed.
+
+    Returns:
+        Dict with recommendation_count, recommendations list, and duration_ms.
+        Each recommendation contains: target_sku, estimated_monthly_savings,
+        savings_currency, impact, description, extended_properties (raw dict).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_advisor_rightsizing_recommendations",
+        tool_parameters={"vm_name": vm_name, "subscription_id": subscription_id},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if AdvisorManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-mgmt-advisor not installed",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = AdvisorManagementClient(credential, subscription_id)
+
+            recommendations = []
+            for rec in client.recommendations.list():
+                # Filter: Cost category only
+                if rec.category != "Cost":
+                    continue
+                # Filter: virtualMachines resource type
+                if not rec.impacted_field or "virtualmachines" not in rec.impacted_field.lower():
+                    continue
+                # Filter: matches this VM name (check impacted_value and resource_metadata)
+                impacted_value = (rec.impacted_value or "").lower()
+                resource_id_str = ""
+                if rec.resource_metadata and rec.resource_metadata.resource_id:
+                    resource_id_str = rec.resource_metadata.resource_id.lower()
+
+                if vm_name.lower() not in impacted_value and vm_name.lower() not in resource_id_str:
+                    continue
+                # Also filter by resource_group if provided
+                if resource_group and resource_group.lower() not in resource_id_str:
+                    continue
+
+                ext = rec.extended_properties or {}
+                recommendations.append({
+                    "recommendation_id": rec.id or "",
+                    "target_sku": ext.get("recommendedSkuName", ""),
+                    "estimated_monthly_savings": float(ext.get("savingsAmount", 0) or 0),
+                    "annual_savings": float(ext.get("annualSavingsAmount", 0) or 0),
+                    "savings_currency": ext.get("savingsCurrency", "USD"),
+                    "impact": rec.impact or "Medium",
+                    "description": (rec.short_description.solution if rec.short_description else ""),
+                    "impacted_value": rec.impacted_value or "",
+                    "last_updated": rec.last_updated.isoformat() if rec.last_updated else "",
+                    "extended_properties": dict(ext),
+                })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "query_status": "success",
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "recommendation_count": len(recommendations),
+                "recommendations": recommendations,
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_advisor_rightsizing_recommendations error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
