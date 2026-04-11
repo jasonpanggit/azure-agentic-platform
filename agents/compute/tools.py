@@ -51,6 +51,20 @@ try:
 except ImportError:
     MicrosoftResourceHealth = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-compute may not be installed in all envs
+try:
+    from azure.mgmt.compute import ComputeManagementClient
+except ImportError:
+    ComputeManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-containerservice for AKS tools
+try:
+    from azure.mgmt.containerservice import ContainerServiceClient
+except ImportError:
+    ContainerServiceClient = None  # type: ignore[assignment,misc]
+
+from shared.approval_manager import create_approval_record
+
 tracer = setup_telemetry("aiops-compute-agent")
 logger = logging.getLogger(__name__)
 
@@ -683,3 +697,445 @@ def query_os_version(
                 "query_status": "error",
                 "error": str(e),
             }
+
+
+# ---------------------------------------------------------------------------
+# Phase 32 — New Azure VM tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_vm_extensions(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """List extensions installed on an Azure VM with provisioning state and version.
+
+    Args:
+        resource_group: Resource group name.
+        vm_name: Virtual machine name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with 'extensions' list (name, type, provisioning_state, version).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_extensions",
+        tool_parameters={"resource_group": resource_group, "vm_name": vm_name},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "extensions": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            raw = client.virtual_machine_extensions.list(resource_group, vm_name)
+            extensions = []
+            for ext in (raw.value or []):
+                extensions.append({
+                    "name": ext.name,
+                    "type": getattr(ext, "type_properties_type", ext.type) or "",
+                    "provisioning_state": getattr(ext.properties, "provisioning_state", "Unknown"),
+                    "type_handler_version": getattr(ext.properties, "type_handler_version", ""),
+                    "auto_upgrade_minor_version": getattr(
+                        ext.properties, "auto_upgrade_minor_version", None
+                    ),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"extensions": extensions, "vm_name": vm_name, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_extensions error: %s", exc)
+            return {"error": str(exc), "extensions": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_boot_diagnostics(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Retrieve boot diagnostics data for an Azure VM (screenshot URI + serial log URI).
+
+    Args:
+        resource_group: Resource group name.
+        vm_name: Virtual machine name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'screenshot_uri' and 'serial_log_uri'.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_boot_diagnostics",
+        tool_parameters={"resource_group": resource_group, "vm_name": vm_name},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            result = client.virtual_machines.retrieve_boot_diagnostics_data(
+                resource_group, vm_name
+            )
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "screenshot_uri": result.console_screenshot_blob_uri or "",
+                "serial_log_uri": result.serial_console_log_blob_uri or "",
+                "vm_name": vm_name,
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_boot_diagnostics error: %s", exc)
+            return {"error": str(exc), "screenshot_uri": "", "serial_log_uri": "", "duration_ms": duration_ms}
+
+
+@ai_function
+def query_vm_sku_options(
+    subscription_id: str,
+    location: str,
+    sku_family: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """List available VM SKUs in a region for rightsizing recommendations.
+
+    Call this BEFORE propose_vm_resize to identify valid target SKUs.
+    This is a diagnostic read — no changes are made.
+
+    Args:
+        subscription_id: Azure subscription ID.
+        location: Azure region (e.g. "eastus").
+        sku_family: SKU family prefix to filter (e.g. "Standard_D").
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'skus' list (name, tier, vcpus, memory_gb).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_sku_options",
+        tool_parameters={"location": location, "sku_family": sku_family},
+        correlation_id=subscription_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "skus": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            skus = []
+            for sku in client.resource_skus.list(filter=f"location eq '{location}'"):
+                if sku.resource_type != "virtualMachines":
+                    continue
+                if sku_family and not sku.name.startswith(sku_family):
+                    continue
+                capabilities = {c.name: c.value for c in (sku.capabilities or [])}
+                skus.append({
+                    "name": sku.name,
+                    "tier": sku.tier or "",
+                    "vcpus": capabilities.get("vCPUs", ""),
+                    "memory_gb": capabilities.get("MemoryGB", ""),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"skus": skus[:20], "location": location, "sku_family": sku_family, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_sku_options error: %s", exc)
+            return {"error": str(exc), "skus": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_disk_health(
+    resource_group: str,
+    disk_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query disk state, IOPS, throughput, and encryption status.
+
+    Args:
+        resource_group: Resource group name.
+        disk_name: Managed disk name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with disk_state, disk_size_gb, iops, throughput_mbps, encryption_type.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_disk_health",
+        tool_parameters={"resource_group": resource_group, "disk_name": disk_name},
+        correlation_id=disk_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            disk = client.disks.get(resource_group, disk_name)
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "disk_name": disk_name,
+                "disk_state": disk.disk_state or "Unknown",
+                "disk_size_gb": disk.disk_size_gb,
+                "provisioning_state": disk.provisioning_state or "Unknown",
+                "iops_read_write": disk.disk_iops_read_write,
+                "throughput_mbps": disk.disk_m_bps_read_write,
+                "encryption_type": getattr(
+                    getattr(disk, "encryption", None), "type", "Unknown"
+                ),
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_disk_health error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+# ---------------------------------------------------------------------------
+# Phase 32 — HITL remediation proposal tools (no ARM mutations)
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def propose_vm_restart(
+    resource_id: str,
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose a VM restart — creates HITL ApprovalRecord (no ARM call).
+
+    REMEDI-001: This tool ONLY creates an approval record. The restart
+    is executed by RemediationExecutor AFTER human approval.
+
+    Returns:
+        Dict with approval_id and status="pending_approval".
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vm_restart",
+        tool_parameters={"vm_name": vm_name, "reason": reason},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vm_restart",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "reason": reason,
+                "description": f"Restart VM '{vm_name}' to resolve: {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "~2-5 min downtime",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vm_name": vm_name, "resource_id": resource_id},
+                risk_level="medium",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"VM restart proposal created for '{vm_name}'. Awaiting human approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vm_restart error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_vm_resize(
+    resource_id: str,
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    current_sku: str,
+    target_sku: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose a VM resize — creates HITL ApprovalRecord (no ARM call).
+
+    Call query_vm_sku_options FIRST to identify a valid target_sku.
+    REMEDI-001: No ARM call. Approval required before execution.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vm_resize",
+        tool_parameters={"vm_name": vm_name, "target_sku": target_sku},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vm_resize",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "current_sku": current_sku,
+                "target_sku": target_sku,
+                "reason": reason,
+                "description": f"Resize VM '{vm_name}' from {current_sku} to {target_sku}: {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "~5-10 min downtime (deallocate/resize/start)",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vm_name": vm_name, "current_sku": current_sku, "target_sku": target_sku},
+                risk_level="high",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"VM resize proposal: {vm_name} ({current_sku} -> {target_sku}). Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vm_resize error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_vm_redeploy(
+    resource_id: str,
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose a VM redeploy to a different host — creates HITL ApprovalRecord.
+
+    Use when host-level issues are suspected. Redeploy is irreversible
+    (new host allocation; IP/disk are preserved).
+    REMEDI-001: No ARM call. Approval required before execution.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vm_redeploy",
+        tool_parameters={"vm_name": vm_name, "reason": reason},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vm_redeploy",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "reason": reason,
+                "description": f"Redeploy VM '{vm_name}' to new host: {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "~10 min downtime",
+                "reversible": False,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vm_name": vm_name, "resource_id": resource_id},
+                risk_level="high",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"VM redeploy proposal created for '{vm_name}'. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vm_redeploy error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
