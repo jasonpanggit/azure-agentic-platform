@@ -250,6 +250,7 @@ def query_log_analytics(
             rows (list): Query result rows.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"workspace_id": workspace_id, "kql_query": kql_query, "timespan": timespan}
 
@@ -262,13 +263,91 @@ def query_log_analytics(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "workspace_id": workspace_id,
-            "kql_query": kql_query,
-            "timespan": timespan,
-            "rows": [],
-            "query_status": "success",
-        }
+        # Guard: empty workspace_id means no Log Analytics configured — skip gracefully
+        if not workspace_id:
+            logger.warning(
+                "query_log_analytics: skipped | workspace_id is empty — no Log Analytics workspace configured"
+            )
+            return {
+                "workspace_id": workspace_id,
+                "kql_query": kql_query,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "skipped",
+            }
+
+        try:
+            if LogsQueryClient is None:
+                raise ImportError("azure-monitor-query is not installed")
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql_query,
+                timespan=timespan,
+            )
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                rows: List[Dict[str, Any]] = []
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        rows.append(
+                            dict(
+                                zip(
+                                    col_names,
+                                    [str(v) if v is not None else None for v in row],
+                                )
+                            )
+                        )
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.info(
+                    "query_log_analytics: complete | workspace=%s rows=%d duration_ms=%.0f",
+                    workspace_id,
+                    len(rows),
+                    duration_ms,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "kql_query": kql_query,
+                    "timespan": timespan,
+                    "rows": rows,
+                    "query_status": "success",
+                }
+            else:
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.warning(
+                    "query_log_analytics: partial | workspace=%s duration_ms=%.0f error=%s",
+                    workspace_id,
+                    duration_ms,
+                    response.partial_error,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "kql_query": kql_query,
+                    "timespan": timespan,
+                    "rows": [],
+                    "query_status": "partial",
+                    "partial_error": str(response.partial_error),
+                }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_log_analytics: failed | workspace=%s error=%s duration_ms=%.0f",
+                workspace_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "workspace_id": workspace_id,
+                "kql_query": kql_query,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function
