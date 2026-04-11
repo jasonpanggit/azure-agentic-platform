@@ -788,6 +788,35 @@ Plans:
 
 ---
 
+### Phase 41: VMSS + AKS Web UI Tabs
+
+**Goal:** Add dedicated VMSS and AKS tabs to the web UI dashboard, giving operators first-class visibility into Virtual Machine Scale Sets and AKS clusters. Follows the established VMTab → VMDetailPanel pattern: list view with badges → click opens a tabbed detail panel with AI chat. Tab order becomes: Alerts · Audit · Topology · Resources · VMs · VMSS · AKS · Observability · Patch.
+**Design spec:** `docs/superpowers/specs/2026-04-11-vmss-aks-tabs-design.md`
+**Depends on:** Phase 34 (backend VMSS/AKS agent tools), Phase 9 (Tailwind/shadcn UI foundation)
+**Status:** 🔲 Not started
+**Plans:** 0/2 plans complete
+
+**Deliverables:**
+- `VMSSTab.tsx` — list view: name, SKU, instance health count badge, power state, health, alerts
+- `VMSSDetailPanel.tsx` — 5 tabs: Overview / Instances / Metrics / Scaling / AI Chat
+- `AKSTab.tsx` — list view: cluster, K8s version badge, node pool health, system pod health, upgrade badge, alerts
+- `AKSDetailPanel.tsx` — 5 tabs: Overview / Node Pools / Workloads / Metrics / AI Chat
+- 8 new proxy routes (`/api/proxy/vmss/**`, `/api/proxy/aks/**`)
+- `types/azure-resources.ts` — shared type definitions extracted from inline component types
+- `DashboardPanel.tsx` + `AlertFeed.tsx` updates to register and route to new tabs
+
+**Backend prerequisite note:** Proxy routes call `/api/v1/vmss/...` and `/api/v1/aks/...` endpoints that must be implemented in `services/api-gateway/`. Phase 32 agent tools exist; gateway REST endpoints are the remaining backend work. Frontend can be built first — proxy routes gracefully return empty arrays when upstream is unavailable.
+
+**Out of scope (deferred to future phases):**
+- VMSS instance-level drill-down chat
+- AKS log streaming / kubectl-style output
+- Arc-connected AKS clusters (Arc agent, separate tab)
+- Command palette (Cmd+K) global resource search
+- Resource relationship graph view
+- Bulk alert actions, CSV export on all tabs, one-click patch remediation from PatchTab
+
+---
+
 ## v2.0 Requirements
 
 ### PROD (Production Readiness)

@@ -46,6 +46,48 @@ These items require manual operator execution. All code changes are complete —
 
 ---
 
+## WEB UI ENHANCEMENTS (Deferred from Phase 41 Design)
+
+These items were explicitly scoped out of Phase 41 (VMSS + AKS tabs) during design brainstorming. Add to a future UI uplift phase.
+
+- [ ] **[UI] Command palette (Cmd+K) global resource navigation**
+  - Source: Phase 41 design brainstorm — Option B (Full Platform Uplift), deferred
+  - Detail: Cmd+K opens a `cmdk`-powered palette to navigate directly to any VM/VMSS/AKS cluster by name. Package `cmdk` is already installed in `services/web-ui/package.json`.
+
+- [ ] **[UI] Global search across VMs, VMSS, AKS, and alerts**
+  - Source: Phase 41 design brainstorm — deferred
+  - Detail: Single search bar in TopNav that queries all resource types and alerts simultaneously. Results grouped by type with keyboard navigation.
+
+- [ ] **[UI] Resource relationship graph view**
+  - Source: Phase 41 design brainstorm — deferred
+  - Detail: Visual graph showing VM → NSG → VNet → Subnet relationships. The topology data already exists via `GET /api/proxy/topology` (Phase 22 built the backend graph). This is purely a frontend visualisation layer on top of existing data.
+
+- [ ] **[UI] Bulk alert actions (acknowledge/dismiss)**
+  - Source: Phase 41 design brainstorm — deferred
+  - Detail: Checkbox selection on AlertFeed rows with bulk Acknowledge and Dismiss actions. Reduces operator friction for alert storms.
+
+- [ ] **[UI] CSV export on all tabs**
+  - Source: Phase 41 design brainstorm — deferred
+  - Detail: Export button on VMSSTab, AKSTab, ResourcesTab, and ObservabilityTab. AuditLogViewer already has CSV export via `/api/proxy/audit/export` — same pattern.
+
+- [ ] **[UI] One-click patch remediation from PatchTab**
+  - Source: Phase 41 design brainstorm — deferred
+  - Detail: "Remediate" button on PatchTab rows that opens the global chat drawer pre-seeded with a patch remediation prompt for that machine. Hooks into the existing HITL approval flow.
+
+- [ ] **[UI] VMSS instance-level drill-down chat**
+  - Source: Phase 41 design spec — explicitly out of scope
+  - Detail: Clicking an individual VMSS instance row opens a contextual chat scoped to that specific instance (not the scale set as a whole).
+
+- [ ] **[UI] AKS log streaming / kubectl-style output panel**
+  - Source: Phase 41 design spec — explicitly out of scope
+  - Detail: Live pod log streaming within the AKS detail panel. Requires a new SSE-backed log proxy endpoint.
+
+- [ ] **[UI] Arc-connected AKS clusters tab**
+  - Source: Phase 41 design spec — explicitly out of scope
+  - Detail: Arc-enabled Kubernetes clusters (`Microsoft.Kubernetes/connectedClusters`) shown in a dedicated tab or merged into the AKS tab with a type badge. Depends on Arc MCP Server tools (Phase 40).
+
+---
+
 ## RESOLVED — Fixed in Phases 9–28
 
 These items were open after Phase 8. All are confirmed resolved in the codebase.
