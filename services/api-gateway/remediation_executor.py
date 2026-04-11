@@ -455,6 +455,32 @@ async def _inject_verification_result(
             except Exception as exc:
                 logger.warning("_inject_verification_result: failed to increment re_diagnosis_count | %s", exc)
 
+        # Auto-set resolved_at when verification_result is RESOLVED (LOOP-003)
+        if verification_result == "RESOLVED" and cosmos_client is not None:
+            try:
+                resolved_at = datetime.now(timezone.utc).isoformat()
+                db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+                incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+                incidents_container.patch_item(
+                    item=incident_id,
+                    partition_key=incident_id,
+                    patch_operations=[
+                        {"op": "add", "path": "/status", "value": "resolved"},
+                        {"op": "add", "path": "/resolved_at", "value": resolved_at},
+                        {"op": "add", "path": "/auto_resolved", "value": True},
+                        {"op": "add", "path": "/resolution", "value": f"Auto-resolved: {proposed_action} verified as RESOLVED"},
+                    ],
+                )
+                logger.info(
+                    "_inject_verification_result: auto-resolved incident | incident_id=%s resolved_at=%s",
+                    incident_id, resolved_at,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "_inject_verification_result: failed to auto-resolve incident | incident_id=%s error=%s",
+                    incident_id, exc,
+                )
+
         logger.info(
             "_inject_verification_result: injected | thread_id=%s execution_id=%s result=%s count=%d",
             thread_id, execution_id, verification_result, current_count + 1,
