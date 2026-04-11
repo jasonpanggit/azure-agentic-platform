@@ -2029,3 +2029,132 @@ def query_vm_guest_health(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+def _safe_float(val: Any) -> Optional[float]:
+    """Convert a value to float, returning None for empty or None values."""
+    if val is None:
+        return None
+    s = str(val)
+    if s == "":
+        return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+@ai_function
+def query_ama_guest_metrics(
+    resource_id: str,
+    workspace_id: str,
+    timespan_hours: int = 24,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Query AMA InsightsMetrics for hourly CPU, memory, and disk IOPS buckets.
+
+    Returns time-series data binned into 1-hour buckets with cpu_p50,
+    cpu_p95, memory_avg_mb, and disk_iops for trend analysis and
+    capacity planning.
+
+    Args:
+        resource_id: Azure resource ID of the VM.
+        workspace_id: Log Analytics workspace ID.
+        timespan_hours: Look-back window in hours (default: 24).
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with buckets list (hourly aggregations) and metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_ama_guest_metrics",
+        tool_parameters={"resource_id": resource_id, "timespan_hours": timespan_hours},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is empty",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            kql = (
+                "InsightsMetrics"
+                f' | where _ResourceId =~ "{resource_id}"'
+                f" | where TimeGenerated > ago({timespan_hours}h)"
+                ' | where Namespace in ("Processor", "Memory", "LogicalDisk")'
+                " | summarize"
+                '     cpu_p50 = percentile(iff(Namespace == "Processor" and Name == "UtilizationPercentage", Val, real(null)), 50),'
+                '     cpu_p95 = percentile(iff(Namespace == "Processor" and Name == "UtilizationPercentage", Val, real(null)), 95),'
+                '     memory_avg_mb = avg(iff(Namespace == "Memory" and Name == "AvailableMB", Val, real(null))),'
+                '     disk_iops = avg(iff(Namespace == "LogicalDisk" and Name == "TransfersPerSecond", Val, real(null)))'
+                "     by bin(TimeGenerated, 1h)"
+                " | order by TimeGenerated asc"
+            )
+
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql,
+                timespan=f"PT{timespan_hours}H",
+            )
+
+            buckets: List[Dict[str, Any]] = []
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                        buckets.append({
+                            "timestamp": row_dict.get("TimeGenerated"),
+                            "cpu_p50": _safe_float(row_dict.get("cpu_p50")),
+                            "cpu_p95": _safe_float(row_dict.get("cpu_p95")),
+                            "memory_avg_mb": _safe_float(row_dict.get("memory_avg_mb")),
+                            "disk_iops": _safe_float(row_dict.get("disk_iops")),
+                        })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_ama_guest_metrics: complete | resource=%s buckets=%d duration_ms=%d",
+                resource_id,
+                len(buckets),
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "workspace_id": workspace_id,
+                "timespan_hours": timespan_hours,
+                "buckets": buckets,
+                "total_buckets": len(buckets),
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_ama_guest_metrics error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
