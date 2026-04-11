@@ -54,8 +54,10 @@ except ImportError:
 # Lazy import — azure-mgmt-compute may not be installed in all envs
 try:
     from azure.mgmt.compute import ComputeManagementClient
+    from azure.mgmt.compute.models import RunCommandInput
 except ImportError:
     ComputeManagementClient = None  # type: ignore[assignment,misc]
+    RunCommandInput = None  # type: ignore[assignment,misc]
 
 # Lazy import — azure-mgmt-containerservice for AKS tools
 try:
@@ -1620,3 +1622,152 @@ def propose_aks_node_pool_scale(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_aks_node_pool_scale error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+# ---------------------------------------------------------------------------
+# Phase 36 — In-Guest Diagnostic tools
+# ---------------------------------------------------------------------------
+
+BLOCKED_COMMANDS_LINUX: List[str] = [
+    "rm", "kill", "shutdown", "reboot", "halt", "poweroff", "init",
+    "format", "fdisk", "dd", "mkfs", "parted", "wipefs",
+    "systemctl stop", "systemctl disable", "systemctl mask",
+    "apt", "apt-get", "yum", "dnf", "pip", "pip3",
+    "curl -X DELETE", "wget --post",
+    "chmod 000", "chown root",
+    "iptables -F", "iptables -X",
+    "userdel", "groupdel", "passwd",
+    "mount", "umount",
+    "> /dev/sda", "of=/dev/",
+]
+
+BLOCKED_COMMANDS_WINDOWS: List[str] = [
+    "Remove-Item", "Stop-Computer", "Restart-Computer",
+    "Format-Volume", "Clear-Disk",
+    "Stop-Service", "Disable-Service",
+    "Install-Package", "Install-Module",
+    "Set-ExecutionPolicy Unrestricted",
+    "Remove-WindowsFeature",
+]
+
+MAX_SCRIPT_LENGTH = 1500
+
+
+@ai_function
+def execute_run_command(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    script: str,
+    os_type: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Execute a read-only diagnostic command on an Azure VM via Run Command API.
+
+    Safety: destructive commands are blocked by a hard block list. Script
+    length is limited to 1500 characters. Only diagnostic/read operations
+    should be submitted.
+
+    Args:
+        resource_group: Resource group name.
+        vm_name: Virtual machine name.
+        subscription_id: Azure subscription ID.
+        script: Shell or PowerShell script to execute (max 1500 chars).
+        os_type: "Linux" or "Windows".
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with stdout, stderr, and execution metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="execute_run_command",
+        tool_parameters={"resource_group": resource_group, "vm_name": vm_name, "os_type": os_type},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            # Validate os_type
+            if os_type not in ("Linux", "Windows"):
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": f"Invalid os_type '{os_type}'. Must be 'Linux' or 'Windows'.",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Validate script length
+            if len(script) > MAX_SCRIPT_LENGTH:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": f"Script length {len(script)} exceeds maximum {MAX_SCRIPT_LENGTH} characters.",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Check block list
+            blocked = BLOCKED_COMMANDS_LINUX if os_type == "Linux" else BLOCKED_COMMANDS_WINDOWS
+            for line in script.splitlines():
+                line_lower = line.lower()
+                for cmd in blocked:
+                    if cmd.lower() in line_lower:
+                        duration_ms = int((time.monotonic() - start_time) * 1000)
+                        return {
+                            "error": f"Script contains blocked command: '{cmd}'",
+                            "blocked_command": cmd,
+                            "query_status": "error",
+                            "duration_ms": duration_ms,
+                        }
+
+            # SDK guard
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "query_status": "error", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            command_id = "RunShellScript" if os_type == "Linux" else "RunPowerShellScript"
+            parameters = RunCommandInput(
+                command_id=command_id,
+                script=script.splitlines(),
+            )
+
+            poller = client.virtual_machines.begin_run_command(
+                resource_group, vm_name, parameters
+            )
+            result = poller.result()
+
+            stdout = result.value[0].message if result.value and len(result.value) > 0 else ""
+            stderr = result.value[1].message if result.value and len(result.value) > 1 else ""
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "execute_run_command: complete | vm=%s os=%s duration_ms=%d",
+                vm_name,
+                os_type,
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "os_type": os_type,
+                "stdout": stdout,
+                "stderr": stderr,
+                "command_id": command_id,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("execute_run_command error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
