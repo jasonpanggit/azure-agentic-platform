@@ -220,7 +220,7 @@ async def get_aks_detail(
         for pool in (cluster.agent_pool_profiles or []):
             pool_count = pool.count or 0
             total_nodes += pool_count
-            ready_nodes += pool_count  # Simplified — no per-pool health available via ARM
+            ready_nodes += pool_count  # ARM does not expose per-pool node health; assumes all nodes ready
             pools_ready += 1
             node_pools.append({
                 "name": pool.name or "",
@@ -260,7 +260,7 @@ async def get_aks_detail(
 
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.error("aks_detail: error=%s duration_ms=%.1f", exc, duration_ms)
+        logger.error("aks_detail: resource_id=%s error=%s duration_ms=%.1f", resource_id[:60], exc, duration_ms)
         return {"error": str(exc)}
 
 
