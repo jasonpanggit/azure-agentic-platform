@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -11,10 +11,12 @@ import { ObservabilityTab } from './ObservabilityTab'
 import { PatchTab } from './PatchTab'
 import { VMTab } from './VMTab'
 import { VMDetailPanel } from './VMDetailPanel'
+import { VMSSTab } from './VMSSTab'
+import { VMSSDetailPanel } from './VMSSDetailPanel'
 import { CostTab } from './CostTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'cost' | 'observability' | 'patch'
+type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'cost' | 'observability' | 'patch'
 
 interface FilterState {
   severity?: string
@@ -28,6 +30,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'topology', label: 'Topology', Icon: Network },
   { id: 'resources', label: 'Resources', Icon: Server },
   { id: 'vms', label: 'VMs', Icon: Monitor },
+  { id: 'vmss', label: 'VMSS', Icon: Scaling },
   { id: 'cost', label: 'Cost', Icon: TrendingDown },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
@@ -58,6 +61,19 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
   function closeVMDetail() {
     setVMDetailOpen(false)
     setSelectedVM(null)
+  }
+
+  const [vmssDetailOpen, setVMSSDetailOpen] = useState(false)
+  const [selectedVMSS, setSelectedVMSS] = useState<{ resourceId: string; resourceName: string } | null>(null)
+
+  function openVMSSDetail(resourceId: string, resourceName: string) {
+    setSelectedVMSS({ resourceId, resourceName })
+    setVMSSDetailOpen(true)
+  }
+
+  function closeVMSSDetail() {
+    setVMSSDetailOpen(false)
+    setSelectedVMSS(null)
   }
 
   function handleTabChange(tab: TabId) {
@@ -158,6 +174,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
 
+        <div id="tabpanel-vmss" role="tabpanel" aria-labelledby="tab-vmss" hidden={activeTab !== 'vmss'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <VMSSTab subscriptions={selectedSubscriptions} onVMSSClick={openVMSSDetail} />
+          </div>
+        </div>
+
         <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost" hidden={activeTab !== 'cost'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <CostTab subscriptions={selectedSubscriptions} />
@@ -190,6 +212,22 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
             resourceId={selectedVM.resourceId}
             resourceName={selectedVM.resourceName}
             onClose={closeVMDetail}
+          />
+        </>
+      )}
+
+      {/* VMSS Detail Panel + backdrop */}
+      {vmssDetailOpen && selectedVMSS && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            style={{ background: 'rgba(0,0,0,0.3)' }}
+            onClick={closeVMSSDetail}
+          />
+          <VMSSDetailPanel
+            resourceId={selectedVMSS.resourceId}
+            resourceName={selectedVMSS.resourceName}
+            onClose={closeVMSSDetail}
           />
         </>
       )}
