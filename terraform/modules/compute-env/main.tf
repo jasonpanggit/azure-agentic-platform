@@ -57,8 +57,8 @@ resource "azurerm_container_registry_agent_pool" "main" {
   location                = var.location
   container_registry_name = azurerm_container_registry.main.name
 
-  # S1: 2 vCPU, 3 GiB RAM — sufficient for sequential image builds
-  instance_count          = 1
+  # S1: 2 vCPU, 3 GiB RAM per agent — pool size set by variable
+  instance_count          = var.acr_agent_pool_instance_count
   tier                    = "S1"
 
   # Inject agents into our VNet so they reach ACR via private endpoint

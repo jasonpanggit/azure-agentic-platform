@@ -43,3 +43,14 @@ variable "log_analytics_workspace_id" {
   description = "Resource ID of the Log Analytics workspace"
   type        = string
 }
+
+variable "acr_agent_pool_instance_count" {
+  description = "Number of ACR agent pool instances (S1 tier)"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.acr_agent_pool_instance_count >= 1 && var.acr_agent_pool_instance_count <= 10
+    error_message = "Agent pool count must be between 1 and 10."
+  }
+}
