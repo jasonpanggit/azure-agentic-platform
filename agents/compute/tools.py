@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -1768,6 +1769,111 @@ def execute_run_command(
             return {
                 "error": str(exc),
                 "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+SERIAL_LOG_PATTERNS: Dict[str, List[str]] = {
+    "kernel_panic": ["Kernel panic", "BUG: unable to handle"],
+    "oom_kill": ["Out of memory: Kill process", "oom-kill", "oom_reaper"],
+    "disk_error": ["I/O error", "EXT4-fs error", "XFS error", "blk_update_request: I/O error"],
+    "fs_corruption": ["FILESYSTEM CORRUPTION DETECTED", "fsck"],
+}
+
+SERIAL_LOG_MAX_BYTES = 50 * 1024  # 50KB
+SERIAL_LOG_EXCERPT_MAX_CHARS = 200
+
+
+@ai_function
+def parse_boot_diagnostics_serial_log(
+    serial_log_uri: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Download and parse a VM serial console log for OS-level boot errors.
+
+    Detects kernel panics, OOM kills, disk I/O errors, and filesystem
+    corruption. Downloads at most 50KB from the serial log URI (typically
+    obtained from query_boot_diagnostics).
+
+    Args:
+        serial_log_uri: SAS URI for the serial console log blob.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with detected_events list, summary counts, and metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="parse_boot_diagnostics_serial_log",
+        tool_parameters={"serial_log_uri_length": len(serial_log_uri) if serial_log_uri else 0},
+        correlation_id="",
+        thread_id=thread_id,
+    ):
+        try:
+            if not serial_log_uri:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "serial_log_uri is empty",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Download first 50KB
+            response = urllib.request.urlopen(serial_log_uri)  # noqa: S310
+            content_bytes = response.read(SERIAL_LOG_MAX_BYTES)
+            content = content_bytes.decode("utf-8", errors="replace")
+
+            lines = content.splitlines()
+            detected_events: List[Dict[str, Any]] = []
+
+            for line_idx, line in enumerate(lines):
+                line_lower = line.lower()
+                for category, patterns in SERIAL_LOG_PATTERNS.items():
+                    for pattern in patterns:
+                        if pattern.lower() in line_lower:
+                            detected_events.append({
+                                "type": category,
+                                "line_number": line_idx + 1,
+                                "excerpt": line[:SERIAL_LOG_EXCERPT_MAX_CHARS].strip(),
+                            })
+                            break  # one match per category per line
+
+            summary: Dict[str, int] = {
+                "kernel_panic": 0,
+                "oom_kill": 0,
+                "disk_error": 0,
+                "fs_corruption": 0,
+            }
+            for event in detected_events:
+                summary[event["type"]] += 1
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "parse_boot_diagnostics_serial_log: complete | events=%d size=%d duration_ms=%d",
+                len(detected_events),
+                len(content_bytes),
+                duration_ms,
+            )
+            return {
+                "detected_events": detected_events,
+                "summary": summary,
+                "serial_log_size_bytes": len(content_bytes),
+                "truncated": len(content_bytes) >= SERIAL_LOG_MAX_BYTES,
+                "total_events": len(detected_events),
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("parse_boot_diagnostics_serial_log error: %s", exc)
+            return {
+                "error": str(exc),
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
