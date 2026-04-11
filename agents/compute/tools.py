@@ -2171,3 +2171,115 @@ def query_ama_guest_metrics(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+@ai_function
+def get_vm_forecast(
+    resource_id: str,
+    subscription_id: str,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Return capacity exhaustion forecasts for a VM from the Cosmos baselines store.
+
+    Wraps ForecasterClient.get_forecasts() to surface time-to-breach estimates,
+    Holt smoothing level/trend, MAPE confidence, and an imminent_breach flag
+    for CPU, memory, and disk metrics collected by the background sweep loop.
+
+    Args:
+        resource_id: ARM resource ID of the VM.
+        subscription_id: Azure subscription ID (used for tracing only).
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with forecasts list. Each forecast includes: metric_name,
+        time_to_breach_minutes, confidence, mape, level, trend,
+        imminent_breach (bool: time_to_breach_minutes < 60).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="get_vm_forecast",
+        tool_parameters={"resource_id": resource_id, "subscription_id": subscription_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+            if not cosmos_endpoint:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "COSMOS_ENDPOINT environment variable is not set",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            if CosmosClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-cosmos not installed",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            if ForecasterClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "ForecasterClient not available (services.api_gateway not installed)",
+                    "resource_id": resource_id,
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            cosmos_client = CosmosClient(url=cosmos_endpoint, credential=credential)
+            forecaster = ForecasterClient(cosmos_client=cosmos_client, credential=credential)
+
+            raw_forecasts = forecaster.get_forecasts(resource_id)
+
+            forecasts: List[Dict[str, Any]] = []
+            for item in raw_forecasts:
+                ttb = item.get("time_to_breach_minutes")
+                forecasts.append({
+                    "metric_name": item.get("metric_name"),
+                    "time_to_breach_minutes": ttb,
+                    "confidence": item.get("confidence"),
+                    "mape": item.get("mape"),
+                    "level": item.get("level"),
+                    "trend": item.get("trend"),
+                    "threshold": item.get("threshold"),
+                    "imminent_breach": ttb is not None and ttb < 60,
+                    "last_updated": item.get("last_updated"),
+                })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            imminent_count = sum(1 for f in forecasts if f["imminent_breach"])
+            logger.info(
+                "get_vm_forecast: complete | resource=%s forecasts=%d imminent=%d duration_ms=%d",
+                resource_id,
+                len(forecasts),
+                imminent_count,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "forecasts": forecasts,
+                "total_forecasts": len(forecasts),
+                "imminent_breach_count": imminent_count,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("get_vm_forecast error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
