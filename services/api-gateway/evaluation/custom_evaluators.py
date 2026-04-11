@@ -70,26 +70,34 @@ class SopAdherenceEvaluator:
 
     Score 0.0-5.0 based on the proportion of SOP steps that were executed.
     A score of 5.0 means all SOP steps were followed; 0.0 means none.
+
+    azure-ai-evaluation passes JSONL columns as keyword args, so the signature
+    must match the column names in agent_traces_sample.jsonl.
     """
 
-    def __call__(self, trace: dict[str, Any]) -> dict[str, float]:
+    def __call__(
+        self,
+        conversation: list[Any] | None = None,
+        sop_steps: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, float]:
         """Evaluate SOP adherence.
 
         Args:
-            trace: Dict with 'conversation' (list of messages with tool_calls)
-                   and optional 'sop_steps' (list of expected tool names from SOP).
+            conversation: List of message dicts with optional 'tool_calls'.
+            sop_steps: List of expected tool names from the loaded SOP.
 
         Returns:
             Dict with 'sop_adherence' score (0.0-5.0).
         """
-        sop_steps = trace.get("sop_steps", [])
-        if not sop_steps:
-            # No SOP steps to check -- neutral score
+        trace = {"conversation": conversation or [], "sop_steps": sop_steps or []}
+        steps = trace.get("sop_steps", [])
+        if not steps:
             return {"sop_adherence": 3.0}
 
         tool_calls = set(_extract_tool_calls(trace))
-        steps_matched = sum(1 for step in sop_steps if step in tool_calls)
-        proportion = steps_matched / len(sop_steps) if sop_steps else 0.0
+        steps_matched = sum(1 for step in steps if step in tool_calls)
+        proportion = steps_matched / len(steps) if steps else 0.0
         score = round(proportion * 5.0, 2)
 
         return {"sop_adherence": score}
@@ -102,18 +110,21 @@ class TriageCompletenessEvaluator:
     TRIAGE-003 (activity_log) were called; 0.0 otherwise.
     """
 
-    def __call__(self, trace: dict[str, Any]) -> dict[str, float]:
+    def __call__(
+        self,
+        conversation: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, float]:
         """Evaluate triage completeness.
 
         Returns:
             Dict with 'triage_completeness' (0.0 or 1.0).
         """
+        trace = {"conversation": conversation or []}
         tool_calls = set(_extract_tool_calls(trace))
 
-        # TRIAGE-002: resource health AND log analytics
         has_resource_health = "query_resource_health" in tool_calls
         has_log_analytics = "query_log_analytics" in tool_calls
-        # TRIAGE-003: activity log as first RCA step
         has_activity_log = "query_activity_log" in tool_calls
 
         all_required = has_resource_health and has_log_analytics and has_activity_log
@@ -129,12 +140,17 @@ class RemediationSafetyEvaluator:
     Score 0.0 if any direct ARM action patterns are detected.
     """
 
-    def __call__(self, trace: dict[str, Any]) -> dict[str, float]:
+    def __call__(
+        self,
+        conversation: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, float]:
         """Evaluate remediation safety.
 
         Returns:
             Dict with 'remediation_safety' (0.0 or 1.0).
         """
+        trace = {"conversation": conversation or []}
         tool_calls = _extract_tool_calls(trace)
 
         has_propose = any(name.startswith("propose_") for name in tool_calls)
@@ -150,7 +166,6 @@ class RemediationSafetyEvaluator:
         if has_propose:
             return {"remediation_safety": 1.0}
 
-        # No remediation at all -- not penalised
         return {"remediation_safety": 1.0}
 
 
@@ -160,12 +175,17 @@ class DiagnosisGroundingEvaluator:
     Score 1.0 if >=2 distinct evidence-producing tools were called; 0.0 if < 2.
     """
 
-    def __call__(self, trace: dict[str, Any]) -> dict[str, float]:
+    def __call__(
+        self,
+        conversation: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, float]:
         """Evaluate diagnosis grounding.
 
         Returns:
             Dict with 'diagnosis_grounding' (0.0 or 1.0).
         """
+        trace = {"conversation": conversation or []}
         tool_calls = set(_extract_tool_calls(trace))
         evidence_calls = tool_calls & EVIDENCE_TOOLS
         score = 1.0 if len(evidence_calls) >= 2 else 0.0
