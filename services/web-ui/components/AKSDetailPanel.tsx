@@ -152,6 +152,9 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       const res = await fetch(`/api/proxy/aks/${encoded}`, { headers })
       if (!res.ok) throw new Error(`Status ${res.status}`)
       const data = await res.json()
+      if (data.fetch_error) {
+        setError(`Failed to load cluster details: ${data.fetch_error}`)
+      }
       setDetail(data)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
