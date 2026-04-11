@@ -133,6 +133,18 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     )
   )
 | extend vmSize = tostring(properties.hardwareProfile.vmSize)
+| join kind=leftouter (
+    Resources
+    | where type =~ 'microsoft.compute/virtualmachines/extensions'
+    | where name in~ ('AzureMonitorWindowsAgent', 'AzureMonitorLinuxAgent', 'MicrosoftMonitoringAgent')
+    | extend vmId = tolower(strcat_array(array_slice(split(id, '/'), 0, 9), '/'))
+    | project vmId, amaExtName = name
+) on $left.id == $right.vmId
+| extend amaStatus = iff(
+    vmType =~ 'Arc VM',
+    'unknown',
+    iff(isnotempty(amaExtName), 'installed', 'not_installed')
+  )
 | project
     id,
     name,
@@ -144,6 +156,7 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
     osName,
     powerState,
     vmType,
+    amaStatus,
     tags
 """
     if status_filter != "all":
@@ -456,7 +469,7 @@ async def list_vms(
                 "power_state": power_state,
                 "vm_type": vm_type,  # "Azure VM" or "Arc VM"
                 "health_state": health_state,
-                "ama_status": "unknown",  # Phase 17: AMA extension check
+                "ama_status": row.get("amaStatus", "unknown"),
                 "active_alert_count": alert_count,
                 "tags": row.get("tags") or {},
             }
