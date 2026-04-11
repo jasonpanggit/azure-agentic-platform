@@ -150,6 +150,8 @@ jobs:
           # az acr build runs the build server-side in ACR — no local Docker daemon required.
           # --agent-pool targets our VNet-injected private agent pool so it can reach the
           # private ACR endpoint (publicNetworkAccess=Disabled).
+          # --timeout 1800 caps individual builds at 30 min so a hung ACR task fails
+          # fast rather than holding the GitHub runner open until it loses communication.
           az acr build \
             --registry "${{ steps.acr.outputs.name }}" \
             --agent-pool "aap-builder-prod" \
@@ -157,6 +159,7 @@ jobs:
             --image "${IMAGE}:latest" \
             --file "${{ inputs.dockerfile_path }}" \
             --platform linux/amd64 \
+            --timeout 1800 \
             $NO_CACHE_FLAG \
             $BUILD_ARG_FLAGS \
             "${{ inputs.build_context }}"
