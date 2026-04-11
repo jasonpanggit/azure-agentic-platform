@@ -140,6 +140,7 @@ def query_activity_log(
             entries (list): Activity Log entries found.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"resource_ids": resource_ids, "timespan_hours": timespan_hours}
 
@@ -152,12 +153,76 @@ def query_activity_log(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_ids": resource_ids,
-            "timespan_hours": timespan_hours,
-            "entries": [],
-            "query_status": "success",
-        }
+        try:
+            if MonitorManagementClient is None:
+                raise ImportError("azure-mgmt-monitor is not installed")
+
+            credential = get_credential()
+            start = datetime.now(timezone.utc) - timedelta(hours=timespan_hours)
+            all_entries: List[Dict[str, Any]] = []
+
+            for resource_id in resource_ids:
+                sub_id = _extract_subscription_id(resource_id)
+                client = MonitorManagementClient(credential, sub_id)
+                filter_str = (
+                    f"eventTimestamp ge '{start.isoformat()}' "
+                    f"and resourceId eq '{resource_id}'"
+                )
+                events = client.activity_logs.list(filter=filter_str)
+                for event in events:
+                    all_entries.append(
+                        {
+                            "eventTimestamp": (
+                                event.event_timestamp.isoformat()
+                                if event.event_timestamp
+                                else None
+                            ),
+                            "operationName": (
+                                event.operation_name.value
+                                if event.operation_name
+                                else None
+                            ),
+                            "caller": event.caller,
+                            "status": (
+                                event.status.value if event.status else None
+                            ),
+                            "resourceId": event.resource_id,
+                            "level": (
+                                event.level.value if event.level else None
+                            ),
+                            "description": event.description,
+                        }
+                    )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.info(
+                "query_activity_log: complete | resources=%d entries=%d duration_ms=%.0f",
+                len(resource_ids),
+                len(all_entries),
+                duration_ms,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": all_entries,
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_activity_log: failed | resources=%s error=%s duration_ms=%.0f",
+                resource_ids,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function
