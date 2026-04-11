@@ -29,6 +29,14 @@ from shared.envelope import IncidentMessage, validate_envelope
 from shared.otel import setup_telemetry
 from shared.routing import classify_query_text
 
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import A2APreviewTool, PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    A2APreviewTool = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
+
 # Telemetry tracer for the orchestrator service
 tracer = setup_telemetry("aiops-orchestrator-agent")
 
@@ -261,6 +269,50 @@ def create_orchestrator() -> ChatAgent:
     )
     logger.info("create_orchestrator: ChatAgent created successfully")
     return agent
+
+
+# ---------------------------------------------------------------------------
+# A2A Registration (Phase 29)
+# ---------------------------------------------------------------------------
+
+# Domain agents registered as A2A connections in Foundry
+_A2A_DOMAINS = [
+    "compute", "patch", "network", "security",
+    "arc", "sre", "eol", "storage",
+]
+
+
+def create_orchestrator_agent_version(project: "AIProjectClient") -> object:
+    """Register the Orchestrator as a versioned agent with A2A domain connections.
+
+    Each domain agent is wired as an A2APreviewTool, making the full
+    orchestrator -> domain topology visible in the Foundry portal.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion for the orchestrator.
+    """
+    if A2APreviewTool is None or PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    a2a_tools = []
+    for domain in _A2A_DOMAINS:
+        conn = project.connections.get(f"aap-{domain}-agent-connection")
+        a2a_tools.append(A2APreviewTool(project_connection_id=conn.id))
+
+    return project.agents.create_version(
+        agent_name="aap-orchestrator",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("ORCHESTRATOR_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=ORCHESTRATOR_SYSTEM_PROMPT,
+            tools=a2a_tools,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
