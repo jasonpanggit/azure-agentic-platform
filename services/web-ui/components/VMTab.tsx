@@ -5,29 +5,7 @@ import { Server, RefreshCw } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
-
-interface VMRow {
-  id: string
-  name: string
-  resource_group: string
-  subscription_id: string
-  location: string
-  size: string
-  os_type: string
-  os_name: string
-  power_state: string
-  vm_type: string  // "Azure VM" | "Arc VM"
-  health_state: string
-  ama_status: string
-  active_alert_count: number
-}
-
-interface EolEntry {
-  os_name: string
-  eol_date: string | null
-  is_eol: boolean | null
-  source: string | null
-}
+import type { VMRow, EolEntry } from '@/types/azure-resources'
 
 interface VMTabProps {
   subscriptions: string[]
