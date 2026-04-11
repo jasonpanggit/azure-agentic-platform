@@ -443,25 +443,47 @@ def _is_arc_vm(resource_id: str) -> bool:
 
 
 def _check_ama_installed(credential: Any, resource_id: str, os_type: str) -> bool:
-    """Check if the Azure Monitor Agent extension is installed on the VM.
+    """Check if a monitoring agent extension is installed on the VM.
+
+    Detects both the modern Azure Monitor Agent (AMA) and legacy agents
+    (MicrosoftMonitoringAgent / OmsAgentForLinux) so that VMs with
+    VM Insights enabled via either path are correctly recognised.
 
     Handles both Azure VMs (Microsoft.Compute) and Arc-enabled servers
-    (Microsoft.HybridCompute).  The URL pattern is the same
-    (``{resource_id}/extensions/{ext_name}``) but the API version differs:
+    (Microsoft.HybridCompute).  Lists all extensions and checks names
+    rather than probing a single extension by name, avoiding false
+    negatives when ``os_type`` is not yet known at call time.
+
+    API versions:
     - Azure VMs:  ``2023-03-01``
     - Arc VMs:    ``2024-07-10``  (HybridCompute extensions API)
     """
+    # Known monitoring agent extension names (case-insensitive match)
+    _MONITORING_EXTENSIONS = {
+        "azuremonitorlinuxagent",
+        "azuremonitorwindowsagent",
+        "microsoftmonitoringagent",       # Legacy MMA (Windows)
+        "omsagentforlinux",               # Legacy OMS (Linux)
+    }
+
     token = _arm_token(credential)
-    ext_name = "AzureMonitorWindowsAgent" if os_type.lower() == "windows" else "AzureMonitorLinuxAgent"
     api_version = "2024-07-10" if _is_arc_vm(resource_id) else "2023-03-01"
-    url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
+    url = f"{_ARM_BASE}{resource_id}/extensions"
     resp = requests.get(
         url,
         params={"api-version": api_version},
         headers={"Authorization": f"Bearer {token}"},
         timeout=15,
     )
-    return resp.status_code == 200
+    if resp.status_code != 200:
+        return False
+
+    extensions = resp.json().get("value", [])
+    for ext in extensions:
+        ext_name = (ext.get("name") or "").lower()
+        if ext_name in _MONITORING_EXTENSIONS:
+            return True
+    return False
 
 
 def _list_dcr_associations(credential: Any, resource_id: str) -> List[Dict[str, Any]]:
