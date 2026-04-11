@@ -59,8 +59,8 @@ export function useResizable(options?: UseResizableOptions) {
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
-      // Drawer is on the right side — dragging left increases width
-      const delta = startX.current - e.clientX;
+      // Drawer is on the left side — dragging right increases width
+      const delta = e.clientX - startX.current;
       const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth.current + delta));
       setWidth(newWidth);
     };
