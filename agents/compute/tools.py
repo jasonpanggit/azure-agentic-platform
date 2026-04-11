@@ -1877,3 +1877,155 @@ def parse_boot_diagnostics_serial_log(
                 "query_status": "error",
                 "duration_ms": duration_ms,
             }
+
+
+@ai_function
+def query_vm_guest_health(
+    resource_id: str,
+    workspace_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query VM guest health via Heartbeat table and InsightsMetrics (AMA).
+
+    Classifies heartbeat status as healthy (<5 min), stale (5-15 min),
+    or offline (>15 min / no rows). Also retrieves latest CPU, memory,
+    and disk metrics from the AMA InsightsMetrics table.
+
+    Args:
+        resource_id: Azure resource ID of the VM.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with heartbeat_status, last_heartbeat_minutes_ago, and
+        latest CPU/memory/disk metrics.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_guest_health",
+        tool_parameters={"resource_id": resource_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is empty",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # Heartbeat query
+            heartbeat_kql = (
+                "Heartbeat"
+                f' | where _ResourceId =~ "{resource_id}"'
+                " | where TimeGenerated > ago(15m)"
+                " | summarize LastHeartbeat = max(TimeGenerated)"
+                " | extend MinutesAgo = datetime_diff('minute', now(), LastHeartbeat)"
+            )
+
+            heartbeat_response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=heartbeat_kql,
+                timespan="PT15M",
+            )
+
+            minutes_ago: Optional[int] = None
+            heartbeat_status = "offline"
+
+            if heartbeat_response.status == LogsQueryStatus.SUCCESS:
+                for table in heartbeat_response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        val = row_dict.get("MinutesAgo")
+                        if val is not None:
+                            minutes_ago = int(float(str(val)))
+                            if minutes_ago < 5:
+                                heartbeat_status = "healthy"
+                            elif minutes_ago <= 15:
+                                heartbeat_status = "stale"
+                            else:
+                                heartbeat_status = "offline"
+
+            # Guest metrics query
+            metrics_kql = (
+                "InsightsMetrics"
+                f' | where _ResourceId =~ "{resource_id}"'
+                " | where TimeGenerated > ago(5m)"
+                ' | where Namespace in ("Processor", "Memory", "LogicalDisk")'
+                " | summarize"
+                '     cpu_pct = avgif(Val, Namespace == "Processor" and Name == "UtilizationPercentage"),'
+                '     available_memory_mb = avgif(Val, Namespace == "Memory" and Name == "AvailableMB"),'
+                '     disk_free_pct = avgif(Val, Namespace == "LogicalDisk" and Name == "FreeSpacePercentage")'
+            )
+
+            metrics_response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=metrics_kql,
+                timespan="PT5M",
+            )
+
+            cpu_pct: Optional[float] = None
+            available_memory_mb: Optional[float] = None
+            disk_free_pct: Optional[float] = None
+
+            if metrics_response.status == LogsQueryStatus.SUCCESS:
+                for table in metrics_response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        cpu_val = row_dict.get("cpu_pct")
+                        mem_val = row_dict.get("available_memory_mb")
+                        disk_val = row_dict.get("disk_free_pct")
+                        if cpu_val is not None and str(cpu_val) != "":
+                            cpu_pct = float(str(cpu_val))
+                        if mem_val is not None and str(mem_val) != "":
+                            available_memory_mb = float(str(mem_val))
+                        if disk_val is not None and str(disk_val) != "":
+                            disk_free_pct = float(str(disk_val))
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_vm_guest_health: complete | resource=%s heartbeat=%s duration_ms=%d",
+                resource_id,
+                heartbeat_status,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "heartbeat_status": heartbeat_status,
+                "last_heartbeat_minutes_ago": minutes_ago,
+                "cpu_utilization_pct": cpu_pct,
+                "available_memory_mb": available_memory_mb,
+                "disk_free_pct": disk_free_pct,
+                "ama_data_available": cpu_pct is not None or available_memory_mb is not None,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_guest_health error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
