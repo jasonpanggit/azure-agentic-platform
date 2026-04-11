@@ -225,6 +225,72 @@ def _aggregate_feedback(
     return operator_flagged, common_feedback
 
 
+def compute_mttr_by_issue_type(
+    incidents: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """Compute MTTR (Mean Time To Resolution) statistics grouped by issue type.
+
+    Groups resolved incidents by (domain, detection_rule, severity) and computes
+    P50, P95, and mean MTTR in minutes.
+
+    Only includes incidents where both created_at and resolved_at are present.
+
+    Args:
+        incidents: List of incident documents from Cosmos.
+
+    Returns:
+        Dict mapping "domain:detection_rule:severity" → {
+            "count": int,
+            "p50_min": float,
+            "p95_min": float,
+            "mean_min": float,
+        }
+    """
+    from datetime import datetime as _dt
+
+    groups: Dict[str, List[float]] = defaultdict(list)
+
+    for inc in incidents:
+        created_at = inc.get("created_at")
+        resolved_at = inc.get("resolved_at")
+        if not created_at or not resolved_at:
+            continue
+        if inc.get("status") != "resolved":
+            continue
+
+        try:
+            created = _dt.fromisoformat(created_at.replace("Z", "+00:00"))
+            resolved = _dt.fromisoformat(resolved_at.replace("Z", "+00:00"))
+            mttr_minutes = (resolved - created).total_seconds() / 60.0
+            if mttr_minutes < 0:
+                continue
+        except (ValueError, TypeError):
+            continue
+
+        domain = inc.get("domain", "unknown")
+        detection_rule = inc.get("detection_rule", "unknown")
+        severity = inc.get("severity", "unknown")
+        key = f"{domain}:{detection_rule}:{severity}"
+        groups[key].append(mttr_minutes)
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for key, times in groups.items():
+        if not times:
+            continue
+        sorted_times = sorted(times)
+        n = len(sorted_times)
+        p50_idx = int(n * 0.50)
+        p95_idx = min(int(n * 0.95), n - 1)
+        result[key] = {
+            "count": n,
+            "p50_min": round(sorted_times[p50_idx], 1),
+            "p95_min": round(sorted_times[p95_idx], 1),
+            "mean_min": round(sum(sorted_times) / n, 1),
+        }
+
+    return result
+
+
 def _query_cosmos_container(
     cosmos_client: Any,
     container_name: str,
