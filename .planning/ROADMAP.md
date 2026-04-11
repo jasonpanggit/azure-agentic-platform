@@ -757,7 +757,7 @@ Plans:
 **Goal:** Shift from reactive to predictive. Expose `forecaster.py` as an agent-callable `@ai_function` tool. Add `query_vm_performance_baseline` (P50/P95/P99 over 30 days) and `detect_performance_drift` (drift score + narrative vs baseline). Surface anomaly scoring in the VM detail panel. Add weekly fleet performance digest SOP.
 **Depends on:** Phase 26, Phase 34
 **Status:** 🔲 Not started
-**Plans:** 0/1 plans complete
+**Plans:** 3/3 plans complete
 
 ---
 
