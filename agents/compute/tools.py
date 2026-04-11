@@ -1139,3 +1139,243 @@ def propose_vm_redeploy(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_vm_redeploy error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+# ---------------------------------------------------------------------------
+# Phase 32 — VMSS tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_vmss_instances(
+    resource_group: str,
+    vmss_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """List VMSS instances with health state, power state, and provisioning status.
+
+    Args:
+        resource_group: Resource group name.
+        vmss_name: VMSS name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'instances' list (instance_id, provisioning_state, vm_id).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vmss_instances",
+        tool_parameters={"resource_group": resource_group, "vmss_name": vmss_name},
+        correlation_id=vmss_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "instances": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            instances = []
+            for inst in client.virtual_machine_scale_set_vms.list(resource_group, vmss_name):
+                instances.append({
+                    "instance_id": inst.instance_id,
+                    "provisioning_state": getattr(inst, "provisioning_state", "Unknown"),
+                    "vm_id": inst.vm_id or "",
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"instances": instances, "vmss_name": vmss_name, "count": len(instances), "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vmss_instances error: %s", exc)
+            return {"error": str(exc), "instances": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_vmss_autoscale(
+    resource_group: str,
+    vmss_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query current autoscale settings and recent scale events for a VMSS.
+
+    Args:
+        resource_group: Resource group name.
+        vmss_name: VMSS name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'autoscale_settings' list.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vmss_autoscale",
+        tool_parameters={"resource_group": resource_group, "vmss_name": vmss_name},
+        correlation_id=vmss_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if MonitorManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-monitor not installed", "autoscale_settings": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = MonitorManagementClient(credential, subscription_id)
+
+            settings = []
+            for s in client.autoscale_settings.list_by_resource_group(resource_group):
+                if vmss_name.lower() not in (s.name or "").lower() and \
+                   vmss_name.lower() not in str(getattr(s, "target_resource_uri", "")).lower():
+                    continue
+                profiles = []
+                for p in (s.profiles or []):
+                    cap = getattr(p, "capacity", None)
+                    profiles.append({
+                        "name": p.name,
+                        "min_count": str(getattr(cap, "minimum", "")) if cap else "",
+                        "max_count": str(getattr(cap, "maximum", "")) if cap else "",
+                        "default_count": str(getattr(cap, "default", "")) if cap else "",
+                    })
+                settings.append({"name": s.name, "enabled": s.enabled, "profiles": profiles})
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"autoscale_settings": settings, "vmss_name": vmss_name, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vmss_autoscale error: %s", exc)
+            return {"error": str(exc), "autoscale_settings": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_vmss_rolling_upgrade(
+    resource_group: str,
+    vmss_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query rolling upgrade status for a VMSS — policy, progress, and failed instances.
+
+    Args:
+        resource_group: Resource group name.
+        vmss_name: VMSS name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with running, failed, pending instance counts and provisioning state.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vmss_rolling_upgrade",
+        tool_parameters={"resource_group": resource_group, "vmss_name": vmss_name},
+        correlation_id=vmss_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            upgrade = client.virtual_machine_scale_set_rolling_upgrades.get_latest(
+                resource_group, vmss_name
+            )
+            progress = upgrade.progress
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "running_instance_count": getattr(progress, "successful_instance_count", 0),
+                "failed_instance_count": getattr(progress, "failed_instance_count", 0),
+                "pending_instance_count": getattr(progress, "pending_instance_count", 0),
+                "provisioning_state": upgrade.provisioning_state or "Unknown",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vmss_rolling_upgrade error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_vmss_scale(
+    resource_id: str,
+    resource_group: str,
+    vmss_name: str,
+    subscription_id: str,
+    current_capacity: int,
+    target_capacity: int,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose manual VMSS scale-out or scale-in — HITL ApprovalRecord only.
+
+    REMEDI-001: No ARM call. Approval required before execution.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vmss_scale",
+        tool_parameters={"vmss_name": vmss_name, "target_capacity": target_capacity},
+        correlation_id=vmss_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vmss_scale",
+                "resource_id": resource_id,
+                "vmss_name": vmss_name,
+                "current_capacity": current_capacity,
+                "target_capacity": target_capacity,
+                "reason": reason,
+                "description": f"Scale VMSS '{vmss_name}' from {current_capacity} to {target_capacity}: {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "New instances take ~5 min to become healthy",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vmss_name": vmss_name, "current_capacity": current_capacity},
+                risk_level="medium",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"VMSS scale proposal: {vmss_name} {current_capacity}->{target_capacity}. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vmss_scale error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
