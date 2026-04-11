@@ -2935,3 +2935,79 @@ def query_vm_cost_7day(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("query_vm_cost_7day error: %s", exc)
             return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_vm_sku_downsize(
+    resource_id: str,
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    target_sku: str,
+    justification: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Propose a VM SKU downsize — creates HITL ApprovalRecord (no ARM call).
+
+    Call query_advisor_rightsizing_recommendations and query_vm_cost_7day
+    BEFORE calling this tool to confirm the downsize is warranted.
+
+    REMEDI-001: This tool ONLY creates an approval record. The SKU change
+    is executed by RemediationExecutor AFTER human approval.
+
+    Use this tool when:
+    - Azure Advisor has flagged the VM as underutilized (target_sku from Advisor)
+    - CPU utilization is consistently below 5% over the last 7 days
+    - Estimated monthly savings exceed $20
+
+    Returns:
+        Dict with status="pending_approval", approval_id, message, and duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_vm_sku_downsize",
+        tool_parameters={"vm_name": vm_name, "target_sku": target_sku},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "vm_sku_downsize",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "vm_name": vm_name,
+                "subscription_id": subscription_id,
+                "target_sku": target_sku,
+                "justification": justification,
+                "description": f"Downsize VM '{vm_name}' to {target_sku}: {justification}",
+                "target_resources": [resource_id],
+                "estimated_impact": "~5-10 min downtime (deallocate/resize/start)",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id="",  # Cost proposals may have no incident context
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"vm_name": vm_name, "target_sku": target_sku},
+                risk_level="medium",  # Downsize = medium (same risk class as restart)
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"SKU downsize proposal created for '{vm_name}' → {target_sku}. Awaiting human approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_vm_sku_downsize error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
