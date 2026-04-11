@@ -15,11 +15,19 @@ RBAC scope: Storage Blob Data Reader (enforced by Terraform).
 from __future__ import annotations
 
 import logging
+import os
 
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from storage.tools import (
     ALLOWED_MCP_TOOLS,
     query_blob_diagnostics,
@@ -120,6 +128,35 @@ def create_storage_agent() -> ChatAgent:
     )
     logger.info("create_storage_agent: ChatAgent created successfully")
     return agent
+
+
+def create_storage_agent_version(project: "AIProjectClient") -> object:
+    """Register the Storage Agent as a versioned PromptAgentDefinition in Foundry.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-storage-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=STORAGE_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_storage_metrics,
+                query_blob_diagnostics,
+                query_file_sync_health,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

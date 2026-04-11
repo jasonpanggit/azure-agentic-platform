@@ -15,18 +15,41 @@ RBAC scope: Virtual Machine Contributor + Monitoring Reader (enforced by Terrafo
 from __future__ import annotations
 
 import logging
+import os
 
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from compute.tools import (
     ALLOWED_MCP_TOOLS,
+    propose_aks_node_pool_scale,
+    propose_vm_redeploy,
+    propose_vm_resize,
+    propose_vm_restart,
+    propose_vmss_scale,
+    query_aks_cluster_health,
+    query_aks_node_pools,
+    query_aks_upgrade_profile,
     query_activity_log,
+    query_boot_diagnostics,
+    query_disk_health,
     query_log_analytics,
     query_monitor_metrics,
     query_os_version,
     query_resource_health,
+    query_vm_extensions,
+    query_vm_sku_options,
+    query_vmss_autoscale,
+    query_vmss_instances,
+    query_vmss_rolling_upgrade,
 )
 
 tracer = setup_telemetry("aiops-compute-agent")
@@ -96,6 +119,21 @@ AKS node-level issues, App Service, and Azure Functions.
     "query_resource_health",
     "query_monitor_metrics",
     "query_os_version",
+    "query_vm_extensions",
+    "query_boot_diagnostics",
+    "query_vm_sku_options",
+    "query_disk_health",
+    "propose_vm_restart",
+    "propose_vm_resize",
+    "propose_vm_redeploy",
+    "query_vmss_instances",
+    "query_vmss_autoscale",
+    "query_vmss_rolling_upgrade",
+    "propose_vmss_scale",
+    "query_aks_cluster_health",
+    "query_aks_node_pools",
+    "query_aks_upgrade_profile",
+    "propose_aks_node_pool_scale",
 ]))
 
 
@@ -124,10 +162,74 @@ def create_compute_agent() -> ChatAgent:
             query_resource_health,
             query_monitor_metrics,
             query_os_version,
+            query_vm_extensions,
+            query_boot_diagnostics,
+            query_vm_sku_options,
+            query_disk_health,
+            propose_vm_restart,
+            propose_vm_resize,
+            propose_vm_redeploy,
+            query_vmss_instances,
+            query_vmss_autoscale,
+            query_vmss_rolling_upgrade,
+            propose_vmss_scale,
+            query_aks_cluster_health,
+            query_aks_node_pools,
+            query_aks_upgrade_profile,
+            propose_aks_node_pool_scale,
         ],
     )
     logger.info("create_compute_agent: ChatAgent created successfully")
     return agent
+
+
+def create_compute_agent_version(project: "AIProjectClient") -> object:
+    """Register the Compute Agent as a versioned PromptAgentDefinition in Foundry.
+
+    This makes the agent visible in the Foundry portal (Agents tab) with full
+    version history, tool configuration, and playground access.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-compute-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=COMPUTE_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_activity_log,
+                query_log_analytics,
+                query_resource_health,
+                query_monitor_metrics,
+                query_os_version,
+                query_vm_extensions,
+                query_boot_diagnostics,
+                query_vm_sku_options,
+                query_disk_health,
+                propose_vm_restart,
+                propose_vm_resize,
+                propose_vm_redeploy,
+                query_vmss_instances,
+                query_vmss_autoscale,
+                query_vmss_rolling_upgrade,
+                propose_vmss_scale,
+                query_aks_cluster_health,
+                query_aks_node_pools,
+                query_aks_upgrade_profile,
+                propose_aks_node_pool_scale,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

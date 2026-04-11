@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
-  title: 'Azure AIOps',
+  title: 'Azure Agentic Platform',
   description: 'Azure Agentic Platform — AI Operations Dashboard',
 }
 

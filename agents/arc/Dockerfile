@@ -1,5 +1,5 @@
 ARG BASE_IMAGE
-FROM ${BASE_IMAGE:-aap-agents-base:latest}
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 

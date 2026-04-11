@@ -39,7 +39,7 @@ export function AuthenticatedApp() {
       </AuthenticatedTemplate>
       <UnauthenticatedTemplate>
         <div className="flex flex-col items-center justify-center h-screen gap-6">
-          <h1 className="text-2xl font-semibold">Azure AIOps</h1>
+          <h1 className="text-2xl font-semibold">Azure Agentic Platform</h1>
           <p className="text-sm text-muted-foreground">Sign in to access the operations dashboard.</p>
           <Button onClick={handleLogin}>Sign In</Button>
         </div>

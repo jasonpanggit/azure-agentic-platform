@@ -95,7 +95,7 @@ class TestChatEndpoint:
         """POST with incident_id reuses existing thread."""
         captured_args = {}
 
-        async def mock_create_chat_thread(request, user_id):
+        async def mock_create_chat_thread(request, user_id, **kwargs):
             captured_args["incident_id"] = request.incident_id
             return {"thread_id": "thread-test-001", "run_id": "run-test-001"}
 

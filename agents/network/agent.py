@@ -17,13 +17,24 @@ RBAC scope: Network Contributor (enforced by Terraform).
 from __future__ import annotations
 
 import logging
+import os
 
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from network.tools import (
     ALLOWED_MCP_TOOLS,
+    check_connectivity,
+    query_expressroute_health,
+    query_flow_logs,
     query_load_balancer_health,
     query_nsg_rules,
     query_peering_status,
@@ -68,17 +79,26 @@ azure-mgmt-network SDK directly.
 4. **NSG rule evaluation:** If an NSG rule change was detected in Step 1, call `query_nsg_rules`
    to evaluate effective security rules for affected resources.
 
-5. **Monitor metrics (MONITOR-001):** Use `monitor.query_metrics` for connection failures,
+5. **ExpressRoute health:** If ExpressRoute is involved, call `query_expressroute_health` to
+   check circuit provisioning state and BGP peering health.
+
+6. **Connectivity diagnosis:** For connectivity issues, call `check_connectivity` with Network
+   Watcher to diagnose reachability between source and destination (hop-by-hop trace).
+
+7. **Flow log configuration:** Call `query_flow_logs` to check NSG flow log configuration for
+   affected Network Watcher — verify logging is enabled for forensics.
+
+8. **Monitor metrics (MONITOR-001):** Use `monitor.query_metrics` for connection failures,
    dropped packets, bandwidth utilization, and gateway BGP routes over the incident window.
 
-6. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause
+9. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause
    hypothesis with a confidence score between 0.0 and 1.0. Include:
    - `hypothesis`, `evidence`, `confidence_score`
    - `needs_cross_domain`: true if root cause is outside network domain
    - `suspected_domain`: domain to route to if needs_cross_domain is true
 
-7. **Remediation proposal (REMEDI-001):** Include NSG rule delta, routing change, or DNS fix
-   with `risk_level` and `reversible` flag. **MUST NOT execute without explicit human approval.**
+10. **Remediation proposal (REMEDI-001):** Include NSG rule delta, routing change, or DNS fix
+    with `risk_level` and `reversible` flag. **MUST NOT execute without explicit human approval.**
 
 ## Safety Constraints
 
@@ -100,6 +120,9 @@ azure-mgmt-network SDK directly.
     "query_load_balancer_health",
     "query_vnet_topology",
     "query_peering_status",
+    "query_flow_logs",
+    "query_expressroute_health",
+    "check_connectivity",
 ]))
 
 
@@ -127,10 +150,46 @@ def create_network_agent() -> ChatAgent:
             query_load_balancer_health,
             query_vnet_topology,
             query_peering_status,
+            query_flow_logs,
+            query_expressroute_health,
+            check_connectivity,
         ],
     )
     logger.info("create_network_agent: ChatAgent created successfully")
     return agent
+
+
+def create_network_agent_version(project: "AIProjectClient") -> object:
+    """Register the Network Agent as a versioned PromptAgentDefinition in Foundry.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-network-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=NETWORK_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_nsg_rules,
+                query_load_balancer_health,
+                query_vnet_topology,
+                query_peering_status,
+                query_flow_logs,
+                query_expressroute_health,
+                check_connectivity,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

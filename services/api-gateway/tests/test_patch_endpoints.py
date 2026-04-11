@@ -450,8 +450,9 @@ class TestGetInstalledPatches:
             resp = client.get("/api/v1/patch/installed")
             assert resp.status_code == 422
 
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
     @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
-    def test_returns_installed_patches(self, mock_detail, client):
+    def test_returns_installed_patches(self, mock_detail, mock_discover, client):
         """Successful response returns patches array and metadata."""
         mock_detail.return_value = [
             {
@@ -474,10 +475,9 @@ class TestGetInstalledPatches:
 
         resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
 
-        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
-            with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
-                mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
-                resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=30")
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=30")
 
         assert resp.status_code == 200
 
@@ -511,8 +511,9 @@ class TestGetInstalledPatches:
         assert body["patches"] == []
         assert body["days"] == 90  # default
 
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
     @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
-    def test_installed_cve_enrichment_graceful_degradation(self, mock_detail, client):
+    def test_installed_cve_enrichment_graceful_degradation(self, mock_detail, mock_discover, client):
         """CVE enrichment failure still returns patches with empty cves."""
         mock_detail.return_value = [
             {
@@ -527,10 +528,9 @@ class TestGetInstalledPatches:
 
         resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
 
-        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "ws-123"}, clear=False):
-            with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
-                mock_cves.side_effect = Exception("MSRC API down")
-                resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.side_effect = Exception("MSRC API down")
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -538,7 +538,101 @@ class TestGetInstalledPatches:
         # CVE enrichment failed but patch data is still returned
         assert body["patches"][0]["cves"] == []
 
-    def test_installed_days_validation(self, client):
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_cve_enrichment_for_patch_type(self, mock_detail, mock_discover, client):
+        """SoftwareType=='Patch' patches are now enriched with CVEs (not just Hotfix).
+
+        Regression test: previously only SoftwareType=='Hotfix' triggered MSRC lookup.
+        Arc VMs and Azure Update Manager use SoftwareType=='Patch' or 'Update', so
+        those patches always showed empty CVEs.
+        """
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "Security Update KB5034441",
+                "SoftwareType": "Patch",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Patch",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+            {
+                "SoftwareName": "Windows Update KB5035853",
+                "SoftwareType": "Update",
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Update",
+                "InstalledDate": "2026-03-29T02:00:00Z",
+            },
+            {
+                "SoftwareName": "nginx",
+                "SoftwareType": "Package",
+                "CurrentVersion": "1.24.0",
+                "Publisher": "Ubuntu",
+                "Category": "Package",
+                "InstalledDate": "2026-03-28T12:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {
+                "KB5034441": ["CVE-2024-21302"],
+                "KB5035853": ["CVE-2024-26234", "CVE-2024-26218"],
+            }
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 3
+
+        # SoftwareType=='Patch' must be enriched
+        p0 = body["patches"][0]
+        assert p0["SoftwareType"] == "Patch"
+        assert p0["cves"] == ["CVE-2024-21302"]
+
+        # SoftwareType=='Update' must be enriched
+        p1 = body["patches"][1]
+        assert p1["SoftwareType"] == "Update"
+        assert p1["cves"] == ["CVE-2024-26234", "CVE-2024-26218"]
+
+        # SoftwareType=='Package' must NOT be enriched
+        p2 = body["patches"][2]
+        assert p2["SoftwareType"] == "Package"
+        assert p2["cves"] == []
+
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace", return_value="ws-123")
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    def test_installed_cve_uses_kbid_field_directly(self, mock_detail, mock_discover, client):
+        """KB ID is extracted from the kbid field when present, not just from SoftwareName.
+
+        Regression test: previously only searched SoftwareName for KB\\d+ pattern,
+        missing patches that have kbid as a separate field.
+        """
+        mock_detail.return_value = [
+            {
+                "SoftwareName": "2026-03 Cumulative Update for Windows",
+                "SoftwareType": "Update",
+                "kbid": "5034441",  # numeric kbid field, no KB prefix
+                "CurrentVersion": "1.0.0",
+                "Publisher": "Microsoft",
+                "Category": "Update",
+                "InstalledDate": "2026-03-30T02:00:00Z",
+            },
+        ]
+
+        resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+            resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == ["CVE-2024-21302"]
+
+
         """Days parameter must be between 1 and 365."""
         resource_id = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
 
@@ -548,6 +642,208 @@ class TestGetInstalledPatches:
 
             resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}&days=400")
             assert resp.status_code == 422
+
+
+class TestDiscoverChangeTrackingWorkspace:
+    """Tests for _discover_change_tracking_workspace workspace discovery helper."""
+
+    ARC_RESOURCE_ID = (
+        "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        "/resourceGroups/agentic-aiops-demo-rg"
+        "/providers/Microsoft.HybridCompute/machines/WIN-JBC7MM2NO8J"
+    )
+    # Realistic: ARM path ends with workspace NAME, not a GUID.
+    # This matches real Azure environments (e.g. ChangeTracking(workspace-agentic-aiops-demo)).
+    WORKSPACE_ARM_ID = (
+        "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        "/resourceGroups/ct-rg"
+        "/providers/Microsoft.OperationalInsights/workspaces"
+        "/my-change-tracking-workspace"
+    )
+    WORKSPACE_GUID = "aabbccdd-1122-3344-5566-778899aabbcc"
+
+    def setup_method(self):
+        """Clear the module-level workspace cache before each test."""
+        from services.api_gateway import patch_endpoints
+        patch_endpoints._workspace_cache.clear()
+
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_returns_discovered_workspace_guid(self, mock_arg, mock_customer_id):
+        """Returns the customerId GUID from the ChangeTracking solution's workspace.
+
+        The ARM resource path ends with a workspace NAME, not a GUID. The helper
+        must resolve the customerId via _get_workspace_customer_id.
+        """
+        mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = self.WORKSPACE_GUID
+        credential = MagicMock()
+
+        from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+        result = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result == self.WORKSPACE_GUID
+        mock_arg.assert_called_once()
+        mock_customer_id.assert_called_once_with(credential, self.WORKSPACE_ARM_ID)
+        # Verify the ARG query scopes to the correct subscription
+        call_kql = mock_arg.call_args[0][2]
+        assert "ChangeTracking(" in call_kql
+        assert "4c727b88-12f4-4c91-9c2b-372aab3bbae9" in call_kql
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_falls_back_to_env_var_when_no_solution_found(self, mock_arg):
+        """Falls back to LOG_ANALYTICS_WORKSPACE_ID when no ChangeTracking solution exists."""
+        mock_arg.return_value = []
+        credential = MagicMock()
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "fallback-ws-guid"}):
+            from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+            result = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result == "fallback-ws-guid"
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_falls_back_to_env_var_on_arg_error(self, mock_arg):
+        """Falls back gracefully when ARG raises an exception — never raises itself."""
+        mock_arg.side_effect = Exception("ARG service unavailable")
+        credential = MagicMock()
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "fallback-ws-guid"}):
+            from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+            result = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result == "fallback-ws-guid"
+
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_falls_back_to_env_var_when_customer_id_lookup_fails(self, mock_arg, mock_customer_id):
+        """Falls back to env var when _get_workspace_customer_id returns empty string."""
+        mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = ""  # lookup failed
+        credential = MagicMock()
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "fallback-ws-guid"}):
+            from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+            result = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result == "fallback-ws-guid"
+
+    @patch("services.api_gateway.patch_endpoints._get_workspace_customer_id")
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_caches_result_and_avoids_repeat_arg_call(self, mock_arg, mock_customer_id):
+        """Second call for the same subscription hits the cache, not ARG."""
+        mock_arg.return_value = [{"workspaceResourceId": self.WORKSPACE_ARM_ID}]
+        mock_customer_id.return_value = self.WORKSPACE_GUID
+        credential = MagicMock()
+
+        from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+
+        # First call — hits ARG + customer_id lookup
+        result1 = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+        # Second call — same subscription, should use cache
+        result2 = _discover_change_tracking_workspace(credential, self.ARC_RESOURCE_ID)
+
+        assert result1 == self.WORKSPACE_GUID
+        assert result2 == self.WORKSPACE_GUID
+        assert mock_arg.call_count == 1      # ARG called only once
+        assert mock_customer_id.call_count == 1  # customer_id lookup only once
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_returns_fallback_for_invalid_resource_id(self, mock_arg):
+        """Returns env var fallback without calling ARG when resource_id is malformed."""
+        credential = MagicMock()
+
+        with patch.dict(os.environ, {"LOG_ANALYTICS_WORKSPACE_ID": "fallback-ws-guid"}):
+            from services.api_gateway.patch_endpoints import _discover_change_tracking_workspace
+            result = _discover_change_tracking_workspace(credential, "not-a-valid-resource-id")
+
+        assert result == "fallback-ws-guid"
+        mock_arg.assert_not_called()
+
+    @patch("services.api_gateway.patch_endpoints._query_law_installed_detail", new_callable=AsyncMock)
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace")
+    def test_get_installed_uses_discovered_workspace(self, mock_discover, mock_detail, client):
+        """get_installed_patches uses the discovered workspace, not raw env var."""
+        mock_discover.return_value = "discovered-ct-workspace-guid"
+        mock_detail.return_value = []
+
+        resource_id = self.ARC_RESOURCE_ID
+        resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        # Verify the detail query was called with the discovered workspace, not the env var
+        mock_detail.assert_called_once()
+        call_workspace = mock_detail.call_args[0][1]  # second positional arg is workspace_id
+        assert call_workspace == "discovered-ct-workspace-guid"
+
+    @patch("services.api_gateway.patch_endpoints._discover_change_tracking_workspace")
+    def test_get_installed_degrades_when_no_workspace_at_all(self, mock_discover, client):
+        """Returns degraded response when both discovery and env var return empty string."""
+        mock_discover.return_value = ""
+
+        resource_id = self.ARC_RESOURCE_ID
+        resp = client.get(f"/api/v1/patch/installed?resource_id={resource_id}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"] == []
+        assert body["total_count"] == 0
+        assert body["query_status"] == "degraded"
+
+
+class TestGetWorkspaceCustomerId:
+    """Tests for _get_workspace_customer_id helper."""
+
+    WORKSPACE_ARM_ID = (
+        "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        "/resourceGroups/agentic-aiops-demo-rg"
+        "/providers/Microsoft.OperationalInsights/workspaces"
+        "/workspace-agentic-aiops-demo"
+    )
+    EXPECTED_GUID = "d6e88b39-4f54-4f95-96f1-8acfedf0129c"
+
+    @patch("services.api_gateway.patch_endpoints.LogAnalyticsManagementClient")
+    def test_returns_customer_id_from_management_api(self, mock_law_cls):
+        """Returns the customerId GUID from the workspace management API response."""
+        mock_workspace = MagicMock()
+        mock_workspace.customer_id = self.EXPECTED_GUID
+        mock_client = MagicMock()
+        mock_client.workspaces.get.return_value = mock_workspace
+        mock_law_cls.return_value = mock_client
+
+        credential = MagicMock()
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, self.WORKSPACE_ARM_ID)
+
+        assert result == self.EXPECTED_GUID
+        mock_law_cls.assert_called_once_with(
+            credential, "4c727b88-12f4-4c91-9c2b-372aab3bbae9"
+        )
+        mock_client.workspaces.get.assert_called_once_with(
+            "agentic-aiops-demo-rg", "workspace-agentic-aiops-demo"
+        )
+
+    @patch("services.api_gateway.patch_endpoints.LogAnalyticsManagementClient")
+    def test_returns_empty_string_on_exception(self, mock_law_cls):
+        """Returns empty string when the management API call fails (never raises)."""
+        mock_client = MagicMock()
+        mock_client.workspaces.get.side_effect = Exception("API error")
+        mock_law_cls.return_value = mock_client
+
+        credential = MagicMock()
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, self.WORKSPACE_ARM_ID)
+
+        assert result == ""
+
+    def test_returns_empty_string_for_malformed_arm_id(self):
+        """Returns empty string without calling SDK when ARM resource ID is malformed."""
+        credential = MagicMock()
+
+        from services.api_gateway.patch_endpoints import _get_workspace_customer_id
+        result = _get_workspace_customer_id(credential, "not-an-arm-id")
+
+        assert result == ""
 
 
 class TestKqlSoftwareTypeFilter:
@@ -572,11 +868,22 @@ class TestKqlSoftwareTypeFilter:
             '"Update" to capture Azure Update Manager installed patches. '
             "Without it, the Installed Patches tab shows empty for Arc VMs."
         )
+        assert '"Patch"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_detail_sync must include "
+            '"Patch" to capture Arc VM Change Tracking installed patches. '
+            "Arc VMs report SoftwareType='Patch', not 'Hotfix' or 'Update'."
+        )
+        assert "SoftwareClassification" not in source, (
+            "KQL in _query_law_installed_detail_sync must not reference SoftwareClassification — "
+            "this column does not exist in Arc VM Change Tracking ConfigurationData. "
+            "Use SoftwareType for Category instead."
+        )
 
     def test_installed_summary_kql_includes_update_type(self):
-        """The summary query KQL must include SoftwareType 'Update' to capture AUM-installed patches.
+        """The summary query KQL must include SoftwareType 'Update' and 'Patch'.
 
         Regression test for: installed-patches-empty bug (2026-04-07).
+        Arc VMs use SoftwareType='Patch'; Azure VMs use 'Update'.
         """
         from services.api_gateway.patch_endpoints import _query_law_installed_summary_sync
 
@@ -587,6 +894,103 @@ class TestKqlSoftwareTypeFilter:
             "KQL SoftwareType filter in _query_law_installed_summary_sync must include "
             '"Update" to capture Azure Update Manager installed patches.'
         )
+        assert '"Patch"' in source, (
+            "KQL SoftwareType filter in _query_law_installed_summary_sync must include "
+            '"Patch" to capture Arc VM Change Tracking installed patches.'
+        )
+
+
+# ---------------------------------------------------------------------------
+# _query_law_installed_detail_sync column parsing tests
+# ---------------------------------------------------------------------------
+
+
+class TestQueryLawInstalledDetailSyncColumns:
+    """Regression tests: azure-monitor-query v2.x returns columns as plain strings,
+    not LogsTableColumn objects.  _query_law_installed_detail_sync must handle both.
+
+    Bug: 'str' object has no attribute 'name' — caused total_count: 0 in production.
+    Root cause: azure-monitor-query 2.0.0 changed LogsTable.columns from list[LogsTableColumn]
+    to list[str].  Fixed 2026-04-07.
+    """
+
+    def _build_mock_monitor_query_module(self, columns, rows):
+        """Build a sys.modules-injectable mock for azure.monitor.query."""
+        # LogsQueryStatus sentinel
+        mock_status = MagicMock()
+        mock_status.SUCCESS = "SUCCESS"
+
+        # Table mock
+        table = MagicMock()
+        table.columns = columns
+        table.rows = rows
+
+        # Response mock — .status == LogsQueryStatus.SUCCESS, .tables = [table]
+        mock_response = MagicMock()
+        mock_response.status = mock_status.SUCCESS
+        mock_response.tables = [table]
+
+        # Client mock
+        mock_client_instance = MagicMock()
+        mock_client_instance.query_workspace.return_value = mock_response
+
+        mock_client_cls = MagicMock(return_value=mock_client_instance)
+
+        # Module mock
+        mock_module = MagicMock()
+        mock_module.LogsQueryClient = mock_client_cls
+        mock_module.LogsQueryStatus = mock_status
+
+        return mock_module, mock_client_instance
+
+    def _run_detail_sync(self, mock_module):
+        """Inject mock module and call _query_law_installed_detail_sync."""
+        with patch.dict(sys.modules, {
+            "azure.monitor.query": mock_module,
+        }):
+            # Force reimport of function to pick up mocked module
+            import importlib
+            import services.api_gateway.patch_endpoints as pe
+            importlib.reload(pe)
+            result = pe._query_law_installed_detail_sync(
+                credential=MagicMock(),
+                workspace_id="d6e88b39-4f54-4f95-96f1-8acfedf0129c",
+                resource_id="/subscriptions/sub/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/vm",
+                days=90,
+            )
+        return result
+
+    def test_handles_v2_columns_as_strings(self):
+        """v2.x: columns list contains plain strings — must not raise AttributeError."""
+        columns_v2 = ["SoftwareName", "SoftwareType", "CurrentVersion", "Publisher", "Category", "InstalledDate"]
+        rows = [
+            ["Security Update KB5001234", "Patch", "Installed", "Microsoft Corporation", "Patch", "2026-04-06 03:17:06"],
+        ]
+        mock_module, _ = self._build_mock_monitor_query_module(columns_v2, rows)
+        result = self._run_detail_sync(mock_module)
+
+        assert len(result) == 1
+        assert result[0]["SoftwareName"] == "Security Update KB5001234"
+        assert result[0]["SoftwareType"] == "Patch"
+        assert result[0]["Category"] == "Patch"
+
+    def test_handles_v1_columns_as_objects(self):
+        """v1.x compat: columns list contains objects with .name attribute — must still work."""
+        def make_col(name):
+            col = MagicMock()
+            col.name = name
+            return col
+
+        columns_v1 = [make_col(n) for n in ["SoftwareName", "SoftwareType", "CurrentVersion", "Publisher", "Category", "InstalledDate"]]
+        rows = [
+            ["nginx", "Package", "1.24.0", "Ubuntu", "Package", "2026-04-01 00:00:00"],
+        ]
+        mock_module, _ = self._build_mock_monitor_query_module(columns_v1, rows)
+        result = self._run_detail_sync(mock_module)
+
+        assert len(result) == 1
+        assert result[0]["SoftwareName"] == "nginx"
+        assert result[0]["SoftwareType"] == "Package"
 
 
 # ---------------------------------------------------------------------------
@@ -654,3 +1058,147 @@ class TestRunArgQuery:
 
             assert len(result) == 2
             assert mock_client_instance.resources.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Pending patches endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetPendingPatches:
+    """Tests for GET /api/v1/patch/pending."""
+
+    RESOURCE_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm-prod-01"
+
+    SAMPLE_ROWS = [
+        {
+            "patchName": "2026-03 Cumulative Update for Windows Server 2022",
+            "classifications": ["Security", "Critical"],
+            "rebootRequired": True,
+            "kbid": "5034441",
+            "version": "10.0.20348.2340",
+            "publishedDateTime": "2026-03-11T00:00:00Z",
+        },
+        {
+            "patchName": "2026-03 Servicing Stack Update for Windows Server 2022",
+            "classifications": ["Security"],
+            "rebootRequired": False,
+            "kbid": "KB5035853",
+            "version": "10.0.20348.2300",
+            "publishedDateTime": "2026-03-11T00:00:00Z",
+        },
+        {
+            "patchName": "Definition Update for Windows Defender",
+            "classifications": ["Definition"],
+            "rebootRequired": False,
+            "kbid": "",
+            "version": "1.409.100.0",
+            "publishedDateTime": None,
+        },
+    ]
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_returns_pending_patches(self, mock_query, client):
+        """Successful response includes patches array with cves field."""
+        mock_query.return_value = self.SAMPLE_ROWS
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {
+                "KB5034441": ["CVE-2024-21302"],
+                "KB5035853": ["CVE-2024-26234"],
+            }
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 3
+        assert body["resource_id"] == self.RESOURCE_ID
+
+        # All patches must have a cves field
+        for p in body["patches"]:
+            assert "cves" in p, f"patch {p['patchName']!r} missing 'cves' field"
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_cve_enrichment_numeric_kbid(self, mock_query, client):
+        """Numeric kbid (no 'KB' prefix) is normalised to 'KB{id}' for MSRC lookup.
+
+        Regression test: ARG returns kbid as a bare number (e.g. '5034441').
+        The enrichment must prepend 'KB' before calling get_cves_for_kbs.
+        """
+        mock_query.return_value = [
+            {
+                "patchName": "2026-03 Cumulative Update",
+                "classifications": ["Security"],
+                "rebootRequired": True,
+                "kbid": "5034441",
+                "version": "10.0.20348.2340",
+                "publishedDateTime": "2026-03-11T00:00:00Z",
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {"KB5034441": ["CVE-2024-21302"]}
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == ["CVE-2024-21302"]
+
+        # Verify MSRC was called with the KB-prefixed form
+        called_with = mock_cves.call_args[0][0]
+        assert "KB5034441" in called_with
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_cve_enrichment_graceful_degradation(self, mock_query, client):
+        """CVE enrichment failure still returns patches with empty cves list."""
+        mock_query.return_value = [
+            {
+                "patchName": "2026-03 Cumulative Update",
+                "classifications": ["Security"],
+                "rebootRequired": True,
+                "kbid": "5034441",
+                "version": "10.0.20348.2340",
+                "publishedDateTime": "2026-03-11T00:00:00Z",
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.side_effect = Exception("MSRC API unavailable")
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 1
+        assert body["patches"][0]["cves"] == []
+
+    @patch("services.api_gateway.patch_endpoints._run_arg_query")
+    def test_pending_no_kbid_no_cves(self, mock_query, client):
+        """Patches with no kbid and no KB pattern in name get empty cves."""
+        mock_query.return_value = [
+            {
+                "patchName": "Definition Update for Windows Defender",
+                "classifications": ["Definition"],
+                "rebootRequired": False,
+                "kbid": "",
+                "version": "1.409.100.0",
+                "publishedDateTime": None,
+            },
+        ]
+
+        with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new_callable=AsyncMock) as mock_cves:
+            mock_cves.return_value = {}
+            resp = client.get(f"/api/v1/patch/pending?resource_id={self.RESOURCE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["patches"][0]["cves"] == []
+
+    def test_pending_returns_400_for_invalid_resource_id(self, client):
+        """Malformed resource_id (no subscription) returns 400."""
+        resp = client.get("/api/v1/patch/pending?resource_id=not-a-valid-id")
+        assert resp.status_code == 400
+
+    def test_pending_returns_422_when_resource_id_missing(self, client):
+        """Missing resource_id query param returns 422."""
+        resp = client.get("/api/v1/patch/pending")
+        assert resp.status_code == 422

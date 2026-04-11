@@ -7,7 +7,7 @@ Always escalates credential exposure findings immediately.
 Requirements:
     TRIAGE-002: Must query Log Analytics AND Resource Health before producing diagnosis.
     TRIAGE-003: Must check Activity Log (prior 2h) as the FIRST RCA step.
-    TRIAGE-004: Must include confidence score (0.0–1.0) in every diagnosis.
+    TRIAGE-004: Must include confidence score (0.0-1.0) in every diagnosis.
     REMEDI-001: Must NOT execute any remediation without explicit human approval.
 
 RBAC scope: Security Reader across all in-scope subscriptions (enforced by Terraform).
@@ -15,16 +15,28 @@ RBAC scope: Security Reader across all in-scope subscriptions (enforced by Terra
 from __future__ import annotations
 
 import logging
+import os
 
 from agent_framework import ChatAgent
 
 from shared.auth import get_foundry_client
 from shared.otel import setup_telemetry
+
+try:
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import PromptAgentDefinition
+except ImportError:
+    AIProjectClient = None  # type: ignore[assignment,misc]
+    PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from security.tools import (
     ALLOWED_MCP_TOOLS,
     query_defender_alerts,
     query_iam_changes,
     query_keyvault_diagnostics,
+    query_policy_compliance,
+    query_rbac_assignments,
+    query_secure_score,
+    scan_public_endpoints,
 )
 
 tracer = setup_telemetry("aiops-security-agent")
@@ -69,13 +81,25 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
 7. **Monitor metrics (MONITOR-001):** Use `monitor.query_metrics` for Key Vault operation
    rates and Defender alert metrics.
 
-8. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause
+8. **Secure Score:** Call `query_secure_score` for a security posture overview of the
+   subscription.
+
+9. **RBAC audit:** Call `query_rbac_assignments` to audit RBAC drift on affected
+   resources — filter by scope if a specific resource is involved.
+
+10. **Policy compliance:** Call `query_policy_compliance` for non-compliant policies
+    affecting the subscription — focus on NonCompliant state.
+
+11. **Public endpoint exposure:** If public-facing exposure is suspected, call
+    `scan_public_endpoints` to identify unassociated or exposed public IPs.
+
+12. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause
    hypothesis with a confidence score between 0.0 and 1.0. Include:
    - `hypothesis`, `evidence`, `confidence_score`
    - `needs_cross_domain`: true if incident has infrastructure root cause
    - `suspected_domain`: domain to route to if needs_cross_domain is true
 
-9. **Remediation proposal (REMEDI-001):** RBAC change, Key Vault access policy update, or
+13. **Remediation proposal (REMEDI-001):** RBAC change, Key Vault access policy update, or
    identity revocation with full context. **MUST NOT execute without explicit human approval.**
 
 ## Safety Constraints
@@ -100,6 +124,10 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
     "query_defender_alerts",
     "query_keyvault_diagnostics",
     "query_iam_changes",
+    "query_secure_score",
+    "query_rbac_assignments",
+    "query_policy_compliance",
+    "scan_public_endpoints",
 ]))
 
 
@@ -126,10 +154,47 @@ def create_security_agent() -> ChatAgent:
             query_defender_alerts,
             query_keyvault_diagnostics,
             query_iam_changes,
+            query_secure_score,
+            query_rbac_assignments,
+            query_policy_compliance,
+            scan_public_endpoints,
         ],
     )
     logger.info("create_security_agent: ChatAgent created successfully")
     return agent
+
+
+def create_security_agent_version(project: "AIProjectClient") -> object:
+    """Register the Security Agent as a versioned PromptAgentDefinition in Foundry.
+
+    Args:
+        project: Authenticated AIProjectClient (azure-ai-projects 2.0.x).
+
+    Returns:
+        AgentVersion object with version.id for environment variable storage.
+    """
+    if PromptAgentDefinition is None:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required for create_version. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        )
+
+    return project.agents.create_version(
+        agent_name="aap-security-agent",
+        definition=PromptAgentDefinition(
+            model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
+            instructions=SECURITY_AGENT_SYSTEM_PROMPT,
+            tools=[
+                query_defender_alerts,
+                query_keyvault_diagnostics,
+                query_iam_changes,
+                query_secure_score,
+                query_rbac_assignments,
+                query_policy_compliance,
+                scan_public_endpoints,
+            ],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

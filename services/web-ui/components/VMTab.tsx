@@ -22,6 +22,13 @@ interface VMRow {
   active_alert_count: number
 }
 
+interface EolEntry {
+  os_name: string
+  eol_date: string | null
+  is_eol: boolean | null
+  source: string | null
+}
+
 interface VMTabProps {
   subscriptions: string[]
   onVMClick?: (resourceId: string, resourceName: string) => void
@@ -32,6 +39,8 @@ function PowerStateBadge({ state }: { state: string }) {
     running: { label: 'Running', color: 'var(--accent-green)' },
     stopped: { label: 'Stopped', color: 'var(--accent-yellow)' },
     deallocated: { label: 'Deallocated', color: 'var(--text-muted)' },
+    connected: { label: 'Connected', color: 'var(--accent-green)' },
+    disconnected: { label: 'Disconnected', color: 'var(--accent-red)' },
   }[state.toLowerCase()] ?? { label: state, color: 'var(--text-muted)' }
 
   return (
@@ -89,6 +98,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [eolMap, setEolMap] = useState<Record<string, EolEntry>>({})
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     const account = accounts[0]
@@ -116,7 +126,32 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`/api/proxy/vms?${params}`, { headers })
       const data = await res.json()
-      setVMs(data.vms ?? [])
+      const vmList: VMRow[] = data.vms ?? []
+      setVMs(vmList)
+
+      // Fetch EOL data for unique OS names (fire-and-forget — never blocks VM display)
+      const uniqueOsNames = [...new Set(vmList.map((vm) => vm.os_name).filter(Boolean))]
+      if (uniqueOsNames.length > 0) {
+        try {
+          const eolHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (token) eolHeaders['Authorization'] = `Bearer ${token}`
+          const eolRes = await fetch('/api/proxy/vms/eol', {
+            method: 'POST',
+            headers: eolHeaders,
+            body: JSON.stringify({ os_names: uniqueOsNames }),
+          })
+          if (eolRes.ok) {
+            const eolData = await eolRes.json()
+            const map: Record<string, EolEntry> = {}
+            for (const entry of eolData.results ?? []) {
+              map[entry.os_name] = entry
+            }
+            setEolMap(map)
+          }
+        } catch {
+          // EOL fetch failure is non-fatal — column shows "—"
+        }
+      }
     } catch {
       setError('Failed to load VMs')
     } finally {
@@ -208,7 +243,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Resource Group', 'Size', 'OS', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
+                {['Name', 'Resource Group', 'Size', 'OS', 'EOL Date', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide"
@@ -240,6 +275,42 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     {vm.os_name || vm.os_type}
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {(() => {
+                      const eol = eolMap[vm.os_name]
+                      if (!eol || (eol.eol_date === null && eol.is_eol === null)) {
+                        return <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      }
+                      if (eol.is_eol === true) {
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{
+                                background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
+                                color: 'var(--accent-red)',
+                              }}
+                            >
+                              EOL
+                            </span>
+                            {eol.eol_date && (
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                          </span>
+                        )
+                      }
+                      if (eol.eol_date) {
+                        return (
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                          </span>
+                        )
+                      }
+                      return <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <VMTypeBadge vmType={vm.vm_type ?? 'Azure VM'} />

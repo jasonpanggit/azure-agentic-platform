@@ -16,14 +16,30 @@ Explicit MCP tool allowlist — no wildcards permitted (AGENT-001):
 """
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Dict, List
 
 from agent_framework import ai_function
 
-from shared.auth import get_agent_identity
+from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
+from shared.approval_manager import create_approval_record
+
+# Lazy import — azure-mgmt-hybridcompute
+try:
+    from azure.mgmt.hybridcompute import HybridComputeManagementClient
+except ImportError:
+    HybridComputeManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-guestconfiguration
+try:
+    from azure.mgmt.guestconfiguration import GuestConfigurationClient
+except ImportError:
+    GuestConfigurationClient = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-arc-agent")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Explicit MCP tool allowlist — replaces the Phase 2 empty list (AGENT-005)
@@ -180,3 +196,246 @@ def query_resource_health(
             "summary": "Resource Health query pending.",
             "query_status": "success",
         }
+
+
+# ---------------------------------------------------------------------------
+# Phase 32 — New Arc tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_arc_extension_health(
+    resource_group: str,
+    machine_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """List Arc extensions with provisioning state and error details.
+
+    Args:
+        resource_group: Resource group name.
+        machine_name: Arc machine name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'extensions' list (name, provisioning_state, version).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="query_arc_extension_health",
+        tool_parameters={"machine_name": machine_name},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if HybridComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-hybridcompute not installed", "extensions": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = HybridComputeManagementClient(credential, subscription_id)
+
+            extensions = []
+            for ext in client.machine_extensions.list(resource_group, machine_name):
+                extensions.append({
+                    "name": ext.name,
+                    "provisioning_state": getattr(ext, "provisioning_state", "Unknown"),
+                    "type_handler_version": getattr(ext, "type_handler_version", ""),
+                    "instance_view": str(getattr(ext, "instance_view", "")),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"extensions": extensions, "machine_name": machine_name, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_arc_extension_health error: %s", exc)
+            return {"error": str(exc), "extensions": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_arc_guest_config(
+    resource_group: str,
+    machine_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query guest configuration assignment compliance state for an Arc machine.
+
+    Uses azure-mgmt-guestconfiguration (GuestConfigurationClient).
+    Returns compliance assignments and status.
+
+    Args:
+        resource_group: Resource group name.
+        machine_name: Arc machine name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'assignments' list (name, compliance_status).
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="query_arc_guest_config",
+        tool_parameters={"machine_name": machine_name},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if GuestConfigurationClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-guestconfiguration not installed", "assignments": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = GuestConfigurationClient(credential, subscription_id)
+
+            assignments = []
+            for assignment in client.guest_configuration_assignments.list(
+                resource_group, machine_name
+            ):
+                assignments.append({
+                    "name": assignment.name,
+                    "compliance_status": getattr(
+                        getattr(assignment, "properties", assignment),
+                        "compliance_status",
+                        "Unknown",
+                    ),
+                    "last_compliance_time": str(
+                        getattr(
+                            getattr(assignment, "properties", assignment),
+                            "last_compliance_status_checked",
+                            "",
+                        )
+                    ),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"assignments": assignments, "machine_name": machine_name, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_arc_guest_config error: %s", exc)
+            return {"error": str(exc), "assignments": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_arc_connectivity(
+    resource_group: str,
+    machine_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query Arc machine connectivity status and last heartbeat.
+
+    Args:
+        resource_group: Resource group name.
+        machine_name: Arc machine name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with status, last_status_change, agent_version, os_type, os_name.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="query_arc_connectivity",
+        tool_parameters={"machine_name": machine_name},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if HybridComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-hybridcompute not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = HybridComputeManagementClient(credential, subscription_id)
+
+            machine = client.machines.get(resource_group, machine_name)
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "machine_name": machine_name,
+                "status": getattr(machine, "status", "Unknown"),
+                "last_status_change": str(getattr(machine, "last_status_change", "")),
+                "agent_version": getattr(machine, "agent_version", "Unknown"),
+                "os_type": getattr(machine, "os_type", "Unknown"),
+                "os_name": getattr(machine, "os_name", "Unknown"),
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_arc_connectivity error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_arc_assessment(
+    resource_id: str,
+    machine_name: str,
+    subscription_id: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose triggering a patch assessment on an Arc VM — HITL ApprovalRecord only.
+
+    REMEDI-001: No ARM call. Approval required before execution.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="propose_arc_assessment",
+        tool_parameters={"machine_name": machine_name, "reason": reason},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "arc_patch_assessment",
+                "resource_id": resource_id,
+                "machine_name": machine_name,
+                "subscription_id": subscription_id,
+                "reason": reason,
+                "description": f"Trigger patch assessment on Arc VM '{machine_name}': {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "Read-only — triggers assessment scan, no changes",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="arc-agent",
+                proposal=proposal,
+                resource_snapshot={"machine_name": machine_name},
+                risk_level="low",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"Arc assessment proposal created for '{machine_name}'. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_arc_assessment error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}

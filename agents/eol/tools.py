@@ -2,7 +2,7 @@
 PostgreSQL cache helpers, ARG OS/software inventory, proactive estate scan,
 Activity Log wrapper, Resource Health wrapper, and runbook search wrapper.
 
-Provides @tool functions for querying EOL status from two external sources
+Provides @ai_function functions for querying EOL status from two external sources
 (endoflife.date API and Microsoft Product Lifecycle API), caching results
 in PostgreSQL (24h TTL), and discovering software inventory via ARG and
 Log Analytics ConfigurationData.
@@ -17,13 +17,14 @@ import asyncio
 import concurrent.futures
 import hashlib
 import json
+import logging
 import os
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from agent_framework import tool
+from agent_framework import ai_function
 
 from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
@@ -44,7 +45,27 @@ except ImportError:
     QueryRequest = None  # type: ignore[assignment,misc]
     QueryRequestOptions = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-monitor
+try:
+    from azure.mgmt.monitor import MonitorManagementClient
+except ImportError:
+    MonitorManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-monitor-query
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+except ImportError:
+    LogsQueryClient = None  # type: ignore[assignment,misc]
+    LogsQueryStatus = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-resourcehealth
+try:
+    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+except ImportError:
+    MicrosoftResourceHealth = None  # type: ignore[assignment,misc]
+
 tracer = setup_telemetry("aiops-eol-agent")
+logger = logging.getLogger(__name__)
 
 # Explicit MCP tool allowlist — no wildcards permitted (AGENT-001).
 ALLOWED_MCP_TOOLS: List[str] = [
@@ -59,25 +80,25 @@ CACHE_TTL_HOURS = 24
 # Product slug normalization map (ARG/ConfigurationData name -> (source, slug))
 # Source: "ms-lifecycle" for Microsoft products, "endoflife.date" for others
 PRODUCT_SLUG_MAP: Dict[str, Tuple[str, str]] = {
-    # Windows Server
-    "windows server 2012": ("ms-lifecycle", "windows-server-2012"),
-    "windows server 2016": ("ms-lifecycle", "windows-server-2016"),
-    "windows server 2019": ("ms-lifecycle", "windows-server-2019"),
-    "windows server 2022": ("ms-lifecycle", "windows-server-2022"),
-    "windows server 2025": ("ms-lifecycle", "windows-server-2025"),
-    # SQL Server
-    "sql server 2016": ("ms-lifecycle", "sql-server-2016"),
-    "sql server 2019": ("ms-lifecycle", "sql-server-2019"),
-    "sql server 2022": ("ms-lifecycle", "sql-server-2022"),
-    # .NET
-    "dotnet 6": ("ms-lifecycle", ".net-6.0"),
-    "dotnet 7": ("ms-lifecycle", ".net-7.0"),
-    "dotnet 8": ("ms-lifecycle", ".net-8.0"),
-    "dotnet 9": ("ms-lifecycle", ".net-9.0"),
-    ".net 6": ("ms-lifecycle", ".net-6.0"),
-    ".net 7": ("ms-lifecycle", ".net-7.0"),
-    ".net 8": ("ms-lifecycle", ".net-8.0"),
-    ".net 9": ("ms-lifecycle", ".net-9.0"),
+    # Windows Server — endoflife.date uses "windows-server" with year as cycle
+    "windows server 2012": ("endoflife.date", "windows-server"),
+    "windows server 2016": ("endoflife.date", "windows-server"),
+    "windows server 2019": ("endoflife.date", "windows-server"),
+    "windows server 2022": ("endoflife.date", "windows-server"),
+    "windows server 2025": ("endoflife.date", "windows-server"),
+    # SQL Server — endoflife.date uses "mssqlserver" with year as cycle
+    "sql server 2016": ("endoflife.date", "mssqlserver"),
+    "sql server 2019": ("endoflife.date", "mssqlserver"),
+    "sql server 2022": ("endoflife.date", "mssqlserver"),
+    # .NET — endoflife.date uses "dotnet" with major version as cycle
+    "dotnet 6": ("endoflife.date", "dotnet"),
+    "dotnet 7": ("endoflife.date", "dotnet"),
+    "dotnet 8": ("endoflife.date", "dotnet"),
+    "dotnet 9": ("endoflife.date", "dotnet"),
+    ".net 6": ("endoflife.date", "dotnet"),
+    ".net 7": ("endoflife.date", "dotnet"),
+    ".net 8": ("endoflife.date", "dotnet"),
+    ".net 9": ("endoflife.date", "dotnet"),
     # Linux
     "ubuntu": ("endoflife.date", "ubuntu"),
     "rhel": ("endoflife.date", "rhel"),
@@ -250,6 +271,10 @@ def _fetch_with_retry(
 def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, str, str]:
     """Normalize ARG/ConfigurationData product name to (source, slug, cycle).
 
+    For products in PRODUCT_SLUG_MAP, extracts the year/version from the
+    product name itself to use as the cycle (e.g., "Windows Server 2025
+    Datacenter Azure Edition" -> slug="windows-server", cycle="2025").
+
     Returns:
         (source, product_slug, version_cycle) tuple.
         source is "ms-lifecycle" or "endoflife.date".
@@ -260,7 +285,15 @@ def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, s
     for key in [f"{lower} {version}".strip(), lower]:
         if key in PRODUCT_SLUG_MAP:
             source, slug = PRODUCT_SLUG_MAP[key]
-            return (source, slug, version)
+            # Extract year from the key for use as cycle
+            cycle = _extract_version_cycle(key, version)
+            return (source, slug, cycle)
+
+    # Try prefix matching — check if any slug map key is a prefix of lower
+    for key, (source, slug) in PRODUCT_SLUG_MAP.items():
+        if lower.startswith(key):
+            cycle = _extract_version_cycle(key, version)
+            return (source, slug, cycle)
 
     # Try prefix matching for MS products
     for ms_prefix in MS_PRODUCTS:
@@ -272,6 +305,25 @@ def normalize_product_slug(product_name: str, version: str = "") -> Tuple[str, s
     # Default to endoflife.date with lowered product name
     slug = lower.replace(" ", "-")
     return ("endoflife.date", slug, version)
+
+
+def _extract_version_cycle(slug_map_key: str, fallback_version: str) -> str:
+    """Extract a version/year cycle from a slug map key.
+
+    For "windows server 2025" -> "2025"
+    For "sql server 2019" -> "2019"
+    For "ubuntu" -> fallback_version
+    """
+    import re as _re
+    # Look for a 4-digit year at the end of the key
+    m = _re.search(r"(\d{4}(?:\s*r\d)?)$", slug_map_key)
+    if m:
+        return m.group(1).replace(" ", "-")
+    # Look for a version number pattern (e.g., "6", "8.0")
+    m = _re.search(r"(\d+(?:\.\d+)?)$", slug_map_key)
+    if m:
+        return m.group(1)
+    return fallback_version
 
 
 def classify_eol_status(eol_date: Optional[date], is_eol: bool) -> Dict[str, Any]:
@@ -349,11 +401,28 @@ def _run_async(coro: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# @tool functions
+# Private helpers
 # ---------------------------------------------------------------------------
 
 
-@tool
+def _extract_subscription_id(resource_id: str) -> str:
+    """Extract subscription ID from an Azure resource ID."""
+    parts = resource_id.lower().split("/")
+    try:
+        idx = parts.index("subscriptions")
+        return parts[idx + 1]
+    except (ValueError, IndexError):
+        raise ValueError(
+            f"Cannot extract subscription_id from resource_id: {resource_id}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# @ai_function functions
+# ---------------------------------------------------------------------------
+
+
+@ai_function
 def query_activity_log(
     resource_ids: List[str],
     timespan_hours: int = 2,
@@ -388,15 +457,80 @@ def query_activity_log(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_ids": resource_ids,
-            "timespan_hours": timespan_hours,
-            "entries": [],
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+        try:
+            if MonitorManagementClient is None:
+                raise ImportError("azure-mgmt-monitor is not installed")
+
+            credential = get_credential()
+            start = datetime.now(timezone.utc) - timedelta(hours=timespan_hours)
+            all_entries: List[Dict[str, Any]] = []
+
+            for resource_id in resource_ids:
+                sub_id = _extract_subscription_id(resource_id)
+                client = MonitorManagementClient(credential, sub_id)
+                filter_str = (
+                    f"eventTimestamp ge '{start.isoformat()}' "
+                    f"and resourceId eq '{resource_id}'"
+                )
+                events = client.activity_logs.list(filter=filter_str)
+                for event in events:
+                    all_entries.append(
+                        {
+                            "eventTimestamp": (
+                                event.event_timestamp.isoformat()
+                                if event.event_timestamp
+                                else None
+                            ),
+                            "operationName": (
+                                event.operation_name.value
+                                if event.operation_name
+                                else None
+                            ),
+                            "caller": event.caller,
+                            "status": (
+                                event.status.value if event.status else None
+                            ),
+                            "resourceId": event.resource_id,
+                            "level": (
+                                event.level.value if event.level else None
+                            ),
+                            "description": event.description,
+                        }
+                    )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_activity_log: complete | resources=%d entries=%d duration_ms=%d",
+                len(resource_ids),
+                len(all_entries),
+                duration_ms,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": all_entries,
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "query_activity_log: failed | resources=%s error=%s duration_ms=%d",
+                resource_ids,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
-@tool
+@ai_function
 def query_os_inventory(
     subscription_ids: List[str],
     resource_ids: Optional[List[str]] = None,
@@ -511,7 +645,7 @@ def query_os_inventory(
             }
 
 
-@tool
+@ai_function
 def query_software_inventory(
     workspace_id: str,
     computer_names: Optional[List[str]] = None,
@@ -552,25 +686,105 @@ def query_software_inventory(
         correlation_id="",
         thread_id="",
     ):
-        # KQL for installed runtimes and databases (will be executed via Azure Monitor SDK):
-        # ConfigurationData
-        # | where ConfigDataType == "Software"
-        # | where SoftwareType in ("Application", "Package")
-        # | where SoftwareName has_any ("python", "nodejs", "node.js", "dotnet", ".net",
-        #                               "postgresql", "mysql", "sql server")
-        # | project Computer, SoftwareName, CurrentVersion, Publisher, TimeGenerated, _ResourceId
-        # | order by TimeGenerated desc
-        # If computer_names: | where Computer in~ ("vm-1", "vm-2")
-        return {
-            "workspace_id": workspace_id,
-            "computer_names": computer_names,
-            "timespan": timespan,
-            "rows": [],
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+
+        if not workspace_id:
+            logger.warning("query_software_inventory: no_workspace | workspace_id is empty")
+            return {
+                "workspace_id": workspace_id,
+                "computer_names": computer_names,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "no_workspace",
+            }
+
+        try:
+            if LogsQueryClient is None:
+                raise ImportError("azure-monitor-query is not installed")
+
+            kql_lines = [
+                "ConfigurationData",
+                '| where ConfigDataType == "Software"',
+                '| where SoftwareType in ("Application", "Package")',
+                '| where SoftwareName has_any ("python", "nodejs", "node.js", "dotnet", ".net",',
+                '                              "postgresql", "mysql", "sql server")',
+                "| project Computer, SoftwareName, CurrentVersion, Publisher,",
+                "         TimeGenerated, _ResourceId",
+                "| order by TimeGenerated desc",
+            ]
+
+            if computer_names:
+                names_str = ", ".join(f'"{n}"' for n in computer_names)
+                kql_lines.insert(1, f"| where Computer in~ ({names_str})")
+
+            kql_query = "\n".join(kql_lines)
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql_query,
+                timespan=timespan,
+            )
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                rows: List[Dict[str, Any]] = []
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        rows.append(
+                            dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                        )
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                logger.info(
+                    "query_software_inventory: complete | workspace=%s rows=%d duration_ms=%d",
+                    workspace_id,
+                    len(rows),
+                    duration_ms,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "computer_names": computer_names,
+                    "timespan": timespan,
+                    "rows": rows,
+                    "query_status": "success",
+                }
+            else:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                logger.warning(
+                    "query_software_inventory: partial | workspace=%s duration_ms=%d",
+                    workspace_id,
+                    duration_ms,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "computer_names": computer_names,
+                    "timespan": timespan,
+                    "rows": [],
+                    "query_status": "partial",
+                    "partial_error": str(response.partial_error),
+                }
+
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "query_software_inventory: failed | workspace=%s error=%s duration_ms=%d",
+                workspace_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "workspace_id": workspace_id,
+                "computer_names": computer_names,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
-@tool
+@ai_function
 def query_k8s_versions(
     subscription_ids: List[str],
 ) -> Dict[str, Any]:
@@ -652,7 +866,7 @@ def query_k8s_versions(
             }
 
 
-@tool
+@ai_function
 def query_endoflife_date(
     product: str,
     version: str,
@@ -796,7 +1010,7 @@ def query_endoflife_date(
             }
 
 
-@tool
+@ai_function
 def query_ms_lifecycle(
     product: str,
     version: str = "",
@@ -970,7 +1184,7 @@ def query_ms_lifecycle(
             }
 
 
-@tool
+@ai_function
 def query_resource_health(
     resource_id: str,
 ) -> Dict[str, Any]:
@@ -1002,15 +1216,64 @@ def query_resource_health(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_id": resource_id,
-            "availability_state": "Unknown",
-            "summary": "Resource Health query pending.",
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+        try:
+            if MicrosoftResourceHealth is None:
+                raise ImportError("azure-mgmt-resourcehealth is not installed")
+
+            credential = get_credential()
+            sub_id = _extract_subscription_id(resource_id)
+            client = MicrosoftResourceHealth(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=resource_id,
+                expand="recommendedActions",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            availability_state = (
+                status.properties.availability_state.value
+                if status.properties.availability_state
+                else "Unknown"
+            )
+            logger.info(
+                "query_resource_health: complete | resource=%s state=%s duration_ms=%d",
+                resource_id,
+                availability_state,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": availability_state,
+                "summary": status.properties.summary,
+                "reason_type": status.properties.reason_type,
+                "occurred_time": (
+                    status.properties.occurred_time.isoformat()
+                    if status.properties.occurred_time
+                    else None
+                ),
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "query_resource_health: failed | resource=%s error=%s duration_ms=%d",
+                resource_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": "Unknown",
+                "summary": None,
+                "reason_type": None,
+                "occurred_time": None,
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
-@tool
+@ai_function
 def search_runbooks(
     query: str,
     domain: str = "eol",
@@ -1021,9 +1284,9 @@ def search_runbooks(
     Retrieves the top runbooks by semantic similarity for the given query,
     filtered to the eol domain by default. Results are cited in triage responses.
 
-    This is a sync @tool wrapper around the async retrieve_runbooks
+    This is a sync @ai_function wrapper around the async retrieve_runbooks
     from shared.runbook_tool. The shared retrieve_runbooks is an
-    async def without @tool — it cannot be registered directly in
+    async def without @ai_function — it cannot be registered directly in
     Agent(tools=[...]). This wrapper bridges the gap.
 
     Args:
@@ -1071,7 +1334,7 @@ def search_runbooks(
         }
 
 
-@tool
+@ai_function
 def scan_estate_eol(
     subscription_ids: List[str],
 ) -> Dict[str, Any]:

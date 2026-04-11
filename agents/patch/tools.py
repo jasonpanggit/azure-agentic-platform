@@ -16,6 +16,7 @@ import asyncio
 import concurrent.futures
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
@@ -50,6 +51,11 @@ try:
     from azure.mgmt.monitor import MonitorManagementClient
 except ImportError:
     MonitorManagementClient = None  # type: ignore[assignment,misc]
+
+try:
+    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+except ImportError:
+    MicrosoftResourceHealth = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-patch-agent")
 logger = logging.getLogger(__name__)
@@ -130,12 +136,77 @@ def query_activity_log(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_ids": resource_ids,
-            "timespan_hours": timespan_hours,
-            "entries": [],
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+        try:
+            if MonitorManagementClient is None:
+                raise ImportError("azure-mgmt-monitor is not installed")
+
+            credential = get_credential()
+            start = datetime.now(timezone.utc) - timedelta(hours=timespan_hours)
+            all_entries: List[Dict[str, Any]] = []
+
+            for resource_id in resource_ids:
+                sub_id = _extract_subscription_id(resource_id)
+                client = MonitorManagementClient(credential, sub_id)
+                filter_str = (
+                    f"eventTimestamp ge '{start.isoformat()}' "
+                    f"and resourceId eq '{resource_id}'"
+                )
+                events = client.activity_logs.list(filter=filter_str)
+                for event in events:
+                    all_entries.append(
+                        {
+                            "eventTimestamp": (
+                                event.event_timestamp.isoformat()
+                                if event.event_timestamp
+                                else None
+                            ),
+                            "operationName": (
+                                event.operation_name.value
+                                if event.operation_name
+                                else None
+                            ),
+                            "caller": event.caller,
+                            "status": (
+                                event.status.value if event.status else None
+                            ),
+                            "resourceId": event.resource_id,
+                            "level": (
+                                event.level.value if event.level else None
+                            ),
+                            "description": event.description,
+                        }
+                    )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_activity_log: complete | resources=%d entries=%d duration_ms=%d",
+                len(resource_ids),
+                len(all_entries),
+                duration_ms,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": all_entries,
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "query_activity_log: failed | resources=%s error=%s duration_ms=%d",
+                resource_ids,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function
@@ -801,12 +872,61 @@ def query_resource_health(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_id": resource_id,
-            "availability_state": "Unknown",
-            "summary": "Resource Health query pending.",
-            "query_status": "success",
-        }
+        start_time = time.monotonic()
+        try:
+            if MicrosoftResourceHealth is None:
+                raise ImportError("azure-mgmt-resourcehealth is not installed")
+
+            credential = get_credential()
+            sub_id = _extract_subscription_id(resource_id)
+            client = MicrosoftResourceHealth(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=resource_id,
+                expand="recommendedActions",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            availability_state = (
+                status.properties.availability_state.value
+                if status.properties.availability_state
+                else "Unknown"
+            )
+            logger.info(
+                "query_resource_health: complete | resource=%s state=%s duration_ms=%d",
+                resource_id,
+                availability_state,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": availability_state,
+                "summary": status.properties.summary,
+                "reason_type": status.properties.reason_type,
+                "occurred_time": (
+                    status.properties.occurred_time.isoformat()
+                    if status.properties.occurred_time
+                    else None
+                ),
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "query_resource_health: failed | resource=%s error=%s duration_ms=%d",
+                resource_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": "Unknown",
+                "summary": None,
+                "reason_type": None,
+                "occurred_time": None,
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function

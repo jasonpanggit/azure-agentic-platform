@@ -82,6 +82,7 @@ def _install_agent_framework_stub() -> None:
     stub.HandoffOrchestrator = HandoffOrchestrator
     stub.Agent = Agent
     stub.tool = tool
+    stub.MCPTool = _Base  # MCPTool used by eol agent
 
     sys.modules["agent_framework"] = stub
 

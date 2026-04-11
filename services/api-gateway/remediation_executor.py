@@ -285,10 +285,219 @@ def _classify_verification(
     return "TIMEOUT"
 
 
+async def _cancel_active_runs(client: Any, thread_id: str) -> None:
+    """Cancel all active runs on a Foundry thread before injecting a new message.
+
+    Follows the same pattern as chat.py create_chat_thread:
+    - Lists runs on the thread
+    - Cancels any with status in {"queued", "in_progress", "requires_action", "cancelling"}
+    - Sleeps 1s if any were cancelled to allow propagation
+
+    Uses client.runs.* namespace (not client.agents.*).
+    """
+    try:
+        runs = list(client.runs.list(thread_id=thread_id))
+        active_statuses = {"queued", "in_progress", "requires_action", "cancelling"}
+        cancelled_any = False
+        for run in runs:
+            if run.status in active_statuses:
+                logger.info(
+                    "_cancel_active_runs: cancelling run %s (status=%s) on thread %s",
+                    run.id, run.status, thread_id,
+                )
+                try:
+                    client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                    cancelled_any = True
+                except Exception as cancel_exc:
+                    logger.warning("_cancel_active_runs: failed to cancel run %s: %s", run.id, cancel_exc)
+        if cancelled_any:
+            await asyncio.sleep(1)
+    except Exception as exc:
+        logger.warning("_cancel_active_runs: failed to list/cancel runs on thread %s: %s", thread_id, exc)
+
+
+_VERIFICATION_INSTRUCTIONS: dict[str, str] = {
+    "RESOLVED": (
+        "The remediation action has RESOLVED the issue. "
+        "Confirm the resource is healthy, summarize the root cause and fix, "
+        "and recommend this incident be closed."
+    ),
+    "IMPROVED": (
+        "The remediation action has IMPROVED the resource health but the issue "
+        "is not fully resolved. Re-diagnose the current state and determine if "
+        "a follow-up action is needed."
+    ),
+    "DEGRADED": (
+        "The remediation action has DEGRADED the resource. Auto-rollback has been triggered. "
+        "Re-diagnose the issue with fresh signals and propose an alternative approach. "
+        "Do NOT re-propose the same action that caused degradation."
+    ),
+    "TIMEOUT": (
+        "Verification timed out — resource health status is unknown. "
+        "Re-check the resource health manually and report the current state. "
+        "If the resource is healthy, recommend closure. If not, propose next steps."
+    ),
+}
+
+
+def _build_verification_instruction(verification_result: str) -> str:
+    """Build the re-diagnosis instruction based on verification outcome."""
+    return _VERIFICATION_INSTRUCTIONS.get(verification_result, _VERIFICATION_INSTRUCTIONS["TIMEOUT"])
+
+
+MAX_RE_DIAGNOSIS_COUNT: int = int(os.environ.get("MAX_RE_DIAGNOSIS_COUNT", "3"))
+
+
+async def _inject_verification_result(
+    thread_id: str,
+    execution_id: str,
+    verification_result: str,
+    resource_id: str,
+    proposed_action: str,
+    rolled_back: bool,
+    incident_id: str,
+    cosmos_client: Optional[Any],
+) -> None:
+    """Inject verification result into the originating Foundry thread and create a new run (LOOP-001).
+
+    1. Check re_diagnosis_count on the incident — if >= MAX_RE_DIAGNOSIS_COUNT, log escalation and return
+    2. Cancel active runs on the thread (client.runs.cancel)
+    3. Post a verification_result message following AGENT-002 envelope format (client.agents.create_message)
+    4. Create a new orchestrator run for re-diagnosis (client.agents.create_run)
+    5. Increment re_diagnosis_count on the incident
+    """
+    import json
+
+    # --- Guard: check re_diagnosis_count ---
+    current_count = 0
+    if cosmos_client is not None:
+        try:
+            db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+            incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+            inc_docs = list(incidents_container.query_items(
+                query="SELECT c.re_diagnosis_count FROM c WHERE c.incident_id = @iid",
+                parameters=[{"name": "@iid", "value": incident_id}],
+                enable_cross_partition_query=True,
+            ))
+            if inc_docs:
+                current_count = inc_docs[0].get("re_diagnosis_count", 0) or 0
+        except Exception as exc:
+            logger.warning("_inject_verification_result: failed to read re_diagnosis_count | %s", exc)
+
+    if current_count >= MAX_RE_DIAGNOSIS_COUNT:
+        logger.warning(
+            "_inject_verification_result: max re-diagnosis reached | "
+            "incident_id=%s count=%d max=%d — escalating to operator",
+            incident_id, current_count, MAX_RE_DIAGNOSIS_COUNT,
+        )
+        return
+
+    # --- Inject message and create run ---
+    try:
+        from services.api_gateway.foundry import _get_foundry_client
+        from services.api_gateway.instrumentation import foundry_span, agent_span
+
+        client = _get_foundry_client()
+        orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID", "")
+        if not orchestrator_agent_id:
+            logger.error("_inject_verification_result: ORCHESTRATOR_AGENT_ID not set")
+            return
+
+        # Cancel active runs first (uses client.runs.cancel)
+        await _cancel_active_runs(client, thread_id)
+
+        # Build AGENT-002 typed JSON envelope
+        message = {
+            "correlation_id": incident_id,
+            "source_agent": "api-gateway",
+            "target_agent": "orchestrator",
+            "message_type": "verification_result",
+            "payload": {
+                "execution_id": execution_id,
+                "verification_result": verification_result,
+                "resource_id": resource_id,
+                "proposed_action": proposed_action,
+                "rolled_back": rolled_back,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "instruction": _build_verification_instruction(verification_result),
+            },
+        }
+
+        # Post message to thread (uses client.agents.create_message)
+        with foundry_span("post_message", thread_id=thread_id) as span:
+            span.set_attribute("foundry.message_type", "verification_result")
+            client.agents.create_message(
+                thread_id=thread_id,
+                role="user",
+                content=json.dumps(message),
+            )
+
+        # Create new orchestrator run (uses client.agents.create_run)
+        with agent_span("orchestrator", correlation_id=execution_id) as span:
+            with foundry_span("create_run", thread_id=thread_id):
+                client.agents.create_run(
+                    thread_id=thread_id,
+                    assistant_id=orchestrator_agent_id,
+                )
+
+        # Increment re_diagnosis_count
+        if cosmos_client is not None:
+            try:
+                db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+                incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+                incidents_container.patch_item(
+                    item=incident_id,
+                    partition_key=incident_id,
+                    patch_operations=[
+                        {"op": "incr", "path": "/re_diagnosis_count", "value": 1},
+                    ],
+                )
+            except Exception as exc:
+                logger.warning("_inject_verification_result: failed to increment re_diagnosis_count | %s", exc)
+
+        # Auto-set resolved_at when verification_result is RESOLVED (LOOP-003)
+        if verification_result == "RESOLVED" and cosmos_client is not None:
+            try:
+                resolved_at = datetime.now(timezone.utc).isoformat()
+                db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+                incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+                incidents_container.patch_item(
+                    item=incident_id,
+                    partition_key=incident_id,
+                    patch_operations=[
+                        {"op": "add", "path": "/status", "value": "resolved"},
+                        {"op": "add", "path": "/resolved_at", "value": resolved_at},
+                        {"op": "add", "path": "/auto_resolved", "value": True},
+                        {"op": "add", "path": "/resolution", "value": f"Auto-resolved: {proposed_action} verified as RESOLVED"},
+                    ],
+                )
+                logger.info(
+                    "_inject_verification_result: auto-resolved incident | incident_id=%s resolved_at=%s",
+                    incident_id, resolved_at,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "_inject_verification_result: failed to auto-resolve incident | incident_id=%s error=%s",
+                    incident_id, exc,
+                )
+
+        logger.info(
+            "_inject_verification_result: injected | thread_id=%s execution_id=%s result=%s count=%d",
+            thread_id, execution_id, verification_result, current_count + 1,
+        )
+
+    except Exception as exc:
+        logger.error(
+            "_inject_verification_result: failed | thread_id=%s execution_id=%s error=%s",
+            thread_id, execution_id, exc,
+        )
+
+
 async def _verify_remediation(
     execution_id: str,
     resource_id: str,
     incident_id: str,
+    thread_id: str,
     proposed_action: str,
     credential: Any,
     cosmos_client: Optional[Any],
@@ -296,7 +505,8 @@ async def _verify_remediation(
     """Verify the result of a remediation action via Azure Resource Health (REMEDI-009).
 
     Queries resource health, classifies result, updates WAL record,
-    and triggers rollback if DEGRADED (REMEDI-012).
+    triggers rollback if DEGRADED (REMEDI-012), and injects verification
+    result into Foundry thread for re-diagnosis (LOOP-001).
     """
     subscription_id, _, _ = _parse_arm_resource_id(resource_id)
 
@@ -341,6 +551,7 @@ async def _verify_remediation(
         execution_id, classification,
     )
 
+    rollback_id = None
     if classification == "DEGRADED":
         logger.warning(
             "_verify_remediation: DEGRADED — triggering rollback | execution_id=%s",
@@ -367,6 +578,20 @@ async def _verify_remediation(
                     "rollback_execution_id": rollback_id,
                 },
             )
+
+    # --- Inject verification result into originating Foundry thread (LOOP-001) ---
+    if thread_id:
+        rolled_back = classification == "DEGRADED" and rollback_id is not None
+        await _inject_verification_result(
+            thread_id=thread_id,
+            execution_id=execution_id,
+            verification_result=classification,
+            resource_id=resource_id,
+            proposed_action=proposed_action,
+            rolled_back=rolled_back if classification == "DEGRADED" else False,
+            incident_id=incident_id,
+            cosmos_client=cosmos_client,
+        )
 
     return classification
 
@@ -445,6 +670,7 @@ async def _delayed_verify(
     execution_id: str,
     resource_id: str,
     incident_id: str,
+    thread_id: str,
     proposed_action: str,
     credential: Any,
     cosmos_client: Optional[Any],
@@ -457,6 +683,7 @@ async def _delayed_verify(
             execution_id=execution_id,
             resource_id=resource_id,
             incident_id=incident_id,
+            thread_id=thread_id,
             proposed_action=proposed_action,
             credential=credential,
             cosmos_client=cosmos_client,
@@ -629,6 +856,7 @@ async def execute_remediation(
             execution_id=execution_id,
             resource_id=resource_id,
             incident_id=incident_id,
+            thread_id=thread_id,
             proposed_action=proposed_action,
             credential=credential,
             cosmos_client=cosmos_client,
@@ -686,3 +914,76 @@ async def run_wal_stale_monitor(
             raise
         except Exception as exc:
             logger.error("run_wal_stale_monitor: error | %s", exc)
+
+
+async def run_missed_verification_sweep(
+    cosmos_client: Optional[Any],
+    credential: Any,
+) -> None:
+    """Startup sweep: re-verify WAL records that completed execution but never got verified.
+
+    Catches records where:
+    - status = 'complete'
+    - verification_result IS NULL
+    - executed_at > 20 minutes ago (verification should have completed by now)
+
+    For each missed record, runs _verify_remediation immediately.
+    """
+    if cosmos_client is None:
+        return
+
+    try:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(minutes=20)
+        ).isoformat()
+        container = _get_remediation_audit_container(cosmos_client)
+        query = (
+            "SELECT * FROM c "
+            "WHERE c.status = 'complete' "
+            "AND NOT IS_DEFINED(c.verification_result) "
+            "AND c.executed_at < @cutoff "
+            "AND c.action_type = 'execute'"
+        )
+        missed = list(container.query_items(
+            query=query,
+            parameters=[{"name": "@cutoff", "value": cutoff}],
+            enable_cross_partition_query=True,
+        ))
+
+        if not missed:
+            logger.info("run_missed_verification_sweep: no missed verifications found")
+            return
+
+        logger.warning(
+            "run_missed_verification_sweep: found %d missed verifications", len(missed)
+        )
+
+        for record in missed:
+            execution_id = record.get("id", "")
+            resource_id = record.get("resource_id", "")
+            incident_id = record.get("incident_id", "")
+            thread_id = record.get("thread_id", "")
+            proposed_action = record.get("proposed_action", "")
+
+            logger.info(
+                "run_missed_verification_sweep: re-verifying | execution_id=%s",
+                execution_id,
+            )
+            try:
+                await _verify_remediation(
+                    execution_id=execution_id,
+                    resource_id=resource_id,
+                    incident_id=incident_id,
+                    thread_id=thread_id,
+                    proposed_action=proposed_action,
+                    credential=credential,
+                    cosmos_client=cosmos_client,
+                )
+            except Exception as exc:
+                logger.error(
+                    "run_missed_verification_sweep: failed | execution_id=%s error=%s",
+                    execution_id, exc,
+                )
+
+    except Exception as exc:
+        logger.error("run_missed_verification_sweep: sweep failed | %s", exc)

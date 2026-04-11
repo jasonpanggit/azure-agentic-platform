@@ -1,9 +1,23 @@
-export type CardType = "alert" | "approval" | "outcome" | "reminder";
+export type CardType =
+  | "alert"
+  | "approval"
+  | "outcome"
+  | "reminder"
+  | "sop_notification"
+  | "sop_escalation"
+  | "sop_summary";
 
 export interface NotifyRequest {
   card_type: CardType;
   channel_id: string;
-  payload: AlertPayload | ApprovalPayload | OutcomePayload | ReminderPayload;
+  payload:
+    | AlertPayload
+    | ApprovalPayload
+    | OutcomePayload
+    | ReminderPayload
+    | SopNotificationPayload
+    | SopEscalationPayload
+    | SopSummaryPayload;
 }
 
 export interface NotifyResponse {
@@ -54,4 +68,29 @@ export interface ReminderPayload {
   risk_level: "critical" | "high";
   created_at: string;
   expires_at: string;
+}
+
+export interface SopNotificationPayload {
+  incident_id: string;
+  resource_name: string;
+  message: string;
+  severity: "info" | "warning" | "critical";
+  sop_step: string;
+}
+
+export interface SopEscalationPayload {
+  incident_id: string;
+  resource_name: string;
+  message: string;
+  sop_step: string;
+  context: string;
+}
+
+export interface SopSummaryPayload {
+  incident_id: string;
+  resource_name: string;
+  sop_title: string;
+  steps_run: number;
+  steps_skipped: number;
+  outcome: "resolved" | "escalated" | "pending_approval" | "failed";
 }

@@ -12,6 +12,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, AlertTriangle, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, X, ShieldAlert, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import { useResizable } from '@/lib/use-resizable';
 
@@ -59,6 +65,7 @@ interface PendingPatch {
   readonly kbid: string;
   readonly version: string;
   readonly publishedDateTime: string | null;
+  readonly cves: readonly string[];
 }
 
 interface InstalledPatchesPanelProps {
@@ -80,6 +87,8 @@ const DAYS_OPTIONS: readonly { readonly value: DaysOption; readonly label: strin
   { value: '180', label: '180 days' },
   { value: '365', label: '365 days' },
 ] as const;
+
+const PATCH_SOFTWARE_TYPES = new Set(['patch', 'update', 'hotfix']);
 
 function classificationBadgeStyle(cls: string): React.CSSProperties {
   const lower = cls.toLowerCase();
@@ -139,27 +148,457 @@ function StatChip({ label, value, variant }: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// CVE detail types + helpers
+// ---------------------------------------------------------------------------
+
+interface CveDetail {
+  cveNumber: string;
+  cveTitle: string;
+  severity: string;
+  baseScore: string;
+  temporalScore: string;
+  vectorString: string;
+  impact: string;
+  vulnType: string;
+  description: string;
+  exploited: string;
+  publiclyDisclosed: string;
+  releaseDate: string;
+  mitreUrl: string;
+  latestSoftwareRelease: string;
+  tag: string;
+}
+
+function severityColor(severity: string): string {
+  switch (severity.toLowerCase()) {
+    case 'critical': return 'var(--accent-red)';
+    case 'important': return 'var(--accent-orange, #f97316)';
+    case 'moderate': return 'var(--accent-yellow, #eab308)';
+    default: return 'var(--text-muted)';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CVSS vector string parser + visualisation helpers
+// ---------------------------------------------------------------------------
+
+interface CvssComponents {
+  AV: string; AC: string; PR: string; UI: string;
+  S: string; C: string; I: string; A: string;
+}
+
+const CVSS_LABELS: Record<keyof CvssComponents, string> = {
+  AV: 'Attack Vector', AC: 'Attack Complexity', PR: 'Privileges Required',
+  UI: 'User Interaction', S: 'Scope', C: 'Confidentiality',
+  I: 'Integrity', A: 'Availability',
+};
+
+const CVSS_VALUE_SCORES: Record<string, Record<string, number>> = {
+  AV: { N: 1.0, A: 0.67, L: 0.55, P: 0.2 },
+  AC: { L: 1.0, H: 0.44 },
+  PR: { N: 1.0, L: 0.62, H: 0.27 },
+  UI: { N: 1.0, R: 0.85 },
+  S: { C: 1.0, U: 0.5 },
+  C: { H: 1.0, L: 0.5, N: 0 },
+  I: { H: 1.0, L: 0.5, N: 0 },
+  A: { H: 1.0, L: 0.5, N: 0 },
+};
+
+const CVSS_VALUE_LABELS: Record<string, Record<string, string>> = {
+  AV: { N: 'Network', A: 'Adjacent', L: 'Local', P: 'Physical' },
+  AC: { L: 'Low', H: 'High' },
+  PR: { N: 'None', L: 'Low', H: 'High' },
+  UI: { N: 'None', R: 'Required' },
+  S: { C: 'Changed', U: 'Unchanged' },
+  C: { H: 'High', L: 'Low', N: 'None' },
+  I: { H: 'High', L: 'Low', N: 'None' },
+  A: { H: 'High', L: 'Low', N: 'None' },
+};
+
+function parseCvssVector(vectorString: string): Partial<CvssComponents> {
+  // e.g. "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H/E:U/RL:O/RC:C"
+  const result: Partial<CvssComponents> = {};
+  const parts = vectorString.replace(/^CVSS:\d+\.\d+\//, '').split('/');
+  for (const part of parts) {
+    const [key, val] = part.split(':');
+    if (key && val && key in CVSS_LABELS) {
+      (result as Record<string, string>)[key] = val;
+    }
+  }
+  return result;
+}
+
+function scoreToColor(score: number): string {
+  if (score >= 0.8) return 'var(--accent-red)';
+  if (score >= 0.5) return 'var(--accent-orange, #f97316)';
+  if (score >= 0.3) return 'var(--accent-yellow, #eab308)';
+  return 'var(--accent-green, #22c55e)';
+}
+
+/** Horizontal bar showing a 0–1 score with colour coding */
+function CvssBar({ label, value, score }: { label: string; value: string; score: number }) {
+  const pct = Math.round(score * 100);
+  const color = scoreToColor(score);
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-[130px] shrink-0" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span className="w-[72px] shrink-0 font-medium" style={{ color: 'var(--text-secondary)' }}>{value}</span>
+      <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, background: 'var(--border)' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999, transition: 'width 0.3s' }} />
+      </div>
+    </div>
+  );
+}
+
+/** Radar chart rendered with SVG — no external charting library */
+function CvssRadar({ components }: { components: Partial<CvssComponents> }) {
+  const keys = Object.keys(CVSS_LABELS) as (keyof CvssComponents)[];
+  const n = keys.length;
+  const cx = 80, cy = 80, r = 60;
+
+  // Generate polygon points for a given scale factor
+  const points = (scale: number) =>
+    keys.map((_, i) => {
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      return [cx + r * scale * Math.cos(angle), cy + r * scale * Math.sin(angle)];
+    });
+
+  const toSvgPts = (pts: number[][]) => pts.map(p => p.join(',')).join(' ');
+
+  // Score polygon points based on parsed component values
+  const scorePts = keys.map((key, i) => {
+    const val = components[key] ?? '';
+    const score = CVSS_VALUE_SCORES[key]?.[val] ?? 0;
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    return [cx + r * score * Math.cos(angle), cy + r * score * Math.sin(angle)];
+  });
+
+  // Grid rings at 25%, 50%, 75%, 100%
+  const rings = [0.25, 0.5, 0.75, 1.0];
+
+  // Axis labels
+  const labelPts = keys.map((key, i) => {
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    const dist = r + 16;
+    return {
+      key,
+      x: cx + dist * Math.cos(angle),
+      y: cy + dist * Math.sin(angle),
+    };
+  });
+
+  return (
+    <svg viewBox="0 0 160 160" className="w-full max-w-[180px] mx-auto" aria-label="CVSS radar chart">
+      {/* Grid rings */}
+      {rings.map((scale) => (
+        <polygon
+          key={scale}
+          points={toSvgPts(points(scale))}
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth={scale === 1.0 ? 1 : 0.5}
+        />
+      ))}
+      {/* Axis spokes */}
+      {points(1.0).map(([x, y], i) => (
+        <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--border)" strokeWidth={0.5} />
+      ))}
+      {/* Score polygon */}
+      <polygon
+        points={toSvgPts(scorePts)}
+        fill="color-mix(in srgb, var(--accent-blue) 25%, transparent)"
+        stroke="var(--accent-blue)"
+        strokeWidth={1.5}
+      />
+      {/* Score dots */}
+      {scorePts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={2.5} fill="var(--accent-blue)" />
+      ))}
+      {/* Axis labels */}
+      {labelPts.map(({ key, x, y }) => (
+        <text
+          key={key}
+          x={x}
+          y={y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={7}
+          fill="var(--text-muted)"
+        >
+          {key}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+/** Score gauge arc rendered in SVG */
+function CvssGauge({ score, max = 10 }: { score: number; max?: number }) {
+  const pct = score / max;
+  const radius = 32;
+  const cx = 44, cy = 44;
+  // Arc from -150° to +150° (300° sweep)
+  const sweepDeg = 300;
+  const startDeg = -150;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const arcStart = [
+    cx + radius * Math.cos(toRad(startDeg)),
+    cy + radius * Math.sin(toRad(startDeg)),
+  ];
+  const endDeg = startDeg + sweepDeg * pct;
+  const arcEnd = [
+    cx + radius * Math.cos(toRad(endDeg)),
+    cy + radius * Math.sin(toRad(endDeg)),
+  ];
+  const largeArc = sweepDeg * pct > 180 ? 1 : 0;
+  const bgEndDeg = startDeg + sweepDeg;
+  const bgEnd = [
+    cx + radius * Math.cos(toRad(bgEndDeg)),
+    cy + radius * Math.sin(toRad(bgEndDeg)),
+  ];
+
+  const color = score >= 9 ? 'var(--accent-red)' : score >= 7 ? 'var(--accent-orange, #f97316)' : score >= 4 ? 'var(--accent-yellow, #eab308)' : 'var(--accent-green, #22c55e)';
+
+  return (
+    <svg viewBox="0 0 88 60" className="w-[88px] h-[60px]" aria-label={`CVSS score ${score}`}>
+      {/* Background arc */}
+      <path
+        d={`M ${arcStart[0]} ${arcStart[1]} A ${radius} ${radius} 0 1 1 ${bgEnd[0]} ${bgEnd[1]}`}
+        fill="none" stroke="var(--border)" strokeWidth={5} strokeLinecap="round"
+      />
+      {/* Score arc */}
+      {pct > 0 && (
+        <path
+          d={`M ${arcStart[0]} ${arcStart[1]} A ${radius} ${radius} 0 ${largeArc} 1 ${arcEnd[0]} ${arcEnd[1]}`}
+          fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
+        />
+      )}
+      {/* Score text */}
+      <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="middle" fontSize={13} fontWeight="700" fill={color}>
+        {score.toFixed(1)}
+      </text>
+      <text x={cx} y={cy + 11} textAnchor="middle" fontSize={6} fill="var(--text-muted)">/ {max}</text>
+    </svg>
+  );
+}
+
+function CveDetailDialog({ cveId, onClose }: { readonly cveId: string; readonly onClose: () => void }) {
+  const [detail, setDetail] = React.useState<CveDetail | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/proxy/patch/cve/${encodeURIComponent(cveId)}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { setDetail(d); setLoading(false); })
+      .catch(() => { setError('Failed to load CVE details'); setLoading(false); });
+  }, [cveId]);
+
+  const cvssComponents = React.useMemo(
+    () => detail?.vectorString ? parseCvssVector(detail.vectorString) : {},
+    [detail?.vectorString]
+  );
+
+  const baseScore = detail?.baseScore ? parseFloat(detail.baseScore) : null;
+  const temporalScore = detail?.temporalScore ? parseFloat(detail.temporalScore) : null;
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl" style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}>
+        <DialogHeader>
+          <DialogTitle className="font-mono text-sm" style={{ color: 'var(--accent-blue)' }}>{cveId}</DialogTitle>
+        </DialogHeader>
+        {loading && (
+          <div className="space-y-2 py-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        )}
+        {error && <p className="text-sm py-2" style={{ color: 'var(--accent-red)' }}>{error}</p>}
+        {detail && (
+          <ScrollArea className="max-h-[70vh]">
+            <div className="space-y-4 text-sm pr-1">
+              {/* Title + severity badges */}
+              <div>
+                <p className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>{detail.cveTitle}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="text-[11px]" style={{
+                    background: `color-mix(in srgb, ${severityColor(detail.severity)} 15%, transparent)`,
+                    color: severityColor(detail.severity),
+                    borderColor: `color-mix(in srgb, ${severityColor(detail.severity)} 35%, transparent)`,
+                    border: '1px solid',
+                  }}>
+                    {detail.severity}
+                  </Badge>
+                  {detail.impact && (
+                    <Badge variant="outline" className="text-[11px]" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
+                      {detail.impact}
+                    </Badge>
+                  )}
+                  {detail.vulnType && (
+                    <Badge variant="outline" className="text-[11px]" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
+                      {detail.vulnType}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* CVSS scores section */}
+              {(baseScore !== null || temporalScore !== null) && (
+                <div className="rounded-lg border p-3 space-y-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>CVSS Scores</p>
+
+                  {/* Gauges row */}
+                  <div className="flex gap-4 items-end">
+                    {baseScore !== null && (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <CvssGauge score={baseScore} />
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Base Score</span>
+                      </div>
+                    )}
+                    {temporalScore !== null && (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <CvssGauge score={temporalScore} />
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Temporal Score</span>
+                      </div>
+                    )}
+                    {/* Radar chart next to gauges when vector is available */}
+                    {detail.vectorString && Object.keys(cvssComponents).length > 0 && (
+                      <div className="flex-1">
+                        <CvssRadar components={cvssComponents} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Vector string */}
+                  {detail.vectorString && (
+                    <p className="font-mono text-[10px] break-all" style={{ color: 'var(--text-muted)' }}>
+                      {detail.vectorString}
+                    </p>
+                  )}
+
+                  {/* Component breakdown bars */}
+                  {Object.keys(cvssComponents).length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Vector Components</p>
+                      {(Object.keys(CVSS_LABELS) as (keyof CvssComponents)[]).map((key) => {
+                        const val = cvssComponents[key];
+                        if (!val) return null;
+                        const score = CVSS_VALUE_SCORES[key]?.[val] ?? 0;
+                        const label = CVSS_VALUE_LABELS[key]?.[val] ?? val;
+                        return (
+                          <CvssBar
+                            key={key}
+                            label={CVSS_LABELS[key]}
+                            value={label}
+                            score={score}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Description */}
+              {detail.description && (
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {detail.description}
+                </p>
+              )}
+
+              {/* Metadata grid */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs rounded-lg border p-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Exploited</span>
+                <span style={{ color: detail.exploited === 'Yes' ? 'var(--accent-red)' : 'var(--text-secondary)', fontWeight: detail.exploited === 'Yes' ? 600 : undefined }}>
+                  {detail.exploited || '—'}
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}>Publicly Disclosed</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{detail.publiclyDisclosed || '—'}</span>
+                <span style={{ color: 'var(--text-muted)' }}>Exploitability</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{detail.latestSoftwareRelease || '—'}</span>
+                {detail.releaseDate && (
+                  <>
+                    <span style={{ color: 'var(--text-muted)' }}>Release Date</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{detail.releaseDate.split('T')[0]}</span>
+                  </>
+                )}
+                {detail.tag && (
+                  <>
+                    <span style={{ color: 'var(--text-muted)' }}>Tag</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{detail.tag}</span>
+                  </>
+                )}
+              </div>
+
+              {/* MITRE link */}
+              {detail.mitreUrl && (
+                <a href={detail.mitreUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs"
+                  style={{ color: 'var(--accent-blue)' }}>
+                  View on MITRE <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </ScrollArea>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CveBadges({ cves }: { readonly cves: readonly string[] }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const [selectedCve, setSelectedCve] = React.useState<string | null>(null);
+
   if (cves.length === 0) return <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>;
 
-  const visible = cves.slice(0, MAX_VISIBLE_CVES);
+  const visible = expanded ? cves : cves.slice(0, MAX_VISIBLE_CVES);
   const overflow = cves.length - MAX_VISIBLE_CVES;
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {visible.map((cve) => (
-        <Badge key={cve} variant="outline" className="text-[10px] font-mono px-1.5 py-0"
-          style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
-          {cve}
-        </Badge>
-      ))}
-      {overflow > 0 && (
-        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0"
-          style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-          +{overflow} more
-        </Badge>
-      )}
-    </div>
+    <>
+      {selectedCve && <CveDetailDialog cveId={selectedCve} onClose={() => setSelectedCve(null)} />}
+      <div className="flex flex-wrap gap-1 items-center">
+        {visible.map((cve) => (
+          <button
+            key={cve}
+            onClick={() => setSelectedCve(cve)}
+            className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80 cursor-pointer"
+            style={{
+              color: 'var(--accent-blue)',
+              borderColor: 'color-mix(in srgb, var(--accent-blue) 35%, transparent)',
+              background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+            }}
+          >
+            {cve}
+          </button>
+        ))}
+        {!expanded && overflow > 0 && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            +{overflow} more <ChevronDown className="h-2.5 w-2.5" />
+          </button>
+        )}
+        {expanded && overflow > 0 && (
+          <button
+            onClick={() => setExpanded(false)}
+            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-sm border transition-colors hover:opacity-80"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+          >
+            Show less <ChevronUp className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -223,14 +662,15 @@ function PendingPatchesTable({
       <Table className="w-full text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Patch Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody><SkeletonRows cols={5} /></TableBody>
+        <TableBody><SkeletonRows cols={6} /></TableBody>
       </Table>
     );
   }
@@ -245,21 +685,25 @@ function PendingPatchesTable({
 
   return (
     <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <Table className="w-full text-sm">
+      <Table className="w-full text-sm table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Patch Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)', width: '35%' }}>Name</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>Reboot</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Published</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {patches.map((p, idx) => (
             <TableRow key={`${p.patchName}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
-              <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[240px] truncate" style={{ color: 'var(--text-primary)' }}>
+              <TableCell className="h-9 px-3 align-middle text-[13px]" style={{ color: 'var(--text-primary)', maxWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.patchName}>
                 {p.patchName}
+              </TableCell>
+              <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                {p.kbid ? (p.kbid.toUpperCase().startsWith('KB') ? p.kbid : `KB${p.kbid}`) : '\u2014'}
               </TableCell>
               <TableCell className="h-9 px-3 align-middle">
                 <div className="flex flex-wrap gap-1">
@@ -273,23 +717,13 @@ function PendingPatchesTable({
                 </div>
               </TableCell>
               <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.kbid ? `KB${p.kbid}` : '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                {p.rebootRequired ? (
-                  <Badge className="border text-[11px]" style={{
-                    background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
-                    color: 'var(--accent-orange)',
-                    borderColor: 'color-mix(in srgb, var(--accent-orange) 35%, transparent)',
-                  }}>
-                    Required
-                  </Badge>
-                ) : (
-                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No</span>
-                )}
+                {p.version || '\u2014'}
               </TableCell>
               <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                 {p.publishedDateTime ? formatRelativeTime(p.publishedDateTime) : '\u2014'}
+              </TableCell>
+              <TableCell className="h-9 px-3 align-middle">
+                <CveBadges cves={p.cves ?? []} />
               </TableCell>
             </TableRow>
           ))}
@@ -320,10 +754,10 @@ function InstalledPatchesTable({
         <TableHeader>
           <TableRow>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
             <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
@@ -340,42 +774,46 @@ function InstalledPatchesTable({
 
   return (
     <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <Table className="w-full text-sm">
+      <Table className="w-full text-sm table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Name</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Category</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Publisher</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
-            <TableHead className="h-8 px-3 text-left text-xs font-semibold min-w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)', width: '35%' }}>Name</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[80px]" style={{ color: 'var(--text-muted)' }}>KB ID</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[110px]" style={{ color: 'var(--text-muted)' }}>Classification</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[90px]" style={{ color: 'var(--text-muted)' }}>Version</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[100px]" style={{ color: 'var(--text-muted)' }}>Installed</TableHead>
+            <TableHead className="h-8 px-3 text-left text-xs font-semibold w-[120px]" style={{ color: 'var(--text-muted)' }}>CVEs</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {patches.map((p, idx) => (
-            <TableRow key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
-              <TableCell className="h-9 px-3 align-middle text-[13px] max-w-[220px] truncate" style={{ color: 'var(--text-primary)' }}>
-                {p.SoftwareName}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.CurrentVersion || '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                <Badge variant="outline" className="text-[11px] border" style={classificationBadgeStyle(p.Category)}>
-                  {p.Category || 'Other'}
-                </Badge>
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-muted)' }}>
-                {p.Publisher || '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
-              </TableCell>
-              <TableCell className="h-9 px-3 align-middle">
-                <CveBadges cves={p.cves ?? []} />
-              </TableCell>
-            </TableRow>
-          ))}
+          {patches.map((p, idx) => {
+            const kbMatch = /KB(\d+)/i.exec(p.SoftwareName);
+            const kbId = kbMatch ? `KB${kbMatch[1]}` : null;
+            return (
+              <TableRow key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`} className="border-b hover:bg-muted/50 transition-colors">
+                <TableCell className="h-9 px-3 align-middle text-[13px]" style={{ color: 'var(--text-primary)', maxWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.SoftwareName}>
+                  {p.SoftwareName}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {kbId ?? '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle">
+                  <Badge variant="outline" className="text-[11px] border" style={classificationBadgeStyle(p.Category)}>
+                    {p.Category || 'Other'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {p.CurrentVersion || '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  {p.InstalledDate ? formatRelativeTime(p.InstalledDate) : '\u2014'}
+                </TableCell>
+                <TableCell className="h-9 px-3 align-middle">
+                  <CveBadges cves={p.cves ?? []} />
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -463,7 +901,11 @@ export function InstalledPatchesPanel({
         throw new Error(errData.error ?? `Request failed (${res.status})`);
       }
       const data = await res.json();
-      setPatches(data.patches ?? []);
+      setPatches(
+        (data.patches ?? []).filter((p: InstalledPatch) =>
+          PATCH_SOFTWARE_TYPES.has(p.SoftwareType.toLowerCase())
+        )
+      );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load patch detail');
       setPatches([]);
@@ -667,6 +1109,15 @@ export function InstalledPatchesPanel({
           >
             <Package className="h-3.5 w-3.5" />
             Installed Patches
+            {patches.length > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 ml-1 border" style={{
+                background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                color: 'var(--accent-blue)',
+                borderColor: 'color-mix(in srgb, var(--accent-blue) 35%, transparent)',
+              }}>
+                {patches.length}
+              </Badge>
+            )}
           </button>
 
           {/* Days selector — only shown on installed tab */}

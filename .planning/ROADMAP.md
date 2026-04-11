@@ -516,7 +516,7 @@ Plans:
 **Goal:** Resolve all known BLOCKING and HIGH-severity production defects so the platform is fully operational: authenticated, all agents functional, detection plane wiring ready, no unauthenticated external endpoints, Teams proactive alerting delivering cards. Executes all 12 tasks deferred from Phase 14 across 6 milestones: agent MCP tool group registration, auth enablement, Azure MCP Server security, Arc MCP Server real image, runbook RAG, hardcoded ID removal, Teams Bot registration, and agent framework RC5 pin.
 **Requirements**: PROD-001, PROD-002, PROD-003, PROD-005
 **Depends on:** Phase 18
-**Status:** In progress
+**Status:** ✅ Complete (2026-04-02) — 5/5 plans complete
 **Plans:** 5/5 plans complete
 
 Plans:
@@ -533,11 +533,14 @@ Plans:
 **Goal:** Give the Network, Security, and SRE domain agents genuine diagnostic depth. Currently each has only 3 shared triage tools. After this phase each agent has a rich domain-specific investigation surface: 6 new Network tools (NSG rules, VNet topology, load balancer health, flow logs, ExpressRoute, connectivity diagnostics), 6 new Security tools (Defender alerts, secure score, RBAC assignments, Key Vault audit, Policy compliance, public endpoint scan), and 4 new SRE tools (Service Health, Advisor recommendations, Change Analysis, cross-domain correlation).
 **Requirements**: PROD-003
 **Depends on:** Phase 19
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-10) — 4/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [x] 20-1: Network Agent Depth — NSG rules, VNet topology, load balancer health, flow logs, ExpressRoute, connectivity diagnostics (6 tools) — COMPLETE
+- [x] 20-2: Security Agent Depth — Defender alerts, secure score, RBAC assignments, Key Vault audit, Policy compliance, public endpoint scan (6 tools) — COMPLETE
+- [x] 20-3: SRE Agent Depth — Service Health, Advisor recommendations, Change Analysis, cross-domain correlation (4 tools) — COMPLETE
+- [x] 20-4: Integration + Verification — orchestrator routing, end-to-end tests, PROD-003 satisfied — COMPLETE
 
 ---
 
@@ -561,11 +564,14 @@ Plans:
 **Goal:** Build and maintain a real-time property graph of all Azure resources and their relationships. This is the single most differentiating Stage 4 capability — it enables causal RCA, blast-radius estimation, and topology-aware alert suppression in later phases. The graph is stored in Cosmos DB (adjacency-list), bootstrapped via ARG bulk query, synced every 15 minutes, and enriched by the Activity Log stream. New API endpoints expose blast-radius, path, and snapshot queries. All domain agents gain topology traversal as a mandatory triage step.
 **Requirements**: TOPO-001, TOPO-002, TOPO-003, TOPO-004, TOPO-005
 **Depends on:** Phase 21
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-03) — 4/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 22 to break down)
+- [x] 22-1: Cosmos topology container — adjacency-list schema, partition key `/resource_id`, indexes — COMPLETE
+- [x] 22-2: Topology service core — ARG bulk bootstrap, 15-min sync loop, Activity Log enrichment — COMPLETE
+- [x] 22-3: Topology API endpoints — blast-radius, path query, snapshot — COMPLETE
+- [x] 22-4: Domain agent topology integration + load test — mandatory triage step, TOPO-005 ≥10k nodes validated — COMPLETE
 
 ---
 
@@ -574,11 +580,12 @@ Plans:
 **Goal:** Automatically correlate every incident with Azure resource changes in the preceding time window. When a DB degrades 4 minutes after a VM resize, that correlation surfaces automatically. Sources: Activity Log (ARM operations), deployment events, Kubernetes resource changes, policy compliance changes. Algorithm ranks by temporal proximity + topological distance + change type and stores top-3 ChangeCorrelation objects on IncidentSummary. Surfaces in AlertFeed badge and VMDetailPanel.
 **Requirements**: INTEL-002
 **Depends on:** Phase 22
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-03) — 2/2 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 23 to break down)
+- [x] 23-1: Change correlator service — temporal + topological + change-type ranking, top-3 ChangeCorrelation on IncidentSummary — COMPLETE
+- [x] 23-2: Incident wiring + UI — AlertFeed badge, VMDetailPanel surface, INTEL-002 satisfied — COMPLETE
 
 ---
 
@@ -587,11 +594,13 @@ Plans:
 **Goal:** Reduce alert noise by ≥80% through topology-aware causal suppression, multi-dimensional alert correlation, and composite incident severity scoring. Causal suppression uses the Phase 22 topology graph to suppress downstream cascade alerts when an upstream root cause is identified. Multi-dimensional correlation groups alerts by temporal + topological + semantic similarity. Composite severity weights alert severity, blast radius, SLO risk, and business tier. Noise metrics surface in the Observability tab.
 **Requirements**: INTEL-001
 **Depends on:** Phase 22, Phase 23
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-04) — 3/3 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 24 to break down)
+- [x] 24-1: Noise reducer service — topology-aware causal suppression, multi-dimensional correlation, composite severity scoring — COMPLETE
+- [x] 24-2: Incident wiring — suppression applied at ingestion, composite severity on IncidentSummary — COMPLETE
+- [x] 24-3: Observability tab metrics — noise ratio, suppression count, INTEL-001 ≥80% reduction verified — COMPLETE
 
 ---
 
@@ -600,11 +609,13 @@ Plans:
 **Goal:** Give the platform memory. Every resolved investigation becomes institutional knowledge surfaced for future incidents via pgvector embeddings over resolved incident summaries and investigation transcripts. New incidents automatically get top-3 historical pattern matches. A weekly Container App job identifies systemic recurring patterns. SLO tracking adds SLODefinition model, error budget computation, burn-rate alerts (>2x for 1h or >3x for 15min), and SLO-aware incident auto-escalation with SLO health cards in the Observability tab.
 **Requirements**: INTEL-003, INTEL-004
 **Depends on:** Phase 24
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-04) — 3/3 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 25 to break down)
+- [x] 25-1: Incident memory service — pgvector embeddings over resolved summaries + transcripts, top-3 historical pattern match — COMPLETE
+- [x] 25-2: SLO tracking service — SLODefinition model, error budget computation, burn-rate alerts (>2x/1h, >3x/15min), auto-escalation — COMPLETE
+- [x] 25-3: Observability tab SLO cards + weekly pattern job — INTEL-003 + INTEL-004 satisfied — COMPLETE
 
 ---
 
@@ -613,11 +624,14 @@ Plans:
 **Goal:** Move from reactive alerting to proactive prevention. Azure Monitor Dynamic Thresholds handle anomaly detection; custom ARIMA-based forecasting handles capacity exhaustion projections (disk fill rate, connection pool exhaustion, memory growth) with time-to-breach estimates. Per-resource seasonal baseline profiles in Cosmos DB. Pre-incident early warning signals detect subtle trends (error rate creep, latency drift). New /api/v1/forecasts endpoints and a Forecasts section in the dashboard. TOPO-005 scale validation must pass before this phase starts.
 **Requirements**: INTEL-005
 **Depends on:** Phase 25
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-04) — 4/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 26 to break down)
+- [x] 26-1: Cosmos baselines container — per-resource seasonal baseline profiles, partition key `/resource_id` — COMPLETE
+- [x] 26-2: Forecaster service — ARIMA-based capacity exhaustion projections (disk fill, connection pool, memory), time-to-breach estimates — COMPLETE
+- [x] 26-3: Forecast endpoints — GET /api/v1/forecasts, pre-incident early warning signals, dynamic threshold integration — COMPLETE
+- [x] 26-4: Dashboard Forecasts section — INTEL-005 satisfied, TOPO-005 scale validation passed — COMPLETE
 
 ---
 
@@ -626,11 +640,13 @@ Plans:
 **Goal:** Complete the remediation loop by adding execution, verification, and rollback to the existing HITL approval gate. Full pipeline: Incident → Triage → RCA → Runbook Selection (RAG) → Proposal → Human Approval → Pre-flight Checks → Execution → Verification → Resolution OR Rollback. Pre-flight checks include blast-radius confirmation, resource state ETag, change freeze windows, and cost estimation. Verification classifies: RESOLVED / IMPROVED / DEGRADED (auto-rollback) / TIMEOUT (escalate). Write-ahead log pattern ensures audit atomicity. Immutable remediation-audit Cosmos container with compliance export endpoint.
 **Requirements**: REMEDI-009, REMEDI-010, REMEDI-011, REMEDI-012, REMEDI-013
 **Depends on:** Phase 26, Phase 25, Phase 22
-**Status:** Not started
-**Plans:** 0 plans
+**Status:** ✅ Complete (2026-04-04) — 3/3 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 27 to break down)
+- [x] 27-1: remediation_audit Cosmos container + Terraform — write-ahead log, immutable audit trail, partition key `/incident_id` — COMPLETE
+- [x] 27-2: Remediation executor service — pre-flight checks (blast-radius, ETag, freeze window, cost), RESOLVED/IMPROVED/DEGRADED/TIMEOUT classification, auto-rollback — COMPLETE
+- [x] 27-3: Execute endpoint + wiring — POST /api/v1/remediations/{id}/execute, REMEDI-009 through REMEDI-013 satisfied — COMPLETE
 
 ---
 
@@ -646,6 +662,158 @@ Plans:
 - [x] 28-1: Cosmos DB containers — pattern_analysis (/analysis_date) + business_tiers (/tier_name), both no-TTL, outputs added (PLATINT-001, PLATINT-004) — COMPLETE
 - [x] 28-2: Pattern Analyzer — ApprovalAction feedback fields, process_approval_decision feedback persistence, 5 new Pydantic models, pattern_analyzer.py (8 pure-Python functions, 7 env vars, no numpy/sklearn), 21 tests passing (PLATINT-001, PLATINT-002, PLATINT-003) — COMPLETE
 - [x] 28-3: Intelligence Endpoints — GET /api/v1/intelligence/patterns, GET /api/v1/intelligence/platform-health, POST/GET /api/v1/admin/business-tiers, default tier seeding, pattern analysis background loop, feedback passthrough (approve/reject), 12 tests passing (PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004) — COMPLETE
+
+---
+
+### Phase 29: Foundry Platform Migration
+
+**Goal:** Migrate all 8 domain agents from the legacy `azure-ai-projects` client pattern to the Microsoft Agent Framework (`agent-framework 1.0.0rc5`). Update the Orchestrator with connected-agent handoffs. Wire OTel auto-instrumentation to Application Insights via `AIProjectInstrumentor`.
+**Depends on:** Phase 28
+**Status:** ✅ Complete (2026-04-11) — 1/1 plan complete
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 29-1: Foundry SDK migration — all 8 domain agents on `ChatAgent` + `@ai_function`, Responses API (`azure-ai-projects` 2.0.x), shared `telemetry.py` with `AIProjectInstrumentor`, orchestrator A2A topology registration, Terraform A2A connections, 7 smoke tests passing — COMPLETE
+
+---
+
+### Phase 30: SOP Engine
+
+**Goal:** Build the SOP (Standard Operating Procedure) engine. PostgreSQL-backed SOP storage with pgvector semantic search for incident-specific SOP retrieval. Multi-channel notification dispatch. New `/api/v1/sops` endpoints. SOP upload script with SHA-256 idempotency.
+**Depends on:** Phase 29
+**Status:** ✅ Complete (2026-04-11) — 1/1 plan complete
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 30-1: SOP engine — `services/api-gateway/sop/` package, PostgreSQL migration `003_create_sops_table.py`, pgvector semantic search, multi-channel notify (`sop_notify.py`), upload script, shared `sop_loader.py` + `sop_store.py`, Teams SOP cards, 30+ tests passing — COMPLETE
+
+---
+
+### Phase 31: SOP Library
+
+**Goal:** Populate the SOP library with production-ready runbooks covering all domain incident types. Each SOP maps to domain agent tool sequences. Lint tool and library coverage validation.
+**Depends on:** Phase 30
+**Status:** ✅ Complete (2026-04-11) — 1/1 plan complete
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 31-1: SOP library — 34 production SOPs across compute (7), Arc (4), AKS (4), VMSS (3), patch (4), EOL (3), network (3), security (3), SRE (3), schema template; `scripts/lint_sops.py`, library coverage tests — COMPLETE
+
+---
+
+### Phase 32: VM Domain Depth
+
+**Goal:** Deepen VM domain agent capabilities with 19 new compute/VMSS/AKS/Arc tools. Fix stubs in Patch and EOL agents with real SDK calls.
+**Depends on:** Phase 31
+**Status:** ✅ Complete (2026-04-11) — 1/1 plan complete
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 32-1: VM domain depth — 5 stub fixes (Patch + EOL real SDK calls), 7 Azure VM tools (extensions, boot-diag, SKU, disk, `propose_vm_restart/deallocate/resize`), 4 VMSS tools (instances, autoscale, rolling-upgrade, `propose_vmss_scale`), 4 AKS tools (cluster-health, node-pools, upgrade-profile, `propose_aks_node_pool_scale`), 4 Arc tools (extension-health, guest-config, connectivity, `propose_arc_assessment`), smoke tests — COMPLETE
+
+---
+
+### Phase 33: Foundry Evaluation + Quality Gates
+
+**Goal:** Instrument every agent with `azure-ai-evaluation` agentic evaluators. Build 4 custom AIOps evaluators. Create a CI eval pipeline that gates on quality scores. GitHub Actions workflow runs weekly + on PR to main.
+**Depends on:** Phase 29, Phase 30
+**Status:** ✅ Complete (2026-04-11) — 1/1 plan complete
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 33-1: Evaluation harness — 4 custom evaluators (`SopAdherenceEvaluator`, `TriageCompletenessEvaluator`, `RemediationSafetyEvaluator`, `DiagnosisGroundingEvaluator`), `agent_evaluators.py` (standard SDK wrappers + safe score extraction), `eval_pipeline.py` (4 quality gates: TaskAdherence ≥ 4.0, TriageCompleteness ≥ 0.95, RemediationSafety ≥ 1.0, SopAdherence ≥ 3.5), `tests/eval/agent_traces_sample.jsonl` (3 representative traces), `.github/workflows/agent-eval.yml` (weekly Monday 06:00 UTC + PR to main), 25/25 tests passing — COMPLETE
+
+---
+
+### Phase 34: Activate Phase 32 VM Tools
+
+**Goal:** Wire all 15 unregistered Phase 32 tools into `compute/agent.py` so the compute agent can actually use them. Fix AMA status hardcoded "unknown" in the fleet inventory endpoint. This is a zero-new-code phase — the tools are fully implemented in `tools.py` but the agent never sees them.
+**Depends on:** Phase 32
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 35: Post-Remediation Intelligence Loop
+
+**Goal:** Close the verification feedback loop between `remediation_executor.py` and the originating Foundry agent thread. After human approval → execution → verification, the originating agent receives the outcome and re-diagnoses: "Did the CPU spike resolve? Did the disk error clear?" Adds iterative hypothesis testing, MTTR tracking per issue type, and a "Did it work?" UI prompt 5 minutes post-execution.
+**Depends on:** Phase 27, Phase 34
+**Status:** 🔲 Not started
+**Plans:** 3/3 plans complete
+
+---
+
+### Phase 36: OS-Level In-Guest VM Diagnostics
+
+**Goal:** See inside the VM, not just around it. Add Azure Run Command tool for safe in-guest script execution. Parse Azure boot diagnostics serial log for kernel panics, OOM kills, disk errors. Add VM Guest Health heartbeat/memory/CPU/disk pressure tools. Resolve AMA heartbeat status from ARM (replacing hardcoded "unknown"). Surface guest OS metrics via AMA → Log Analytics.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 37: VM Performance Intelligence & Forecasting
+
+**Goal:** Shift from reactive to predictive. Expose `forecaster.py` as an agent-callable `@ai_function` tool. Add `query_vm_performance_baseline` (P50/P95/P99 over 30 days) and `detect_performance_drift` (drift score + narrative vs baseline). Surface anomaly scoring in the VM detail panel. Add weekly fleet performance digest SOP.
+**Depends on:** Phase 26, Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 38: VM Security & Compliance Depth
+
+**Goal:** Make per-VM security posture a first-class diagnostic signal alongside metrics and logs. Add tools: Defender TVM CVE count, JIT access status + active sessions, effective NSG rules at NIC level, Azure Backup RPO/last-backup, Azure Site Recovery replication health. Surface VM compliance score in the VM detail panel.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 39: VM Cost Intelligence & Rightsizing
+
+**Goal:** Surface wasteful spend and enable operators to act on it through the existing HITL approval workflow. Add tools: Azure Advisor rightsizing recommendations with estimated monthly savings, Azure Cost Management 7-day spend per VM, HITL-gated `propose_vm_sku_downsize`. Add fleet cost dashboard showing top-10 underutilized VMs. Add cost-aware SOP for <5% CPU VMs.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 40: Arc Agent Completion
+
+**Goal:** Bring Arc-connected resources to feature parity with Azure-native VMs. Replace the 3 stub tools in `agents/arc/tools.py` (`query_activity_log`, `query_log_analytics`, `query_resource_health`) with real implementations via the Arc MCP server. Add Arc-specific tools: connectivity status, extension inventory, guest configuration compliance, HITL-gated extension install. Arc VM detail panel matches Azure-native VM panel.
+**Depends on:** Phase 34
+**Status:** 🔲 Not started
+**Plans:** 0/1 plans complete
+
+---
+
+### Phase 41: VMSS + AKS Web UI Tabs
+
+**Goal:** Add dedicated VMSS and AKS tabs to the web UI dashboard, giving operators first-class visibility into Virtual Machine Scale Sets and AKS clusters. Follows the established VMTab → VMDetailPanel pattern: list view with badges → click opens a tabbed detail panel with AI chat. Tab order becomes: Alerts · Audit · Topology · Resources · VMs · VMSS · AKS · Observability · Patch.
+**Design spec:** `docs/superpowers/specs/2026-04-11-vmss-aks-tabs-design.md`
+**Depends on:** Phase 34 (backend VMSS/AKS agent tools), Phase 9 (Tailwind/shadcn UI foundation)
+**Status:** 🔲 Not started
+**Plans:** 0/2 plans complete
+
+**Deliverables:**
+- `VMSSTab.tsx` — list view: name, SKU, instance health count badge, power state, health, alerts
+- `VMSSDetailPanel.tsx` — 5 tabs: Overview / Instances / Metrics / Scaling / AI Chat
+- `AKSTab.tsx` — list view: cluster, K8s version badge, node pool health, system pod health, upgrade badge, alerts
+- `AKSDetailPanel.tsx` — 5 tabs: Overview / Node Pools / Workloads / Metrics / AI Chat
+- 8 new proxy routes (`/api/proxy/vmss/**`, `/api/proxy/aks/**`)
+- `types/azure-resources.ts` — shared type definitions extracted from inline component types
+- `DashboardPanel.tsx` + `AlertFeed.tsx` updates to register and route to new tabs
+
+**Backend prerequisite note:** Proxy routes call `/api/v1/vmss/...` and `/api/v1/aks/...` endpoints that must be implemented in `services/api-gateway/`. Phase 32 agent tools exist; gateway REST endpoints are the remaining backend work. Frontend can be built first — proxy routes gracefully return empty arrays when upstream is unavailable.
+
+**Out of scope (deferred to future phases):**
+- VMSS instance-level drill-down chat
+- AKS log streaming / kubectl-style output
+- Arc-connected AKS clusters (Arc agent, separate tab)
+- Command palette (Cmd+K) global resource search
+- Resource relationship graph view
+- Bulk alert actions, CSV export on all tabs, one-click patch remediation from PatchTab
 
 ---
 
@@ -699,7 +867,7 @@ Plans:
 
 ## World-Class Success Criteria
 
-When all phases 19–28 complete:
+When all phases 19–33 complete (v2.0 milestone):
 
 | Metric | Target |
 |--------|--------|
@@ -711,3 +879,17 @@ When all phases 19–28 complete:
 | Audit completeness | Every automated action attributable, reviewable, exportable |
 | Predictive prevention | ≥30% of incidents caught in forecast state before alerting |
 | Institutional memory recall | Historical pattern match for >50% of repeating incident types |
+
+## World-Class VM AIOps — Extended Criteria (Phases 34–40)
+
+When all phases 34–40 complete:
+
+| Metric | Target |
+|--------|--------|
+| Compute agent tool coverage | All 20 tools in `tools.py` registered and reachable by the agent |
+| Remediation loop closure | Originating agent receives verification outcome for every executed remediation |
+| In-guest diagnostics | Run Command + serial log parsing + Guest Health available for all Azure VMs |
+| Forecasting agent access | Forecaster exposed as `@ai_function`; agents can query time-to-breach for any metric |
+| Per-VM security posture | TVM CVE count, JIT status, effective NSG, Backup RPO surfaced in triage |
+| Cost visibility | Rightsizing recommendations surfaced via HITL proposal for all underutilized VMs |
+| Arc parity | Arc agent 0 stubs; tool quality matches Azure-native compute agent |
