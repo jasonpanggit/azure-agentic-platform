@@ -500,7 +500,10 @@ resource "azurerm_container_app" "teams_bot" {
 # ---------------------------------------------------------------------------
 
 locals {
-  a2a_domains = {
+  # All domain agent endpoints — empty string means not yet deployed.
+  # Filter out empty values so Terraform doesn't attempt to create a connection
+  # with a blank target (Foundry API rejects: "Target Property can't be empty").
+  a2a_domains_all = {
     compute  = var.compute_agent_endpoint
     arc      = var.arc_agent_endpoint
     eol      = var.eol_agent_endpoint
@@ -510,6 +513,7 @@ locals {
     sre      = var.sre_agent_endpoint
     storage  = var.storage_agent_endpoint
   }
+  a2a_domains = { for k, v in local.a2a_domains_all : k => v if v != "" }
 }
 
 resource "azapi_resource" "a2a_connection" {
@@ -527,7 +531,10 @@ resource "azapi_resource" "a2a_connection" {
     properties = {
       category    = "RemoteA2A"
       target      = each.value
-      authType    = "ManagedIdentity"
+      # "ManagedIdentity" was removed in 2025-04-01-preview; use ProjectManagedIdentity.
+      # Valid authTypes for RemoteA2A: None, CustomKeys, ProjectManagedIdentity,
+      # OAuth2, UserEntraToken, AgenticIdentityToken, AgenticUser, AgentUserImpersonation
+      authType    = "ProjectManagedIdentity"
       displayName = "AAP ${title(each.key)} Agent (A2A)"
     }
   }
