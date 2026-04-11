@@ -345,6 +345,128 @@ def _build_verification_instruction(verification_result: str) -> str:
     return _VERIFICATION_INSTRUCTIONS.get(verification_result, _VERIFICATION_INSTRUCTIONS["TIMEOUT"])
 
 
+MAX_RE_DIAGNOSIS_COUNT: int = int(os.environ.get("MAX_RE_DIAGNOSIS_COUNT", "3"))
+
+
+async def _inject_verification_result(
+    thread_id: str,
+    execution_id: str,
+    verification_result: str,
+    resource_id: str,
+    proposed_action: str,
+    rolled_back: bool,
+    incident_id: str,
+    cosmos_client: Optional[Any],
+) -> None:
+    """Inject verification result into the originating Foundry thread and create a new run (LOOP-001).
+
+    1. Check re_diagnosis_count on the incident — if >= MAX_RE_DIAGNOSIS_COUNT, log escalation and return
+    2. Cancel active runs on the thread (client.runs.cancel)
+    3. Post a verification_result message following AGENT-002 envelope format (client.agents.create_message)
+    4. Create a new orchestrator run for re-diagnosis (client.agents.create_run)
+    5. Increment re_diagnosis_count on the incident
+    """
+    import json
+
+    # --- Guard: check re_diagnosis_count ---
+    current_count = 0
+    if cosmos_client is not None:
+        try:
+            db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+            incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+            inc_docs = list(incidents_container.query_items(
+                query="SELECT c.re_diagnosis_count FROM c WHERE c.incident_id = @iid",
+                parameters=[{"name": "@iid", "value": incident_id}],
+                enable_cross_partition_query=True,
+            ))
+            if inc_docs:
+                current_count = inc_docs[0].get("re_diagnosis_count", 0) or 0
+        except Exception as exc:
+            logger.warning("_inject_verification_result: failed to read re_diagnosis_count | %s", exc)
+
+    if current_count >= MAX_RE_DIAGNOSIS_COUNT:
+        logger.warning(
+            "_inject_verification_result: max re-diagnosis reached | "
+            "incident_id=%s count=%d max=%d — escalating to operator",
+            incident_id, current_count, MAX_RE_DIAGNOSIS_COUNT,
+        )
+        return
+
+    # --- Inject message and create run ---
+    try:
+        from services.api_gateway.foundry import _get_foundry_client
+        from services.api_gateway.instrumentation import foundry_span, agent_span
+
+        client = _get_foundry_client()
+        orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID", "")
+        if not orchestrator_agent_id:
+            logger.error("_inject_verification_result: ORCHESTRATOR_AGENT_ID not set")
+            return
+
+        # Cancel active runs first (uses client.runs.cancel)
+        await _cancel_active_runs(client, thread_id)
+
+        # Build AGENT-002 typed JSON envelope
+        message = {
+            "correlation_id": incident_id,
+            "source_agent": "api-gateway",
+            "target_agent": "orchestrator",
+            "message_type": "verification_result",
+            "payload": {
+                "execution_id": execution_id,
+                "verification_result": verification_result,
+                "resource_id": resource_id,
+                "proposed_action": proposed_action,
+                "rolled_back": rolled_back,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "instruction": _build_verification_instruction(verification_result),
+            },
+        }
+
+        # Post message to thread (uses client.agents.create_message)
+        with foundry_span("post_message", thread_id=thread_id) as span:
+            span.set_attribute("foundry.message_type", "verification_result")
+            client.agents.create_message(
+                thread_id=thread_id,
+                role="user",
+                content=json.dumps(message),
+            )
+
+        # Create new orchestrator run (uses client.agents.create_run)
+        with agent_span("orchestrator", correlation_id=execution_id) as span:
+            with foundry_span("create_run", thread_id=thread_id):
+                client.agents.create_run(
+                    thread_id=thread_id,
+                    assistant_id=orchestrator_agent_id,
+                )
+
+        # Increment re_diagnosis_count
+        if cosmos_client is not None:
+            try:
+                db_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+                incidents_container = cosmos_client.get_database_client(db_name).get_container_client("incidents")
+                incidents_container.patch_item(
+                    item=incident_id,
+                    partition_key=incident_id,
+                    patch_operations=[
+                        {"op": "incr", "path": "/re_diagnosis_count", "value": 1},
+                    ],
+                )
+            except Exception as exc:
+                logger.warning("_inject_verification_result: failed to increment re_diagnosis_count | %s", exc)
+
+        logger.info(
+            "_inject_verification_result: injected | thread_id=%s execution_id=%s result=%s count=%d",
+            thread_id, execution_id, verification_result, current_count + 1,
+        )
+
+    except Exception as exc:
+        logger.error(
+            "_inject_verification_result: failed | thread_id=%s execution_id=%s error=%s",
+            thread_id, execution_id, exc,
+        )
+
+
 async def _verify_remediation(
     execution_id: str,
     resource_id: str,
