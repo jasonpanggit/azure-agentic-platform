@@ -254,22 +254,22 @@ export function ChatDrawer() {
 
       {/* Drawer panel */}
       <div
-        className="fixed right-0 flex flex-col transition-transform duration-300 ease-out"
+        className="fixed left-0 flex flex-col transition-transform duration-300 ease-out"
         style={{
           top: '48px',
           width: `${width}px`,
           height: 'calc(100vh - 48px)',
           zIndex: 45,
           background: 'var(--bg-surface)',
-          borderLeft: '1px solid var(--border)',
-          boxShadow: '-4px 0 24px rgba(0,0,0,0.25)',
-          transform: drawerOpen ? 'translateX(0)' : 'translateX(100%)',
+          borderRight: '1px solid var(--border)',
+          boxShadow: '4px 0 24px rgba(0,0,0,0.25)',
+          transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
         }}
       >
         {/* Resize handle */}
         <div
           onMouseDown={onMouseDown}
-          className="absolute left-0 top-0 h-full w-2 cursor-col-resize group z-10 hover:bg-blue-500/20 transition-colors"
+          className="absolute right-0 top-0 h-full w-2 cursor-col-resize group z-10 hover:bg-blue-500/20 transition-colors"
           title="Drag to resize"
         />
 
