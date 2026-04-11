@@ -133,6 +133,8 @@ module "compute_env" {
   acr_agent_pool_subnet_id   = module.networking.subnet_acr_agent_pool_id
   log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
 
+  acr_agent_pool_instance_count = 3
+
   # NOTE (ISSUE-01): No private_endpoint_subnet_id or private_dns_zone_acr_id
   # passed here. ACR PE is created by module.private_endpoints below.
 }
