@@ -5,72 +5,15 @@ import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface VMDetail {
-  id: string
-  name: string
-  resource_group: string
-  subscription_id: string
-  location: string
-  size: string
-  os_type: string
-  os_name: string
-  power_state: string
-  health_state: string
-  health_summary: string | null
-  ama_status: string
-  vm_type?: string
-  tags: Record<string, string>
-  active_incidents: ActiveIncident[]
-}
-
-interface ActiveIncident {
-  incident_id: string
-  severity: string
-  title?: string
-  created_at: string
-  status: string
-  investigation_status?: string
-}
-
-interface Evidence {
-  pipeline_status: 'complete' | 'partial' | 'failed' | 'pending'
-  collected_at: string | null
-  evidence_summary: {
-    health_state: string
-    recent_changes: RecentChange[]
-    metric_anomalies: MetricAnomaly[]
-    log_errors: { count: number; sample: string[] }
-  } | null
-}
-
-interface RecentChange {
-  timestamp: string
-  operation: string
-  caller: string
-  status: string
-}
-
-interface MetricAnomaly {
-  metric_name: string
-  current_value: number
-  threshold: number
-  unit: string
-}
-
-interface MetricSeries {
-  name: string | null
-  unit: string | null
-  timeseries: { timestamp: string; average: number | null; maximum: number | null }[]
-}
-
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  approval_id?: string
-}
+import type {
+  VMDetail,
+  ActiveIncident,
+  Evidence,
+  RecentChange,
+  MetricAnomaly,
+  MetricSeries,
+  ChatMessage,
+} from '@/types/azure-resources'
 
 interface VMDetailPanelProps {
   incidentId: string | null          // incident that opened the panel (for evidence lookup)

@@ -1,15 +1,39 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Server, RefreshCw } from 'lucide-react'
+import { Scaling, RefreshCw } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
-import type { VMRow, EolEntry } from '@/types/azure-resources'
+import type { VMSSRow } from '@/types/azure-resources'
 
-interface VMTabProps {
+interface VMSSTabProps {
   subscriptions: string[]
-  onVMClick?: (resourceId: string, resourceName: string) => void
+  onVMSSClick?: (resourceId: string, resourceName: string) => void
+}
+
+function InstanceCountBadge({ total, healthy }: { total: number; healthy: number }) {
+  const unhealthy = total - healthy
+  const ratio = total > 0 ? unhealthy / total : 0
+  let color: string
+  if (unhealthy === 0) {
+    color = 'var(--accent-green)'
+  } else if (ratio > 0.2) {
+    color = 'var(--accent-red)'
+  } else {
+    color = 'var(--accent-yellow)'
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+      style={{
+        background: `color-mix(in srgb, ${color} 15%, transparent)`,
+        color,
+      }}
+    >
+      {healthy}/{total}
+    </span>
+  )
 }
 
 function PowerStateBadge({ state }: { state: string }) {
@@ -17,10 +41,7 @@ function PowerStateBadge({ state }: { state: string }) {
     running: { label: 'Running', color: 'var(--accent-green)' },
     stopped: { label: 'Stopped', color: 'var(--accent-yellow)' },
     deallocated: { label: 'Deallocated', color: 'var(--text-muted)' },
-    connected: { label: 'Connected', color: 'var(--accent-green)' },
-    disconnected: { label: 'Disconnected', color: 'var(--accent-red)' },
   }[state.toLowerCase()] ?? { label: state, color: 'var(--text-muted)' }
-
   return (
     <span
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
@@ -42,41 +63,19 @@ function HealthBadge({ state }: { state: string }) {
     unavailable: { label: 'Unavailable', color: 'var(--accent-red)' },
     unknown: { label: 'Unknown', color: 'var(--text-muted)' },
   }[state.toLowerCase()] ?? { label: state, color: 'var(--text-muted)' }
-
   return (
-    <span
-      className="text-[11px] font-medium"
-      style={{ color: config.color }}
-    >
+    <span className="text-[11px] font-medium" style={{ color: config.color }}>
       {config.label}
     </span>
   )
 }
 
-function VMTypeBadge({ vmType }: { vmType: string }) {
-  const isArc = vmType === 'Arc VM'
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{
-        background: isArc
-          ? 'color-mix(in srgb, var(--accent-blue) 15%, transparent)'
-          : 'var(--bg-subtle)',
-        color: isArc ? 'var(--accent-blue)' : 'var(--text-muted)',
-      }}
-    >
-      {isArc ? 'Arc' : 'Azure'}
-    </span>
-  )
-}
-
-export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
+export function VMSSTab({ subscriptions, onVMSSClick }: VMSSTabProps) {
   const { instance, accounts } = useMsal()
-  const [vms, setVMs] = useState<VMRow[]>([])
+  const [vmssList, setVMSSList] = useState<VMSSRow[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [eolMap, setEolMap] = useState<Record<string, EolEntry>>({})
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     const account = accounts[0]
@@ -92,7 +91,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
     }
   }, [instance, accounts])
 
-  async function fetchVMs() {
+  async function fetchVMSS() {
     if (subscriptions.length === 0) return
     setLoading(true)
     setError(null)
@@ -102,45 +101,20 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
       const token = await getAccessToken()
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`/api/proxy/vms?${params}`, { headers })
+      const res = await fetch(`/api/proxy/vmss?${params}`, { headers })
       const data = await res.json()
-      const vmList: VMRow[] = data.vms ?? []
-      setVMs(vmList)
-
-      // Fetch EOL data for unique OS names (fire-and-forget — never blocks VM display)
-      const uniqueOsNames = [...new Set(vmList.map((vm) => vm.os_name).filter(Boolean))]
-      if (uniqueOsNames.length > 0) {
-        try {
-          const eolHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-          if (token) eolHeaders['Authorization'] = `Bearer ${token}`
-          const eolRes = await fetch('/api/proxy/vms/eol', {
-            method: 'POST',
-            headers: eolHeaders,
-            body: JSON.stringify({ os_names: uniqueOsNames }),
-          })
-          if (eolRes.ok) {
-            const eolData = await eolRes.json()
-            const map: Record<string, EolEntry> = {}
-            for (const entry of eolData.results ?? []) {
-              map[entry.os_name] = entry
-            }
-            setEolMap(map)
-          }
-        } catch {
-          // EOL fetch failure is non-fatal — column shows "—"
-        }
-      }
+      setVMSSList(data.vmss ?? [])
     } catch {
-      setError('Failed to load VMs')
+      setError('Failed to load scale sets')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchVMs() }, [subscriptions]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchVMSS() }, [subscriptions]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = vms.filter(vm =>
-    !search || vm.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = vmssList.filter(vmss =>
+    !search || vmss.name.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -152,15 +126,12 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
       >
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Virtual Machines
+            Virtual Machine Scale Sets
           </span>
           {!loading && (
             <span
               className="text-xs px-2 py-0.5 rounded-full"
-              style={{
-                background: 'var(--bg-subtle)',
-                color: 'var(--text-secondary)',
-              }}
+              style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
             >
               {filtered.length}
             </span>
@@ -169,7 +140,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
         <div className="flex items-center gap-2">
           <input
             type="text"
-            placeholder="Search VMs…"
+            placeholder="Search scale sets…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="text-xs px-3 py-1.5 rounded-md outline-none"
@@ -177,15 +148,15 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
               background: 'var(--bg-canvas)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
-              width: '180px',
+              width: '200px',
             }}
           />
           <button
-            onClick={fetchVMs}
+            onClick={fetchVMSS}
             disabled={loading}
             className="p-1.5 rounded cursor-pointer transition-colors"
             style={{ color: 'var(--text-secondary)' }}
-            title="Refresh VM list"
+            title="Refresh VMSS list"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -209,11 +180,11 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
         </div>
       ) : filtered.length === 0 ? (
         <div className="p-12 text-center">
-          <Server className="h-8 w-8 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+          <Scaling className="h-8 w-8 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             {subscriptions.length === 0
-              ? 'Select a subscription to view VMs'
-              : 'No VMs found in selected subscriptions'}
+              ? 'Select a subscription to view scale sets'
+              : 'No scale sets found in selected subscriptions'}
           </p>
         </div>
       ) : (
@@ -221,7 +192,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Resource Group', 'Size', 'OS', 'EOL Date', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
+                {['Name', 'Resource Group', 'SKU', 'Instances', 'Power State', 'Health', 'Alerts'].map(col => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide"
@@ -233,74 +204,35 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(vm => (
+              {filtered.map(vmss => (
                 <tr
-                  key={vm.id}
+                  key={vmss.id}
                   className="cursor-pointer transition-colors"
                   style={{ borderBottom: '1px solid var(--border-subtle)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  onClick={() => onVMClick?.(vm.id, vm.name)}
+                  onClick={() => onVMSSClick?.(vmss.id, vmss.name)}
                 >
                   <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {vm.name}
+                    {vmss.name}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {vm.resource_group}
+                    {vmss.resource_group}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {vm.size || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {vm.os_name || vm.os_type}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {(() => {
-                      const eol = eolMap[vm.os_name]
-                      if (!eol || (eol.eol_date === null && eol.is_eol === null)) {
-                        return <span style={{ color: 'var(--text-muted)' }}>—</span>
-                      }
-                      if (eol.is_eol === true) {
-                        return (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                              style={{
-                                background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
-                                color: 'var(--accent-red)',
-                              }}
-                            >
-                              EOL
-                            </span>
-                            {eol.eol_date && (
-                              <span style={{ color: 'var(--text-muted)' }}>
-                                {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                              </span>
-                            )}
-                          </span>
-                        )
-                      }
-                      if (eol.eol_date) {
-                        return (
-                          <span style={{ color: 'var(--text-secondary)' }}>
-                            {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                          </span>
-                        )
-                      }
-                      return <span style={{ color: 'var(--text-muted)' }}>—</span>
-                    })()}
+                    {vmss.sku || '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <VMTypeBadge vmType={vm.vm_type ?? 'Azure VM'} />
+                    <InstanceCountBadge total={vmss.instance_count} healthy={vmss.healthy_instance_count} />
                   </td>
                   <td className="px-4 py-3">
-                    <PowerStateBadge state={vm.power_state} />
+                    <PowerStateBadge state={vmss.power_state} />
                   </td>
                   <td className="px-4 py-3">
-                    <HealthBadge state={vm.health_state} />
+                    <HealthBadge state={vmss.health_state} />
                   </td>
                   <td className="px-4 py-3">
-                    {vm.active_alert_count > 0 ? (
+                    {vmss.active_alert_count > 0 ? (
                       <span
                         className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
                         style={{
@@ -308,7 +240,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                           color: 'var(--accent-red)',
                         }}
                       >
-                        {vm.active_alert_count}
+                        {vmss.active_alert_count}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--text-muted)' }}>—</span>
