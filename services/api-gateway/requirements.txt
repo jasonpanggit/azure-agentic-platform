@@ -8,8 +8,10 @@ azure-identity>=1.17.0
 fastapi-azure-auth>=5.0.0
 
 # Azure AI Foundry SDK
-# azure-ai-projects 2.x removed thread/run/message operations — use azure-ai-agents instead
-# 1.2.0b5 required for SubmitToolApprovalAction (MCP tool approval gate)
+# azure-ai-projects 2.x: AIProjectClient + Responses API (Phase 29 migration)
+azure-ai-projects>=2.0.1
+# azure-ai-agents: thread/run/message operations + SubmitToolApprovalAction (MCP tool approval gate)
+# 1.2.0b5 required for SubmitToolApprovalAction
 azure-ai-agents==1.2.0b5
 
 # MCP client — stdio transport to @azure/mcp subprocess (gcc-demo pattern)
