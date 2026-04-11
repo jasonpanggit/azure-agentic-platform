@@ -680,3 +680,87 @@ def propose_arc_assessment(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_arc_assessment error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_arc_extension_install(
+    resource_id: str,
+    resource_group: str,
+    machine_name: str,
+    subscription_id: str,
+    extension_name: str,
+    extension_publisher: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose installing an Arc extension on a machine — HITL ApprovalRecord only.
+
+    Common use case: proposing AMA (AzureMonitorWindowsAgent / AzureMonitorLinuxAgent)
+    installation when Arc VM has no Log Analytics workspace heartbeat.
+
+    REMEDI-001: No ARM call. Approval required before execution.
+
+    Args:
+        resource_id: Full ARM resource ID of the Arc machine.
+        resource_group: Resource group name.
+        machine_name: Arc machine name.
+        subscription_id: Azure subscription ID.
+        extension_name: Extension type name (e.g., "AzureMonitorWindowsAgent").
+        extension_publisher: Extension publisher (e.g., "Microsoft.Azure.Monitor").
+        incident_id: Foundry incident ID.
+        thread_id: Foundry thread ID.
+        reason: Human-readable reason for the install proposal.
+
+    Returns:
+        Dict with status "pending_approval", approval_id, message, duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="propose_arc_extension_install",
+        tool_parameters={"machine_name": machine_name, "extension_name": extension_name, "reason": reason},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "arc_extension_install",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "machine_name": machine_name,
+                "subscription_id": subscription_id,
+                "extension_name": extension_name,
+                "extension_publisher": extension_publisher,
+                "reason": reason,
+                "description": f"Install extension '{extension_name}' on Arc VM '{machine_name}': {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "Extension install — may restart Arc agent briefly",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="arc-agent",
+                proposal=proposal,
+                resource_snapshot={"machine_name": machine_name, "extension_name": extension_name},
+                risk_level="medium",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"Arc extension install proposal created for '{extension_name}' on '{machine_name}'. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_arc_extension_install error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
