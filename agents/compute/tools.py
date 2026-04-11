@@ -79,6 +79,36 @@ try:
 except ImportError:
     ForecasterClient = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-advisor may not be installed in all envs
+try:
+    from azure.mgmt.advisor import AdvisorManagementClient
+    from azure.mgmt.advisor.models import ResourceRecommendationBase
+except ImportError:
+    AdvisorManagementClient = None  # type: ignore[assignment,misc]
+    ResourceRecommendationBase = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-costmanagement may not be installed in all envs
+try:
+    from azure.mgmt.costmanagement import CostManagementClient
+    from azure.mgmt.costmanagement.models import (
+        QueryDefinition,
+        QueryTimePeriod,
+        QueryDataset,
+        QueryAggregation,
+        QueryGrouping,
+        GranularityType,
+        TimeframeType,
+    )
+except ImportError:
+    CostManagementClient = None  # type: ignore[assignment,misc]
+    QueryDefinition = None  # type: ignore[assignment,misc]
+    QueryTimePeriod = None  # type: ignore[assignment,misc]
+    QueryDataset = None  # type: ignore[assignment,misc]
+    QueryAggregation = None  # type: ignore[assignment,misc]
+    QueryGrouping = None  # type: ignore[assignment,misc]
+    GranularityType = None  # type: ignore[assignment,misc]
+    TimeframeType = None  # type: ignore[assignment,misc]
+
 from shared.approval_manager import create_approval_record
 
 tracer = setup_telemetry("aiops-compute-agent")
