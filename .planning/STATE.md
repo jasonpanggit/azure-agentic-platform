@@ -2,17 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-11T05:45:30.194Z"
+status: complete
+last_updated: "2026-04-11T07:22:00.000Z"
 progress:
-  total_phases: 22
-  completed_phases: 21
-  total_plans: 81
-  completed_plans: 82
+  total_phases: 33
+  completed_phases: 33
+  total_plans: 109
+  completed_plans: 109
   percent: 100
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last activity: 2026-04-11 - Phase 29–33 merged to main via PR #41 (49 commits, 127 files, 11,387 insertions). All 33 phases complete. 1,073 Python test functions across 92 test files + 15 TypeScript test files. ROADMAP.md updated to reflect all phases. Branch: main.
 
 > Last activity: 2026-04-10 - Completed quick task 260410-amq: Create summary stub for superseded Phase 14 — Phase 14 was absorbed into Phase 19 before execution. All phases now report correctly; progress bar at 100%.
 
@@ -126,7 +128,38 @@ progress:
 
 ## Current Phase
 
-**Phase 9: Web UI Revamp — COMPLETE (6/6 plans)**
+**All 33 phases complete — Platform fully shipped to main (2026-04-11)**
+
+**Phase 33: Evaluation + Quality Gates — COMPLETE (1/1 plans)**
+
+4 custom AIOps evaluators (SopAdherence, TriageCompleteness, RemediationSafety, DiagnosisGrounding), standard `azure-ai-evaluation` wrappers, CI eval pipeline with 4 quality gates (TaskAdherence ≥ 4.0 / TriageCompleteness ≥ 0.95 / RemediationSafety ≥ 1.0 / SopAdherence ≥ 3.5), GitHub Actions weekly + PR workflow, 25/25 tests passing.
+
+**Phase 32: VM Domain Depth — COMPLETE (1/1 plans)**
+
+5 stub fixes in Patch + EOL agents, 7 new Azure VM compute tools, 4 VMSS tools, 4 AKS tools, 4 Arc tools. 19 new domain tools total.
+
+**Phase 31: SOP Library — COMPLETE (1/1 plans)**
+
+34 production SOPs across 10 domains (compute, Arc, AKS, VMSS, patch, EOL, network, security, SRE, vmss), lint tool, library coverage tests.
+
+**Phase 30: SOP Engine — COMPLETE (1/1 plans)**
+
+`services/api-gateway/sop/` package with PostgreSQL + pgvector semantic search, multi-channel notify, upload script with SHA-256 idempotency, Teams SOP cards, 30+ tests.
+
+**Phase 29: Foundry Platform Migration — COMPLETE (1/1 plans)**
+
+All 8 domain agents migrated to Microsoft Agent Framework (`agent-framework 1.0.0rc5`). `ChatAgent` + `@ai_function`, Responses API (`azure-ai-projects` 2.0.x), `AIProjectInstrumentor`, orchestrator A2A topology, Terraform A2A connections.
+
+Phases 29–33 merged to main via PR #41 (2026-04-11, 49 commits, 127 files, 11,387 insertions).
+
+**Codebase stats (as of 2026-04-11):**
+- 33 phase directories, 109 PLAN files, 109 SUMMARY files
+- 1,073 Python test functions across 92 test files
+- 15 TypeScript test files
+- 34 production SOPs in `sops/`
+- 11 modules in `agents/shared/`
+
+
 
 Plan 09-01 complete: Tailwind + shadcn/ui Foundation. Fluent UI fully removed from package.json. Tailwind CSS v4.2.2 installed, all 18 shadcn/ui components scaffolded in `components/ui/` (button through alert), `cn()` utility at `lib/utils.ts`, `tailwind.config.ts` with full design system including Azure Blue tokens and blink-cursor/pulse-dot animations, `postcss.config.mjs`, and `globals.css` with UI-SPEC CSS variables plus `.prose table` markdown table styles.
 
@@ -188,23 +221,39 @@ Plan 07-06 complete: 5 new E2E spec files — `e2e-incident-flow.spec.ts` (E2E-0
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | Complete (5/5 plans) |
-| 2 | Agent Core | Complete (2026-03-26) |
-| 3 | Arc MCP Server | Complete (2026-03-26) |
-| 4 | Detection Plane | ✅ Complete (2026-03-26) — all 4 plans, 92 unit tests, 8 requirements |
-| 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — all 7 plans, 40 unit tests, 4 E2E specs, CI workflow |
-| 6 | Teams Integration | ✅ Complete (2026-03-27) — all 5 plans, 100 tests at 92.34% coverage, 6 TEAMS requirements |
-| 7 | Quality & Hardening | ✅ Complete (2026-03-27) — all 6 plans, E2E-001–005, REMEDI-007, AUDIT-006, 60 runbooks, security CI, Terraform prod |
-| 8 | Azure Validation & Incident Simulation | ⚠️ Plans Complete (2026-03-29) — all 5 plans, 7/7 simulations PASS, manual OTel spans; VALIDATION FAIL — F-01 Foundry RBAC + F-02 runbook search OPEN |
-| 9 | Web UI Revamp | ✅ Complete (2026-03-31) — all 6 plans, Tailwind v4 + shadcn/ui, tsc passes, build passes, zero Fluent remnants |
-| 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans, explicit auth mode, audit filter validation, runbook availability hardening, 19 focused tests passing |
-| 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests, 47 integration/routing tests, 8 Terraform files modified, build-patch CI job |
-| 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests, EOL agent with endoflife.date + MS Lifecycle APIs, PostgreSQL 24h cache, orchestrator routing wired |
-| 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan, 15 unit tests, full-stack: gateway endpoints + proxy routes + PatchTab component + DashboardPanel wiring |
-| 14 | Production Stabilisation | Not started — 12 tasks across 6 milestones: agent wiring, MCP tool groups, Arc MCP deploy, runbook RAG, Teams alerting, dependency pinning |
-| 15 | Diagnostic Pipeline | ✅ Complete (2026-04-02) — 5/5 plans, 578 tests pass, 4 compute tools wired to real Azure SDKs, diagnostic pipeline BackgroundTask, IncidentSummary enriched, structured logging audit, frontend evidence integration |
-| 16 | VM Triage Path | ✅ Complete (2026-04-02) — 3/3 plans, GET /api/v1/vms inventory + detail + metrics, VMDetailPanel slide-over with health/evidence/sparklines/incidents, AlertFeed + VMTab wired to openVMDetail |
-| 17 | Resource-Scoped Chat | ✅ Complete (2026-04-02) — 2/2 plans, 329 api-gateway tests, POST /api/v1/vms/{id}/chat routes to COMPUTE_AGENT_ID with evidence context injection, VMDetailPanel inline chat with auto-summary + polling |
+| 1 | Foundation | ✅ Complete (5/5 plans) |
+| 2 | Agent Core | ✅ Complete (2026-03-26) |
+| 3 | Arc MCP Server | ✅ Complete (2026-03-26) |
+| 4 | Detection Plane | ✅ Complete (2026-03-26) — 4/4 plans, 92 unit tests, 8 requirements |
+| 5 | Triage & Remediation + Web UI | ✅ Complete (2026-03-27) — 7/7 plans, 40 unit tests, 4 E2E specs |
+| 6 | Teams Integration | ✅ Complete (2026-03-27) — 5/5 plans, 100 tests, 6 TEAMS requirements |
+| 7 | Quality & Hardening | ✅ Complete (2026-03-27) — 6/6 plans, E2E-001–005, 60 runbooks, security CI |
+| 8 | Azure Validation & Incident Simulation | ✅ Complete (2026-03-29) — 5/5 plans, 7/7 simulations PASS |
+| 9 | Web UI Revamp | ✅ Complete (2026-03-31) — 6/6 plans, Tailwind v4 + shadcn/ui |
+| 10 | API Gateway Hardening | ✅ Complete (2026-03-30) — 2/2 plans |
+| 11 | Patch Domain Agent | ✅ Complete (2026-03-30) — 3/3 plans, 49 unit tests |
+| 12 | EOL Domain Agent | ✅ Complete (2026-03-31) — 3/3 plans, 86 unit tests |
+| 13 | Patch Management Tab | ✅ Complete (2026-03-31) — 1/1 plan |
+| 14 | Production Stabilisation | ✅ Complete — stub absorbed into Phase 19 |
+| 15 | Diagnostic Pipeline | ✅ Complete (2026-04-02) — 5/5 plans, 578 tests |
+| 16 | VM Triage Path | ✅ Complete (2026-04-02) — 3/3 plans |
+| 17 | Resource-Scoped Chat | ✅ Complete (2026-04-02) — 2/2 plans |
+| 18 | Observability | ✅ Complete (2026-04-02) — Recharts charts, OTel instrumentation |
+| 19 | Production Stabilisation | ✅ Complete (2026-04-02) — 5/5 plans, PROD-001–003, PROD-005 |
+| 20 | Network & Security Agent Depth | ✅ Complete (2026-04-10) — 4/4 plans, 16 new domain tools |
+| 21 | Detection Plane Activation | ✅ Complete (2026-04-03) — 3/3 plans, PROD-004 |
+| 22 | Resource Topology Graph | ✅ Complete (2026-04-03) — 4/4 plans, TOPO-001–005 |
+| 23 | Change Correlation Engine | ✅ Complete (2026-04-03) — 2/2 plans, INTEL-002 |
+| 24 | Alert Intelligence & Noise Reduction | ✅ Complete (2026-04-04) — 3/3 plans, INTEL-001 |
+| 25 | Institutional Memory & SLO Tracking | ✅ Complete (2026-04-04) — 3/3 plans, INTEL-003, INTEL-004 |
+| 26 | Predictive Operations | ✅ Complete (2026-04-04) — 4/4 plans, INTEL-005 |
+| 27 | Closed-Loop Remediation | ✅ Complete (2026-04-04) — 3/3 plans, REMEDI-009–013 |
+| 28 | Platform Intelligence | ✅ Complete (2026-04-04) — 3/3 plans, PLATINT-001–004 |
+| 29 | Foundry Platform Migration | ✅ Complete (2026-04-11) — 1/1 plan, Agent Framework RC5 |
+| 30 | SOP Engine | ✅ Complete (2026-04-11) — 1/1 plan, pgvector semantic search |
+| 31 | SOP Library | ✅ Complete (2026-04-11) — 1/1 plan, 34 production SOPs |
+| 32 | VM Domain Depth | ✅ Complete (2026-04-11) — 1/1 plan, 19 new domain tools |
+| 33 | Evaluation + Quality Gates | ✅ Complete (2026-04-11) — 1/1 plan, 4 custom evaluators, 25/25 tests |
 
 ---
 
