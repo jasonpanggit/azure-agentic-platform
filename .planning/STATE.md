@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design — 5 tabs: Overview, Metrics, Evidence, Patches, AI Chat
+
 > Last activity: 2026-04-11 - Completed quick task 260411-wm8: move chat button from right to left and chat panel as well
 
 > Last activity: 2026-04-11 - Added Phase 42: SOP Tab Web UI to ROADMAP.md. Live runbook library tab with semantic search, domain filters, step-progress execution tracker, inline HITL approval for REMEDIATION steps, and incident linkage. Depends on Phase 30 (SOP engine) + Phase 31 (34 SOPs). 2 plans (42-1: list+detail viewer; 42-2: live execution tracking+incident integration). Total phases: 42, total plans: 113.
@@ -400,6 +402,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260410-15h | Fix phase naming inconsistencies and update memory — renamed files across phases 05/12/13/21/22–26, added missing summary stubs for 05-06/16-03/27, all 26 active phases now report correctly | 2026-04-10 | 12a6227 | [260410-15h-fix-phase-naming-inconsistencies-and-upd](./quick/260410-15h-fix-phase-naming-inconsistencies-and-upd/) |
 | 260410-amq | Create summary stub for superseded Phase 14 — Phase 14 was absorbed into Phase 19 before execution; all phases now report correctly, progress at 100% | 2026-04-10 | 59e3706 | [260410-amq-create-summary-stub-for-superseded-phase](./quick/260410-amq-create-summary-stub-for-superseded-phase/) |
 | 260411-wm8 | move chat button from right to left and chat panel as well | 2026-04-11 | 5f80f38 | [260411-wm8-move-chat-button-from-right-to-left-and-](./quick/260411-wm8-move-chat-button-from-right-to-left-and-/) |
+| 260411-wps | update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design with overview tab, ai chat tab and whatever tab you deem suitable | 2026-04-11 | d493ca3 | [260411-wps-update-vmdetailpanel-to-follow-vmss-and-](./quick/260411-wps-update-vmdetailpanel-to-follow-vmss-and-/) |
 
 ---
 
