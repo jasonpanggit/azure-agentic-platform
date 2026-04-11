@@ -1379,3 +1379,244 @@ def propose_vmss_scale(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_vmss_scale error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+# ---------------------------------------------------------------------------
+# Phase 32 — AKS tools
+# ---------------------------------------------------------------------------
+
+
+@ai_function
+def query_aks_cluster_health(
+    resource_group: str,
+    cluster_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query AKS cluster health — API server status, provisioning state, Kubernetes version.
+
+    Args:
+        resource_group: Resource group name.
+        cluster_name: AKS cluster name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with provisioning_state, kubernetes_version, power_state, fqdn.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_aks_cluster_health",
+        tool_parameters={"resource_group": resource_group, "cluster_name": cluster_name},
+        correlation_id=cluster_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ContainerServiceClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-containerservice not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ContainerServiceClient(credential, subscription_id)
+
+            cluster = client.managed_clusters.get(resource_group, cluster_name)
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "cluster_name": cluster_name,
+                "provisioning_state": getattr(cluster, "provisioning_state", "Unknown"),
+                "kubernetes_version": getattr(cluster, "kubernetes_version", "Unknown"),
+                "power_state": getattr(getattr(cluster, "power_state", None), "code", "Unknown"),
+                "fqdn": getattr(cluster, "fqdn", "") or "",
+                "enable_rbac": getattr(cluster, "enable_rbac", None),
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_aks_cluster_health error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def query_aks_node_pools(
+    resource_group: str,
+    cluster_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """List AKS node pools with status, count, VM size, and OS type.
+
+    Args:
+        resource_group: Resource group name.
+        cluster_name: AKS cluster name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with 'node_pools' list.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_aks_node_pools",
+        tool_parameters={"resource_group": resource_group, "cluster_name": cluster_name},
+        correlation_id=cluster_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ContainerServiceClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-containerservice not installed", "node_pools": [], "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ContainerServiceClient(credential, subscription_id)
+
+            node_pools = []
+            for np in client.agent_pools.list(resource_group, cluster_name):
+                node_pools.append({
+                    "name": np.name,
+                    "count": getattr(np, "count", 0),
+                    "vm_size": getattr(np, "vm_size", ""),
+                    "provisioning_state": getattr(np, "provisioning_state", "Unknown"),
+                    "os_type": getattr(np, "os_type", "Linux"),
+                    "mode": getattr(np, "mode", "User"),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {"node_pools": node_pools, "cluster_name": cluster_name, "duration_ms": duration_ms}
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_aks_node_pools error: %s", exc)
+            return {"error": str(exc), "node_pools": [], "duration_ms": duration_ms}
+
+
+@ai_function
+def query_aks_upgrade_profile(
+    resource_group: str,
+    cluster_name: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query available Kubernetes upgrades for an AKS cluster.
+
+    Args:
+        resource_group: Resource group name.
+        cluster_name: AKS cluster name.
+        subscription_id: Azure subscription ID.
+        thread_id: Foundry thread ID.
+
+    Returns:
+        Dict with current_version and available_upgrades list.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_aks_upgrade_profile",
+        tool_parameters={"resource_group": resource_group, "cluster_name": cluster_name},
+        correlation_id=cluster_name,
+        thread_id=thread_id,
+    ):
+        try:
+            if ContainerServiceClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-containerservice not installed", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ContainerServiceClient(credential, subscription_id)
+
+            upgrade = client.managed_clusters.get_upgrade_profile(resource_group, cluster_name)
+            cp = upgrade.control_plane_profile
+            current_version = getattr(cp, "kubernetes_version", "Unknown")
+            available = []
+            for u in (getattr(cp, "upgrades", None) or []):
+                available.append({
+                    "kubernetes_version": getattr(u, "kubernetes_version", ""),
+                    "is_preview": getattr(u, "is_preview", False),
+                })
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "current_version": current_version,
+                "available_upgrades": available,
+                "cluster_name": cluster_name,
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_aks_upgrade_profile error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_aks_node_pool_scale(
+    resource_id: str,
+    resource_group: str,
+    cluster_name: str,
+    node_pool_name: str,
+    subscription_id: str,
+    target_count: int,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose scaling an AKS node pool — HITL ApprovalRecord only.
+
+    REMEDI-001: No ARM call. Approval required before execution.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="propose_aks_node_pool_scale",
+        tool_parameters={"cluster_name": cluster_name, "node_pool_name": node_pool_name, "target_count": target_count},
+        correlation_id=cluster_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "aks_node_pool_scale",
+                "resource_id": resource_id,
+                "cluster_name": cluster_name,
+                "node_pool_name": node_pool_name,
+                "target_count": target_count,
+                "reason": reason,
+                "description": f"Scale AKS node pool '{node_pool_name}' in '{cluster_name}' to {target_count} nodes: {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "New nodes take ~5-10 min to become ready",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="compute-agent",
+                proposal=proposal,
+                resource_snapshot={"cluster_name": cluster_name, "node_pool_name": node_pool_name},
+                risk_level="medium",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"AKS node pool scale proposal: {node_pool_name} -> {target_count}. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_aks_node_pool_scale error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
