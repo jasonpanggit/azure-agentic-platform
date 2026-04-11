@@ -2816,3 +2816,122 @@ def query_advisor_rightsizing_recommendations(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("query_advisor_rightsizing_recommendations error: %s", exc)
             return {"error": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def query_vm_cost_7day(
+    resource_id: str,
+    subscription_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query Azure Cost Management for a VM's actual cost over the last 7 days.
+
+    Returns daily cost breakdown and 7-day total spend for the specified VM.
+
+    IMPORTANT: Azure Cost Management data has a 24-48 hour lag. Today's cost
+    may not yet be reflected. Use this for trend analysis, not real-time spend.
+
+    Requires 'Cost Management Reader' role on the subscription scope (Terraform
+    RBAC must be applied before this tool will succeed in production).
+
+    Returns:
+        Dict with total_cost_7d, currency, daily_costs list [{date, cost}],
+        data_lag_note, and duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_cost_7day",
+        tool_parameters={"resource_id": resource_id, "subscription_id": subscription_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if CostManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-mgmt-costmanagement not installed",
+                    "duration_ms": duration_ms,
+                }
+
+            from datetime import datetime, timedelta, timezone
+
+            credential = get_credential()
+            client = CostManagementClient(credential)
+
+            # 7-day window (yesterday - 7 days to yesterday to account for 24-48h lag)
+            to_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            from_dt = to_dt - timedelta(days=7)
+
+            scope = f"/subscriptions/{subscription_id}"
+
+            query = QueryDefinition(
+                type="ActualCost",
+                timeframe=TimeframeType.CUSTOM,
+                time_period=QueryTimePeriod(
+                    from_property=from_dt,
+                    to=to_dt,
+                ),
+                dataset=QueryDataset(
+                    granularity=GranularityType.DAILY,
+                    aggregation={
+                        "totalCost": QueryAggregation(name="Cost", function="Sum")
+                    },
+                    grouping=[
+                        QueryGrouping(type="Dimension", name="ResourceId"),
+                    ],
+                    filter={
+                        "dimensions": {
+                            "name": "ResourceId",
+                            "operator": "In",
+                            "values": [resource_id],
+                        }
+                    },
+                ),
+            )
+
+            result = client.query.usage(scope=scope, parameters=query)
+
+            # Parse columns to determine index positions
+            columns = [col.name.lower() if hasattr(col, "name") else col.get("name", "").lower()
+                       for col in (result.columns or [])]
+
+            cost_idx = next((i for i, c in enumerate(columns) if "cost" in c), 0)
+            date_idx = next((i for i, c in enumerate(columns) if "date" in c or "usage" in c.lower()), 1)
+            currency_idx = next((i for i, c in enumerate(columns) if "currency" in c), None)
+
+            daily_costs: List[Dict[str, Any]] = []
+            total_cost = 0.0
+            currency = "USD"
+            for row in (result.rows or []):
+                cost_val = float(row[cost_idx]) if len(row) > cost_idx else 0.0
+                date_val = str(row[date_idx]) if len(row) > date_idx else ""
+                if currency_idx is not None and len(row) > currency_idx:
+                    currency = str(row[currency_idx])
+                total_cost += cost_val
+                daily_costs.append({"date": date_val, "cost": round(cost_val, 4)})
+
+            # Sort daily_costs ascending by date
+            daily_costs.sort(key=lambda x: x["date"])
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "query_status": "success",
+                "resource_id": resource_id,
+                "subscription_id": subscription_id,
+                "total_cost_7d": round(total_cost, 4),
+                "currency": currency,
+                "daily_costs": daily_costs,
+                "period_from": from_dt.strftime("%Y-%m-%d"),
+                "period_to": to_dt.strftime("%Y-%m-%d"),
+                "data_lag_note": "Azure Cost Management data has a 24-48 hour lag. Recent costs may not be reflected.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_cost_7day error: %s", exc)
+            return {"error": str(exc), "duration_ms": duration_ms}
