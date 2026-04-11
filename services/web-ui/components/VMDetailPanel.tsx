@@ -21,6 +21,7 @@ interface VMDetail {
   health_state: string
   health_summary: string | null
   ama_status: string
+  vm_type?: string
   tags: Record<string, string>
   active_incidents: ActiveIncident[]
 }
@@ -861,6 +862,8 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {vm?.power_state === 'deallocated'
                     ? 'No metrics — VM is deallocated. Start the VM to collect data.'
+                    : vm?.vm_type === 'Arc VM'
+                    ? 'Arc VMs use Log Analytics for telemetry — ARM metrics are not available. Use AI Investigation to query Heartbeat and Event tables.'
                     : 'No metrics available'}
                 </div>
               ) : (

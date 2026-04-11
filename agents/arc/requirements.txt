@@ -13,3 +13,9 @@ azure-mgmt-kubernetesconfiguration==3.1.0
 
 # HTTP client for calling Arc MCP Server directly in integration tests
 httpx>=0.27.0
+
+# Monitoring + Resource Health (stub implementations → real SDK calls, Phase 40)
+azure-mgmt-monitor>=6.0.0
+azure-monitor-query>=1.3.0
+azure-mgmt-resourcehealth==1.0.0b6
+azure-mgmt-guestconfiguration>=1.0.0

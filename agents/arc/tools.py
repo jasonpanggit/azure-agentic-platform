@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from agent_framework import ai_function
@@ -37,6 +38,25 @@ try:
     from azure.mgmt.guestconfiguration import GuestConfigurationClient
 except ImportError:
     GuestConfigurationClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-monitor (activity log)
+try:
+    from azure.mgmt.monitor import MonitorManagementClient
+except ImportError:
+    MonitorManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-monitor-query (log analytics)
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+except ImportError:
+    LogsQueryClient = None  # type: ignore[assignment,misc]
+    LogsQueryStatus = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-resourcehealth
+try:
+    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+except ImportError:
+    MicrosoftResourceHealth = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-arc-agent")
 logger = logging.getLogger(__name__)
@@ -60,6 +80,34 @@ ALLOWED_MCP_TOOLS: List[str] = [
     "monitor.query_metrics",
     "resourcehealth.get_availability_status",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_subscription_id(resource_id: str) -> str:
+    """Extract subscription ID from an Azure resource ID.
+
+    Args:
+        resource_id: Azure resource ID in the form
+            /subscriptions/{sub}/resourceGroups/{rg}/providers/{type}/{name}
+
+    Returns:
+        Subscription ID string (lowercase).
+
+    Raises:
+        ValueError: If the subscription segment cannot be found.
+    """
+    parts = resource_id.lower().split("/")
+    try:
+        idx = parts.index("subscriptions")
+        return parts[idx + 1]
+    except (ValueError, IndexError):
+        raise ValueError(
+            f"Cannot extract subscription_id from resource_id: {resource_id}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +140,7 @@ def query_activity_log(
             entries (list): Activity Log entries found.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"resource_ids": resource_ids, "timespan_hours": timespan_hours}
 
@@ -104,12 +153,76 @@ def query_activity_log(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_ids": resource_ids,
-            "timespan_hours": timespan_hours,
-            "entries": [],
-            "query_status": "success",
-        }
+        try:
+            if MonitorManagementClient is None:
+                raise ImportError("azure-mgmt-monitor is not installed")
+
+            credential = get_credential()
+            start = datetime.now(timezone.utc) - timedelta(hours=timespan_hours)
+            all_entries: List[Dict[str, Any]] = []
+
+            for resource_id in resource_ids:
+                sub_id = _extract_subscription_id(resource_id)
+                client = MonitorManagementClient(credential, sub_id)
+                filter_str = (
+                    f"eventTimestamp ge '{start.isoformat()}' "
+                    f"and resourceId eq '{resource_id}'"
+                )
+                events = client.activity_logs.list(filter=filter_str)
+                for event in events:
+                    all_entries.append(
+                        {
+                            "eventTimestamp": (
+                                event.event_timestamp.isoformat()
+                                if event.event_timestamp
+                                else None
+                            ),
+                            "operationName": (
+                                event.operation_name.value
+                                if event.operation_name
+                                else None
+                            ),
+                            "caller": event.caller,
+                            "status": (
+                                event.status.value if event.status else None
+                            ),
+                            "resourceId": event.resource_id,
+                            "level": (
+                                event.level.value if event.level else None
+                            ),
+                            "description": event.description,
+                        }
+                    )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.info(
+                "query_activity_log: complete | resources=%d entries=%d duration_ms=%.0f",
+                len(resource_ids),
+                len(all_entries),
+                duration_ms,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": all_entries,
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_activity_log: failed | resources=%s error=%s duration_ms=%.0f",
+                resource_ids,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_ids": resource_ids,
+                "timespan_hours": timespan_hours,
+                "entries": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function
@@ -137,6 +250,7 @@ def query_log_analytics(
             rows (list): Query result rows.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"workspace_id": workspace_id, "kql_query": kql_query, "timespan": timespan}
 
@@ -149,13 +263,91 @@ def query_log_analytics(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "workspace_id": workspace_id,
-            "kql_query": kql_query,
-            "timespan": timespan,
-            "rows": [],
-            "query_status": "success",
-        }
+        # Guard: empty workspace_id means no Log Analytics configured — skip gracefully
+        if not workspace_id:
+            logger.warning(
+                "query_log_analytics: skipped | workspace_id is empty — no Log Analytics workspace configured"
+            )
+            return {
+                "workspace_id": workspace_id,
+                "kql_query": kql_query,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "skipped",
+            }
+
+        try:
+            if LogsQueryClient is None:
+                raise ImportError("azure-monitor-query is not installed")
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql_query,
+                timespan=timespan,
+            )
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                rows: List[Dict[str, Any]] = []
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        rows.append(
+                            dict(
+                                zip(
+                                    col_names,
+                                    [str(v) if v is not None else None for v in row],
+                                )
+                            )
+                        )
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.info(
+                    "query_log_analytics: complete | workspace=%s rows=%d duration_ms=%.0f",
+                    workspace_id,
+                    len(rows),
+                    duration_ms,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "kql_query": kql_query,
+                    "timespan": timespan,
+                    "rows": rows,
+                    "query_status": "success",
+                }
+            else:
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.warning(
+                    "query_log_analytics: partial | workspace=%s duration_ms=%.0f error=%s",
+                    workspace_id,
+                    duration_ms,
+                    response.partial_error,
+                )
+                return {
+                    "workspace_id": workspace_id,
+                    "kql_query": kql_query,
+                    "timespan": timespan,
+                    "rows": [],
+                    "query_status": "partial",
+                    "partial_error": str(response.partial_error),
+                }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_log_analytics: failed | workspace=%s error=%s duration_ms=%.0f",
+                workspace_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "workspace_id": workspace_id,
+                "kql_query": kql_query,
+                "timespan": timespan,
+                "rows": [],
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 @ai_function
@@ -178,6 +370,7 @@ def query_resource_health(
             summary (str): Human-readable health summary.
             query_status (str): "success" or "error".
     """
+    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {"resource_id": resource_id}
 
@@ -190,12 +383,60 @@ def query_resource_health(
         correlation_id="",
         thread_id="",
     ):
-        return {
-            "resource_id": resource_id,
-            "availability_state": "Unknown",
-            "summary": "Resource Health query pending.",
-            "query_status": "success",
-        }
+        try:
+            if MicrosoftResourceHealth is None:
+                raise ImportError("azure-mgmt-resourcehealth is not installed")
+
+            credential = get_credential()
+            sub_id = _extract_subscription_id(resource_id)
+            client = MicrosoftResourceHealth(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=resource_id,
+                expand="recommendedActions",
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+            availability_state = (
+                status.properties.availability_state.value
+                if status.properties.availability_state
+                else "Unknown"
+            )
+            logger.info(
+                "query_resource_health: complete | resource=%s state=%s duration_ms=%.0f",
+                resource_id,
+                availability_state,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": availability_state,
+                "summary": status.properties.summary,
+                "reason_type": status.properties.reason_type,
+                "occurred_time": (
+                    status.properties.occurred_time.isoformat()
+                    if status.properties.occurred_time
+                    else None
+                ),
+                "query_status": "success",
+            }
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "query_resource_health: failed | resource=%s error=%s duration_ms=%.0f",
+                resource_id,
+                e,
+                duration_ms,
+                exc_info=True,
+            )
+            return {
+                "resource_id": resource_id,
+                "availability_state": "Unknown",
+                "summary": None,
+                "reason_type": None,
+                "occurred_time": None,
+                "query_status": "error",
+                "error": str(e),
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -438,4 +679,88 @@ def propose_arc_assessment(
         except Exception as exc:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_arc_assessment error: %s", exc)
+            return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+@ai_function
+def propose_arc_extension_install(
+    resource_id: str,
+    resource_group: str,
+    machine_name: str,
+    subscription_id: str,
+    extension_name: str,
+    extension_publisher: str,
+    incident_id: str,
+    thread_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Propose installing an Arc extension on a machine — HITL ApprovalRecord only.
+
+    Common use case: proposing AMA (AzureMonitorWindowsAgent / AzureMonitorLinuxAgent)
+    installation when Arc VM has no Log Analytics workspace heartbeat.
+
+    REMEDI-001: No ARM call. Approval required before execution.
+
+    Args:
+        resource_id: Full ARM resource ID of the Arc machine.
+        resource_group: Resource group name.
+        machine_name: Arc machine name.
+        subscription_id: Azure subscription ID.
+        extension_name: Extension type name (e.g., "AzureMonitorWindowsAgent").
+        extension_publisher: Extension publisher (e.g., "Microsoft.Azure.Monitor").
+        incident_id: Foundry incident ID.
+        thread_id: Foundry thread ID.
+        reason: Human-readable reason for the install proposal.
+
+    Returns:
+        Dict with status "pending_approval", approval_id, message, duration_ms.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="arc-agent",
+        agent_id=agent_id,
+        tool_name="propose_arc_extension_install",
+        tool_parameters={"machine_name": machine_name, "extension_name": extension_name, "reason": reason},
+        correlation_id=machine_name,
+        thread_id=thread_id,
+    ):
+        try:
+            proposal = {
+                "action": "arc_extension_install",
+                "resource_id": resource_id,
+                "resource_group": resource_group,
+                "machine_name": machine_name,
+                "subscription_id": subscription_id,
+                "extension_name": extension_name,
+                "extension_publisher": extension_publisher,
+                "reason": reason,
+                "description": f"Install extension '{extension_name}' on Arc VM '{machine_name}': {reason}",
+                "target_resources": [resource_id],
+                "estimated_impact": "Extension install — may restart Arc agent briefly",
+                "reversible": True,
+            }
+
+            record = create_approval_record(
+                container=None,
+                thread_id=thread_id,
+                incident_id=incident_id,
+                agent_name="arc-agent",
+                proposal=proposal,
+                resource_snapshot={"machine_name": machine_name, "extension_name": extension_name},
+                risk_level="medium",
+            )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            return {
+                "status": "pending_approval",
+                "approval_id": record.get("id") if isinstance(record, dict) else getattr(record, "id", ""),
+                "message": f"Arc extension install proposal created for '{extension_name}' on '{machine_name}'. Awaiting approval.",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("propose_arc_extension_install error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}

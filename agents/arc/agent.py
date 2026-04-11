@@ -39,7 +39,12 @@ except ImportError:
     PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from arc.tools import (
     ALLOWED_MCP_TOOLS,
+    propose_arc_assessment,
+    propose_arc_extension_install,
     query_activity_log,
+    query_arc_connectivity,
+    query_arc_extension_health,
+    query_arc_guest_config,
     query_log_analytics,
     query_resource_health,
 )
@@ -71,16 +76,23 @@ assignments, connectivity policy changes. This is MANDATORY before any Arc MCP
 Server calls.
 
 ### Step 2 — Arc Connectivity Check (MONITOR-004)
-Call `arc_servers_list` or `arc_k8s_list` for the affected subscription(s).
+Call `query_arc_connectivity` for each affected machine to get real-time status, last heartbeat,
+and agent version. Also call `arc_servers_list` or `arc_k8s_list` for the affected subscription(s).
 Identify: status (Connected/Disconnected/Error), last_status_change, agent_version,
 prolonged_disconnection flag. For K8s clusters: check connectivity_status and
 last_connectivity_time.
 
 ### Step 3 — Extension Health Check (MONITOR-005)
-For any Arc server with status != 'Connected', call `arc_extensions_list` for that
-machine. Check: AMA (AzureMonitorWindowsAgent/LinuxAgent), VM Insights (DependencyAgent),
+Call `query_arc_extension_health` for any Arc server to get provisioning state and error details
+for all extensions. Also call `arc_extensions_list` for cross-reference.
+Check: AMA (AzureMonitorWindowsAgent/LinuxAgent), VM Insights (DependencyAgent),
 Change Tracking, Azure Policy (GuestConfiguration). Note any with provisioning_state
 != 'Succeeded' or status_level == 'Error'.
+
+### Step 3b — Guest Config Compliance
+For Arc servers, call `query_arc_guest_config` to check policy assignment compliance state.
+Review compliance_status for each assignment — NonCompliant assignments indicate policy
+violations that may affect agent behaviour or extension availability.
 
 ### Step 4 — GitOps Reconciliation Status (MONITOR-006, K8s clusters only)
 If the incident involves an Arc K8s cluster, call `arc_k8s_gitops_status` for the
@@ -99,6 +111,7 @@ Produce a structured diagnosis with ALL of the following fields:
   - `confidence_score`: float 0.0–1.0
   - `connectivity_findings`: summary from Step 2
   - `extension_health_findings`: summary from Step 3 (or "N/A — not a server incident")
+  - `guest_config_findings`: summary from Step 3b (or "N/A — not applicable")
   - `gitops_findings`: summary from Step 4 (or "N/A — not a K8s incident")
   - `needs_cross_domain`: true if root cause is outside Arc domain
   - `suspected_domain`: domain to route to if needs_cross_domain is true
@@ -106,6 +119,9 @@ Produce a structured diagnosis with ALL of the following fields:
 ### Step 7 — Remediation Proposal (REMEDI-001)
 If a clear remediation path exists, propose it with: description, target_resources,
 estimated_impact, risk_level (low/medium/high/critical), reversibility statement.
+Use `propose_arc_assessment` to propose a patch assessment scan (low risk, read-only).
+Use `propose_arc_extension_install` to propose installing a missing extension such as AMA
+when the Arc VM has no Heartbeat in Log Analytics (medium risk).
 **MUST NOT execute without explicit human approval (REMEDI-001).**
 
 ## Safety Constraints
@@ -124,8 +140,16 @@ estimated_impact, risk_level (low/medium/high/critical), reversibility statement
 """.format(
     allowed_tools="\n".join(
         f"- `{t}`"
-        for t in ALLOWED_MCP_TOOLS
-        + ["query_activity_log", "query_log_analytics", "query_resource_health"]
+        for t in ALLOWED_MCP_TOOLS + [
+            "query_activity_log",
+            "query_log_analytics",
+            "query_resource_health",
+            "query_arc_extension_health",
+            "query_arc_connectivity",
+            "query_arc_guest_config",
+            "propose_arc_assessment",
+            "propose_arc_extension_install",
+        ]
     )
 )
 
@@ -154,6 +178,11 @@ def create_arc_agent() -> ChatAgent:
         query_activity_log,
         query_log_analytics,
         query_resource_health,
+        query_arc_extension_health,
+        query_arc_connectivity,
+        query_arc_guest_config,
+        propose_arc_assessment,
+        propose_arc_extension_install,
     ]
 
     # Mount the Arc MCP Server via MCPTool when available (AGENT-005)
@@ -206,6 +235,11 @@ def create_arc_agent_version(project: "AIProjectClient") -> object:
                 query_activity_log,
                 query_log_analytics,
                 query_resource_health,
+                query_arc_extension_health,
+                query_arc_connectivity,
+                query_arc_guest_config,
+                propose_arc_assessment,
+                propose_arc_extension_install,
             ],
         ),
     )
