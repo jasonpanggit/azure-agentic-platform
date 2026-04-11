@@ -152,6 +152,10 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       const res = await fetch(`/api/proxy/aks/${encoded}`, { headers })
       if (!res.ok) throw new Error(`Status ${res.status}`)
       const data = await res.json()
+      if ('error' in data && typeof data.error === 'string') {
+        setError(data.error)
+        return
+      }
       setDetail(data)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
