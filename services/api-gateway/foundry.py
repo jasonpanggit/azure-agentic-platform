@@ -1,8 +1,12 @@
-"""Foundry thread creation and Orchestrator dispatch (DETECT-004, D-11).
+"""Foundry Responses API dispatch — Orchestrator invocation (Phase 29, 2.0.x migration).
 
-Creates a Foundry conversation thread for each incident, posts the
-incident as a typed message envelope (AGENT-002), and dispatches
-to the Orchestrator agent.
+Replaces the Phase 1-28 threads/runs pattern (AgentsClient) with the
+Foundry Responses API. Each incident creates a single responses.create()
+call with the Orchestrator agent reference.
+
+Key change from 1.x:
+- OLD: AgentsClient -> client.threads.create() -> client.runs.create()
+- NEW: AIProjectClient -> project.get_openai_client() -> openai.responses.create()
 """
 from __future__ import annotations
 
@@ -21,20 +25,20 @@ from services.api_gateway.models import IncidentPayload
 logger = logging.getLogger(__name__)
 
 
-def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None) -> AgentsClient:
+# ---------------------------------------------------------------------------
+# Backward-compat: _get_foundry_client returns AgentsClient
+# Used by chat.py, vm_chat.py, approvals.py for thread/message/run ops
+# ---------------------------------------------------------------------------
+
+
+def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None):
     """Create an AgentsClient using DefaultAzureCredential.
 
-    Accepts an optional pre-initialized credential (from app.state singleton).
-    Falls back to creating a new DefaultAzureCredential when not provided
-    (backward compatibility for direct calls outside the FastAPI lifespan).
+    Backward-compatible function preserved for chat.py, vm_chat.py,
+    and approvals.py which use client.threads, client.messages,
+    and client.runs sub-operation groups.
 
-    Reads AZURE_PROJECT_ENDPOINT from environment, falling back to
-    FOUNDRY_ACCOUNT_ENDPOINT for backward compatibility with the
-    Terraform agent-apps module which uses the latter name.
-
-    Note: azure-ai-projects 2.x moved thread/run/message operations to
-    the azure-ai-agents package (AgentsClient). The client exposes
-    .threads, .messages, and .runs sub-operation groups.
+    For new incident dispatch, use dispatch_to_orchestrator() instead.
     """
     endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
         "FOUNDRY_ACCOUNT_ENDPOINT"
@@ -48,78 +52,133 @@ def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None) -> 
     if credential is None:
         credential = DefaultAzureCredential()
 
-    return AgentsClient(
-        endpoint=endpoint,
-        credential=credential,
-    )
+    return AgentsClient(endpoint=endpoint, credential=credential)
 
 
-async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
-    """Create a Foundry thread and dispatch incident to the Orchestrator.
+# ---------------------------------------------------------------------------
+# Phase 29: AIProjectClient + Responses API
+# ---------------------------------------------------------------------------
 
-    Steps:
-    1. Create a new conversation thread in Foundry.
-    2. Post the incident as a typed envelope message (AGENT-002).
-    3. Start a run with the Orchestrator agent.
-    4. Return thread_id and run_id.
 
-    Args:
-        payload: Validated incident payload from the API.
+def _get_foundry_project(credential: Optional[DefaultAzureCredential] = None):
+    """Create AIProjectClient using DefaultAzureCredential.
 
-    Returns:
-        Dict with "thread_id" and "run_id" keys.
+    Reads AZURE_PROJECT_ENDPOINT (or FOUNDRY_ACCOUNT_ENDPOINT for compatibility).
     """
-    client = _get_foundry_client()
-    orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID")
+    try:
+        from azure.ai.projects import AIProjectClient
+    except ImportError as exc:
+        raise ImportError(
+            "azure-ai-projects>=2.0.1 required. "
+            "Install with: pip install 'azure-ai-projects>=2.0.1'"
+        ) from exc
 
-    if not orchestrator_agent_id:
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+        "FOUNDRY_ACCOUNT_ENDPOINT"
+    )
+    if not endpoint:
         raise ValueError(
-            "ORCHESTRATOR_AGENT_ID environment variable is required."
+            "AZURE_PROJECT_ENDPOINT (or FOUNDRY_ACCOUNT_ENDPOINT) env var required."
         )
 
-    # Create thread
-    with foundry_span("create_thread") as span:
-        thread = client.threads.create()
-        span.set_attribute("foundry.thread_id", thread.id)
-    logger.info(
-        "Created Foundry thread %s for incident %s",
-        thread.id,
-        payload.incident_id,
-    )
+    if credential is None:
+        credential = DefaultAzureCredential()
 
-    # Build typed envelope message (AGENT-002)
+    return AIProjectClient(endpoint=endpoint, credential=credential)
+
+
+def _get_openai_client(project=None):
+    """Get the OpenAI-compatible client from AIProjectClient for Responses API."""
+    if project is None:
+        project = _get_foundry_project()
+    return project.get_openai_client()
+
+
+def build_incident_message(payload: IncidentPayload) -> str:
+    """Build the typed envelope message (AGENT-002) for the Orchestrator.
+
+    Returns a JSON string with correlation_id, source_agent, message_type,
+    and the full incident payload.
+    """
     now = datetime.now(timezone.utc).isoformat()
     envelope = {
         "correlation_id": payload.incident_id,
-        "thread_id": thread.id,
         "source_agent": "api-gateway",
         "target_agent": "orchestrator",
         "message_type": "incident_handoff",
         "payload": payload.model_dump(),
         "timestamp": now,
     }
+    return json.dumps(envelope)
 
-    # Post incident as first message
-    with foundry_span("post_message", thread_id=thread.id) as span:
-        client.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=json.dumps(envelope),
-        )
 
-    # Dispatch to Orchestrator agent
-    with agent_span("orchestrator", domain=payload.domain, correlation_id=payload.incident_id):
-        with foundry_span("create_run", thread_id=thread.id, agent_id=orchestrator_agent_id) as span:
-            run = client.runs.create(
-                thread_id=thread.id,
-                agent_id=orchestrator_agent_id,
-            )
-            span.set_attribute("foundry.run_id", run.id)
+async def dispatch_to_orchestrator(
+    payload: IncidentPayload,
+    credential: Optional[DefaultAzureCredential] = None,
+) -> dict[str, str]:
+    """Dispatch an incident to the Orchestrator via the Foundry Responses API.
 
-    logger.info(
-        "Dispatched incident %s to Orchestrator (run %s)",
-        payload.incident_id,
-        run.id,
+    Replaces the Phase 1-28 threads/runs pattern. Creates a single
+    responses.create() call — no thread or run lifecycle to manage.
+
+    Args:
+        payload: Validated incident payload.
+        credential: Optional pre-initialized credential.
+
+    Returns:
+        Dict with "response_id" and "status" keys.
+    """
+    orchestrator_agent_name = os.environ.get(
+        "ORCHESTRATOR_AGENT_NAME", "aap-orchestrator"
     )
 
-    return {"thread_id": thread.id, "run_id": run.id}
+    openai_client = _get_openai_client(_get_foundry_project(credential))
+    message = build_incident_message(payload)
+
+    with agent_span(
+        "orchestrator", domain=payload.domain, correlation_id=payload.incident_id
+    ):
+        with foundry_span("responses_create") as span:
+            response = openai_client.responses.create(
+                input=message,
+                extra_body={
+                    "agent_reference": {
+                        "name": orchestrator_agent_name,
+                        "type": "agent_reference",
+                    }
+                },
+            )
+            span.set_attribute("foundry.response_id", response.id)
+            span.set_attribute("incident.id", payload.incident_id)
+            span.set_attribute("incident.domain", payload.domain)
+            span.set_attribute("agent.name", orchestrator_agent_name)
+
+    logger.info(
+        "Dispatched incident %s to Orchestrator (response %s, status %s)",
+        payload.incident_id,
+        response.id,
+        response.status,
+    )
+
+    return {"response_id": response.id, "status": response.status}
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat alias — callers that import create_foundry_thread
+# can be migrated incrementally
+# ---------------------------------------------------------------------------
+
+
+async def create_foundry_thread(payload: IncidentPayload) -> dict[str, str]:
+    """Backward-compat alias for dispatch_to_orchestrator.
+
+    The old 'thread_id' key is mapped to 'response_id' for callers
+    that haven't yet been updated. Remove once all callers are updated.
+    """
+    result = await dispatch_to_orchestrator(payload)
+    # Map to old key names for backward compatibility
+    return {
+        "thread_id": result["response_id"],  # callers that use thread_id
+        "run_id": result["response_id"],
+        **result,
+    }
