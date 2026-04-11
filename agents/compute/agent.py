@@ -30,6 +30,8 @@ except ImportError:
     PromptAgentDefinition = None  # type: ignore[assignment,misc]
 from compute.tools import (
     ALLOWED_MCP_TOOLS,
+    execute_run_command,
+    parse_boot_diagnostics_serial_log,
     propose_aks_node_pool_scale,
     propose_vm_redeploy,
     propose_vm_resize,
@@ -39,6 +41,7 @@ from compute.tools import (
     query_aks_node_pools,
     query_aks_upgrade_profile,
     query_activity_log,
+    query_ama_guest_metrics,
     query_boot_diagnostics,
     query_disk_health,
     query_log_analytics,
@@ -46,6 +49,7 @@ from compute.tools import (
     query_os_version,
     query_resource_health,
     query_vm_extensions,
+    query_vm_guest_health,
     query_vm_sku_options,
     query_vmss_autoscale,
     query_vmss_instances,
@@ -134,6 +138,10 @@ AKS node-level issues, App Service, and Azure Functions.
     "query_aks_node_pools",
     "query_aks_upgrade_profile",
     "propose_aks_node_pool_scale",
+    "execute_run_command",
+    "parse_boot_diagnostics_serial_log",
+    "query_vm_guest_health",
+    "query_ama_guest_metrics",
 ]))
 
 
@@ -177,6 +185,10 @@ def create_compute_agent() -> ChatAgent:
             query_aks_node_pools,
             query_aks_upgrade_profile,
             propose_aks_node_pool_scale,
+            execute_run_command,
+            parse_boot_diagnostics_serial_log,
+            query_vm_guest_health,
+            query_ama_guest_metrics,
         ],
     )
     logger.info("create_compute_agent: ChatAgent created successfully")
@@ -227,6 +239,10 @@ def create_compute_agent_version(project: "AIProjectClient") -> object:
                 query_aks_node_pools,
                 query_aks_upgrade_profile,
                 propose_aks_node_pool_scale,
+                execute_run_command,
+                parse_boot_diagnostics_serial_log,
+                query_vm_guest_health,
+                query_ama_guest_metrics,
             ],
         ),
     )

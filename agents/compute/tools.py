@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -54,8 +55,10 @@ except ImportError:
 # Lazy import — azure-mgmt-compute may not be installed in all envs
 try:
     from azure.mgmt.compute import ComputeManagementClient
+    from azure.mgmt.compute.models import RunCommandInput
 except ImportError:
     ComputeManagementClient = None  # type: ignore[assignment,misc]
+    RunCommandInput = None  # type: ignore[assignment,misc]
 
 # Lazy import — azure-mgmt-containerservice for AKS tools
 try:
@@ -1620,3 +1623,538 @@ def propose_aks_node_pool_scale(
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.warning("propose_aks_node_pool_scale error: %s", exc)
             return {"status": "error", "message": str(exc), "duration_ms": duration_ms}
+
+
+# ---------------------------------------------------------------------------
+# Phase 36 — In-Guest Diagnostic tools
+# ---------------------------------------------------------------------------
+
+BLOCKED_COMMANDS_LINUX: List[str] = [
+    "rm", "kill", "shutdown", "reboot", "halt", "poweroff", "init",
+    "format", "fdisk", "dd", "mkfs", "parted", "wipefs",
+    "systemctl stop", "systemctl disable", "systemctl mask",
+    "apt", "apt-get", "yum", "dnf", "pip", "pip3",
+    "curl -X DELETE", "wget --post",
+    "chmod 000", "chown root",
+    "iptables -F", "iptables -X",
+    "userdel", "groupdel", "passwd",
+    "mount", "umount",
+    "> /dev/sda", "of=/dev/",
+]
+
+BLOCKED_COMMANDS_WINDOWS: List[str] = [
+    "Remove-Item", "Stop-Computer", "Restart-Computer",
+    "Format-Volume", "Clear-Disk",
+    "Stop-Service", "Disable-Service",
+    "Install-Package", "Install-Module",
+    "Set-ExecutionPolicy Unrestricted",
+    "Remove-WindowsFeature",
+]
+
+MAX_SCRIPT_LENGTH = 1500
+
+
+@ai_function
+def execute_run_command(
+    resource_group: str,
+    vm_name: str,
+    subscription_id: str,
+    script: str,
+    os_type: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Execute a read-only diagnostic command on an Azure VM via Run Command API.
+
+    Safety: destructive commands are blocked by a hard block list. Script
+    length is limited to 1500 characters. Only diagnostic/read operations
+    should be submitted.
+
+    Args:
+        resource_group: Resource group name.
+        vm_name: Virtual machine name.
+        subscription_id: Azure subscription ID.
+        script: Shell or PowerShell script to execute (max 1500 chars).
+        os_type: "Linux" or "Windows".
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with stdout, stderr, and execution metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="execute_run_command",
+        tool_parameters={"resource_group": resource_group, "vm_name": vm_name, "os_type": os_type},
+        correlation_id=vm_name,
+        thread_id=thread_id,
+    ):
+        try:
+            # Validate os_type
+            if os_type not in ("Linux", "Windows"):
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": f"Invalid os_type '{os_type}'. Must be 'Linux' or 'Windows'.",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Validate script length
+            if len(script) > MAX_SCRIPT_LENGTH:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": f"Script length {len(script)} exceeds maximum {MAX_SCRIPT_LENGTH} characters.",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Check block list
+            blocked = BLOCKED_COMMANDS_LINUX if os_type == "Linux" else BLOCKED_COMMANDS_WINDOWS
+            for line in script.splitlines():
+                line_lower = line.lower()
+                for cmd in blocked:
+                    if cmd.lower() in line_lower:
+                        duration_ms = int((time.monotonic() - start_time) * 1000)
+                        return {
+                            "error": f"Script contains blocked command: '{cmd}'",
+                            "blocked_command": cmd,
+                            "query_status": "error",
+                            "duration_ms": duration_ms,
+                        }
+
+            # SDK guard
+            if ComputeManagementClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {"error": "azure-mgmt-compute not installed", "query_status": "error", "duration_ms": duration_ms}
+
+            credential = get_credential()
+            client = ComputeManagementClient(credential, subscription_id)
+
+            command_id = "RunShellScript" if os_type == "Linux" else "RunPowerShellScript"
+            parameters = RunCommandInput(
+                command_id=command_id,
+                script=script.splitlines(),
+            )
+
+            poller = client.virtual_machines.begin_run_command(
+                resource_group, vm_name, parameters
+            )
+            result = poller.result()
+
+            stdout = result.value[0].message if result.value and len(result.value) > 0 else ""
+            stderr = result.value[1].message if result.value and len(result.value) > 1 else ""
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "execute_run_command: complete | vm=%s os=%s duration_ms=%d",
+                vm_name,
+                os_type,
+                duration_ms,
+            )
+            return {
+                "vm_name": vm_name,
+                "os_type": os_type,
+                "stdout": stdout,
+                "stderr": stderr,
+                "command_id": command_id,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("execute_run_command error: %s", exc)
+            return {
+                "error": str(exc),
+                "vm_name": vm_name,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+SERIAL_LOG_PATTERNS: Dict[str, List[str]] = {
+    "kernel_panic": ["Kernel panic", "BUG: unable to handle"],
+    "oom_kill": ["Out of memory: Kill process", "oom-kill", "oom_reaper"],
+    "disk_error": ["I/O error", "EXT4-fs error", "XFS error", "blk_update_request: I/O error"],
+    "fs_corruption": ["FILESYSTEM CORRUPTION DETECTED", "fsck"],
+}
+
+SERIAL_LOG_MAX_BYTES = 50 * 1024  # 50KB
+SERIAL_LOG_EXCERPT_MAX_CHARS = 200
+
+
+@ai_function
+def parse_boot_diagnostics_serial_log(
+    serial_log_uri: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Download and parse a VM serial console log for OS-level boot errors.
+
+    Detects kernel panics, OOM kills, disk I/O errors, and filesystem
+    corruption. Downloads at most 50KB from the serial log URI (typically
+    obtained from query_boot_diagnostics).
+
+    Args:
+        serial_log_uri: SAS URI for the serial console log blob.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with detected_events list, summary counts, and metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="parse_boot_diagnostics_serial_log",
+        tool_parameters={"serial_log_uri_length": len(serial_log_uri) if serial_log_uri else 0},
+        correlation_id="",
+        thread_id=thread_id,
+    ):
+        try:
+            if not serial_log_uri:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "serial_log_uri is empty",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            # Download first 50KB
+            response = urllib.request.urlopen(serial_log_uri)  # noqa: S310
+            content_bytes = response.read(SERIAL_LOG_MAX_BYTES)
+            content = content_bytes.decode("utf-8", errors="replace")
+
+            lines = content.splitlines()
+            detected_events: List[Dict[str, Any]] = []
+
+            for line_idx, line in enumerate(lines):
+                line_lower = line.lower()
+                for category, patterns in SERIAL_LOG_PATTERNS.items():
+                    for pattern in patterns:
+                        if pattern.lower() in line_lower:
+                            detected_events.append({
+                                "type": category,
+                                "line_number": line_idx + 1,
+                                "excerpt": line[:SERIAL_LOG_EXCERPT_MAX_CHARS].strip(),
+                            })
+                            break  # one match per category per line
+
+            summary: Dict[str, int] = {
+                "kernel_panic": 0,
+                "oom_kill": 0,
+                "disk_error": 0,
+                "fs_corruption": 0,
+            }
+            for event in detected_events:
+                summary[event["type"]] += 1
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "parse_boot_diagnostics_serial_log: complete | events=%d size=%d duration_ms=%d",
+                len(detected_events),
+                len(content_bytes),
+                duration_ms,
+            )
+            return {
+                "detected_events": detected_events,
+                "summary": summary,
+                "serial_log_size_bytes": len(content_bytes),
+                "truncated": len(content_bytes) >= SERIAL_LOG_MAX_BYTES,
+                "total_events": len(detected_events),
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("parse_boot_diagnostics_serial_log error: %s", exc)
+            return {
+                "error": str(exc),
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+@ai_function
+def query_vm_guest_health(
+    resource_id: str,
+    workspace_id: str,
+    thread_id: str,
+) -> Dict[str, Any]:
+    """Query VM guest health via Heartbeat table and InsightsMetrics (AMA).
+
+    Classifies heartbeat status as healthy (<5 min), stale (5-15 min),
+    or offline (>15 min / no rows). Also retrieves latest CPU, memory,
+    and disk metrics from the AMA InsightsMetrics table.
+
+    Args:
+        resource_id: Azure resource ID of the VM.
+        workspace_id: Log Analytics workspace ID.
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with heartbeat_status, last_heartbeat_minutes_ago, and
+        latest CPU/memory/disk metrics.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_vm_guest_health",
+        tool_parameters={"resource_id": resource_id},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is empty",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            # Heartbeat query
+            heartbeat_kql = (
+                "Heartbeat"
+                f' | where _ResourceId =~ "{resource_id}"'
+                " | where TimeGenerated > ago(15m)"
+                " | summarize LastHeartbeat = max(TimeGenerated)"
+                " | extend MinutesAgo = datetime_diff('minute', now(), LastHeartbeat)"
+            )
+
+            heartbeat_response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=heartbeat_kql,
+                timespan="PT15M",
+            )
+
+            minutes_ago: Optional[int] = None
+            heartbeat_status = "offline"
+
+            if heartbeat_response.status == LogsQueryStatus.SUCCESS:
+                for table in heartbeat_response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        val = row_dict.get("MinutesAgo")
+                        if val is not None:
+                            minutes_ago = int(float(str(val)))
+                            if minutes_ago < 5:
+                                heartbeat_status = "healthy"
+                            elif minutes_ago <= 15:
+                                heartbeat_status = "stale"
+                            else:
+                                heartbeat_status = "offline"
+
+            # Guest metrics query
+            metrics_kql = (
+                "InsightsMetrics"
+                f' | where _ResourceId =~ "{resource_id}"'
+                " | where TimeGenerated > ago(5m)"
+                ' | where Namespace in ("Processor", "Memory", "LogicalDisk")'
+                " | summarize"
+                '     cpu_pct = avgif(Val, Namespace == "Processor" and Name == "UtilizationPercentage"),'
+                '     available_memory_mb = avgif(Val, Namespace == "Memory" and Name == "AvailableMB"),'
+                '     disk_free_pct = avgif(Val, Namespace == "LogicalDisk" and Name == "FreeSpacePercentage")'
+            )
+
+            metrics_response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=metrics_kql,
+                timespan="PT5M",
+            )
+
+            cpu_pct: Optional[float] = None
+            available_memory_mb: Optional[float] = None
+            disk_free_pct: Optional[float] = None
+
+            if metrics_response.status == LogsQueryStatus.SUCCESS:
+                for table in metrics_response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, row))
+                        cpu_val = row_dict.get("cpu_pct")
+                        mem_val = row_dict.get("available_memory_mb")
+                        disk_val = row_dict.get("disk_free_pct")
+                        if cpu_val is not None and str(cpu_val) != "":
+                            cpu_pct = float(str(cpu_val))
+                        if mem_val is not None and str(mem_val) != "":
+                            available_memory_mb = float(str(mem_val))
+                        if disk_val is not None and str(disk_val) != "":
+                            disk_free_pct = float(str(disk_val))
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_vm_guest_health: complete | resource=%s heartbeat=%s duration_ms=%d",
+                resource_id,
+                heartbeat_status,
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "heartbeat_status": heartbeat_status,
+                "last_heartbeat_minutes_ago": minutes_ago,
+                "cpu_utilization_pct": cpu_pct,
+                "available_memory_mb": available_memory_mb,
+                "disk_free_pct": disk_free_pct,
+                "ama_data_available": cpu_pct is not None or available_memory_mb is not None,
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_vm_guest_health error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
+
+
+def _safe_float(val: Any) -> Optional[float]:
+    """Convert a value to float, returning None for empty or None values."""
+    if val is None:
+        return None
+    s = str(val)
+    if s == "":
+        return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+@ai_function
+def query_ama_guest_metrics(
+    resource_id: str,
+    workspace_id: str,
+    timespan_hours: int = 24,
+    thread_id: str = "",
+) -> Dict[str, Any]:
+    """Query AMA InsightsMetrics for hourly CPU, memory, and disk IOPS buckets.
+
+    Returns time-series data binned into 1-hour buckets with cpu_p50,
+    cpu_p95, memory_avg_mb, and disk_iops for trend analysis and
+    capacity planning.
+
+    Args:
+        resource_id: Azure resource ID of the VM.
+        workspace_id: Log Analytics workspace ID.
+        timespan_hours: Look-back window in hours (default: 24).
+        thread_id: Foundry thread ID for tracing.
+
+    Returns:
+        Dict with buckets list (hourly aggregations) and metadata.
+    """
+    start_time = time.monotonic()
+    agent_id = get_agent_identity()
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="compute-agent",
+        agent_id=agent_id,
+        tool_name="query_ama_guest_metrics",
+        tool_parameters={"resource_id": resource_id, "timespan_hours": timespan_hours},
+        correlation_id=resource_id,
+        thread_id=thread_id,
+    ):
+        try:
+            if not workspace_id:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "query_status": "skipped",
+                    "reason": "workspace_id is empty",
+                    "duration_ms": duration_ms,
+                }
+
+            if LogsQueryClient is None:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                return {
+                    "error": "azure-monitor-query not installed",
+                    "query_status": "error",
+                    "duration_ms": duration_ms,
+                }
+
+            credential = get_credential()
+            client = LogsQueryClient(credential)
+
+            kql = (
+                "InsightsMetrics"
+                f' | where _ResourceId =~ "{resource_id}"'
+                f" | where TimeGenerated > ago({timespan_hours}h)"
+                ' | where Namespace in ("Processor", "Memory", "LogicalDisk")'
+                " | summarize"
+                '     cpu_p50 = percentile(iff(Namespace == "Processor" and Name == "UtilizationPercentage", Val, real(null)), 50),'
+                '     cpu_p95 = percentile(iff(Namespace == "Processor" and Name == "UtilizationPercentage", Val, real(null)), 95),'
+                '     memory_avg_mb = avg(iff(Namespace == "Memory" and Name == "AvailableMB", Val, real(null))),'
+                '     disk_iops = avg(iff(Namespace == "LogicalDisk" and Name == "TransfersPerSecond", Val, real(null)))'
+                "     by bin(TimeGenerated, 1h)"
+                " | order by TimeGenerated asc"
+            )
+
+            response = client.query_workspace(
+                workspace_id=workspace_id,
+                query=kql,
+                timespan=f"PT{timespan_hours}H",
+            )
+
+            buckets: List[Dict[str, Any]] = []
+
+            if response.status == LogsQueryStatus.SUCCESS:
+                for table in response.tables:
+                    col_names = [col.name for col in table.columns]
+                    for row in table.rows:
+                        row_dict = dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                        buckets.append({
+                            "timestamp": row_dict.get("TimeGenerated"),
+                            "cpu_p50": _safe_float(row_dict.get("cpu_p50")),
+                            "cpu_p95": _safe_float(row_dict.get("cpu_p95")),
+                            "memory_avg_mb": _safe_float(row_dict.get("memory_avg_mb")),
+                            "disk_iops": _safe_float(row_dict.get("disk_iops")),
+                        })
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "query_ama_guest_metrics: complete | resource=%s buckets=%d duration_ms=%d",
+                resource_id,
+                len(buckets),
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "workspace_id": workspace_id,
+                "timespan_hours": timespan_hours,
+                "buckets": buckets,
+                "total_buckets": len(buckets),
+                "query_status": "success",
+                "duration_ms": duration_ms,
+            }
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.warning("query_ama_guest_metrics error: %s", exc)
+            return {
+                "error": str(exc),
+                "resource_id": resource_id,
+                "query_status": "error",
+                "duration_ms": duration_ms,
+            }
