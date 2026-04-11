@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from agent_framework import ai_function
@@ -37,6 +38,25 @@ try:
     from azure.mgmt.guestconfiguration import GuestConfigurationClient
 except ImportError:
     GuestConfigurationClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-monitor (activity log)
+try:
+    from azure.mgmt.monitor import MonitorManagementClient
+except ImportError:
+    MonitorManagementClient = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-monitor-query (log analytics)
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+except ImportError:
+    LogsQueryClient = None  # type: ignore[assignment,misc]
+    LogsQueryStatus = None  # type: ignore[assignment,misc]
+
+# Lazy import — azure-mgmt-resourcehealth
+try:
+    from azure.mgmt.resourcehealth import MicrosoftResourceHealth
+except ImportError:
+    MicrosoftResourceHealth = None  # type: ignore[assignment,misc]
 
 tracer = setup_telemetry("aiops-arc-agent")
 logger = logging.getLogger(__name__)
@@ -60,6 +80,34 @@ ALLOWED_MCP_TOOLS: List[str] = [
     "monitor.query_metrics",
     "resourcehealth.get_availability_status",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_subscription_id(resource_id: str) -> str:
+    """Extract subscription ID from an Azure resource ID.
+
+    Args:
+        resource_id: Azure resource ID in the form
+            /subscriptions/{sub}/resourceGroups/{rg}/providers/{type}/{name}
+
+    Returns:
+        Subscription ID string (lowercase).
+
+    Raises:
+        ValueError: If the subscription segment cannot be found.
+    """
+    parts = resource_id.lower().split("/")
+    try:
+        idx = parts.index("subscriptions")
+        return parts[idx + 1]
+    except (ValueError, IndexError):
+        raise ValueError(
+            f"Cannot extract subscription_id from resource_id: {resource_id}"
+        )
 
 
 # ---------------------------------------------------------------------------
