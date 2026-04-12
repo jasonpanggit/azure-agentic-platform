@@ -460,6 +460,16 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
               </div>
             ) : detail && !(detail as AKSDetail & { fetch_error?: string }).fetch_error ? (
               <>
+                {/* Resource name heading */}
+                <div className="mb-1">
+                  <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {resourceName}
+                  </h2>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    AKS Cluster
+                  </p>
+                </div>
+
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
