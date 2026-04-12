@@ -383,6 +383,23 @@ async def get_aks_detail(
         omsagent = profiles.get("omsagent")
         azmon = profiles.get("azureMonitorMetrics")
 
+        # Fetch the latest available K8s version from the upgrade profile
+        latest_available_version: Optional[str] = None
+        try:
+            upgrade_profile = aks_client.managed_clusters.get_upgrade_profile(resource_group, cluster_name)
+            upgrades = (
+                upgrade_profile.control_plane_profile.upgrades
+                if upgrade_profile.control_plane_profile
+                else None
+            )
+            if upgrades:
+                # Pick the highest non-preview version available
+                ga_versions = [u.kubernetes_version for u in upgrades if not u.is_preview and u.kubernetes_version]
+                if ga_versions:
+                    latest_available_version = sorted(ga_versions, reverse=True)[0]
+        except Exception as upgrade_exc:
+            logger.debug("aks_detail: upgrade profile unavailable error=%s", upgrade_exc)
+
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
         return {
@@ -392,7 +409,7 @@ async def get_aks_detail(
             "subscription_id": subscription_id,
             "location": cluster.location or "",
             "kubernetes_version": cluster.kubernetes_version or "",
-            "latest_available_version": None,
+            "latest_available_version": latest_available_version,
             "node_pool_count": len(node_pools),
             "node_pools_ready": pools_ready,
             "total_nodes": total_nodes,

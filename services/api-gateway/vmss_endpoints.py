@@ -106,6 +106,20 @@ def _extract_subscription_id(resource_id: str) -> str:
     return ""
 
 
+def _enum_value(obj: Any, default: str) -> str:
+    """Safely extract a string value from an Azure SDK enum or plain string.
+
+    Azure SDK enums expose a `.value` attribute containing the canonical string
+    (e.g. ``OperatingSystemTypes.linux.value == "Linux"``). Calling ``str()``
+    on the enum object produces the full qualified name which is wrong for display.
+    """
+    if obj is None:
+        return default
+    if hasattr(obj, "value"):
+        return obj.value or default
+    return str(obj) or default
+
+
 def _get_vmss_health_states(
     resource_ids: List[str],
     credential: Any,
@@ -431,12 +445,25 @@ async def get_vmss_detail(
         if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile:
             sp = vmss.virtual_machine_profile.storage_profile
             if sp.os_disk and sp.os_disk.os_type:
-                os_type_val = str(sp.os_disk.os_type)
+                # Use _enum_value to avoid SDK enum object leak (e.g. "OperatingSystemTypes.Linux")
+                os_type_val = _enum_value(sp.os_disk.os_type, "")
             if sp.image_reference:
-                os_image_version_val = " ".join(filter(None, [
-                    sp.image_reference.offer or "",
-                    sp.image_reference.sku or "",
-                ])).strip()
+                ref = sp.image_reference
+                if ref.offer and ref.sku:
+                    # Standard Marketplace image: e.g. "UbuntuServer 18.04-LTS"
+                    os_image_version_val = " ".join(filter(None, [
+                        ref.offer or "",
+                        ref.sku or "",
+                    ])).strip()
+                elif ref.id:
+                    # Gallery image ID — extract the version segment from the ARM path
+                    # e.g. ".../versions/202603.12.1" → "202603.12.1"
+                    id_parts = (ref.id or "").split("/")
+                    try:
+                        ver_idx = next(i for i, p in enumerate(id_parts) if p.lower() == "versions")
+                        os_image_version_val = id_parts[ver_idx + 1] if ver_idx + 1 < len(id_parts) else ""
+                    except StopIteration:
+                        os_image_version_val = ""
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_detail: resource_id=%s instances=%d healthy=%d health_state=%s duration_ms=%.1f", resource_id[:60], len(instances), healthy_instance_count, health_state, duration_ms)
@@ -457,7 +484,7 @@ async def get_vmss_detail(
             "active_alert_count": 0,
             "min_count": autoscale_settings["min_count"],
             "max_count": autoscale_settings["max_count"],
-            "upgrade_policy": (str(vmss.upgrade_policy.mode or "") if vmss.upgrade_policy else ""),
+            "upgrade_policy": (_enum_value(vmss.upgrade_policy.mode, "") if vmss.upgrade_policy else ""),
             "health_summary": None,
             "active_incidents": [],
             "instances": instances,
