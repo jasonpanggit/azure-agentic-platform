@@ -283,7 +283,29 @@ async def get_vmss_detail(
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.error("vmss_detail: error=%s duration_ms=%.1f", exc, duration_ms)
-        return {"error": str(exc)}
+        return {
+            "id": resource_id,
+            "name": resource_id.split("/")[-1],
+            "resource_group": "",
+            "subscription_id": _extract_subscription_id(resource_id),
+            "location": "",
+            "sku": "",
+            "instance_count": 0,
+            "healthy_instance_count": 0,
+            "os_type": "",
+            "os_image_version": "",
+            "power_state": "unknown",
+            "health_state": "unknown",
+            "autoscale_enabled": False,
+            "active_alert_count": 0,
+            "min_count": 0,
+            "max_count": 0,
+            "upgrade_policy": "",
+            "health_summary": None,
+            "active_incidents": [],
+            "instances": [],
+            "fetch_error": str(exc),
+        }
 
 
 @router.get("/{resource_id_base64}/metrics")
