@@ -34,27 +34,27 @@ from services.api_gateway.eol_endpoints import (
 class TestParseOsForEol:
     def test_windows_server_2025_standard(self):
         result = _parse_os_for_eol("Windows Server 2025 Standard")
-        assert result == ("windows-server-2025", "2025")
+        assert result == ("windows-server", "2025")
 
     def test_windows_server_2019_datacenter(self):
         result = _parse_os_for_eol("Windows Server 2019 Datacenter")
-        assert result == ("windows-server-2019", "2019")
+        assert result == ("windows-server", "2019")
 
     def test_windows_server_2012_r2_standard(self):
         result = _parse_os_for_eol("Windows Server 2012 R2 Standard")
-        assert result == ("windows-server-2012-r2", "2012-r2")
+        assert result == ("windows-server", "2012-r2")
 
     def test_windows_server_2008_r2(self):
         result = _parse_os_for_eol("Windows Server 2008 R2 Datacenter")
-        assert result == ("windows-server-2008-r2", "2008-r2")
+        assert result == ("windows-server", "2008-r2")
 
     def test_windows_server_2022(self):
         result = _parse_os_for_eol("Windows Server 2022")
-        assert result == ("windows-server-2022", "2022")
+        assert result == ("windows-server", "2022")
 
     def test_windows_server_2016_essentials(self):
         result = _parse_os_for_eol("Windows Server 2016 Essentials")
-        assert result == ("windows-server-2016", "2016")
+        assert result == ("windows-server", "2016")
 
     def test_ubuntu_2204_lts(self):
         result = _parse_os_for_eol("Ubuntu 22.04 LTS")
@@ -64,6 +64,26 @@ class TestParseOsForEol:
         result = _parse_os_for_eol("Ubuntu 20.04")
         assert result == ("ubuntu", "20.04")
 
+    def test_rhel_9(self):
+        result = _parse_os_for_eol("RHEL 9")
+        assert result == ("rhel", "9")
+
+    def test_rhel_8(self):
+        result = _parse_os_for_eol("RHEL 8")
+        assert result == ("rhel", "8")
+
+    def test_sles_15(self):
+        result = _parse_os_for_eol("SLES 15")
+        assert result == ("sles", "15")
+
+    def test_debian_12(self):
+        result = _parse_os_for_eol("Debian 12")
+        assert result == ("debian", "12")
+
+    def test_centos_8(self):
+        result = _parse_os_for_eol("CentOS 8")
+        assert result == ("centos", "8")
+
     def test_unrecognised_os(self):
         assert _parse_os_for_eol("Red Hat Enterprise Linux 9") is None
 
@@ -72,7 +92,7 @@ class TestParseOsForEol:
 
     def test_case_insensitive(self):
         result = _parse_os_for_eol("windows server 2025 standard")
-        assert result == ("windows-server-2025", "2025")
+        assert result == ("windows-server", "2025")
 
 
 # ---------------------------------------------------------------------------
@@ -359,3 +379,82 @@ class TestBatchEolEndpoint:
             assert data["results"][1]["os_name"] == "Unknown Linux Distro"
             assert data["results"][1]["eol_date"] is None
             assert data["results"][1]["is_eol"] is None
+
+    def test_stale_null_cache_row_triggers_api_fallback(self, client):
+        """Cache rows with NULL eol_date AND NULL is_eol are treated as misses."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            return_value="postgresql://test:test@localhost:5432/test",
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg, patch(
+            "services.api_gateway.eol_endpoints.httpx"
+        ) as mock_httpx:
+            mock_conn = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+            mock_conn.close = AsyncMock()
+            mock_conn.execute = AsyncMock()
+
+            # Cache returns a stale null row (both eol_date and is_eol are None)
+            mock_conn.fetchrow = AsyncMock(
+                return_value={
+                    "eol_date": None,
+                    "is_eol": None,
+                    "source": "endoflife.date",
+                }
+            )
+
+            # API returns valid data
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"eol": "2031-10-14"}
+
+            mock_http_client = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=mock_response)
+            mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.AsyncClient.return_value = mock_http_client
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2022 Datacenter"]},
+            )
+            assert resp.status_code == 200
+            result = resp.json()["results"][0]
+            # Should have fetched from API, not returned the stale nulls
+            assert result["eol_date"] == "2031-10-14"
+            assert result["is_eol"] is False
+            assert result["source"] == "endoflife.date"
+
+            # Verify API was called (cache miss triggered fallback)
+            mock_http_client.get.assert_called_once()
+            # Verify cache was updated with fresh data
+            mock_conn.execute.assert_called_once()
+
+    def test_cache_hit_with_boolean_eol_true_no_date(self, client):
+        """Cache rows with is_eol=True but eol_date=None are valid hits (not misses)."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            return_value="postgresql://test:test@localhost:5432/test",
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg:
+            mock_conn = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+            mock_conn.close = AsyncMock()
+
+            # Cache has is_eol=True but no date (boolean EOL from API)
+            mock_conn.fetchrow = AsyncMock(
+                return_value={
+                    "eol_date": None,
+                    "is_eol": True,
+                    "source": "endoflife.date",
+                }
+            )
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2008 Standard"]},
+            )
+            assert resp.status_code == 200
+            result = resp.json()["results"][0]
+            # This is a valid cache hit — is_eol is not None
+            assert result["is_eol"] is True
+            assert result["eol_date"] is None
+            assert result["source"] == "endoflife.date"
