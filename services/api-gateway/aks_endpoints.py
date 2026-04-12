@@ -87,6 +87,20 @@ def _extract_subscription_id(resource_id: str) -> str:
     return ""
 
 
+def _enum_value(obj: Any, default: str) -> str:
+    """Safely extract a string value from an Azure SDK enum or plain string.
+
+    Azure SDK enum objects (e.g. AgentPoolMode.SYSTEM) have a ``.value``
+    attribute that holds the canonical string (e.g. "System").  Calling
+    ``str()`` on them produces the full qualified name which is wrong.
+    """
+    if obj is None:
+        return default
+    if hasattr(obj, "value"):
+        return obj.value or default
+    return str(obj) or default
+
+
 def _fetch_single_metric(
     client: Any,
     resource_id: str,
@@ -317,8 +331,8 @@ async def get_aks_detail(
                     "vm_size": pool.vm_size or "",
                     "node_count": pool_count,
                     "ready_node_count": pool_ready_count,
-                    "mode": str(pool.mode or "User"),
-                    "os_type": str(pool.os_type or "Linux"),
+                    "mode": _enum_value(pool.mode, "User"),
+                    "os_type": _enum_value(pool.os_type, "Linux"),
                     "min_count": pool.min_count,
                     "max_count": pool.max_count,
                     "provisioning_state": pool.provisioning_state or "unknown",
@@ -339,8 +353,8 @@ async def get_aks_detail(
                     "vm_size": pool.vm_size or "",
                     "node_count": pool_count,
                     "ready_node_count": pool_count,
-                    "mode": str(pool.mode or "User"),
-                    "os_type": str(pool.os_type or "Linux"),
+                    "mode": _enum_value(pool.mode, "User"),
+                    "os_type": _enum_value(pool.os_type, "Linux"),
                     "min_count": pool.min_count,
                     "max_count": pool.max_count,
                     "provisioning_state": pool.provisioning_state or "unknown",
