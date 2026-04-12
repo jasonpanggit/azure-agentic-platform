@@ -486,8 +486,20 @@ async def get_aks_detail(
                 except Exception as ws_exc:
                     logger.debug("aks_detail: workload_summary fetch failed error=%s", ws_exc)
 
+        # Derive system_pod_health from workload_summary when Container Insights data is available.
+        # Fallback to "unknown" when no pod data is available (no LA workspace or no data).
+        if workload_summary is not None:
+            if workload_summary.get("crash_loop_pods", 0) > 0:
+                system_pod_health = "degraded"
+            elif workload_summary.get("running_pods", 0) > 0:
+                system_pod_health = "healthy"
+            else:
+                system_pod_health = "unknown"
+        else:
+            system_pod_health = "unknown"
+
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("aks_detail: resource_id=%s node_pools=%d workload_summary=%s duration_ms=%.1f", resource_id[:60], len(node_pools), workload_summary is not None, duration_ms)
+        logger.info("aks_detail: resource_id=%s node_pools=%d workload_summary=%s system_pod_health=%s duration_ms=%.1f", resource_id[:60], len(node_pools), workload_summary is not None, system_pod_health, duration_ms)
         return {
             "id": resource_id,
             "name": cluster.name or cluster_name,
@@ -500,7 +512,7 @@ async def get_aks_detail(
             "node_pools_ready": pools_ready,
             "total_nodes": total_nodes,
             "ready_nodes": ready_nodes,
-            "system_pod_health": "unknown",
+            "system_pod_health": system_pod_health,
             "fqdn": cluster.fqdn,
             "network_plugin": (cluster.network_profile.network_plugin if cluster.network_profile else ""),
             "rbac_enabled": cluster.enable_rbac or False,

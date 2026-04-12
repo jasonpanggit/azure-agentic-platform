@@ -419,7 +419,9 @@ async def get_vmss_detail(
 
         compute_client = ComputeManagementClient(credential, subscription_id)
         vmss = compute_client.virtual_machine_scale_sets.get(resource_group, vmss_name)
-        instances_paged = compute_client.virtual_machine_scale_set_vms.list(resource_group, vmss_name)
+        instances_paged = compute_client.virtual_machine_scale_set_vms.list(
+            resource_group, vmss_name, expand="instanceView"
+        )
         instances = [
             {
                 "instance_id": inst.instance_id or "",
@@ -451,7 +453,9 @@ async def get_vmss_detail(
             logger.warning("vmss_detail: autoscale query failed error=%s", autoscale_exc)
 
         # Derive healthy_instance_count from running instances (power_state contains "running")
-        total = int(vmss.sku.capacity or 0) if vmss.sku else 0
+        # AKS-managed VMSS report sku.capacity == 0; use the actual instance list length as fallback.
+        sku_capacity = int(vmss.sku.capacity or 0) if vmss.sku else 0
+        total = len(instances) if sku_capacity == 0 and instances else sku_capacity
         running_count = sum(
             1 for inst in instances
             if "running" in (inst.get("power_state") or "").lower()
@@ -467,6 +471,20 @@ async def get_vmss_detail(
             health_state = "unavailable"
         else:
             health_state = "degraded"
+
+        # Enrich health_state from Resource Health API (best-effort, non-blocking)
+        # Only override when Resource Health returns a definitive (non-unknown) state.
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            health_map = await loop.run_in_executor(
+                None, _get_vmss_health_states, [resource_id], credential
+            )
+            rh_state = health_map.get(resource_id.lower(), "unknown").lower()
+            if rh_state and rh_state != "unknown":
+                health_state = rh_state
+        except Exception as rh_exc:
+            logger.debug("vmss_detail: resource_health enrichment failed error=%s", rh_exc)
 
         # Extract OS type and image version from the VMSS model
         os_type_val = ""
