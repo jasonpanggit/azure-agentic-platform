@@ -120,6 +120,32 @@ def _enum_value(obj: Any, default: str) -> str:
     return str(obj) or default
 
 
+def _extract_os_image_version(offer: str, sku: str, gallery_id: str) -> str:
+    """Return a human-readable OS image version string.
+
+    Priority:
+    1. Marketplace image  → ``"<offer> <sku>"``   (e.g. ``"UbuntuServer 18.04-LTS"``)
+    2. Shared Image Gallery → last ``versions/<ver>`` segment of the ARM resource ID
+       (e.g. ``.../versions/202603.12.1`` → ``"202603.12.1"``)
+    3. Empty string when neither is available.
+    """
+    offer = (offer or "").strip()
+    sku = (sku or "").strip()
+    if offer and sku:
+        return f"{offer} {sku}"
+    if offer:
+        return offer
+    gallery_id = (gallery_id or "").strip()
+    if gallery_id:
+        parts = gallery_id.split("/")
+        try:
+            ver_idx = next(i for i, p in enumerate(parts) if p.lower() == "versions")
+            return parts[ver_idx + 1] if ver_idx + 1 < len(parts) else ""
+        except StopIteration:
+            pass
+    return ""
+
+
 def _get_vmss_health_states(
     resource_ids: List[str],
     credential: Any,
@@ -270,6 +296,7 @@ async def list_vmss(
     os_type = tostring(properties.virtualMachineProfile.storageProfile.osDisk.osType),
     os_image_offer = tostring(properties.virtualMachineProfile.storageProfile.imageReference.offer),
     os_image_sku = tostring(properties.virtualMachineProfile.storageProfile.imageReference.sku),
+    os_image_gallery_id = tostring(properties.virtualMachineProfile.storageProfile.imageReference.id),
     power_state = 'running',
     health_state = iff(tostring(properties.provisioningState) =~ 'Succeeded', 'available', iff(tostring(properties.provisioningState) =~ 'Failed', 'degraded', 'unknown')),
     autoscale_raw = tostring(properties.automaticRepairsPolicy.enabled),
@@ -296,11 +323,13 @@ async def list_vmss(
                 "instance_count": r.get("instance_count", 0) or 0,
                 "healthy_instance_count": r.get("instance_count", 0) or 0,
                 "os_type": r.get("os_type", ""),
-                # Combine offer + sku, strip whitespace, return "" if both empty
-                "os_image_version": " ".join(filter(None, [
-                    (r.get("os_image_offer") or "").strip(),
-                    (r.get("os_image_sku") or "").strip(),
-                ])),
+                # Prefer Marketplace offer+sku; fall back to gallery image version
+                # extracted from the ARM path (e.g. ".../versions/202603.12.1")
+                "os_image_version": _extract_os_image_version(
+                    r.get("os_image_offer") or "",
+                    r.get("os_image_sku") or "",
+                    r.get("os_image_gallery_id") or "",
+                ),
                 "power_state": r.get("power_state", "running"),
                 "health_state": r.get("health_state", "unknown"),
                 # autoscale_raw is a string "true"/"false"/"" from ARG — normalise to bool
@@ -449,21 +478,11 @@ async def get_vmss_detail(
                 os_type_val = _enum_value(sp.os_disk.os_type, "")
             if sp.image_reference:
                 ref = sp.image_reference
-                if ref.offer and ref.sku:
-                    # Standard Marketplace image: e.g. "UbuntuServer 18.04-LTS"
-                    os_image_version_val = " ".join(filter(None, [
-                        ref.offer or "",
-                        ref.sku or "",
-                    ])).strip()
-                elif ref.id:
-                    # Gallery image ID — extract the version segment from the ARM path
-                    # e.g. ".../versions/202603.12.1" → "202603.12.1"
-                    id_parts = (ref.id or "").split("/")
-                    try:
-                        ver_idx = next(i for i, p in enumerate(id_parts) if p.lower() == "versions")
-                        os_image_version_val = id_parts[ver_idx + 1] if ver_idx + 1 < len(id_parts) else ""
-                    except StopIteration:
-                        os_image_version_val = ""
+                os_image_version_val = _extract_os_image_version(
+                    ref.offer or "",
+                    ref.sku or "",
+                    ref.id or "",
+                )
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_detail: resource_id=%s instances=%d healthy=%d health_state=%s duration_ms=%.1f", resource_id[:60], len(instances), healthy_instance_count, health_state, duration_ms)
