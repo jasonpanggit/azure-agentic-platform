@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, MouseEvent as ReactMouseEvent } from 'react'
 import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity, ShieldAlert, Package } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
+import { CveBadges } from './CveDetailDialog'
 import type {
   VMDetail,
   ActiveIncident,
@@ -151,6 +152,25 @@ const DEFAULT_METRICS = [
   'Network Out Total',
 ]
 
+// Arc VMs use Log Analytics Perf table — fewer metrics available, different names
+const ARC_METRIC_CATALOG: MetricOption[] = [
+  { name: 'Percentage CPU',         label: 'CPU %',       group: 'CPU' },
+  { name: 'Available Memory Bytes', label: 'Free Memory', group: 'Memory' },
+  { name: 'Disk Read Bytes',        label: 'Disk Read',   group: 'Disk' },
+  { name: 'Disk Write Bytes',       label: 'Disk Write',  group: 'Disk' },
+  { name: 'Network In Total',       label: 'Net In',      group: 'Network' },
+  { name: 'Network Out Total',      label: 'Net Out',     group: 'Network' },
+]
+
+const ARC_DEFAULT_METRICS = [
+  'Percentage CPU',
+  'Available Memory Bytes',
+  'Disk Read Bytes',
+  'Disk Write Bytes',
+  'Network In Total',
+  'Network Out Total',
+]
+
 const DETAIL_TABS: { id: DetailTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'metrics',  label: 'Metrics' },
@@ -217,6 +237,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [pollingEvidence, setPollingEvidence] = useState(false)
   const metricsLoadedForTimeRange = useRef<string | null>(null)
 
+  // Arc VMs use a different metric catalog (Log Analytics Perf table)
+  const isArcVM = vm?.vm_type === 'Arc VM'
+  const activeCatalog = useMemo(() => isArcVM ? ARC_METRIC_CATALOG : METRIC_CATALOG, [isArcVM])
+  const activeDefaults = useMemo(() => isArcVM ? ARC_DEFAULT_METRICS : DEFAULT_METRICS, [isArcVM])
+
   // ── Patch state ──────────────────────────────────────────────────────────
   const [patchSubTab, setPatchSubTab] = useState<PatchSubTab>('pending')
   const [pendingPatches, setPendingPatches] = useState<readonly PendingPatch[]>([])
@@ -224,7 +249,6 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [patchLoading, setPatchLoading] = useState(false)
   const [patchError, setPatchError] = useState<string | null>(null)
   const [patchDays, setPatchDays] = useState<DaysOption>('90')
-  const [expandedCves, setExpandedCves] = useState<Set<string>>(new Set())
   const patchLoadedRef = useRef(false)
 
   // ── Panel resize state ───────────────────────────────────────────────────
@@ -600,7 +624,16 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     setChatThreadId(null)
     setChatRunId(null)
     chatAutoFired.current = false
+    setSelectedMetrics(DEFAULT_METRICS)
   }, [resourceId])
+
+  // Switch metric catalog when VM type is determined (Arc vs Azure)
+  useEffect(() => {
+    if (vm) {
+      setSelectedMetrics(activeDefaults)
+      metricsLoadedForTimeRange.current = null
+    }
+  }, [vm?.vm_type, activeDefaults]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial fetch when resourceId/incidentId changes
   useEffect(() => {
@@ -945,12 +978,12 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                             <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Select metrics</span>
                             <div className="flex gap-2">
                               <button
-                                onClick={() => setSelectedMetrics(METRIC_CATALOG.map(m => m.name))}
+                                onClick={() => setSelectedMetrics(activeCatalog.map(m => m.name))}
                                 className="text-[10px] cursor-pointer hover:opacity-70"
                                 style={{ color: 'var(--accent-blue)' }}
                               >All</button>
                               <button
-                                onClick={() => setSelectedMetrics(DEFAULT_METRICS)}
+                                onClick={() => setSelectedMetrics(activeDefaults)}
                                 className="text-[10px] cursor-pointer hover:opacity-70"
                                 style={{ color: 'var(--text-muted)' }}
                               >Reset</button>
@@ -961,7 +994,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                               <div className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                                 {group}
                               </div>
-                              {METRIC_CATALOG.filter(m => m.group === group).map(m => (
+                              {activeCatalog.filter(m => m.group === group).map(m => (
                                 <label
                                   key={m.name}
                                   className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:opacity-80"
@@ -1012,7 +1045,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                       {vm?.power_state === 'deallocated'
                         ? 'No metrics — VM is deallocated. Start the VM to collect data.'
                         : vm?.vm_type === 'Arc VM'
-                        ? 'Arc VMs use Log Analytics for telemetry. Use AI Chat to query Heartbeat and Event tables.'
+                        ? 'No Perf data in Log Analytics yet. Ensure Azure Monitor Agent is active and a Data Collection Rule is collecting performance counters.'
                         : 'No metrics available'}
                     </p>
                   </div>
@@ -1025,7 +1058,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                         <div key={m.name} className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                              {METRIC_CATALOG.find(c => c.name === m.name)?.label ?? m.name ?? '—'}
+                              {activeCatalog.find(c => c.name === m.name)?.label ?? m.name ?? '—'}
                             </div>
                             {latest !== undefined && (
                               <div className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>
@@ -1045,6 +1078,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 )}
 
                 {/* Diagnostic settings status */}
+                {isArcVM && metrics.length > 0 && (
+                  <div className="mt-2 text-[11px] flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                    Source: Log Analytics Perf table
+                  </div>
+                )}
                 {diagConfigured === true && (
                   <div className="mt-2 text-[11px] flex items-center gap-1" style={{ color: 'var(--accent-green)' }}>
                     ✓ Azure Monitor Agent active — collecting data to Log Analytics
@@ -1398,61 +1436,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                               </span>
                             )}
                           </div>
-                          {p.cves && p.cves.length > 0 && (() => {
-                            const key = `pending-${idx}`
-                            const isExpanded = expandedCves.has(key)
-                            const shown = isExpanded ? p.cves : p.cves.slice(0, 3)
-                            const overflow = p.cves.length - 3
-                            return (
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                {shown.map(cve => (
-                                  <a
-                                    key={cve}
-                                    href={`https://nvd.nist.gov/vuln/detail/${cve}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-mono text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                    style={{
-                                      background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
-                                      color: 'var(--accent-blue)',
-                                      textDecoration: 'none',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {cve}
-                                  </a>
-                                ))}
-                                {!isExpanded && overflow > 0 && (
-                                  <button
-                                    onClick={() => setExpandedCves(prev => new Set([...prev, key]))}
-                                    className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                    style={{
-                                      background: 'var(--bg-subtle)',
-                                      color: 'var(--accent-blue)',
-                                      cursor: 'pointer',
-                                      border: 'none',
-                                    }}
-                                  >
-                                    +{overflow} more
-                                  </button>
-                                )}
-                                {isExpanded && (
-                                  <button
-                                    onClick={() => setExpandedCves(prev => { const s = new Set(prev); s.delete(key); return s })}
-                                    className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                    style={{
-                                      background: 'var(--bg-subtle)',
-                                      color: 'var(--text-muted)',
-                                      cursor: 'pointer',
-                                      border: 'none',
-                                    }}
-                                  >
-                                    show less
-                                  </button>
-                                )}
-                              </div>
-                            )
-                          })()}
+                          {p.cves && p.cves.length > 0 && (
+                            <div className="mt-1.5">
+                              <CveBadges cves={p.cves} />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1505,61 +1493,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                                 </span>
                               )}
                             </div>
-                            {p.cves && p.cves.length > 0 && (() => {
-                              const key = `installed-${idx}`
-                              const isExpanded = expandedCves.has(key)
-                              const shown = isExpanded ? p.cves : p.cves.slice(0, 3)
-                              const overflow = p.cves.length - 3
-                              return (
-                                <div className="flex flex-wrap gap-1 mt-1.5">
-                                  {shown.map(cve => (
-                                    <a
-                                      key={cve}
-                                      href={`https://nvd.nist.gov/vuln/detail/${cve}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="font-mono text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                      style={{
-                                        background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
-                                        color: 'var(--accent-blue)',
-                                        textDecoration: 'none',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      {cve}
-                                    </a>
-                                  ))}
-                                  {!isExpanded && overflow > 0 && (
-                                    <button
-                                      onClick={() => setExpandedCves(prev => new Set([...prev, key]))}
-                                      className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                      style={{
-                                        background: 'var(--bg-subtle)',
-                                        color: 'var(--accent-blue)',
-                                        cursor: 'pointer',
-                                        border: 'none',
-                                      }}
-                                    >
-                                      +{overflow} more
-                                    </button>
-                                  )}
-                                  {isExpanded && (
-                                    <button
-                                      onClick={() => setExpandedCves(prev => { const s = new Set(prev); s.delete(key); return s })}
-                                      className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
-                                      style={{
-                                        background: 'var(--bg-subtle)',
-                                        color: 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        border: 'none',
-                                      }}
-                                    >
-                                      show less
-                                    </button>
-                                  )}
-                                </div>
-                              )
-                            })()}
+                            {p.cves && p.cves.length > 0 && (
+                              <div className="mt-1.5">
+                                <CveBadges cves={p.cves} />
+                              </div>
+                            )}
                           </div>
                         )
                       })}
