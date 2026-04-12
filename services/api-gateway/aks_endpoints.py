@@ -39,6 +39,13 @@ try:
 except ImportError:
     _AKSClient = None  # type: ignore[assignment,misc]
 
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    _LOGS_QUERY_AVAILABLE = True
+except ImportError:
+    _LOGS_QUERY_AVAILABLE = False
+    logger.warning("azure-monitor-query not available — AKS workload summary unavailable")
+
 # AKS platform metric names (Microsoft.ContainerService/managedClusters namespace).
 # metricnamespace MUST be specified or these will return empty.
 # NOTE: apiserver_request_total is Prometheus-only — NOT a platform metric; excluded.
@@ -118,6 +125,66 @@ def _enum_value(obj: Any, default: str) -> str:
     if hasattr(obj, "value"):
         return obj.value or default
     return str(obj) or default
+
+
+def _fetch_aks_workload_summary(
+    credential: Any,
+    la_workspace_resource_id: str,
+    cluster_name: str,
+) -> Optional[Dict[str, Any]]:
+    """Query KubePodInventory in Log Analytics to get workload summary for an AKS cluster.
+
+    Returns a dict with running_pods, crash_loop_pods, pending_pods, namespace_count,
+    or None if the workspace has no Container Insights data.
+    """
+    if not _LOGS_QUERY_AVAILABLE:
+        return None
+    if not la_workspace_resource_id:
+        return None
+
+    import re
+    from datetime import timedelta
+
+    try:
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    except ImportError:
+        return None
+
+    # Extract workspace GUID from resource ID
+    # Format: /subscriptions/.../workspaces/<name>
+    # LogsQueryClient accepts workspace resource IDs directly (v2 SDK)
+    try:
+        client = LogsQueryClient(credential)
+        kql = f"""
+KubePodInventory
+| where TimeGenerated > ago(5m)
+| where ClusterName =~ "{cluster_name}"
+| summarize
+    running_pods = countif(PodStatus == "Running"),
+    crash_loop_pods = countif(ContainerStatusReason == "CrashLoopBackOff"),
+    pending_pods = countif(PodStatus == "Pending"),
+    namespace_count = dcount(Namespace)
+"""
+        result = client.query_resource(
+            la_workspace_resource_id,
+            kql,
+            timespan=timedelta(minutes=10),
+        )
+        if result.status == LogsQueryStatus.SUCCESS and result.tables:
+            table = result.tables[0]
+            if table.rows:
+                row = table.rows[0]
+                cols = [c.name for c in table.columns]
+                row_dict = dict(zip(cols, row))
+                return {
+                    "running_pods": int(row_dict.get("running_pods") or 0),
+                    "crash_loop_pods": int(row_dict.get("crash_loop_pods") or 0),
+                    "pending_pods": int(row_dict.get("pending_pods") or 0),
+                    "namespace_count": int(row_dict.get("namespace_count") or 0),
+                }
+    except Exception as exc:
+        logger.debug("aks_workload_summary: query failed cluster=%s error=%s", cluster_name, exc)
+    return None
 
 
 def _fetch_single_metric_aks(
@@ -382,6 +449,12 @@ async def get_aks_detail(
         profiles = cluster.addon_profiles or {}
         omsagent = profiles.get("omsagent")
         azmon = profiles.get("azureMonitorMetrics")
+        # Extract the linked LA workspace resource ID from the omsagent config (if present)
+        omsagent_config = getattr(omsagent, "config", None) or {}
+        la_workspace_resource_id: Optional[str] = (
+            omsagent_config.get("logAnalyticsWorkspaceResourceID")
+            or os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "") or None
+        )
 
         # Fetch the latest available K8s version from the upgrade profile
         latest_available_version: Optional[str] = None
@@ -400,8 +473,21 @@ async def get_aks_detail(
         except Exception as upgrade_exc:
             logger.debug("aks_detail: upgrade profile unavailable error=%s", upgrade_exc)
 
+        # Fetch workload summary from Container Insights (KubePodInventory) if available
+        workload_summary: Optional[Dict[str, Any]] = None
+        if la_workspace_resource_id and bool(omsagent and omsagent.enabled):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    _fetch_aks_workload_summary, credential, la_workspace_resource_id, cluster.name or cluster_name
+                )
+                try:
+                    workload_summary = future.result(timeout=10)
+                except Exception as ws_exc:
+                    logger.debug("aks_detail: workload_summary fetch failed error=%s", ws_exc)
+
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
+        logger.info("aks_detail: resource_id=%s node_pools=%d workload_summary=%s duration_ms=%.1f", resource_id[:60], len(node_pools), workload_summary is not None, duration_ms)
         return {
             "id": resource_id,
             "name": cluster.name or cluster_name,
@@ -421,8 +507,9 @@ async def get_aks_detail(
             "active_alert_count": 0,
             "container_insights_enabled": bool(omsagent and omsagent.enabled),
             "managed_prometheus_enabled": bool(azmon and azmon.enabled),
+            "log_analytics_workspace_resource_id": la_workspace_resource_id,
             "node_pools": node_pools,
-            "workload_summary": None,
+            "workload_summary": workload_summary,
             "active_incidents": [],
         }
 

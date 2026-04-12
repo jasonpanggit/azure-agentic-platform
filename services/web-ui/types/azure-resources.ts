@@ -149,6 +149,7 @@ export interface AKSCluster {
   // Monitoring addon status — populated by get_aks_detail, absent in list view
   container_insights_enabled?: boolean
   managed_prometheus_enabled?: boolean
+  log_analytics_workspace_resource_id?: string | null
 }
 
 export interface AKSNodePool {

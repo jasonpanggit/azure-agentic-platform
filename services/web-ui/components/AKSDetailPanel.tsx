@@ -768,14 +768,30 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
             ) : metrics.length === 0 || metrics.every(m =>
               m.timeseries.length === 0 || m.timeseries.every(p => p.average == null)
             ) ? (
-              <div className="py-8 text-center">
-                <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+              <div className="py-8 text-center space-y-3">
+                <Activity className="h-8 w-8 mx-auto" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   No metrics available
                 </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Platform metrics may take a few minutes to appear for a new cluster.
-                </p>
+                {detail && !detail.container_insights_enabled ? (
+                  <>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Enable Container Insights to collect node-level metrics.
+                    </p>
+                    <button
+                      onClick={handleEnableContainerInsights}
+                      disabled={enablingContainerInsights}
+                      className="mx-auto flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity disabled:opacity-60 cursor-pointer"
+                      style={{ background: 'var(--accent-blue)', color: '#fff' }}
+                    >
+                      {enablingContainerInsights ? 'Enabling…' : 'Enable Container Insights'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Platform metrics may take a few minutes to appear for a new cluster.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

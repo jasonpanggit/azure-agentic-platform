@@ -23,10 +23,28 @@ from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
 from services.api_gateway.os_normalizer import normalize_os
 
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+except ImportError:  # pragma: no cover
+    LogsQueryClient = None  # type: ignore[assignment,misc]
+    LogsQueryStatus = None  # type: ignore[assignment,misc]
+
+try:
+    from azure.mgmt.loganalytics import LogAnalyticsManagementClient
+except ImportError:  # pragma: no cover
+    LogAnalyticsManagementClient = None  # type: ignore[assignment,misc]
+
 # ARM resource ID of the Log Analytics workspace to send diagnostics to.
 # Set LOG_ANALYTICS_WORKSPACE_RESOURCE_ID on the API gateway container app.
 # Falls back to constructing it from the customer ID if only that is available.
 _LA_WORKSPACE_RESOURCE_ID = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
+
+# Module-level cache: workspace ARM resource ID -> customer GUID.
+_workspace_guid_cache: Dict[str, str] = {}
+
+# Module-level cache: Arc VM resource ID -> workspace customer GUID (Perf data).
+# Populated lazily by _discover_arc_vm_workspace(); valid for process lifetime.
+_arc_workspace_cache: Dict[str, str] = {}
 
 # DCR and association names we manage (stable names so we can detect / overwrite)
 _DCR_NAME = "aap-dcr"
@@ -339,6 +357,332 @@ def _fetch_single_metric(
         return None
 
 
+# ---------------------------------------------------------------------------
+# Arc VM metrics via Log Analytics (Perf table)
+# ---------------------------------------------------------------------------
+
+# Map Perf table counter names to the same metric names used in METRIC_CATALOG
+# so the frontend can render them identically.
+_PERF_COUNTER_MAP: Dict[str, Dict[str, str]] = {
+    "% Processor Time": {"name": "Percentage CPU", "unit": "Percent"},
+    "Available MBytes": {"name": "Available Memory Bytes", "unit": "Bytes"},
+    "Available Bytes": {"name": "Available Memory Bytes", "unit": "Bytes"},
+    "Disk Read Bytes/sec": {"name": "Disk Read Bytes", "unit": "BytesPerSecond"},
+    "Disk Write Bytes/sec": {"name": "Disk Write Bytes", "unit": "BytesPerSecond"},
+    "Bytes Received/sec": {"name": "Network In Total", "unit": "BytesPerSecond"},
+    "Bytes Sent/sec": {"name": "Network Out Total", "unit": "BytesPerSecond"},
+    "Total Bytes Received": {"name": "Network In Total", "unit": "Bytes"},
+    "Total Bytes Transmitted": {"name": "Network Out Total", "unit": "Bytes"},
+}
+
+# Default Perf counters to query when no specific metrics are requested.
+_ARC_DEFAULT_COUNTERS = [
+    "% Processor Time",
+    "Available MBytes",
+    "Available Bytes",
+    "Disk Read Bytes/sec",
+    "Disk Write Bytes/sec",
+    "Bytes Received/sec",
+    "Bytes Sent/sec",
+]
+
+
+def _discover_arc_vm_workspace(credential: Any, resource_id: str) -> str:
+    """Discover the Log Analytics workspace GUID for an Arc VM's Perf data.
+
+    Arc VMs enrolled in Azure Monitor Agent send Perf counters to a Log
+    Analytics workspace specified in their Data Collection Rule (DCR).  This
+    function discovers that workspace automatically so no manual env-var
+    configuration is required.
+
+    Discovery strategy (in order):
+    1. Check module-level cache keyed by resource_id.
+    2. List DCR associations on the Arc VM via ARM REST.
+    3. Fetch each DCR (skip configurationAccessEndpoint which has no DCR ID).
+    4. Extract ``destinations.logAnalytics[*].workspaceId`` — this is already
+       the customer GUID that LogsQueryClient expects, so no further ARM call.
+    5. Fall back to _resolve_workspace_guid() using LOG_ANALYTICS_WORKSPACE_RESOURCE_ID
+       env var if no DCR-based workspace is found.
+
+    Returns the workspace GUID string; returns empty string on failure (never raises).
+    """
+    cached = _arc_workspace_cache.get(resource_id)
+    if cached is not None:
+        return cached
+
+    try:
+        token = credential.get_token("https://management.azure.com/.default").token
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Step 1: list DCR associations
+        assoc_url = (
+            f"{_ARM_BASE}{resource_id}"
+            "/providers/Microsoft.Insights/dataCollectionRuleAssociations"
+        )
+        resp = requests.get(
+            assoc_url,
+            params={"api-version": "2022-06-01"},
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "vm_metrics: DCR association list failed for %s status=%d",
+                resource_id[-60:], resp.status_code,
+            )
+        else:
+            for assoc in resp.json().get("value", []):
+                dcr_id: Optional[str] = assoc.get("properties", {}).get("dataCollectionRuleId")
+                if not dcr_id:
+                    continue  # configurationAccessEndpoint has no DCR
+
+                # Step 2: fetch DCR and extract workspace GUID
+                dcr_resp = requests.get(
+                    f"{_ARM_BASE}{dcr_id}",
+                    params={"api-version": "2022-06-01"},
+                    headers=headers,
+                    timeout=15,
+                )
+                if dcr_resp.status_code != 200:
+                    continue
+
+                la_dests = (
+                    dcr_resp.json()
+                    .get("properties", {})
+                    .get("destinations", {})
+                    .get("logAnalytics", [])
+                )
+                for dest in la_dests:
+                    ws_guid = dest.get("workspaceId", "")
+                    if ws_guid:
+                        logger.info(
+                            "vm_metrics: discovered workspace %s for Arc VM %s via DCR %s",
+                            ws_guid, resource_id[-60:], dcr_id[-60:],
+                        )
+                        _arc_workspace_cache[resource_id] = ws_guid
+                        return ws_guid
+
+    except Exception as exc:
+        logger.warning(
+            "vm_metrics: workspace discovery via DCR failed for %s: %s",
+            resource_id[-60:], exc,
+        )
+
+    # Step 3: fall back to env-var configured workspace
+    fallback_resource_id = _LA_WORKSPACE_RESOURCE_ID
+    if fallback_resource_id:
+        fallback_guid = _resolve_workspace_guid(credential, fallback_resource_id)
+        _arc_workspace_cache[resource_id] = fallback_guid
+        return fallback_guid
+
+    logger.warning(
+        "vm_metrics: no workspace found for Arc VM %s — "
+        "set LOG_ANALYTICS_WORKSPACE_RESOURCE_ID or attach a DCR with a Log Analytics destination",
+        resource_id[-60:],
+    )
+    _arc_workspace_cache[resource_id] = ""
+    return ""
+
+
+
+    """Resolve a Log Analytics workspace ARM resource ID to its customerId (GUID).
+
+    Uses a module-level cache so repeated calls for the same workspace
+    do not hit ARM again.  Returns empty string on failure (never raises).
+    """
+    if not workspace_resource_id:
+        return ""
+
+    cached = _workspace_guid_cache.get(workspace_resource_id)
+    if cached is not None:
+        return cached
+
+    parts = workspace_resource_id.split("/")
+    try:
+        sub_idx = next(i for i, p in enumerate(parts) if p.lower() == "subscriptions")
+        ws_sub = parts[sub_idx + 1]
+        rg_idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
+        ws_rg = parts[rg_idx + 1]
+        ws_name = parts[-1]
+    except (StopIteration, IndexError):
+        logger.warning(
+            "vm_metrics: cannot parse workspace ARM ID %r", workspace_resource_id
+        )
+        _workspace_guid_cache[workspace_resource_id] = ""
+        return ""
+
+    try:
+        if LogAnalyticsManagementClient is None:
+            logger.warning("vm_metrics: azure-mgmt-loganalytics not installed")
+            _workspace_guid_cache[workspace_resource_id] = ""
+            return ""
+        client = LogAnalyticsManagementClient(credential, ws_sub)
+        workspace = client.workspaces.get(ws_rg, ws_name)
+        customer_id: str = workspace.customer_id or ""
+        _workspace_guid_cache[workspace_resource_id] = customer_id
+        return customer_id
+    except Exception as exc:
+        logger.warning(
+            "vm_metrics: failed to resolve workspace GUID for %r: %s",
+            workspace_resource_id, exc,
+        )
+        _workspace_guid_cache[workspace_resource_id] = ""
+        return ""
+
+
+def _build_arc_metrics_kql(resource_id: str, counters: List[str], timespan: str, interval: str) -> str:
+    """Build a KQL query against the Perf table for Arc VM metrics.
+
+    Groups results into time bins matching the requested interval so the
+    frontend receives evenly-spaced time-series data.
+    """
+    safe_rid = resource_id.replace("'", "''").lower()
+    counter_list = ", ".join(f"'{c}'" for c in counters)
+
+    return (
+        f"Perf\n"
+        f"| where TimeGenerated > ago({timespan})\n"
+        f"| where _ResourceId =~ '{safe_rid}'\n"
+        f"| where CounterName in ({counter_list})\n"
+        f"| summarize avg(CounterValue) by bin(TimeGenerated, {interval}), CounterName\n"
+        f"| order by CounterName asc, TimeGenerated asc"
+    )
+
+
+def _parse_arc_metrics_response(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Parse KQL Perf table rows into the same format as Azure Monitor metrics.
+
+    Returns a list of ``{name, unit, timeseries}`` dicts compatible with the
+    platform metrics response format.
+    """
+    # Group rows by CounterName
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        counter = row.get("CounterName", "")
+        if counter not in grouped:
+            grouped[counter] = []
+        grouped[counter].append(row)
+
+    metrics_out: List[Dict[str, Any]] = []
+    for counter_name, data_points in grouped.items():
+        mapping = _PERF_COUNTER_MAP.get(counter_name)
+        if not mapping:
+            # Use the raw counter name if no mapping exists
+            metric_name = counter_name
+            unit = ""
+        else:
+            metric_name = mapping["name"]
+            unit = mapping["unit"]
+
+        timeseries = []
+        for dp in data_points:
+            ts = dp.get("TimeGenerated", "")
+            avg_val = dp.get("avg_CounterValue")
+            if avg_val is not None:
+                try:
+                    avg_val = float(avg_val)
+                except (ValueError, TypeError):
+                    avg_val = None
+            timeseries.append({
+                "timestamp": ts,
+                "average": avg_val,
+                "maximum": avg_val,  # KQL summarize only has avg; reuse
+                "minimum": avg_val,
+            })
+
+        # Deduplicate: if multiple counters map to the same metric name
+        # (e.g. "Available MBytes" and "Available Bytes" both -> "Available Memory Bytes"),
+        # keep the one with more data points.
+        existing = next((m for m in metrics_out if m["name"] == metric_name), None)
+        if existing:
+            if len(timeseries) > len(existing["timeseries"]):
+                existing["timeseries"] = timeseries
+                existing["unit"] = unit
+        else:
+            metrics_out.append({
+                "name": metric_name,
+                "unit": unit,
+                "timeseries": timeseries,
+            })
+
+    return metrics_out
+
+
+def _fetch_arc_vm_metrics_sync(
+    credential: Any,
+    workspace_guid: str,
+    resource_id: str,
+    metric_names: List[str],
+    timespan: str,
+    interval: str,
+) -> List[Dict[str, Any]]:
+    """Query Log Analytics Perf table for Arc VM metrics (synchronous).
+
+    Maps requested metric names (frontend METRIC_CATALOG names) back to
+    Perf counter names, queries, and returns results in platform format.
+    """
+    if LogsQueryClient is None:
+        logger.warning("vm_metrics: azure-monitor-query not installed — cannot query LA for Arc")
+        return []
+
+    # Reverse-map: metric catalog name -> Perf counter names
+    reverse_map: Dict[str, List[str]] = {}
+    for counter, mapping in _PERF_COUNTER_MAP.items():
+        reverse_map.setdefault(mapping["name"], []).append(counter)
+
+    # Determine which Perf counters to query based on requested metric names
+    counters_to_query: List[str] = []
+    for metric_name in metric_names:
+        if metric_name in reverse_map:
+            counters_to_query.extend(reverse_map[metric_name])
+        # Also check if it's a raw counter name
+        elif metric_name in _PERF_COUNTER_MAP:
+            counters_to_query.append(metric_name)
+
+    if not counters_to_query:
+        # Fall back to default counters
+        counters_to_query = list(_ARC_DEFAULT_COUNTERS)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_counters: List[str] = []
+    for c in counters_to_query:
+        if c not in seen:
+            seen.add(c)
+            unique_counters.append(c)
+
+    kql = _build_arc_metrics_kql(resource_id, unique_counters, timespan, interval)
+
+    try:
+        client = LogsQueryClient(credential)
+        response = client.query_workspace(
+            workspace_id=workspace_guid,
+            query=kql,
+            timespan=timespan,
+        )
+
+        if response.status == LogsQueryStatus.SUCCESS:
+            rows: List[Dict[str, Any]] = []
+            for table in response.tables:
+                col_names = [col.name for col in table.columns]
+                for row in table.rows:
+                    rows.append(
+                        dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                    )
+            return _parse_arc_metrics_response(rows)
+        else:
+            logger.warning(
+                "vm_metrics: arc LA query partial/failed | status=%s error=%s",
+                response.status, getattr(response, "partial_error", ""),
+            )
+            return []
+    except Exception as exc:
+        logger.error(
+            "vm_metrics: arc LA query failed | error=%s", exc, exc_info=True
+        )
+        return []
+
+
 @router.get("/{resource_id_base64}/metrics")
 async def get_vm_metrics(
     resource_id_base64: str,
@@ -372,10 +716,64 @@ async def get_vm_metrics(
 
     metric_names = [m.strip() for m in metrics.split(",") if m.strip()]
     logger.info(
-        "vm_metrics: request | resource=%s metrics=%d timespan=%s",
-        resource_id[-60:], len(metric_names), timespan,
+        "vm_metrics: request | resource=%s metrics=%d timespan=%s arc=%s",
+        resource_id[-60:], len(metric_names), timespan, _is_arc_vm(resource_id),
     )
 
+    # -------------------------------------------------------------------
+    # Arc VMs: query Log Analytics Perf table instead of platform metrics
+    # -------------------------------------------------------------------
+    if _is_arc_vm(resource_id):
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+
+        # Auto-discover the workspace from the VM's DCR associations.
+        # Falls back to LOG_ANALYTICS_WORKSPACE_RESOURCE_ID env var if no DCR found.
+        workspace_guid = await loop.run_in_executor(
+            None, _discover_arc_vm_workspace, credential, resource_id,
+        )
+        if not workspace_guid:
+            duration_ms = (time.monotonic() - start) * 1000
+            logger.warning(
+                "vm_metrics: arc VM — no Log Analytics workspace discoverable | duration_ms=%.0f",
+                duration_ms,
+            )
+            return {
+                "resource_id": resource_id,
+                "timespan": timespan,
+                "interval": interval,
+                "metrics": [],
+                "source": "log_analytics",
+            }
+
+        metrics_out = await loop.run_in_executor(
+            None,
+            _fetch_arc_vm_metrics_sync,
+            credential,
+            workspace_guid,
+            resource_id,
+            metric_names,
+            timespan,
+            interval,
+        )
+
+        duration_ms = (time.monotonic() - start) * 1000
+        logger.info(
+            "vm_metrics: arc complete | resource=%s returned=%d duration_ms=%.0f",
+            resource_id[-60:], len(metrics_out), duration_ms,
+        )
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "interval": interval,
+            "metrics": metrics_out,
+            "source": "log_analytics",
+        }
+
+    # -------------------------------------------------------------------
+    # Azure VMs: use platform metrics (Azure Monitor)
+    # -------------------------------------------------------------------
     try:
         import asyncio
         from azure.mgmt.monitor import MonitorManagementClient
@@ -413,6 +811,7 @@ async def get_vm_metrics(
             "timespan": timespan,
             "interval": interval,
             "metrics": metrics_out,
+            "source": "platform_metrics",
         }
 
     except Exception as exc:
