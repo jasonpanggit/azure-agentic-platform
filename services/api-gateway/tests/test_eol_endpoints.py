@@ -34,27 +34,27 @@ from services.api_gateway.eol_endpoints import (
 class TestParseOsForEol:
     def test_windows_server_2025_standard(self):
         result = _parse_os_for_eol("Windows Server 2025 Standard")
-        assert result == ("windows-server-2025", "2025")
+        assert result == ("windows-server", "2025")
 
     def test_windows_server_2019_datacenter(self):
         result = _parse_os_for_eol("Windows Server 2019 Datacenter")
-        assert result == ("windows-server-2019", "2019")
+        assert result == ("windows-server", "2019")
 
     def test_windows_server_2012_r2_standard(self):
         result = _parse_os_for_eol("Windows Server 2012 R2 Standard")
-        assert result == ("windows-server-2012-r2", "2012-r2")
+        assert result == ("windows-server", "2012-r2")
 
     def test_windows_server_2008_r2(self):
         result = _parse_os_for_eol("Windows Server 2008 R2 Datacenter")
-        assert result == ("windows-server-2008-r2", "2008-r2")
+        assert result == ("windows-server", "2008-r2")
 
     def test_windows_server_2022(self):
         result = _parse_os_for_eol("Windows Server 2022")
-        assert result == ("windows-server-2022", "2022")
+        assert result == ("windows-server", "2022")
 
     def test_windows_server_2016_essentials(self):
         result = _parse_os_for_eol("Windows Server 2016 Essentials")
-        assert result == ("windows-server-2016", "2016")
+        assert result == ("windows-server", "2016")
 
     def test_ubuntu_2204_lts(self):
         result = _parse_os_for_eol("Ubuntu 22.04 LTS")
@@ -64,6 +64,26 @@ class TestParseOsForEol:
         result = _parse_os_for_eol("Ubuntu 20.04")
         assert result == ("ubuntu", "20.04")
 
+    def test_rhel_9(self):
+        result = _parse_os_for_eol("RHEL 9")
+        assert result == ("rhel", "9")
+
+    def test_rhel_8(self):
+        result = _parse_os_for_eol("RHEL 8")
+        assert result == ("rhel", "8")
+
+    def test_sles_15(self):
+        result = _parse_os_for_eol("SLES 15")
+        assert result == ("sles", "15")
+
+    def test_debian_12(self):
+        result = _parse_os_for_eol("Debian 12")
+        assert result == ("debian", "12")
+
+    def test_centos_8(self):
+        result = _parse_os_for_eol("CentOS 8")
+        assert result == ("centos", "8")
+
     def test_unrecognised_os(self):
         assert _parse_os_for_eol("Red Hat Enterprise Linux 9") is None
 
@@ -72,7 +92,7 @@ class TestParseOsForEol:
 
     def test_case_insensitive(self):
         result = _parse_os_for_eol("windows server 2025 standard")
-        assert result == ("windows-server-2025", "2025")
+        assert result == ("windows-server", "2025")
 
 
 # ---------------------------------------------------------------------------

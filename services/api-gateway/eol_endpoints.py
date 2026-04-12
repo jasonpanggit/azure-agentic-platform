@@ -70,24 +70,60 @@ _WINDOWS_SERVER_YEARS = [
 # Ubuntu: "Ubuntu 22.04 LTS" -> ("ubuntu", "22.04")
 _UBUNTU_RE = re.compile(r"ubuntu\s+(\d+\.\d+)", re.IGNORECASE)
 
+# RHEL: "RHEL 9", "RHEL 8" -> ("rhel", "9")
+_RHEL_RE = re.compile(r"rhel\s+(\d+)", re.IGNORECASE)
+
+# SLES: "SLES 15" -> ("sles", "15")
+_SLES_RE = re.compile(r"sles\s+(\d+)", re.IGNORECASE)
+
+# Debian: "Debian 12" -> ("debian", "12")
+_DEBIAN_RE = re.compile(r"debian\s+(\d+)", re.IGNORECASE)
+
+# CentOS: "CentOS 8" -> ("centos", "8")
+_CENTOS_RE = re.compile(r"centos\s+(\d+)", re.IGNORECASE)
+
 
 def _parse_os_for_eol(os_name: str) -> tuple[str, str] | None:
     """Parse an OS display name into (product_slug, cycle) for endoflife.date.
+
+    Product slugs must match the endoflife.date URL scheme exactly:
+      https://endoflife.date/api/{product}/{cycle}.json
 
     Returns None for unrecognised OS names.
     """
     lower = os_name.lower()
 
-    # Windows Server
+    # Windows Server — slug is always "windows-server", cycle is the year
+    # e.g. "Windows Server 2022 Datacenter" -> ("windows-server", "2022")
     for year in _WINDOWS_SERVER_YEARS:
         if f"windows server {year}" in lower:
-            slug_year = year.replace(" ", "-")
-            return f"windows-server-{slug_year}", slug_year
+            cycle = year.replace(" ", "-")
+            return "windows-server", cycle
 
     # Ubuntu
     m = _UBUNTU_RE.search(os_name)
     if m:
         return "ubuntu", m.group(1)
+
+    # RHEL
+    m = _RHEL_RE.search(os_name)
+    if m:
+        return "rhel", m.group(1)
+
+    # SLES
+    m = _SLES_RE.search(os_name)
+    if m:
+        return "sles", m.group(1)
+
+    # Debian
+    m = _DEBIAN_RE.search(os_name)
+    if m:
+        return "debian", m.group(1)
+
+    # CentOS
+    m = _CENTOS_RE.search(os_name)
+    if m:
+        return "centos", m.group(1)
 
     return None
 
