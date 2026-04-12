@@ -21,10 +21,15 @@ from services.api_gateway.dependencies import get_credential
 # Lazy import — may not be available in all environments
 try:
     from azure.mgmt.advisor import AdvisorManagementClient
-except ImportError:
+    _ADVISOR_IMPORT_ERROR: str = ""
+except Exception as _e:  # noqa: BLE001
     AdvisorManagementClient = None  # type: ignore[assignment,misc]
+    _ADVISOR_IMPORT_ERROR = str(_e)
 
 logger = logging.getLogger(__name__)
+
+if AdvisorManagementClient is None:
+    logger.warning("azure-mgmt-advisor unavailable: %s", _ADVISOR_IMPORT_ERROR or "ImportError")
 
 router = APIRouter(prefix="/api/v1/vms", tags=["vm-cost"])
 
@@ -64,7 +69,7 @@ async def get_vm_cost_summary(
     """
     if AdvisorManagementClient is None:
         return {
-            "error": "azure-mgmt-advisor not installed",
+            "error": f"azure-mgmt-advisor not installed: {_ADVISOR_IMPORT_ERROR}" if _ADVISOR_IMPORT_ERROR else "azure-mgmt-advisor not installed",
             "vms": [],
             "total_recommendations": 0,
         }
