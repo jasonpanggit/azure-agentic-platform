@@ -453,14 +453,45 @@ async def get_vmss_detail(
             logger.warning("vmss_detail: autoscale query failed error=%s", autoscale_exc)
 
         # Derive healthy_instance_count from running instances (power_state contains "running")
-        # AKS-managed VMSS report sku.capacity == 0; use the actual instance list length as fallback.
+        # AKS-managed VMSS: sku.capacity == 0 and instances list is empty because AKS controls
+        # node counts via its own API. Fall back to the AKS agent pools API when we detect we
+        # are inside an AKS managed resource group (starts with "MC_" case-insensitively).
         sku_capacity = int(vmss.sku.capacity or 0) if vmss.sku else 0
-        total = len(instances) if sku_capacity == 0 and instances else sku_capacity
-        running_count = sum(
-            1 for inst in instances
-            if "running" in (inst.get("power_state") or "").lower()
-        )
-        healthy_instance_count = running_count if instances else total
+        is_aks_managed = resource_group.upper().startswith("MC_")
+        if is_aks_managed and sku_capacity == 0:
+            # Parse cluster name from MC_<rg>_<cluster>_<location> convention
+            mc_parts = resource_group.split("_")
+            # mc_parts[0]="MC", mc_parts[-1]=location; cluster name is in between
+            # e.g. MC_rg-srelab-australiaeast_aks-srelab_australiaeast → aks-srelab
+            aks_cluster_name = mc_parts[-2] if len(mc_parts) >= 3 else ""
+            # Resolve the original resource group that contains the AKS cluster
+            # (strip "MC_" prefix and trailing "_<location>")
+            original_rg = "_".join(mc_parts[1:-1]) if len(mc_parts) >= 3 else ""
+            aks_total = 0
+            aks_running = 0
+            try:
+                from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+                aks_client = ContainerServiceClient(credential, subscription_id)
+                for pool in aks_client.agent_pools.list(original_rg, aks_cluster_name):
+                    # VMSS names follow pattern: aks-<poolname>-<hash>-vmss
+                    # Match by checking for "-<poolname>-" substring in vmss_name
+                    if pool.name and f"-{pool.name}-" in vmss_name.lower():
+                        count = pool.count or 0
+                        aks_total += count
+                        power_code = getattr(getattr(pool, "power_state", None), "code", None)
+                        if power_code and power_code.lower() == "running":
+                            aks_running += count
+            except Exception as aks_exc:
+                logger.debug("vmss_detail: aks agent_pools fallback failed error=%s", aks_exc)
+            total = aks_total
+            running_count = aks_running
+        else:
+            total = len(instances) if sku_capacity == 0 and instances else sku_capacity
+            running_count = sum(
+                1 for inst in instances
+                if "running" in (inst.get("power_state") or "").lower()
+            )
+        healthy_instance_count = running_count if total > 0 else 0
 
         # Derive health_state from healthy ratio
         if total == 0:
