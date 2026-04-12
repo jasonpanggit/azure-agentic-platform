@@ -765,7 +765,9 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                   <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
-            ) : metrics.length === 0 || metrics.every(m => m.timeseries.length === 0) ? (
+            ) : metrics.length === 0 || metrics.every(m =>
+              m.timeseries.length === 0 || m.timeseries.every(p => p.average == null)
+            ) ? (
               <div className="py-8 text-center">
                 <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
