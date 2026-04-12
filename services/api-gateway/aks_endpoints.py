@@ -107,13 +107,15 @@ async def list_aks_clusters(
 
         kql = """Resources
 | where type =~ 'microsoft.containerservice/managedclusters'
+| extend agentPools = properties.agentPoolProfiles
 | project id, name, resourceGroup, subscriptionId, location,
     kubernetes_version = tostring(properties.kubernetesVersion),
     fqdn = tostring(properties.fqdn),
     network_plugin = tostring(properties.networkProfile.networkPlugin),
-    rbac_enabled = tobool(properties.enableRBAC),
-    node_pool_count = array_length(properties.agentPoolProfiles),
-    node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(properties.agentPoolProfiles), 0),
+    rbac_enabled = iff(tobool(properties.enableRBAC) == true, 1, 0),
+    node_pool_count = array_length(agentPools),
+    node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(agentPools), 0),
+    total_nodes = toint(coalesce(toint(properties.agentPoolProfiles[0].count), 0)) + toint(coalesce(toint(properties.agentPoolProfiles[1].count), 0)) + toint(coalesce(toint(properties.agentPoolProfiles[2].count), 0)),
     system_pod_health = 'unknown',
     active_alert_count = 0"""
 
@@ -136,14 +138,15 @@ async def list_aks_clusters(
                 "location": r.get("location", ""),
                 "kubernetes_version": r.get("kubernetes_version", ""),
                 "latest_available_version": None,
-                "node_pool_count": r.get("node_pool_count", 0),
-                "node_pools_ready": r.get("node_pools_ready", 0),
-                "total_nodes": 0,
-                "ready_nodes": 0,
+                "node_pool_count": r.get("node_pool_count", 0) or 0,
+                "node_pools_ready": r.get("node_pools_ready", 0) or 0,
+                "total_nodes": r.get("total_nodes", 0) or 0,
+                "ready_nodes": r.get("total_nodes", 0) or 0,  # ARG has no per-node health; use total as proxy
                 "system_pod_health": "unknown",
                 "fqdn": r.get("fqdn") or None,
                 "network_plugin": r.get("network_plugin", ""),
-                "rbac_enabled": r.get("rbac_enabled", False),
+                # ARG tobool() returns int 0/1 — normalise to Python bool
+                "rbac_enabled": bool(r.get("rbac_enabled", False)),
                 "active_alert_count": 0,
             }
             for r in rows
