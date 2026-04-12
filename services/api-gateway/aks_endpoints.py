@@ -109,13 +109,10 @@ async def list_aks_clusters(
 | where type =~ 'microsoft.containerservice/managedclusters'
 | project id, name, resourceGroup, subscriptionId, location,
     kubernetes_version = tostring(properties.kubernetesVersion),
-    latest_available_version = tostring(properties.currentKubernetesVersion),
     fqdn = tostring(properties.fqdn),
     network_plugin = tostring(properties.networkProfile.networkPlugin),
     rbac_enabled = tobool(properties.enableRBAC),
     node_pool_count = array_length(properties.agentPoolProfiles),
-    total_nodes = toint(coalesce(toint(properties.agentPoolProfiles[0].count), 0)),
-    ready_nodes = toint(coalesce(toint(properties.agentPoolProfiles[0].count), 0)),
     node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(properties.agentPoolProfiles), 0),
     system_pod_health = 'unknown',
     active_alert_count = 0"""
@@ -138,11 +135,11 @@ async def list_aks_clusters(
                 "subscription_id": r.get("subscriptionId", ""),
                 "location": r.get("location", ""),
                 "kubernetes_version": r.get("kubernetes_version", ""),
-                "latest_available_version": None,  # Simplified — same as current means up to date
+                "latest_available_version": None,
                 "node_pool_count": r.get("node_pool_count", 0),
                 "node_pools_ready": r.get("node_pools_ready", 0),
-                "total_nodes": r.get("total_nodes", 0),
-                "ready_nodes": r.get("ready_nodes", 0),
+                "total_nodes": 0,
+                "ready_nodes": 0,
                 "system_pod_health": "unknown",
                 "fqdn": r.get("fqdn") or None,
                 "network_plugin": r.get("network_plugin", ""),
