@@ -11,6 +11,7 @@ Decode with: base64.urlsafe_b64decode(pad(resource_id_base64)).decode()
 from __future__ import annotations
 
 import base64
+import datetime
 import logging
 import os
 import time
@@ -550,6 +551,15 @@ _ISO_TO_KQL_INTERVAL: Dict[str, str] = {
 }
 
 
+_ISO_TO_TIMEDELTA: Dict[str, datetime.timedelta] = {
+    "PT1H": datetime.timedelta(hours=1),
+    "PT6H": datetime.timedelta(hours=6),
+    "PT24H": datetime.timedelta(hours=24),
+    "P7D": datetime.timedelta(days=7),
+    "P30D": datetime.timedelta(days=30),
+}
+
+
 def _iso_to_kql_duration(iso: str, mapping: Dict[str, str], fallback: str) -> str:
     """Convert an ISO 8601 duration string to a KQL timespan literal.
 
@@ -558,6 +568,22 @@ def _iso_to_kql_duration(iso: str, mapping: Dict[str, str], fallback: str) -> st
     Falls back to ``fallback`` for any unrecognised value.
     """
     return mapping.get(iso, fallback)
+
+
+def _iso_to_timedelta(iso: str) -> Optional[datetime.timedelta]:
+    """Convert an ISO 8601 duration string to a datetime.timedelta.
+
+    The azure-monitor-query SDK's ``LogsQueryClient.query_workspace()``
+    requires a ``timedelta`` (or ``None``) for its ``timespan`` parameter —
+    it does NOT accept raw ISO 8601 strings.  Passing a string causes
+    ``construct_iso8601()`` inside the SDK to raise ``ValueError``, which
+    our ``except Exception`` handler silently converts to an empty result.
+
+    Returns ``None`` for unrecognised strings so callers can pass
+    ``timespan=None`` (no API-level filter) and let the KQL ``ago()``
+    clause handle time-scoping instead.
+    """
+    return _ISO_TO_TIMEDELTA.get(iso)
 
 
 def _build_arc_metrics_kql(resource_id: str, counters: List[str], timespan: str, interval: str) -> str:
@@ -690,27 +716,35 @@ def _fetch_arc_vm_metrics_sync(
 
     try:
         client = LogsQueryClient(credential)
+        # query_workspace requires a timedelta (or None) — not an ISO 8601 string.
+        # Passing a raw string (e.g. "P7D") causes construct_iso8601() inside the
+        # SDK to raise ValueError, which our except-clause silently returns as [].
+        # The KQL already contains an ago() clause that scopes the time range, so
+        # passing None here (no API-level filter) is safe for any timespan we don't
+        # recognise; for known timespans we pass the exact timedelta for defence-in-depth.
+        query_timespan = _iso_to_timedelta(timespan)
         response = client.query_workspace(
             workspace_id=workspace_guid,
             query=kql,
-            timespan=timespan,
+            timespan=query_timespan,
         )
 
-        if response.status == LogsQueryStatus.SUCCESS:
-            rows: List[Dict[str, Any]] = []
-            for table in response.tables:
-                col_names = [col.name for col in table.columns]
-                for row in table.rows:
-                    rows.append(
-                        dict(zip(col_names, [str(v) if v is not None else None for v in row]))
-                    )
-            return _parse_arc_metrics_response(rows)
-        else:
+        rows: List[Dict[str, Any]] = []
+        tables = getattr(response, "tables", []) or []
+        for table in tables:
+            col_names = [col.name for col in table.columns]
+            for row in table.rows:
+                rows.append(
+                    dict(zip(col_names, [str(v) if v is not None else None for v in row]))
+                )
+
+        if response.status != LogsQueryStatus.SUCCESS:
             logger.warning(
-                "vm_metrics: arc LA query partial/failed | status=%s error=%s",
-                response.status, getattr(response, "partial_error", ""),
+                "vm_metrics: arc LA query partial/failed | status=%s error=%s rows_recovered=%d",
+                response.status, getattr(response, "partial_error", ""), len(rows),
             )
-            return []
+
+        return _parse_arc_metrics_response(rows)
     except Exception as exc:
         logger.error(
             "vm_metrics: arc LA query failed | error=%s", exc, exc_info=True
