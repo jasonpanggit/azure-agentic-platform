@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
-import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity } from 'lucide-react'
+import { X, RefreshCw, AlertTriangle, CheckCircle, XCircle, HelpCircle, Activity, ShieldAlert, Package } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
@@ -159,6 +159,47 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
   { id: 'chat',     label: 'AI Chat' },
 ]
 
+// ── Patch types & helpers ─────────────────────────────────────────────────────
+
+interface PendingPatch {
+  readonly patchName: string
+  readonly classifications: readonly string[]
+  readonly rebootRequired: boolean
+  readonly kbid: string
+  readonly version: string
+  readonly publishedDateTime: string | null
+  readonly cves: readonly string[]
+}
+
+interface InstalledPatch {
+  readonly SoftwareName: string
+  readonly SoftwareType: string
+  readonly CurrentVersion: string
+  readonly Publisher: string
+  readonly Category: string
+  readonly InstalledDate: string
+  readonly cves: readonly string[]
+}
+
+type PatchSubTab = 'pending' | 'installed'
+type DaysOption = '30' | '90' | '180' | '365'
+
+const DAYS_OPTIONS: readonly { readonly value: DaysOption; readonly label: string }[] = [
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '180', label: '180d' },
+  { value: '365', label: '1y' },
+]
+
+const PATCH_SOFTWARE_TYPES = new Set(['patch', 'update', 'hotfix'])
+
+function classificationBadgeColor(cls: string): { bg: string; text: string } {
+  const lower = cls.toLowerCase()
+  if (lower === 'critical') return { bg: 'color-mix(in srgb, var(--accent-red) 15%, transparent)', text: 'var(--accent-red)' }
+  if (lower === 'security') return { bg: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)', text: 'var(--accent-orange)' }
+  return { bg: 'var(--bg-subtle)', text: 'var(--text-secondary)' }
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }: VMDetailPanelProps) {
@@ -175,6 +216,15 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
   const [pollingEvidence, setPollingEvidence] = useState(false)
   const metricsLoadedForTimeRange = useRef<string | null>(null)
+
+  // ── Patch state ──────────────────────────────────────────────────────────
+  const [patchSubTab, setPatchSubTab] = useState<PatchSubTab>('pending')
+  const [pendingPatches, setPendingPatches] = useState<readonly PendingPatch[]>([])
+  const [installedPatches, setInstalledPatches] = useState<readonly InstalledPatch[]>([])
+  const [patchLoading, setPatchLoading] = useState(false)
+  const [patchError, setPatchError] = useState<string | null>(null)
+  const [patchDays, setPatchDays] = useState<DaysOption>('90')
+  const patchLoadedRef = useRef(false)
 
   // ── Panel resize state ───────────────────────────────────────────────────
   const [panelWidth, setPanelWidth] = useState<number>(() => {
@@ -318,6 +368,72 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       setMetricsLoading(false)
     }
   }, [resourceId, timeRange, selectedMetrics, getAccessToken])
+
+  // Fetch pending patches (ARG-based)
+  const fetchPendingPatches = useCallback(async () => {
+    if (!resourceId) return
+    try {
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(
+        `/api/proxy/patch/pending?resource_id=${encodeURIComponent(resourceId)}`,
+        { headers, signal: AbortSignal.timeout(15000) }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setPendingPatches(data.patches ?? [])
+    } catch (err) {
+      setPendingPatches([])
+      throw err // let caller handle
+    }
+  }, [resourceId, getAccessToken])
+
+  // Fetch installed patches (Log Analytics)
+  const fetchInstalledPatches = useCallback(async (daysVal: string) => {
+    if (!resourceId) return
+    try {
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(
+        `/api/proxy/patch/installed?resource_id=${encodeURIComponent(resourceId)}&days=${daysVal}`,
+        { headers, signal: AbortSignal.timeout(15000) }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setInstalledPatches(
+        (data.patches ?? []).filter((p: InstalledPatch) =>
+          PATCH_SOFTWARE_TYPES.has(p.SoftwareType.toLowerCase())
+        )
+      )
+    } catch (err) {
+      setInstalledPatches([])
+      throw err // let caller handle
+    }
+  }, [resourceId, getAccessToken])
+
+  // Fetch both pending and installed patches
+  const fetchAllPatches = useCallback(async (daysVal: string) => {
+    setPatchLoading(true)
+    setPatchError(null)
+    try {
+      await Promise.all([
+        fetchPendingPatches(),
+        fetchInstalledPatches(daysVal),
+      ])
+    } catch (err) {
+      setPatchError(err instanceof Error ? err.message : 'Failed to load patch data')
+    } finally {
+      setPatchLoading(false)
+    }
+  }, [fetchPendingPatches, fetchInstalledPatches])
 
   // ── Diagnostic settings functions ────────────────────────────────────────
 
@@ -471,6 +587,13 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     setDiagDcrAssociated(null)
     setDiagError(null)
     metricsLoadedForTimeRange.current = null
+    setPatchSubTab('pending')
+    setPendingPatches([])
+    setInstalledPatches([])
+    setPatchLoading(false)
+    setPatchError(null)
+    setPatchDays('90')
+    patchLoadedRef.current = false
     setChatMessages([])
     setChatInput('')
     setChatThreadId(null)
@@ -509,12 +632,28 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     if (activeTab === 'metrics' && resourceId) {
       fetchMetrics()
     }
+    // Lazy-fetch patches on first visit to patches tab
+    if (activeTab === 'patches' && resourceId && !patchLoadedRef.current) {
+      patchLoadedRef.current = true
+      fetchAllPatches(patchDays)
+    }
     // Auto-fire chat on first visit to chat tab
     if (activeTab === 'chat' && !chatAutoFired.current && !chatStreaming) {
       chatAutoFired.current = true
       sendChatMessage('Summarize this VM\'s health and suggest investigation steps.')
     }
   }, [activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refetch installed patches when days selector changes (only if patches tab is active)
+  useEffect(() => {
+    if (activeTab === 'patches' && resourceId && patchLoadedRef.current) {
+      setPatchLoading(true)
+      setPatchError(null)
+      fetchInstalledPatches(patchDays)
+        .catch(err => setPatchError(err instanceof Error ? err.message : 'Failed to load patches'))
+        .finally(() => setPatchLoading(false))
+    }
+  }, [patchDays]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refetch metrics when time range or metric selection changes (only if tab is active)
   useEffect(() => {
@@ -1047,48 +1186,317 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
 
             {/* ── Patches tab ───────────────────────────────────────────── */}
             {activeTab === 'patches' && (
-              <div className="p-4">
-                <div
-                  className="rounded-lg p-4 space-y-3"
-                  style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                      style={{ background: `color-mix(in srgb, var(--accent-blue) 12%, transparent)` }}
-                    >
-                      <Activity className="h-4 w-4" style={{ color: 'var(--accent-blue)' }} />
+              <div className="p-4 space-y-3">
+
+                {/* Summary stat chips */}
+                {(() => {
+                  const criticalCount = pendingPatches.filter(p =>
+                    p.classifications.some(c => c.toLowerCase() === 'critical')
+                  ).length
+                  const securityCount = pendingPatches.filter(p =>
+                    p.classifications.some(c => c.toLowerCase() === 'security')
+                  ).length
+                  const rebootRequired = pendingPatches.some(p => p.rebootRequired)
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        {
+                          label: 'Pending',
+                          value: patchLoading ? '…' : String(pendingPatches.length),
+                          color: pendingPatches.length > 0 ? 'var(--accent-orange)' : 'var(--text-primary)',
+                        },
+                        {
+                          label: 'Critical',
+                          value: patchLoading ? '…' : String(criticalCount),
+                          color: criticalCount > 0 ? 'var(--accent-red)' : 'var(--text-primary)',
+                        },
+                        {
+                          label: 'Security',
+                          value: patchLoading ? '…' : String(securityCount),
+                          color: securityCount > 0 ? 'var(--accent-orange)' : 'var(--text-primary)',
+                        },
+                      ].map(chip => (
+                        <div
+                          key={chip.label}
+                          className="flex flex-col items-center rounded-lg p-2"
+                          style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                        >
+                          <span className="font-mono text-base font-semibold" style={{ color: chip.color }}>
+                            {chip.value}
+                          </span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{chip.label}</span>
+                        </div>
+                      ))}
+                      <div
+                        className="flex flex-col items-center rounded-lg p-2"
+                        style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                      >
+                        <span className="font-mono text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {patchLoading ? '…' : String(installedPatches.length)}
+                        </span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Installed</span>
+                      </div>
+                      <div
+                        className="flex flex-col items-center rounded-lg p-2 col-span-2"
+                        style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                      >
+                        <span
+                          className="font-mono text-base font-semibold"
+                          style={{ color: rebootRequired ? 'var(--accent-orange)' : 'var(--text-primary)' }}
+                        >
+                          {patchLoading ? '…' : rebootRequired ? 'Yes' : 'No'}
+                        </span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Reboot Required</span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Patch data available in Patch Management
-                      </p>
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        Patch assessment and installation history are shown in the{' '}
-                        <strong>Patch Management</strong> tab. You can filter by machine name to find this VM.
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="pt-3"
-                    style={{ borderTop: '1px solid var(--border-subtle)' }}
+                  )
+                })()}
+
+                {/* Sub-tab toggle + days selector */}
+                <div className="flex items-center gap-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                  <button
+                    onClick={() => setPatchSubTab('pending')}
+                    className="flex items-center gap-1 px-3 py-2 text-[11px] font-semibold transition-colors cursor-pointer"
+                    style={{
+                      borderBottom: patchSubTab === 'pending' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                      color: patchSubTab === 'pending' ? 'var(--accent-blue)' : 'var(--text-muted)',
+                      marginBottom: '-1px',
+                      background: 'transparent',
+                    }}
                   >
-                    <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-                      Use AI Chat to query patch status for this VM:
-                    </p>
+                    <ShieldAlert className="h-3 w-3" />
+                    Pending
+                    {pendingPatches.length > 0 && (
+                      <span
+                        className="text-[9px] px-1 py-0 rounded-full font-bold"
+                        style={{
+                          background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
+                          color: 'var(--accent-red)',
+                        }}
+                      >
+                        {pendingPatches.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setPatchSubTab('installed')}
+                    className="flex items-center gap-1 px-3 py-2 text-[11px] font-semibold transition-colors cursor-pointer"
+                    style={{
+                      borderBottom: patchSubTab === 'installed' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                      color: patchSubTab === 'installed' ? 'var(--accent-blue)' : 'var(--text-muted)',
+                      marginBottom: '-1px',
+                      background: 'transparent',
+                    }}
+                  >
+                    <Package className="h-3 w-3" />
+                    Installed
+                    {installedPatches.length > 0 && (
+                      <span
+                        className="text-[9px] px-1 py-0 rounded-full font-bold"
+                        style={{
+                          background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                          color: 'var(--accent-blue)',
+                        }}
+                      >
+                        {installedPatches.length}
+                      </span>
+                    )}
+                  </button>
+                  {patchSubTab === 'installed' && (
+                    <div className="ml-auto flex items-center gap-1">
+                      {DAYS_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setPatchDays(opt.value)}
+                          className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer"
+                          style={{
+                            background: patchDays === opt.value ? 'var(--accent-blue)' : 'var(--bg-subtle)',
+                            color: patchDays === opt.value ? 'white' : 'var(--text-secondary)',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Patch content */}
+                {patchLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
+                    ))}
+                  </div>
+                ) : patchError ? (
+                  <div className="py-8 text-center">
+                    <AlertTriangle className="h-6 w-6 mx-auto mb-2" style={{ color: 'var(--accent-red)' }} />
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{patchError}</p>
                     <button
-                      onClick={() => setActiveTab('chat')}
-                      className="w-full text-sm py-2 px-3 rounded-md cursor-pointer text-center transition-colors"
-                      style={{
-                        background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
-                        color: 'var(--accent-blue)',
-                        border: '1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)',
-                      }}
+                      onClick={() => fetchAllPatches(patchDays)}
+                      className="mt-2 text-xs px-3 py-1 rounded cursor-pointer"
+                      style={{ background: 'var(--bg-subtle)', color: 'var(--accent-blue)' }}
                     >
-                      Ask AI about patch status
+                      Retry
                     </button>
                   </div>
-                </div>
+                ) : patchSubTab === 'pending' ? (
+                  pendingPatches.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <CheckCircle className="h-6 w-6 mx-auto mb-2" style={{ color: 'var(--accent-green)' }} />
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        No pending patches. This VM is up to date.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {pendingPatches.map((p, idx) => (
+                        <div
+                          key={`${p.patchName}-${idx}`}
+                          className="rounded-md p-2.5"
+                          style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-medium truncate flex-1" style={{ color: 'var(--text-primary)' }} title={p.patchName}>
+                              {p.patchName}
+                            </p>
+                            {p.kbid && (
+                              <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                                {p.kbid.toUpperCase().startsWith('KB') ? p.kbid : `KB${p.kbid}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {p.classifications.map(cls => {
+                              const c = classificationBadgeColor(cls)
+                              return (
+                                <span
+                                  key={cls}
+                                  className="text-[9px] font-medium px-1.5 py-0.5 rounded"
+                                  style={{ background: c.bg, color: c.text }}
+                                >
+                                  {cls}
+                                </span>
+                              )
+                            })}
+                            {p.version && (
+                              <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                                v{p.version}
+                              </span>
+                            )}
+                            {p.rebootRequired && (
+                              <span
+                                className="text-[9px] font-medium px-1.5 py-0.5 rounded"
+                                style={{
+                                  background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
+                                  color: 'var(--accent-orange)',
+                                }}
+                              >
+                                Reboot
+                              </span>
+                            )}
+                          </div>
+                          {p.cves && p.cves.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {p.cves.slice(0, 3).map(cve => (
+                                <span
+                                  key={cve}
+                                  className="font-mono text-[9px] px-1 py-0.5 rounded"
+                                  style={{
+                                    background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                                    color: 'var(--accent-blue)',
+                                  }}
+                                >
+                                  {cve}
+                                </span>
+                              ))}
+                              {p.cves.length > 3 && (
+                                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                                  +{p.cves.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  installedPatches.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <Package className="h-6 w-6 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        No installed patches recorded in the last {patchDays} days.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {installedPatches.map((p, idx) => {
+                        const kbMatch = /KB(\d+)/i.exec(p.SoftwareName)
+                        const kbId = kbMatch ? `KB${kbMatch[1]}` : null
+                        const c = classificationBadgeColor(p.Category)
+                        return (
+                          <div
+                            key={`${p.SoftwareName}-${p.CurrentVersion}-${idx}`}
+                            className="rounded-md p-2.5"
+                            style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-medium truncate flex-1" style={{ color: 'var(--text-primary)' }} title={p.SoftwareName}>
+                                {p.SoftwareName}
+                              </p>
+                              {kbId && (
+                                <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                                  {kbId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span
+                                className="text-[9px] font-medium px-1.5 py-0.5 rounded"
+                                style={{ background: c.bg, color: c.text }}
+                              >
+                                {p.Category || 'Other'}
+                              </span>
+                              {p.CurrentVersion && (
+                                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                                  v{p.CurrentVersion}
+                                </span>
+                              )}
+                              {p.InstalledDate && (
+                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                  {new Date(p.InstalledDate).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            {p.cves && p.cves.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {p.cves.slice(0, 3).map(cve => (
+                                  <span
+                                    key={cve}
+                                    className="font-mono text-[9px] px-1 py-0.5 rounded"
+                                    style={{
+                                      background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                                      color: 'var(--accent-blue)',
+                                    }}
+                                  >
+                                    {cve}
+                                  </span>
+                                ))}
+                                {p.cves.length > 3 && (
+                                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                                    +{p.cves.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                )}
               </div>
             )}
 

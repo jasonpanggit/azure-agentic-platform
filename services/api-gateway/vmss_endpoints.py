@@ -41,6 +41,24 @@ def _log_sdk_availability() -> None:
 _log_sdk_availability()
 
 
+# ---------------------------------------------------------------------------
+# Metrics constants
+# ---------------------------------------------------------------------------
+
+VMSS_DEFAULT_METRICS = [
+    "Percentage CPU",
+    "Available Memory Bytes",
+    "Disk Read Bytes",
+    "Disk Write Bytes",
+    "Disk Read Operations/Sec",
+    "Disk Write Operations/Sec",
+    "Network In Total",
+    "Network Out Total",
+    "VM Scale Set VM Instance Count",
+    "OS Disk Queue Depth",
+]
+
+
 def _decode_resource_id(encoded: str) -> str:
     """Decode base64url-encoded ARM resource ID."""
     padding = 4 - len(encoded) % 4
@@ -80,6 +98,56 @@ class VMSSChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+def _fetch_single_metric_vmss(
+    client: Any,
+    resource_id: str,
+    metric_name: str,
+    timespan: str,
+    interval: str,
+) -> Optional[Dict[str, Any]]:
+    """Fetch a single VMSS metric from Azure Monitor.
+
+    Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
+    the metric is unsupported or returns no data. Exceptions are caught
+    per-metric so one unsupported metric cannot poison the whole batch.
+    """
+    try:
+        response = client.metrics.list(
+            resource_uri=resource_id,
+            metricnames=metric_name,
+            timespan=timespan,
+            interval=interval,
+            aggregation="Average,Maximum,Minimum",
+        )
+        for metric in response.value:
+            timeseries = []
+            for ts in metric.timeseries:
+                for dp in ts.data:
+                    if dp.time_stamp:
+                        timeseries.append({
+                            "timestamp": dp.time_stamp.isoformat(),
+                            "average": dp.average,
+                            "maximum": dp.maximum,
+                            "minimum": dp.minimum,
+                        })
+            name_val = (
+                metric.name.value if hasattr(metric.name, "value")
+                else str(metric.name) if metric.name else None
+            )
+            unit_val = (
+                metric.unit.value if hasattr(metric.unit, "value")
+                else str(metric.unit) if metric.unit else None
+            )
+            return {"name": name_val, "unit": unit_val, "timeseries": timeseries}
+        return None
+    except Exception as exc:
+        logger.warning(
+            "vmss_metrics: skipping metric=%r | error=%s", metric_name, exc
+        )
+        return None
+
 
 @router.get("")
 async def list_vmss(
@@ -315,21 +383,81 @@ async def get_vmss_detail(
 @router.get("/{resource_id_base64}/metrics")
 async def get_vmss_metrics(
     resource_id_base64: str,
-    timespan: str = Query("PT24H"),
-    interval: str = Query("PT5M"),
+    metrics: str = Query(
+        ",".join(VMSS_DEFAULT_METRICS[:8]),
+        description="Comma-separated Azure Monitor metric names",
+    ),
+    timespan: str = Query("PT24H", description="ISO 8601 duration"),
+    interval: str = Query("PT5M", description="ISO 8601 interval"),
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Get Azure Monitor metrics for a VMSS."""
+    """Get Azure Monitor metrics for a VMSS.
+
+    Each metric is fetched concurrently so one unsupported metric cannot
+    poison the whole batch.
+    """
     start_time = time.monotonic()
     try:
         resource_id = _decode_resource_id(resource_id_base64)
     except ValueError:
         return {"resource_id": "", "timespan": timespan, "interval": interval, "metrics": []}
 
-    # Return empty metrics stub — real metrics implementation deferred to Phase 36
-    duration_ms = (time.monotonic() - start_time) * 1000
-    logger.info("vmss_metrics: resource_id=%s timespan=%s duration_ms=%.1f", resource_id[:60], timespan, duration_ms)
-    return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+    subscription_id = _extract_subscription_id(resource_id)
+    metric_names = [m.strip() for m in metrics.split(",") if m.strip()]
+    logger.info(
+        "vmss_metrics: request | resource=%s metrics=%d timespan=%s",
+        resource_id[-60:], len(metric_names), timespan,
+    )
+
+    try:
+        import asyncio
+        from azure.identity import DefaultAzureCredential
+        from azure.mgmt.monitor import MonitorManagementClient
+
+        credential = DefaultAzureCredential()
+        client = MonitorManagementClient(credential, subscription_id)
+        loop = asyncio.get_event_loop()
+
+        tasks = [
+            loop.run_in_executor(
+                None,
+                _fetch_single_metric_vmss,
+                client,
+                resource_id,
+                name,
+                timespan,
+                interval,
+            )
+            for name in metric_names
+        ]
+        results = await asyncio.gather(*tasks)
+        metrics_out = [r for r in results if r is not None]
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "vmss_metrics: complete | resource=%s requested=%d returned=%d duration_ms=%.0f",
+            resource_id[-60:], len(metric_names), len(metrics_out), duration_ms,
+        )
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "interval": interval,
+            "metrics": metrics_out,
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "vmss_metrics: failed | resource=%s error=%s duration_ms=%.0f",
+            resource_id[-60:], exc, duration_ms,
+        )
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "interval": interval,
+            "metrics": [],
+            "fetch_error": str(exc),
+        }
 
 
 @router.post("/{resource_id_base64}/chat")

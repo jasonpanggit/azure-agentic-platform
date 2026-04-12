@@ -15,6 +15,7 @@ export async function GET(
   const searchParams = req.nextUrl.searchParams;
   const timespan = searchParams.get('timespan') ?? 'PT24H';
   const interval = searchParams.get('interval') ?? 'PT5M';
+  const metrics = searchParams.get('metrics') ?? '';
 
   log.info('proxy request', { aksId: aksId.slice(0, 40), timespan });
 
@@ -22,6 +23,7 @@ export async function GET(
     const url = new URL(`${getApiGatewayUrl()}/api/v1/aks/${encodeURIComponent(aksId)}/metrics`);
     url.searchParams.set('timespan', timespan);
     url.searchParams.set('interval', interval);
+    if (metrics) url.searchParams.set('metrics', metrics);
 
     const upstreamHeaders = buildUpstreamHeaders(req.headers.get('Authorization'), false);
 
