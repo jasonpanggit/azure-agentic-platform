@@ -1,8 +1,7 @@
 name: Staging E2E + Incident Simulation
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
   pull_request:
     paths:
       - '.github/workflows/staging-e2e-simulation.yml'
