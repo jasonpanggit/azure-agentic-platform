@@ -133,6 +133,9 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
       const res = await fetch(`/api/proxy/vmss/${encoded}`, { headers })
       if (!res.ok) throw new Error(`Status ${res.status}`)
       const data = await res.json()
+      if (data.fetch_error) {
+        setError(`Failed to load scale set details: ${data.fetch_error}`)
+      }
       setDetail(data)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
