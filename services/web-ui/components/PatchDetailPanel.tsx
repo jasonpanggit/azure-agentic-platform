@@ -63,7 +63,7 @@ interface PendingPatch {
   readonly cves: readonly string[];
 }
 
-interface InstalledPatchesPanelProps {
+interface PatchDetailPanelProps {
   readonly machine: PanelMachine | null;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -375,11 +375,11 @@ interface DragState {
 // Main Panel Component
 // ---------------------------------------------------------------------------
 
-export function InstalledPatchesPanel({
+export function PatchDetailPanel({
   machine,
   open,
   onOpenChange,
-}: InstalledPatchesPanelProps) {
+}: PatchDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('pending');
 
   // Pending patches (ARG)

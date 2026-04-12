@@ -22,7 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MetricCard, HealthStatus } from './MetricCard';
-import { InstalledPatchesPanel, PanelMachine } from './InstalledPatchesPanel';
+import { PatchDetailPanel, PanelMachine } from './PatchDetailPanel';
 import { ShieldCheck, RefreshCw, Search } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
@@ -676,7 +676,7 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
         </div>
       )}
       {/* Drill-down panel for installed patches */}
-      <InstalledPatchesPanel
+      <PatchDetailPanel
         machine={selectedMachine}
         open={panelOpen}
         onOpenChange={handlePanelOpenChange}
