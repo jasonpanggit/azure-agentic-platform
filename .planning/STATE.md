@@ -18,6 +18,8 @@ progress:
 
 > Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
 
+> Last activity: 2026-04-13 - Completed quick task 260413-1z2: Overview tab in all detail panels should show the resource name at the top
+
 > Last activity: 2026-04-12 - Completed quick task 260412-lae: Show patch data inline in VM detail panel patch tab instead of redirect message
 
 > Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design — 5 tabs: Overview, Metrics, Evidence, Patches, AI Chat
@@ -410,6 +412,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260411-wm8 | move chat button from right to left and chat panel as well | 2026-04-11 | 5f80f38 | [260411-wm8-move-chat-button-from-right-to-left-and-](./quick/260411-wm8-move-chat-button-from-right-to-left-and-/) |
 | 260411-wps | update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design with overview tab, ai chat tab and whatever tab you deem suitable | 2026-04-11 | d493ca3 | [260411-wps-update-vmdetailpanel-to-follow-vmss-and-](./quick/260411-wps-update-vmdetailpanel-to-follow-vmss-and-/) |
 | 260412-lae | Show patch data inline in VM detail panel patch tab instead of redirect message | 2026-04-12 | f6654b7 | [260412-lae-show-patch-data-inline-in-vm-detail-pane](./quick/260412-lae-show-patch-data-inline-in-vm-detail-pane/) |
+| 260413-1z2 | Overview tab in all detail panels should show the resource name at the top | 2026-04-13 | a5a1c0d | [260413-1z2-overview-tab-in-all-detail-panels-should](./quick/260413-1z2-overview-tab-in-all-detail-panels-should/) |
 | 260411-wyg | Fix VMSS and AKS tab and detail panel data bugs — error response guard, hardcoded health/instance stubs, autoscale, metrics | 2026-04-11 | 0295f3c | [260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da](./quick/260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da/) |
 | 260411-x45 | Fix VMSS list health column, VMSS/AKS metrics tabs, and AKS node health — resolve known limitations from previous fix | 2026-04-11 | 83f181e | [260411-x45-fix-vmss-list-health-column-vmss-aks-met](./quick/260411-x45-fix-vmss-list-health-column-vmss-aks-met/) |
 
