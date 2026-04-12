@@ -221,7 +221,10 @@ async def get_vmss_detail(
             {
                 "instance_id": inst.instance_id or "",
                 "name": inst.name or "",
-                "power_state": (inst.instance_view.statuses[-1].display_status if inst.instance_view and inst.instance_view.statuses else "unknown"),
+                "power_state": (inst.instance_view.statuses[-1].display_status
+                                if inst.instance_view and inst.instance_view.statuses
+                                and len(inst.instance_view.statuses) > 0
+                                else "unknown"),
                 "health_state": "unknown",
                 "provisioning_state": inst.provisioning_state or "unknown",
             }
@@ -255,10 +258,9 @@ async def get_vmss_detail(
             "sku": vmss.sku.name if vmss.sku else "",
             "instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
             "healthy_instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
-            "os_type": (vmss.virtual_machine_profile.storage_profile.os_disk.os_type.value
+            "os_type": (str(vmss.virtual_machine_profile.storage_profile.os_disk.os_type or "")
                         if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
                         and vmss.virtual_machine_profile.storage_profile.os_disk
-                        and vmss.virtual_machine_profile.storage_profile.os_disk.os_type
                         else ""),
             "os_image_version": " ".join(filter(None, [
                 (vmss.virtual_machine_profile.storage_profile.image_reference.offer
@@ -276,7 +278,7 @@ async def get_vmss_detail(
             "active_alert_count": 0,
             "min_count": autoscale_settings["min_count"],
             "max_count": autoscale_settings["max_count"],
-            "upgrade_policy": (vmss.upgrade_policy.mode.value if vmss.upgrade_policy and vmss.upgrade_policy.mode else ""),
+            "upgrade_policy": (str(vmss.upgrade_policy.mode or "") if vmss.upgrade_policy else ""),
             "health_summary": None,
             "active_incidents": [],
             "instances": instances,
