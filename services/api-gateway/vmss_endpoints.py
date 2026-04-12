@@ -459,14 +459,14 @@ async def get_vmss_detail(
         sku_capacity = int(vmss.sku.capacity or 0) if vmss.sku else 0
         is_aks_managed = resource_group.upper().startswith("MC_")
         if is_aks_managed and sku_capacity == 0:
-            # Parse cluster name from MC_<rg>_<cluster>_<location> convention
+            # Parse cluster name from MC_<rg>_<cluster>_<location> convention.
+            # Splitting on "_" gives: ['MC', 'rg-name', 'cluster-name', 'location']
+            # so original_rg = mc_parts[1] and cluster = mc_parts[2].
             mc_parts = resource_group.split("_")
-            # mc_parts[0]="MC", mc_parts[-1]=location; cluster name is in between
             # e.g. MC_rg-srelab-australiaeast_aks-srelab_australiaeast → aks-srelab
-            aks_cluster_name = mc_parts[-2] if len(mc_parts) >= 3 else ""
-            # Resolve the original resource group that contains the AKS cluster
-            # (strip "MC_" prefix and trailing "_<location>")
-            original_rg = "_".join(mc_parts[1:-1]) if len(mc_parts) >= 3 else ""
+            aks_cluster_name = mc_parts[2] if len(mc_parts) >= 4 else (mc_parts[-2] if len(mc_parts) >= 3 else "")
+            # Original resource group is just the second segment (index 1)
+            original_rg = mc_parts[1] if len(mc_parts) >= 4 else ""
             aks_total = 0
             aks_running = 0
             try:
