@@ -60,8 +60,9 @@ api_gateway_tenant_id = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 teams_channel_id = ""
 
 # PostgreSQL pgvector connection string for runbook RAG (BUG-002 / F-02 fix — Plan 19-4)
-# The actual value with the admin password is in credentials.tfvars (not committed to git).
+# IMPORTANT: Do NOT set this here — the actual value is in credentials.tfvars.
+# Setting it to "" here overwrites the credentials.tfvars value because
+# terraform.tfvars is loaded AFTER credentials.tfvars (-var-file order).
 # Format: postgresql://aap_admin:<password>@aap-postgres-prod.postgres.database.azure.com:5432/aap?sslmode=require
 # To set: bash scripts/ops/19-4-seed-runbooks.sh  (also seeds the 60 runbooks)
 # See: docs/ops/runbook-seeding.md for full procedure
-pgvector_connection_string = ""

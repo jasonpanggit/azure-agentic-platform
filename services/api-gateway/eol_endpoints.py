@@ -297,6 +297,11 @@ async def batch_eol_lookup(payload: EolBatchRequest) -> EolBatchResponse:
 
     Returns structured results; unrecognised names return null fields.
     Tool function never raises — returns error-safe results.
+
+    The cache (PostgreSQL eol_cache table) is optional. If the DB is
+    unavailable, the endpoint falls through to the endoflife.date API
+    directly. This ensures EOL data is returned even when PostgreSQL
+    is not configured or unreachable.
     """
     start_time = time.monotonic()
 
@@ -312,12 +317,19 @@ async def batch_eol_lookup(payload: EolBatchRequest) -> EolBatchResponse:
             unique_names.append(name)
 
     results: list[EolResult] = []
-    conn = None
 
+    # Attempt DB connection for cache — gracefully degrade if unavailable
+    conn = None
     try:
         dsn = _resolve_dsn()
         conn = await asyncpg.connect(dsn)
+    except Exception as exc:
+        logger.warning(
+            "batch_eol_lookup: cache unavailable, falling through to API | error=%s",
+            exc,
+        )
 
+    try:
         for os_name in unique_names:
             parsed = _parse_os_for_eol(os_name)
             if parsed is None:
@@ -326,30 +338,41 @@ async def batch_eol_lookup(payload: EolBatchRequest) -> EolBatchResponse:
 
             product, cycle = parsed
 
-            # Cache lookup
-            cached = await _lookup_cache(conn, product, cycle)
-            if cached is not None:
-                results.append(
-                    EolResult(
-                        os_name=os_name,
-                        eol_date=cached["eol_date"],
-                        is_eol=cached["is_eol"],
-                        source=cached["source"],
+            # Cache lookup (only if DB is connected)
+            if conn is not None:
+                try:
+                    cached = await _lookup_cache(conn, product, cycle)
+                    if cached is not None:
+                        results.append(
+                            EolResult(
+                                os_name=os_name,
+                                eol_date=cached["eol_date"],
+                                is_eol=cached["is_eol"],
+                                source=cached["source"],
+                            )
+                        )
+                        continue
+                except Exception as cache_exc:
+                    logger.debug(
+                        "batch_eol_lookup: cache read failed | product=%s cycle=%s error=%s",
+                        product,
+                        cycle,
+                        cache_exc,
                     )
-                )
-                continue
 
-            # Cache miss — fetch from endoflife.date
+            # Cache miss (or cache unavailable) — fetch from endoflife.date
             api_result = await _fetch_from_api(product, cycle)
             if api_result is not None:
-                await _upsert_cache(
-                    conn,
-                    product,
-                    cycle,
-                    api_result["eol_date"],
-                    api_result["is_eol"],
-                    api_result["source"],
-                )
+                # Best-effort cache write (only if DB is connected)
+                if conn is not None:
+                    await _upsert_cache(
+                        conn,
+                        product,
+                        cycle,
+                        api_result["eol_date"],
+                        api_result["is_eol"],
+                        api_result["source"],
+                    )
                 results.append(
                     EolResult(
                         os_name=os_name,
@@ -381,9 +404,10 @@ async def batch_eol_lookup(payload: EolBatchRequest) -> EolBatchResponse:
 
     duration_ms = (time.monotonic() - start_time) * 1000
     logger.info(
-        "batch_eol_lookup: complete | names=%d results=%d duration_ms=%.0f",
+        "batch_eol_lookup: complete | names=%d results=%d cache=%s duration_ms=%.0f",
         len(unique_names),
         len(results),
+        "connected" if conn is not None else "unavailable",
         duration_ms,
     )
     return EolBatchResponse(results=results)

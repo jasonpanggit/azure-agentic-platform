@@ -252,15 +252,28 @@ class TestBatchEolEndpoint:
             assert result["eol_date"] is None
             assert result["is_eol"] is None
 
-    def test_db_connection_failure_returns_unknowns(self, client):
-        """DB unavailable returns null fields for all OS names — never raises."""
+    def test_db_connection_failure_falls_through_to_api(self, client):
+        """DB unavailable falls through to endoflife.date API — not a hard failure."""
         with patch(
             "services.api_gateway.eol_endpoints._resolve_dsn",
             return_value="postgresql://test:test@localhost:5432/test",
-        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg:
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg, patch(
+            "services.api_gateway.eol_endpoints.httpx"
+        ) as mock_httpx:
             mock_asyncpg.connect = AsyncMock(
                 side_effect=ConnectionError("Connection refused")
             )
+
+            # API returns valid data
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"eol": "2031-10-14"}
+
+            mock_http_client = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=mock_response)
+            mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.AsyncClient.return_value = mock_http_client
 
             resp = client.post(
                 "/api/v1/vms/eol",
@@ -269,9 +282,73 @@ class TestBatchEolEndpoint:
             assert resp.status_code == 200
             data = resp.json()
             assert len(data["results"]) == 2
+            # Both should have valid EOL data from the API
             for result in data["results"]:
-                assert result["eol_date"] is None
-                assert result["is_eol"] is None
+                assert result["eol_date"] == "2031-10-14"
+                assert result["is_eol"] is False
+                assert result["source"] == "endoflife.date"
+
+    def test_db_and_api_both_fail_returns_unknowns(self, client):
+        """When both DB and API fail, return null fields — never raises."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            return_value="postgresql://test:test@localhost:5432/test",
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg, patch(
+            "services.api_gateway.eol_endpoints.httpx"
+        ) as mock_httpx:
+            mock_asyncpg.connect = AsyncMock(
+                side_effect=ConnectionError("Connection refused")
+            )
+
+            # API also fails
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+
+            mock_http_client = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=mock_response)
+            mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.AsyncClient.return_value = mock_http_client
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2025 Standard"]},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["results"]) == 1
+            assert data["results"][0]["eol_date"] is None
+            assert data["results"][0]["is_eol"] is None
+
+    def test_dsn_not_configured_falls_through_to_api(self, client):
+        """When PostgreSQL is not configured at all, API fallback still works."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            side_effect=RuntimeError("PostgreSQL not configured"),
+        ), patch(
+            "services.api_gateway.eol_endpoints.httpx"
+        ) as mock_httpx:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"eol": "2029-01-09"}
+
+            mock_http_client = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=mock_response)
+            mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.AsyncClient.return_value = mock_http_client
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2022 Datacenter"]},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["results"]) == 1
+            result = data["results"][0]
+            assert result["eol_date"] == "2029-01-09"
+            assert result["is_eol"] is False
+            assert result["source"] == "endoflife.date"
 
     def test_deduplicates_os_names(self, client):
         """Duplicate OS names are deduplicated but all appear in results."""
