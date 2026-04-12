@@ -468,6 +468,7 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                   {[
                     ['SKU', detail.sku || '—'],
                     ['Location', detail.location || '—'],
+                    ['OS Type', detail.os_type || '—'],
                     ['OS Image', detail.os_image_version || '—'],
                     ['Upgrade Policy', detail.upgrade_policy || '—'],
                     ['Scale Range', detail.min_count === 0 && detail.max_count === 0 ? '—' : `${detail.min_count} – ${detail.max_count}`],
