@@ -94,6 +94,64 @@ function NodeReadyBadge({ ready, total }: { ready: number; total: number }) {
   )
 }
 
+// ── Sparkline chart ───────────────────────────────────────────────────────────
+
+function Sparkline({ data, color = 'var(--accent-blue)' }: { data: number[]; color?: string }) {
+  if (data.length < 2) return <span className="text-xs" style={{ color: 'var(--text-muted)' }}>No data</span>
+
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const W = 120, H = 32, pad = 2
+
+  const points = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (W - pad * 2)
+    const y = H - pad - ((v - min) / range) * (H - pad * 2)
+    return `${x},${y}`
+  })
+
+  const d = `M ${points.join(' L ')}`
+
+  return (
+    <svg width={W} height={H} style={{ overflow: 'visible' }}>
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// ── AKS metrics catalog ───────────────────────────────────────────────────────
+
+interface MetricOption {
+  name: string
+  label: string
+  group: string
+}
+
+const AKS_METRIC_CATALOG: MetricOption[] = [
+  // Node
+  { name: 'node_cpu_usage_percentage',          label: 'Node CPU %',         group: 'Node' },
+  { name: 'node_memory_working_set_percentage', label: 'Node Memory %',      group: 'Node' },
+  { name: 'node_memory_rss_percentage',         label: 'Node RSS %',         group: 'Node' },
+  { name: 'node_disk_usage_bytes',              label: 'Node Disk',          group: 'Node' },
+  { name: 'node_network_in_bytes',              label: 'Node Net In',        group: 'Node' },
+  { name: 'node_network_out_bytes',             label: 'Node Net Out',       group: 'Node' },
+  // Workloads
+  { name: 'kube_pod_status_ready',              label: 'Pods Ready',         group: 'Workloads' },
+  { name: 'kube_node_status_condition',         label: 'Node Condition',     group: 'Workloads' },
+  // API Server
+  { name: 'apiserver_request_total',            label: 'API Requests',       group: 'API Server' },
+  { name: 'cluster_autoscaler_unschedulable_pods_count', label: 'Unschedulable Pods', group: 'API Server' },
+]
+
+const AKS_DEFAULT_SELECTED = [
+  'node_cpu_usage_percentage',
+  'node_memory_working_set_percentage',
+  'node_network_in_bytes',
+  'node_network_out_bytes',
+  'kube_pod_status_ready',
+  'apiserver_request_total',
+]
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailPanelProps) {
@@ -101,10 +159,13 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
   const [detail, setDetail] = useState<AKSDetail | null>(null)
   const [metrics, setMetrics] = useState<MetricSeries[]>([])
-  const [metricsTimespan, setMetricsTimespan] = useState('PT24H')
+  const [metricsTimespan, setMetricsTimespan] = useState<'PT1H' | 'PT6H' | 'PT24H' | 'P7D'>('PT24H')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(AKS_DEFAULT_SELECTED)
+  const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
+  const metricsLoadedForTimeRange = useRef<string | null>(null)
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -172,7 +233,10 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       const token = await getAccessToken()
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`/api/proxy/aks/${encoded}/metrics?timespan=${timespan}`, { headers })
+      const res = await fetch(
+        `/api/proxy/aks/${encoded}/metrics?timespan=${timespan}&metrics=${encodeURIComponent(selectedMetrics.join(','))}`,
+        { headers }
+      )
       if (res.ok) {
         const data = await res.json()
         setMetrics(data.metrics ?? [])
@@ -245,7 +309,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
 
   useEffect(() => {
     if (activeTab === 'metrics') fetchMetrics(metricsTimespan)
-  }, [metricsTimespan]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [metricsTimespan, selectedMetrics]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -549,25 +613,105 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
-              <select
-                value={metricsTimespan}
-                onChange={(e) => setMetricsTimespan(e.target.value)}
-                className="text-xs px-2 py-1 rounded outline-none"
-                style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              >
-                <option value="PT1H">Last 1h</option>
-                <option value="PT6H">Last 6h</option>
-                <option value="PT24H">Last 24h</option>
-                <option value="P7D">Last 7d</option>
-              </select>
+              <div className="flex items-center gap-1">
+                {(['PT1H', 'PT6H', 'PT24H', 'P7D'] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setMetricsTimespan(r)}
+                    className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer"
+                    style={{
+                      background: metricsTimespan === r ? 'var(--accent-blue)' : 'var(--bg-subtle)',
+                      color: metricsTimespan === r ? 'white' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {r.replace('PT', '').replace('P', '').replace('H', 'h').replace('D', 'd')}
+                  </button>
+                ))}
+                {/* Metric selector */}
+                <div className="relative ml-1">
+                  <button
+                    onClick={() => setMetricSelectorOpen(v => !v)}
+                    className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer font-bold"
+                    style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
+                    title="Add / remove metrics"
+                  >
+                    ＋
+                  </button>
+                  {metricSelectorOpen && (
+                    <div
+                      className="absolute right-0 top-6 z-50 rounded-lg shadow-xl overflow-y-auto"
+                      style={{
+                        width: '220px',
+                        maxHeight: '420px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Select metrics</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSelectedMetrics(AKS_METRIC_CATALOG.map(m => m.name))}
+                            className="text-[10px] cursor-pointer hover:opacity-70"
+                            style={{ color: 'var(--accent-blue)' }}
+                          >All</button>
+                          <button
+                            onClick={() => setSelectedMetrics(AKS_DEFAULT_SELECTED)}
+                            className="text-[10px] cursor-pointer hover:opacity-70"
+                            style={{ color: 'var(--text-muted)' }}
+                          >Reset</button>
+                        </div>
+                      </div>
+                      {(['Node', 'Workloads', 'API Server'] as const).map(group => (
+                        <div key={group}>
+                          <div className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            {group}
+                          </div>
+                          {AKS_METRIC_CATALOG.filter(m => m.group === group).map(m => (
+                            <label
+                              key={m.name}
+                              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:opacity-80"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedMetrics.includes(m.name)}
+                                onChange={e => {
+                                  setSelectedMetrics(prev =>
+                                    e.target.checked
+                                      ? [...prev, m.name]
+                                      : prev.filter(n => n !== m.name)
+                                  )
+                                }}
+                                className="accent-[var(--accent-blue)]"
+                              />
+                              <span className="text-[11px]">{m.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                      <div className="px-3 py-2" style={{ borderTop: '1px solid var(--border)' }}>
+                        <button
+                          onClick={() => setMetricSelectorOpen(false)}
+                          className="w-full text-[11px] py-1 rounded cursor-pointer"
+                          style={{ background: 'var(--accent-blue)', color: 'white' }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+
             {loadingMetrics ? (
-              <div className="animate-pulse space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-24 rounded" style={{ background: 'var(--bg-subtle)' }} />
+              <div className="space-y-2">
+                {[...Array(selectedMetrics.length || 4)].map((_, i) => (
+                  <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
-            ) : metrics.length === 0 ? (
+            ) : metrics.length === 0 || metrics.every(m => m.timeseries.length === 0) ? (
               <div className="py-8 text-center">
                 <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -576,20 +720,29 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
               </div>
             ) : (
               <div className="space-y-3">
-                {metrics.map((m, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg"
-                    style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                  >
-                    <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      {m.name ?? 'Metric'} {m.unit ? `(${m.unit})` : ''}
-                    </p>
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {m.timeseries?.length ?? 0} data points
-                    </p>
-                  </div>
-                ))}
+                {metrics.map((m) => {
+                  const values = m.timeseries.map(p => p.average ?? 0).filter(v => v > 0)
+                  const latest = values[values.length - 1]
+                  return (
+                    <div key={m.name} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                          {AKS_METRIC_CATALOG.find(c => c.name === m.name)?.label ?? m.name ?? '—'}
+                        </div>
+                        {latest !== undefined && (
+                          <div className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>
+                            {latest > 1_000_000
+                              ? `${(latest / 1_000_000).toFixed(1)} MB`
+                              : latest > 1_000
+                                ? `${(latest / 1_000).toFixed(1)} KB`
+                                : `${latest.toFixed(1)} ${m.unit ?? ''}`}
+                          </div>
+                        )}
+                      </div>
+                      <Sparkline data={values.slice(-30)} />
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
