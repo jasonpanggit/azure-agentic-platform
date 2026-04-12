@@ -530,21 +530,56 @@ def _resolve_workspace_guid(credential: Any, workspace_resource_id: str) -> str:
         return ""
 
 
+_ISO_TO_KQL_TIMESPAN: Dict[str, str] = {
+    "PT1H": "1h",
+    "PT6H": "6h",
+    "PT24H": "24h",
+    "P7D": "7d",
+    "P30D": "30d",
+}
+
+_ISO_TO_KQL_INTERVAL: Dict[str, str] = {
+    "PT1M": "1m",
+    "PT5M": "5m",
+    "PT15M": "15m",
+    "PT30M": "30m",
+    "PT1H": "1h",
+    "PT6H": "6h",
+    "PT12H": "12h",
+    "P1D": "1d",
+}
+
+
+def _iso_to_kql_duration(iso: str, mapping: Dict[str, str], fallback: str) -> str:
+    """Convert an ISO 8601 duration string to a KQL timespan literal.
+
+    KQL's ago() and bin() only accept KQL literals like ``7d``, ``1h``,
+    ``5m`` — not ISO 8601 strings like ``P7D`` or ``PT5M``.
+    Falls back to ``fallback`` for any unrecognised value.
+    """
+    return mapping.get(iso, fallback)
+
+
 def _build_arc_metrics_kql(resource_id: str, counters: List[str], timespan: str, interval: str) -> str:
     """Build a KQL query against the Perf table for Arc VM metrics.
 
     Groups results into time bins matching the requested interval so the
     frontend receives evenly-spaced time-series data.
+
+    ``timespan`` and ``interval`` are ISO 8601 durations (e.g. ``P7D``,
+    ``PT5M``) and are converted to KQL literals before embedding.
     """
     safe_rid = resource_id.replace("'", "''").lower()
     counter_list = ", ".join(f"'{c}'" for c in counters)
+    kql_timespan = _iso_to_kql_duration(timespan, _ISO_TO_KQL_TIMESPAN, "24h")
+    kql_interval = _iso_to_kql_duration(interval, _ISO_TO_KQL_INTERVAL, "5m")
 
     return (
         f"Perf\n"
-        f"| where TimeGenerated > ago({timespan})\n"
+        f"| where TimeGenerated > ago({kql_timespan})\n"
         f"| where _ResourceId =~ '{safe_rid}'\n"
         f"| where CounterName in ({counter_list})\n"
-        f"| summarize avg(CounterValue) by bin(TimeGenerated, {interval}), CounterName\n"
+        f"| summarize avg(CounterValue) by bin(TimeGenerated, {kql_interval}), CounterName\n"
         f"| order by CounterName asc, TimeGenerated asc"
     )
 

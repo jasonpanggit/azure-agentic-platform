@@ -70,9 +70,37 @@ class TestBuildArcMetricsKql:
         assert "Perf" in kql
         assert "% Processor Time" in kql
         assert "Available MBytes" in kql
-        assert "PT24H" in kql
-        assert "PT5M" in kql
+        # ISO 8601 durations must be converted to KQL literals
+        assert "ago(24h)" in kql
+        assert "bin(TimeGenerated, 5m)" in kql
+        # Raw ISO strings must NOT appear — they are invalid in KQL ago()/bin()
+        assert "PT24H" not in kql
+        assert "PT5M" not in kql
         assert ARC_RID.lower() in kql.lower()
+
+    def test_7d_iso_converted_to_kql(self):
+        """P7D must become ago(7d) not ago(P7D) — KQL rejects ISO 8601."""
+        from services.api_gateway.vm_detail import _build_arc_metrics_kql
+
+        kql = _build_arc_metrics_kql(
+            resource_id=ARC_RID,
+            counters=["% Processor Time"],
+            timespan="P7D",
+            interval="PT1H",
+        )
+        assert "ago(7d)" in kql
+        assert "bin(TimeGenerated, 1h)" in kql
+        assert "P7D" not in kql
+        assert "PT1H" not in kql
+
+    def test_all_supported_timespans_convert(self):
+        """Every timespan the frontend sends must convert cleanly."""
+        from services.api_gateway.vm_detail import _build_arc_metrics_kql, _ISO_TO_KQL_TIMESPAN
+
+        for iso, kql_lit in _ISO_TO_KQL_TIMESPAN.items():
+            kql = _build_arc_metrics_kql(ARC_RID, ["% Processor Time"], iso, "PT5M")
+            assert f"ago({kql_lit})" in kql, f"Expected ago({kql_lit}) for {iso}"
+            assert iso not in kql, f"Raw ISO {iso} must not appear in KQL"
 
     def test_sql_injection_safe(self):
         from services.api_gateway.vm_detail import _build_arc_metrics_kql
