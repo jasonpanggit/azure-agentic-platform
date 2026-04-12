@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
+
 > Last activity: 2026-04-12 - Completed quick task 260412-lae: Show patch data inline in VM detail panel patch tab instead of redirect message
 
 > Last activity: 2026-04-11 - Completed quick task 260411-wps: update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design — 5 tabs: Overview, Metrics, Evidence, Patches, AI Chat
