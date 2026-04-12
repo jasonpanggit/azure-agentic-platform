@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
-import { X, RefreshCw, Activity } from 'lucide-react'
+import { X, RefreshCw, Activity, Info } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
@@ -105,6 +105,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [enablingContainerInsights, setEnablingContainerInsights] = useState(false)
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -182,6 +183,29 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       // Non-fatal
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  async function handleEnableContainerInsights() {
+    if (!detail) return
+    setEnablingContainerInsights(true)
+    try {
+      const encoded = encodeResourceId(detail.id)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/aks/${encoded}/monitoring`, { method: 'POST', headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          // Refresh detail so the banner reflects updated addon status
+          await fetchDetail()
+        }
+      }
+    } catch {
+      // Non-fatal — user can retry
+    } finally {
+      setEnablingContainerInsights(false)
     }
   }
 
@@ -547,8 +571,34 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
 
         {/* Metrics tab */}
         {activeTab === 'metrics' && (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="p-4 space-y-3">
+            {/* Container Insights status banner */}
+            {detail && !detail.container_insights_enabled && (
+              <div
+                className="flex items-start gap-3 px-3 py-2.5 rounded-lg text-xs"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent-yellow) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent-yellow) 30%, transparent)',
+                }}
+              >
+                <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: 'var(--accent-yellow)' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Showing platform metrics. <strong style={{ color: 'var(--text-primary)' }}>Container Insights</strong> not
+                  enabled — logs and richer telemetry unavailable.
+                </span>
+                <button
+                  onClick={handleEnableContainerInsights}
+                  disabled={enablingContainerInsights}
+                  className="ml-auto shrink-0 px-2.5 py-1 rounded text-[11px] font-medium transition-opacity disabled:opacity-60 cursor-pointer"
+                  style={{ background: 'var(--accent-blue)', color: '#fff' }}
+                >
+                  {enablingContainerInsights ? 'Enabling…' : 'Enable'}
+                </button>
+              </div>
+            )}
+
+            {/* Time range selector */}
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
               <select
                 value={metricsTimespan}
@@ -562,10 +612,11 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                 <option value="P7D">Last 7d</option>
               </select>
             </div>
+
             {loadingMetrics ? (
               <div className="animate-pulse space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-24 rounded" style={{ background: 'var(--bg-subtle)' }} />
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-20 rounded" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
             ) : metrics.length === 0 ? (
@@ -574,23 +625,69 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   No metrics available
                 </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Platform metrics may take a few minutes to appear for a new cluster.
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {metrics.map((m, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg"
-                    style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                  >
-                    <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      {m.name ?? 'Metric'} {m.unit ? `(${m.unit})` : ''}
-                    </p>
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {m.timeseries?.length ?? 0} data points
-                    </p>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {metrics.map((m, i) => {
+                  const pts = m.timeseries ?? []
+                  const values = pts.map(p => p.average ?? 0).filter(v => v !== null)
+                  const latest = values.length > 0 ? values[values.length - 1] : null
+                  const peak = values.length > 0 ? Math.max(...values) : null
+                  const unit = m.unit ?? ''
+                  const formatVal = (v: number | null) =>
+                    v === null ? '—' : unit === 'Bytes' ? `${(v / 1024 / 1024).toFixed(1)} MB` : `${v.toFixed(1)}${unit.includes('%') || unit === 'Percent' ? '%' : ''}`
+                  return (
+                    <div
+                      key={i}
+                      className="p-3 rounded-lg"
+                      style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {m.name ?? 'Metric'}
+                        </p>
+                        <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          {latest !== null && (
+                            <span>Latest: <span style={{ color: 'var(--text-primary)' }}>{formatVal(latest)}</span></span>
+                          )}
+                          {peak !== null && (
+                            <span>Peak: <span style={{ color: 'var(--accent-orange)' }}>{formatVal(peak)}</span></span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Sparkline */}
+                      {values.length > 1 ? (
+                        <svg width="100%" height="36" preserveAspectRatio="none">
+                          {(() => {
+                            const max = Math.max(...values) || 1
+                            const min = Math.min(...values)
+                            const range = max - min || 1
+                            const w = 100
+                            const h = 36
+                            const step = w / (values.length - 1)
+                            const points = values.map((v, idx) => `${idx * step},${h - ((v - min) / range) * (h - 4) - 2}`)
+                            return (
+                              <polyline
+                                points={points.join(' ')}
+                                fill="none"
+                                stroke="var(--accent-blue)"
+                                strokeWidth="1.5"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            )
+                          })()}
+                        </svg>
+                      ) : (
+                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          {pts.length} data point{pts.length !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

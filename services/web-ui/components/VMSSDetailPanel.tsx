@@ -502,8 +502,8 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
 
         {/* Metrics tab */}
         {activeTab === 'metrics' && (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
               <select
                 value={metricsTimespan}
@@ -519,8 +519,8 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
             </div>
             {loadingMetrics ? (
               <div className="animate-pulse space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-24 rounded" style={{ background: 'var(--bg-subtle)' }} />
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-20 rounded" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
             ) : metrics.length === 0 ? (
@@ -529,23 +529,69 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   No metrics available
                 </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Metrics may be unavailable if the scale set has no running instances.
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {metrics.map((m, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg"
-                    style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                  >
-                    <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      {m.name ?? 'Metric'} {m.unit ? `(${m.unit})` : ''}
-                    </p>
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {m.timeseries?.length ?? 0} data points
-                    </p>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {metrics.map((m, i) => {
+                  const pts = m.timeseries ?? []
+                  const values = pts.map(p => p.average ?? 0).filter(v => v !== null)
+                  const latest = values.length > 0 ? values[values.length - 1] : null
+                  const peak = values.length > 0 ? Math.max(...values) : null
+                  const unit = m.unit ?? ''
+                  const formatVal = (v: number | null) =>
+                    v === null ? '—' : unit === 'Bytes' ? `${(v / 1024 / 1024).toFixed(1)} MB` : `${v.toFixed(1)}${unit.includes('%') || unit === 'Percent' ? '%' : ''}`
+                  return (
+                    <div
+                      key={i}
+                      className="p-3 rounded-lg"
+                      style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {m.name ?? 'Metric'}
+                        </p>
+                        <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          {latest !== null && (
+                            <span>Latest: <span style={{ color: 'var(--text-primary)' }}>{formatVal(latest)}</span></span>
+                          )}
+                          {peak !== null && (
+                            <span>Peak: <span style={{ color: 'var(--accent-orange)' }}>{formatVal(peak)}</span></span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Sparkline */}
+                      {values.length > 1 ? (
+                        <svg width="100%" height="36" preserveAspectRatio="none">
+                          {(() => {
+                            const max = Math.max(...values) || 1
+                            const min = Math.min(...values)
+                            const range = max - min || 1
+                            const w = 100
+                            const h = 36
+                            const step = w / (values.length - 1)
+                            const points = values.map((v, idx) => `${idx * step},${h - ((v - min) / range) * (h - 4) - 2}`)
+                            return (
+                              <polyline
+                                points={points.join(' ')}
+                                fill="none"
+                                stroke="var(--accent-blue)"
+                                strokeWidth="1.5"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            )
+                          })()}
+                        </svg>
+                      ) : (
+                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          {pts.length} data point{pts.length !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

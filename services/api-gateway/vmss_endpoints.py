@@ -41,13 +41,20 @@ except ImportError:
     except ImportError:
         _RHClient = None  # type: ignore[assignment,misc]
 
-# VMSS metric names for Azure Monitor queries
+# VMSS platform metric names for Azure Monitor queries.
+# NOTE: "VM Scale Set VM Instance Count" is NOT a metric — it is vmss.sku.capacity (ARM property).
+# VmAvailabilityMetric is the per-instance availability signal for VMSS.
 _VMSS_METRIC_NAMES = [
     "Percentage CPU",
+    "Available Memory Bytes",
     "Network In Total",
     "Network Out Total",
     "Disk Read Bytes",
     "Disk Write Bytes",
+    "Disk Read Operations/Sec",
+    "Disk Write Operations/Sec",
+    "VmAvailabilityMetric",
+    "OS Disk Queue Depth",
 ]
 
 

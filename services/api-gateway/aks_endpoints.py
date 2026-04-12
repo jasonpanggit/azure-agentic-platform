@@ -38,14 +38,23 @@ try:
 except ImportError:
     _AKSClient = None  # type: ignore[assignment,misc]
 
-# AKS metric names for Azure Monitor queries
+# AKS platform metric names (Microsoft.ContainerService/managedClusters namespace).
+# metricnamespace MUST be specified or these will return empty.
+# NOTE: apiserver_request_total is Prometheus-only — NOT a platform metric; excluded.
 _AKS_METRIC_NAMES = [
-    "Percentage CPU",
-    "Network In Total",
-    "Network Out Total",
     "node_cpu_usage_percentage",
+    "node_memory_working_set_percentage",
     "node_memory_rss_percentage",
+    "node_disk_usage_bytes",
+    "node_network_in_bytes",
+    "node_network_out_bytes",
+    "kube_pod_status_ready",
+    "kube_node_status_condition",
+    "apiserver_cpu_usage_percentage",
+    "cluster_autoscaler_unschedulable_pods_count",
 ]
+
+AKS_METRIC_NAMESPACE = "Microsoft.ContainerService/managedClusters"
 
 
 def _log_sdk_availability() -> None:
@@ -95,6 +104,7 @@ def _fetch_single_metric(
         response = client.metrics.list(
             resource_uri=resource_id,
             metricnames=metric_name,
+            metricnamespace=AKS_METRIC_NAMESPACE,
             timespan=timespan,
             interval=interval,
             aggregation="Average,Maximum,Minimum",
@@ -336,6 +346,11 @@ async def get_aks_detail(
                     "provisioning_state": pool.provisioning_state or "unknown",
                 })
 
+        # Read addon profiles to surface monitoring status to the UI
+        profiles = cluster.addon_profiles or {}
+        omsagent = profiles.get("omsagent")
+        azmon = profiles.get("azureMonitorMetrics")
+
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
         return {
@@ -355,6 +370,8 @@ async def get_aks_detail(
             "network_plugin": (cluster.network_profile.network_plugin if cluster.network_profile else ""),
             "rbac_enabled": cluster.enable_rbac or False,
             "active_alert_count": 0,
+            "container_insights_enabled": bool(omsagent and omsagent.enabled),
+            "managed_prometheus_enabled": bool(azmon and azmon.enabled),
             "node_pools": node_pools,
             "workload_summary": None,
             "active_incidents": [],
@@ -432,6 +449,71 @@ async def get_aks_metrics(
             resource_id[-60:], exc, duration_ms,
         )
         return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+
+
+@router.post("/{resource_id_base64}/monitoring")
+async def enable_aks_container_insights(
+    resource_id_base64: str,
+    _token: str = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Enable Container Insights on the AKS cluster using the platform's central LAW.
+
+    Reads LOG_ANALYTICS_WORKSPACE_RESOURCE_ID from env.  Returns immediately with
+    an error if the env var is not configured.  The actual enablement calls
+    begin_create_or_update which may take 2-3 minutes.
+    """
+    start_time = time.monotonic()
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError:
+        return {"success": False, "error": "Invalid resource ID"}
+
+    workspace_resource_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
+    if not workspace_resource_id:
+        logger.warning("enable_aks_ci: LOG_ANALYTICS_WORKSPACE_RESOURCE_ID not set")
+        return {"success": False, "error": "LOG_ANALYTICS_WORKSPACE_RESOURCE_ID not configured"}
+
+    subscription_id = _extract_subscription_id(resource_id)
+    parts = resource_id.split("/")
+    rg_index = next((i for i, p in enumerate(parts) if p.lower() == "resourcegroups"), -1)
+    resource_group = parts[rg_index + 1] if rg_index >= 0 else ""
+    cluster_name = parts[-1]
+
+    try:
+        import asyncio
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+        from azure.mgmt.containerservice.models import ManagedClusterAddonProfile  # type: ignore[import]
+
+        credential = DefaultAzureCredential()
+        aks_client = ContainerServiceClient(credential, subscription_id)
+        cluster = aks_client.managed_clusters.get(resource_group, cluster_name)
+
+        cluster.addon_profiles = cluster.addon_profiles or {}
+        cluster.addon_profiles["omsagent"] = ManagedClusterAddonProfile(
+            enabled=True,
+            config={"logAnalyticsWorkspaceResourceID": workspace_resource_id},
+        )
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: aks_client.managed_clusters.begin_create_or_update(
+                resource_group, cluster_name, cluster
+            ).result(),
+        )
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "enable_aks_ci: enabled cluster=%s workspace=%s duration_ms=%.0f",
+            cluster_name, workspace_resource_id, duration_ms,
+        )
+        return {"success": True, "cluster": cluster_name, "workspace": workspace_resource_id}
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error("enable_aks_ci: failed cluster=%s error=%s duration_ms=%.0f", cluster_name, exc, duration_ms)
+        return {"success": False, "error": str(exc)}
 
 
 @router.post("/{resource_id_base64}/chat")
