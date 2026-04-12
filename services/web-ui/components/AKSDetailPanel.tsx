@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
-import { X, RefreshCw, Activity } from 'lucide-react'
+import { X, RefreshCw, Activity, Info } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
@@ -166,6 +166,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(AKS_DEFAULT_SELECTED)
   const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
   const metricsLoadedForTimeRange = useRef<string | null>(null)
+  const [enablingContainerInsights, setEnablingContainerInsights] = useState(false)
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -213,6 +214,10 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       const res = await fetch(`/api/proxy/aks/${encoded}`, { headers })
       if (!res.ok) throw new Error(`Status ${res.status}`)
       const data = await res.json()
+      if ('error' in data && typeof data.error === 'string') {
+        setError(data.error)
+        return
+      }
       if (data.fetch_error) {
         setError(`Failed to load cluster details: ${data.fetch_error}`)
       }
@@ -245,6 +250,29 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       // Non-fatal
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  async function handleEnableContainerInsights() {
+    if (!detail) return
+    setEnablingContainerInsights(true)
+    try {
+      const encoded = encodeResourceId(detail.id)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/aks/${encoded}/monitoring`, { method: 'POST', headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          // Refresh detail so the banner reflects updated addon status
+          await fetchDetail()
+        }
+      }
+    } catch {
+      // Non-fatal — user can retry
+    } finally {
+      setEnablingContainerInsights(false)
     }
   }
 
@@ -610,8 +638,34 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
 
         {/* Metrics tab */}
         {activeTab === 'metrics' && (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="p-4 space-y-3">
+            {/* Container Insights status banner */}
+            {detail && !detail.container_insights_enabled && (
+              <div
+                className="flex items-start gap-3 px-3 py-2.5 rounded-lg text-xs"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent-yellow) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent-yellow) 30%, transparent)',
+                }}
+              >
+                <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: 'var(--accent-yellow)' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Showing platform metrics. <strong style={{ color: 'var(--text-primary)' }}>Container Insights</strong> not
+                  enabled — logs and richer telemetry unavailable.
+                </span>
+                <button
+                  onClick={handleEnableContainerInsights}
+                  disabled={enablingContainerInsights}
+                  className="ml-auto shrink-0 px-2.5 py-1 rounded text-[11px] font-medium transition-opacity disabled:opacity-60 cursor-pointer"
+                  style={{ background: 'var(--accent-blue)', color: '#fff' }}
+                >
+                  {enablingContainerInsights ? 'Enabling…' : 'Enable'}
+                </button>
+              </div>
+            )}
+
+            {/* Time range selector */}
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
               <div className="flex items-center gap-1">
                 {(['PT1H', 'PT6H', 'PT24H', 'P7D'] as const).map(r => (
@@ -716,6 +770,9 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                 <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   No metrics available
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Platform metrics may take a few minutes to appear for a new cluster.
                 </p>
               </div>
             ) : (

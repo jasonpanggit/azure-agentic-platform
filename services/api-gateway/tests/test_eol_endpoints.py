@@ -379,3 +379,82 @@ class TestBatchEolEndpoint:
             assert data["results"][1]["os_name"] == "Unknown Linux Distro"
             assert data["results"][1]["eol_date"] is None
             assert data["results"][1]["is_eol"] is None
+
+    def test_stale_null_cache_row_triggers_api_fallback(self, client):
+        """Cache rows with NULL eol_date AND NULL is_eol are treated as misses."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            return_value="postgresql://test:test@localhost:5432/test",
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg, patch(
+            "services.api_gateway.eol_endpoints.httpx"
+        ) as mock_httpx:
+            mock_conn = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+            mock_conn.close = AsyncMock()
+            mock_conn.execute = AsyncMock()
+
+            # Cache returns a stale null row (both eol_date and is_eol are None)
+            mock_conn.fetchrow = AsyncMock(
+                return_value={
+                    "eol_date": None,
+                    "is_eol": None,
+                    "source": "endoflife.date",
+                }
+            )
+
+            # API returns valid data
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"eol": "2031-10-14"}
+
+            mock_http_client = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=mock_response)
+            mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.AsyncClient.return_value = mock_http_client
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2022 Datacenter"]},
+            )
+            assert resp.status_code == 200
+            result = resp.json()["results"][0]
+            # Should have fetched from API, not returned the stale nulls
+            assert result["eol_date"] == "2031-10-14"
+            assert result["is_eol"] is False
+            assert result["source"] == "endoflife.date"
+
+            # Verify API was called (cache miss triggered fallback)
+            mock_http_client.get.assert_called_once()
+            # Verify cache was updated with fresh data
+            mock_conn.execute.assert_called_once()
+
+    def test_cache_hit_with_boolean_eol_true_no_date(self, client):
+        """Cache rows with is_eol=True but eol_date=None are valid hits (not misses)."""
+        with patch(
+            "services.api_gateway.eol_endpoints._resolve_dsn",
+            return_value="postgresql://test:test@localhost:5432/test",
+        ), patch("services.api_gateway.eol_endpoints.asyncpg") as mock_asyncpg:
+            mock_conn = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+            mock_conn.close = AsyncMock()
+
+            # Cache has is_eol=True but no date (boolean EOL from API)
+            mock_conn.fetchrow = AsyncMock(
+                return_value={
+                    "eol_date": None,
+                    "is_eol": True,
+                    "source": "endoflife.date",
+                }
+            )
+
+            resp = client.post(
+                "/api/v1/vms/eol",
+                json={"os_names": ["Windows Server 2008 Standard"]},
+            )
+            assert resp.status_code == 200
+            result = resp.json()["results"][0]
+            # This is a valid cache hit — is_eol is not None
+            assert result["is_eol"] is True
+            assert result["eol_date"] is None
+            assert result["source"] == "endoflife.date"

@@ -155,7 +155,12 @@ def _resolve_dsn() -> str:
 async def _lookup_cache(
     conn, product: str, version: str
 ) -> dict | None:  # noqa: ANN001 — asyncpg.Connection
-    """Query eol_cache for a non-expired row."""
+    """Query eol_cache for a non-expired row.
+
+    Rows where both eol_date and is_eol are NULL are treated as cache
+    misses — they represent previously failed lookups that should be
+    retried against the upstream API.
+    """
     row = await conn.fetchrow(
         "SELECT eol_date, is_eol, source "
         "FROM eol_cache "
@@ -167,9 +172,20 @@ async def _lookup_cache(
     if row is None:
         return None
     eol_date_val = row["eol_date"]
+    is_eol_val = row["is_eol"]
+
+    # Treat rows with no useful data as cache misses so the API is retried
+    if eol_date_val is None and is_eol_val is None:
+        logger.debug(
+            "eol_cache: stale null row skipped | product=%s version=%s",
+            product,
+            version,
+        )
+        return None
+
     return {
         "eol_date": eol_date_val.isoformat() if eol_date_val else None,
-        "is_eol": row["is_eol"],
+        "is_eol": is_eol_val,
         "source": row["source"],
     }
 

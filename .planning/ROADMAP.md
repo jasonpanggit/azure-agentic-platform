@@ -873,6 +873,24 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 42 to break down)
 
+### Phase 43: Centralized Logging — Wire Enable Logging to Central LAW Across VM, VMSS, and AKS
+
+**Goal:** The existing "Enable" logging button on VMDetailPanel (and equivalent surfaces on VMSS/AKS) routes DCR-based logs to the platform's central Log Analytics Workspace. Operators can enable or update logging on any resource to target the central LAW instead of per-resource LAWs. The Terraform wiring gap (`LOG_ANALYTICS_WORKSPACE_RESOURCE_ID` env var not injected into api-gateway) is fixed. RBAC for the api-gateway managed identity is provisioned. Enable Logging surfaces on VMSS and AKS detail panels in addition to VM.
+
+**Requirements**:
+- CENTRAL-001: Fix Terraform — inject `LOG_ANALYTICS_WORKSPACE_RESOURCE_ID` (ARM resource ID) into api-gateway container app env vars (currently only the GUID workspace ID is injected; the ARM ID is needed by the enable-logging backend)
+- CENTRAL-002: Provision RBAC — api-gateway managed identity needs `Monitoring Contributor` + `Virtual Machine Contributor` on the subscription (or resource groups) to create DCRs, DCR associations, and install AMA extensions
+- CENTRAL-003: Add "Enable Logging" button to VMSSDetailPanel (Overview tab) — calls new `/api/v1/vmss/{id}/diagnostic-settings` endpoint that creates DCR + AMA for scale sets
+- CENTRAL-004: Add "Enable Logging" button to AKSDetailPanel (Overview tab) — calls new `/api/v1/aks/{id}/diagnostic-settings` endpoint using Azure Monitor Container Insights DCR pattern
+- CENTRAL-005: Fix Arc VM block — currently the VM enable-logging endpoint returns HTTP 400 for Arc VMs; add Arc-specific DCR path using the `Microsoft.HybridCompute` extension type and Arc DCR association API
+- CENTRAL-006: Align GET/POST `os_type` defaults (GET defaults `windows`, POST defaults `linux`) and forward POST body in proxy route
+
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 43 to break down)
+
 ---
 
 ## World-Class Success Criteria

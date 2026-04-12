@@ -3,6 +3,7 @@
 GET  /api/v1/aks                           — list AKS clusters in subscriptions via ARG
 GET  /api/v1/aks/{resource_id_base64}      — AKS cluster detail including node pools
 GET  /api/v1/aks/{resource_id_base64}/metrics  — Azure Monitor metrics for AKS
+POST /api/v1/aks/{resource_id_base64}/monitoring — Enable Container Insights on AKS cluster
 POST /api/v1/aks/{resource_id_base64}/chat     — resource-scoped chat for AKS investigation
 
 When the Azure SDK packages are unavailable, all list endpoints return empty
@@ -33,9 +34,35 @@ except ImportError:
     _ARG_AVAILABLE = False
     logger.warning("azure-mgmt-resourcegraph not available — AKS list returns empty")
 
+try:
+    from azure.mgmt.containerservice import ContainerServiceClient as _AKSClient  # type: ignore[import]
+except ImportError:
+    _AKSClient = None  # type: ignore[assignment,misc]
+
+# AKS platform metric names (Microsoft.ContainerService/managedClusters namespace).
+# metricnamespace MUST be specified or these will return empty.
+# NOTE: apiserver_request_total is Prometheus-only — NOT a platform metric; excluded.
+_AKS_METRIC_NAMES = [
+    "node_cpu_usage_percentage",
+    "node_memory_working_set_percentage",
+    "node_memory_rss_percentage",
+    "node_disk_usage_bytes",
+    "node_network_in_bytes",
+    "node_network_out_bytes",
+    "kube_pod_status_ready",
+    "kube_node_status_condition",
+    "apiserver_cpu_usage_percentage",
+    "cluster_autoscaler_unschedulable_pods_count",
+]
+
+AKS_METRIC_NAMESPACE = "Microsoft.ContainerService/managedClusters"
+
 
 def _log_sdk_availability() -> None:
-    logger.info("aks_endpoints: azure-mgmt-resourcegraph available=%s", _ARG_AVAILABLE)
+    logger.info(
+        "aks_endpoints: azure-mgmt-resourcegraph available=%s containerservice available=%s",
+        _ARG_AVAILABLE, _AKSClient is not None,
+    )
 
 
 _log_sdk_availability()
@@ -57,7 +84,6 @@ AKS_DEFAULT_METRICS = [
     "apiserver_request_total",
     "cluster_autoscaler_unschedulable_pods_count",
 ]
-AKS_METRIC_NAMESPACE = "Microsoft.ContainerService/managedClusters"
 
 
 def _decode_resource_id(encoded: str) -> str:
@@ -80,6 +106,20 @@ def _extract_subscription_id(resource_id: str) -> str:
     return ""
 
 
+def _enum_value(obj: Any, default: str) -> str:
+    """Safely extract a string value from an Azure SDK enum or plain string.
+
+    Azure SDK enum objects (e.g. AgentPoolMode.SYSTEM) have a ``.value``
+    attribute that holds the canonical string (e.g. "System").  Calling
+    ``str()`` on them produces the full qualified name which is wrong.
+    """
+    if obj is None:
+        return default
+    if hasattr(obj, "value"):
+        return obj.value or default
+    return str(obj) or default
+
+
 def _fetch_single_metric_aks(
     client: Any,
     resource_id: str,
@@ -90,7 +130,7 @@ def _fetch_single_metric_aks(
     """Fetch a single AKS metric from Azure Monitor.
 
     Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
-    the metric is unsupported or returns no data. Exceptions are caught
+    the metric is unsupported or returns no data.  Exceptions are caught
     per-metric so one unsupported metric cannot poison the whole batch.
     """
     try:
@@ -122,11 +162,10 @@ def _fetch_single_metric_aks(
                 else str(metric.unit) if metric.unit else None
             )
             return {"name": name_val, "unit": unit_val, "timeseries": timeseries}
+        # response.value was empty — metric unsupported for this resource type
         return None
     except Exception as exc:
-        logger.warning(
-            "aks_metrics: skipping metric=%r | error=%s", metric_name, exc
-        )
+        logger.warning("aks_metrics: skipping metric=%r | error=%s", metric_name, exc)
         return None
 
 
@@ -285,22 +324,64 @@ async def get_aks_detail(
         ready_nodes = 0
         pools_ready = 0
 
-        for pool in (cluster.agent_pool_profiles or []):
-            pool_count = pool.count or 0
-            total_nodes += pool_count
-            ready_nodes += pool_count  # Simplified — no per-pool health available via ARM
-            pools_ready += 1
-            node_pools.append({
-                "name": pool.name or "",
-                "vm_size": pool.vm_size or "",
-                "node_count": pool_count,
-                "ready_node_count": pool_count,
-                "mode": str(pool.mode or "User"),
-                "os_type": str(pool.os_type or "Linux"),
-                "min_count": pool.min_count,
-                "max_count": pool.max_count,
-                "provisioning_state": pool.provisioning_state or "unknown",
-            })
+        # Use agent_pools.list() for accurate ready_node_count via provisioning_state + power_state
+        # Fall back to cluster.agent_pool_profiles if _AKSClient shim is unavailable
+        try:
+            if _AKSClient is not None:
+                pools_iter = aks_client.agent_pools.list(resource_group, cluster_name)
+            else:
+                raise ImportError("ContainerServiceClient shim unavailable")
+
+            for pool in pools_iter:
+                pool_count = pool.count or 0
+                total_nodes += pool_count
+                # A pool is ready when provisioning succeeded and its nodes are powered on
+                power_code = getattr(getattr(pool, "power_state", None), "code", None)
+                if pool.provisioning_state == "Succeeded" and power_code == "Running":
+                    pool_ready_count = pool_count
+                else:
+                    pool_ready_count = 0
+                ready_nodes += pool_ready_count
+                if pool_ready_count > 0:
+                    pools_ready += 1
+                node_pools.append({
+                    "name": pool.name or "",
+                    "vm_size": pool.vm_size or "",
+                    "node_count": pool_count,
+                    "ready_node_count": pool_ready_count,
+                    "mode": _enum_value(pool.mode, "User"),
+                    "os_type": _enum_value(pool.os_type, "Linux"),
+                    "min_count": pool.min_count,
+                    "max_count": pool.max_count,
+                    "provisioning_state": pool.provisioning_state or "unknown",
+                })
+        except Exception as pool_exc:
+            logger.warning("aks_detail: agent_pools.list failed, falling back to agent_pool_profiles error=%s", pool_exc)
+            node_pools = []
+            total_nodes = 0
+            ready_nodes = 0
+            pools_ready = 0
+            for pool in (cluster.agent_pool_profiles or []):
+                pool_count = pool.count or 0
+                total_nodes += pool_count
+                ready_nodes += pool_count
+                pools_ready += 1
+                node_pools.append({
+                    "name": pool.name or "",
+                    "vm_size": pool.vm_size or "",
+                    "node_count": pool_count,
+                    "ready_node_count": pool_count,
+                    "mode": _enum_value(pool.mode, "User"),
+                    "os_type": _enum_value(pool.os_type, "Linux"),
+                    "min_count": pool.min_count,
+                    "max_count": pool.max_count,
+                    "provisioning_state": pool.provisioning_state or "unknown",
+                })
+
+        # Read addon profiles to surface monitoring status to the UI
+        profiles = cluster.addon_profiles or {}
+        omsagent = profiles.get("omsagent")
+        azmon = profiles.get("azureMonitorMetrics")
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
@@ -321,6 +402,8 @@ async def get_aks_detail(
             "network_plugin": (cluster.network_profile.network_plugin if cluster.network_profile else ""),
             "rbac_enabled": cluster.enable_rbac or False,
             "active_alert_count": 0,
+            "container_insights_enabled": bool(omsagent and omsagent.enabled),
+            "managed_prometheus_enabled": bool(azmon and azmon.enabled),
             "node_pools": node_pools,
             "workload_summary": None,
             "active_incidents": [],
@@ -366,8 +449,9 @@ async def get_aks_metrics(
 ) -> Dict[str, Any]:
     """Get Azure Monitor metrics for an AKS cluster.
 
-    Each metric is fetched concurrently so one unsupported metric cannot
-    poison the whole batch.
+    Each metric is fetched concurrently.  AKS-specific metrics (node_cpu_usage_percentage,
+    node_memory_rss_percentage) will surface as empty timeseries if the cluster does not
+    emit them — acceptable graceful degradation.  Falls back to empty metrics list on error.
     """
     start_time = time.monotonic()
     try:
@@ -376,6 +460,9 @@ async def get_aks_metrics(
         return {"resource_id": "", "timespan": timespan, "interval": interval, "metrics": []}
 
     subscription_id = _extract_subscription_id(resource_id)
+    if not subscription_id:
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+
     metric_names = [m.strip() for m in metrics.split(",") if m.strip()]
     logger.info(
         "aks_metrics: request | resource=%s metrics=%d timespan=%s",
@@ -384,8 +471,8 @@ async def get_aks_metrics(
 
     try:
         import asyncio
-        from azure.identity import DefaultAzureCredential
-        from azure.mgmt.monitor import MonitorManagementClient
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.monitor import MonitorManagementClient  # type: ignore[import]
 
         credential = DefaultAzureCredential()
         client = MonitorManagementClient(credential, subscription_id)
@@ -431,6 +518,71 @@ async def get_aks_metrics(
             "metrics": [],
             "fetch_error": str(exc),
         }
+
+
+@router.post("/{resource_id_base64}/monitoring")
+async def enable_aks_container_insights(
+    resource_id_base64: str,
+    _token: str = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Enable Container Insights on the AKS cluster using the platform's central LAW.
+
+    Reads LOG_ANALYTICS_WORKSPACE_RESOURCE_ID from env.  Returns immediately with
+    an error if the env var is not configured.  The actual enablement calls
+    begin_create_or_update which may take 2-3 minutes.
+    """
+    start_time = time.monotonic()
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError:
+        return {"success": False, "error": "Invalid resource ID"}
+
+    workspace_resource_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
+    if not workspace_resource_id:
+        logger.warning("enable_aks_ci: LOG_ANALYTICS_WORKSPACE_RESOURCE_ID not set")
+        return {"success": False, "error": "LOG_ANALYTICS_WORKSPACE_RESOURCE_ID not configured"}
+
+    subscription_id = _extract_subscription_id(resource_id)
+    parts = resource_id.split("/")
+    rg_index = next((i for i, p in enumerate(parts) if p.lower() == "resourcegroups"), -1)
+    resource_group = parts[rg_index + 1] if rg_index >= 0 else ""
+    cluster_name = parts[-1]
+
+    try:
+        import asyncio
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+        from azure.mgmt.containerservice.models import ManagedClusterAddonProfile  # type: ignore[import]
+
+        credential = DefaultAzureCredential()
+        aks_client = ContainerServiceClient(credential, subscription_id)
+        cluster = aks_client.managed_clusters.get(resource_group, cluster_name)
+
+        cluster.addon_profiles = cluster.addon_profiles or {}
+        cluster.addon_profiles["omsagent"] = ManagedClusterAddonProfile(
+            enabled=True,
+            config={"logAnalyticsWorkspaceResourceID": workspace_resource_id},
+        )
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: aks_client.managed_clusters.begin_create_or_update(
+                resource_group, cluster_name, cluster
+            ).result(),
+        )
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "enable_aks_ci: enabled cluster=%s workspace=%s duration_ms=%.0f",
+            cluster_name, workspace_resource_id, duration_ms,
+        )
+        return {"success": True, "cluster": cluster_name, "workspace": workspace_resource_id}
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error("enable_aks_ci: failed cluster=%s error=%s duration_ms=%.0f", cluster_name, exc, duration_ms)
+        return {"success": False, "error": str(exc)}
 
 
 @router.post("/{resource_id_base64}/chat")

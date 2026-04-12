@@ -146,6 +146,9 @@ export interface AKSCluster {
   network_plugin: string         // "azure" | "kubenet"
   rbac_enabled: boolean
   active_alert_count: number
+  // Monitoring addon status — populated by get_aks_detail, absent in list view
+  container_insights_enabled?: boolean
+  managed_prometheus_enabled?: boolean
 }
 
 export interface AKSNodePool {

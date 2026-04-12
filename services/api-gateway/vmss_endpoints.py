@@ -33,9 +33,36 @@ except ImportError:
     _ARG_AVAILABLE = False
     logger.warning("azure-mgmt-resourcegraph not available — VMSS list returns empty")
 
+try:
+    from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as _RHClient  # type: ignore[import]
+except ImportError:
+    try:
+        from azure.mgmt.resourcehealth import MicrosoftResourceHealth as _RHClient  # type: ignore[import,no-redef]
+    except ImportError:
+        _RHClient = None  # type: ignore[assignment,misc]
+
+# VMSS platform metric names for Azure Monitor queries.
+# NOTE: "VM Scale Set VM Instance Count" is NOT a metric — it is vmss.sku.capacity (ARM property).
+# VmAvailabilityMetric is the per-instance availability signal for VMSS.
+_VMSS_METRIC_NAMES = [
+    "Percentage CPU",
+    "Available Memory Bytes",
+    "Network In Total",
+    "Network Out Total",
+    "Disk Read Bytes",
+    "Disk Write Bytes",
+    "Disk Read Operations/Sec",
+    "Disk Write Operations/Sec",
+    "VmAvailabilityMetric",
+    "OS Disk Queue Depth",
+]
+
 
 def _log_sdk_availability() -> None:
-    logger.info("vmss_endpoints: azure-mgmt-resourcegraph available=%s", _ARG_AVAILABLE)
+    logger.info(
+        "vmss_endpoints: azure-mgmt-resourcegraph available=%s resource-health available=%s",
+        _ARG_AVAILABLE, _RHClient is not None,
+    )
 
 
 _log_sdk_availability()
@@ -79,25 +106,52 @@ def _extract_subscription_id(resource_id: str) -> str:
     return ""
 
 
-# ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
+def _get_vmss_health_states(
+    resource_ids: List[str],
+    credential: Any,
+) -> Dict[str, str]:
+    """Fetch Resource Health availability states for a list of VMSS resource IDs.
 
-class VMSSChatRequest(BaseModel):
-    message: str
-    thread_id: Optional[str] = None
-    user_id: Optional[str] = None
+    Modelled on vm_inventory._get_health_states_sync().  Returns a dict mapping
+    resource_id.lower() → availability_state string (e.g. "Available",
+    "Unavailable", "Unknown").  Returns {} when the Resource Health SDK is
+    unavailable or any unrecoverable error occurs.
+    """
+    if _RHClient is None:
+        return {}
 
+    results: Dict[str, str] = {}
+    for rid in resource_ids:
+        parts = rid.split("/")
+        try:
+            idx = [p.lower() for p in parts].index("subscriptions")
+            sub_id = parts[idx + 1]
+        except (ValueError, IndexError):
+            results[rid.lower()] = "Unknown"
+            continue
+        try:
+            client = _RHClient(credential, sub_id)
+            status = client.availability_statuses.get_by_resource(
+                resource_uri=rid,
+                expand="recommendedActions",
+            )
+            raw_state = (
+                status.properties.availability_state
+                if status.properties and status.properties.availability_state
+                else None
+            )
+            if raw_state is None:
+                state = "Unknown"
+            elif hasattr(raw_state, "value"):
+                state = raw_state.value
+            else:
+                state = str(raw_state)
+            results[rid.lower()] = state
+        except Exception as exc:
+            logger.debug("vmss_health: failed resource=%s error=%s", rid[:80], exc)
+            results[rid.lower()] = "Unknown"
 
-class VMSSChatResponse(BaseModel):
-    thread_id: str
-    run_id: str
-    status: str = "created"
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+    return results
 
 
 def _fetch_single_metric_vmss(
@@ -110,7 +164,7 @@ def _fetch_single_metric_vmss(
     """Fetch a single VMSS metric from Azure Monitor.
 
     Returns a parsed metric dict ``{name, unit, timeseries}`` or ``None`` when
-    the metric is unsupported or returns no data. Exceptions are caught
+    the metric is unsupported or returns no data.  Exceptions are caught
     per-metric so one unsupported metric cannot poison the whole batch.
     """
     try:
@@ -147,6 +201,27 @@ def _fetch_single_metric_vmss(
             "vmss_metrics: skipping metric=%r | error=%s", metric_name, exc
         )
         return None
+
+
+# ---------------------------------------------------------------------------
+# Request / Response models
+# ---------------------------------------------------------------------------
+
+class VMSSChatRequest(BaseModel):
+    message: str
+    thread_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class VMSSChatResponse(BaseModel):
+    thread_id: str
+    run_id: str
+    status: str = "created"
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.get("")
@@ -220,6 +295,23 @@ async def list_vmss(
             }
             for r in rows
         ]
+
+        # Enrich health_state from Resource Health API (best-effort, falls back to "unknown")
+        if vmss_list:
+            import asyncio
+            resource_ids = [item["id"] for item in vmss_list if item["id"]]
+            loop = asyncio.get_event_loop()
+            health_map = await loop.run_in_executor(
+                None, _get_vmss_health_states, resource_ids, credential
+            )
+            for item in vmss_list:
+                state = health_map.get(item["id"].lower(), "unknown")
+                item["health_state"] = state.lower()
+                # Derive power_state from health_state
+                if state.lower() == "available":
+                    item["power_state"] = "Running"
+                elif state.lower() != "unknown":
+                    item["power_state"] = state.capitalize()
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_list: total=%d duration_ms=%.1f", len(vmss_list), duration_ms)
@@ -312,11 +404,42 @@ async def get_vmss_detail(
                         autoscale_settings["max_count"] = int(profile.capacity.maximum or 10)
                     autoscale_settings["enabled"] = True
                     break
-        except Exception:
-            pass
+        except Exception as autoscale_exc:
+            logger.warning("vmss_detail: autoscale query failed error=%s", autoscale_exc)
+
+        # Derive healthy_instance_count from running instances (power_state contains "running")
+        total = int(vmss.sku.capacity or 0) if vmss.sku else 0
+        running_count = sum(
+            1 for inst in instances
+            if "running" in (inst.get("power_state") or "").lower()
+        )
+        healthy_instance_count = running_count if instances else total
+
+        # Derive health_state from healthy ratio
+        if total == 0:
+            health_state = "unknown"
+        elif healthy_instance_count == total:
+            health_state = "available"
+        elif healthy_instance_count == 0:
+            health_state = "unavailable"
+        else:
+            health_state = "degraded"
+
+        # Extract OS type and image version from the VMSS model
+        os_type_val = ""
+        os_image_version_val = ""
+        if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile:
+            sp = vmss.virtual_machine_profile.storage_profile
+            if sp.os_disk and sp.os_disk.os_type:
+                os_type_val = str(sp.os_disk.os_type)
+            if sp.image_reference:
+                os_image_version_val = " ".join(filter(None, [
+                    sp.image_reference.offer or "",
+                    sp.image_reference.sku or "",
+                ])).strip()
 
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("vmss_detail: resource_id=%s instances=%d duration_ms=%.1f", resource_id[:60], len(instances), duration_ms)
+        logger.info("vmss_detail: resource_id=%s instances=%d healthy=%d health_state=%s duration_ms=%.1f", resource_id[:60], len(instances), healthy_instance_count, health_state, duration_ms)
         return {
             "id": resource_id,
             "name": vmss.name or vmss_name,
@@ -324,24 +447,12 @@ async def get_vmss_detail(
             "subscription_id": subscription_id,
             "location": vmss.location or "",
             "sku": vmss.sku.name if vmss.sku else "",
-            "instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
-            "healthy_instance_count": int(vmss.sku.capacity or 0) if vmss.sku else 0,
-            "os_type": (str(vmss.virtual_machine_profile.storage_profile.os_disk.os_type or "")
-                        if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
-                        and vmss.virtual_machine_profile.storage_profile.os_disk
-                        else ""),
-            "os_image_version": " ".join(filter(None, [
-                (vmss.virtual_machine_profile.storage_profile.image_reference.offer
-                 if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
-                 and vmss.virtual_machine_profile.storage_profile.image_reference else ""),
-                (vmss.virtual_machine_profile.storage_profile.image_reference.sku
-                 if vmss.virtual_machine_profile and vmss.virtual_machine_profile.storage_profile
-                 and vmss.virtual_machine_profile.storage_profile.image_reference else ""),
-            ])).strip(),
+            "instance_count": total,
+            "healthy_instance_count": healthy_instance_count,
+            "os_type": os_type_val,
+            "os_image_version": os_image_version_val,
             "power_state": "running",
-            "health_state": ("available" if vmss.provisioning_state == "Succeeded"
-                             else "degraded" if vmss.provisioning_state == "Failed"
-                             else "unknown"),
+            "health_state": health_state,
             "autoscale_enabled": autoscale_settings.get("enabled", False),
             "active_alert_count": 0,
             "min_count": autoscale_settings["min_count"],
@@ -393,8 +504,8 @@ async def get_vmss_metrics(
 ) -> Dict[str, Any]:
     """Get Azure Monitor metrics for a VMSS.
 
-    Each metric is fetched concurrently so one unsupported metric cannot
-    poison the whole batch.
+    Each metric is fetched concurrently.  Falls back to empty metrics list when
+    the Monitor SDK is unavailable or the resource returns no data.
     """
     start_time = time.monotonic()
     try:
@@ -403,6 +514,9 @@ async def get_vmss_metrics(
         return {"resource_id": "", "timespan": timespan, "interval": interval, "metrics": []}
 
     subscription_id = _extract_subscription_id(resource_id)
+    if not subscription_id:
+        return {"resource_id": resource_id, "timespan": timespan, "interval": interval, "metrics": []}
+
     metric_names = [m.strip() for m in metrics.split(",") if m.strip()]
     logger.info(
         "vmss_metrics: request | resource=%s metrics=%d timespan=%s",
@@ -411,8 +525,8 @@ async def get_vmss_metrics(
 
     try:
         import asyncio
-        from azure.identity import DefaultAzureCredential
-        from azure.mgmt.monitor import MonitorManagementClient
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.monitor import MonitorManagementClient  # type: ignore[import]
 
         credential = DefaultAzureCredential()
         client = MonitorManagementClient(credential, subscription_id)

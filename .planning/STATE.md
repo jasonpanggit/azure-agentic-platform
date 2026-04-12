@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-12 - Merged fix/vmss-aks-metrics-and-health: VMSS/AKS real metrics via Azure Monitor, Resource Health API for VMSS list health, AKS ready_node_count from agent_pools.list(), Container Insights enablement endpoint, error response guards, healthy_instance_count from instance power states, autoscale warning logging
+
 > Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
 
 > Last activity: 2026-04-12 - Completed quick task 260412-lae: Show patch data inline in VM detail panel patch tab instead of redirect message
@@ -408,6 +410,8 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260411-wm8 | move chat button from right to left and chat panel as well | 2026-04-11 | 5f80f38 | [260411-wm8-move-chat-button-from-right-to-left-and-](./quick/260411-wm8-move-chat-button-from-right-to-left-and-/) |
 | 260411-wps | update VMDetailPanel to follow VMSS and AKS detail panel tab-based UI design with overview tab, ai chat tab and whatever tab you deem suitable | 2026-04-11 | d493ca3 | [260411-wps-update-vmdetailpanel-to-follow-vmss-and-](./quick/260411-wps-update-vmdetailpanel-to-follow-vmss-and-/) |
 | 260412-lae | Show patch data inline in VM detail panel patch tab instead of redirect message | 2026-04-12 | f6654b7 | [260412-lae-show-patch-data-inline-in-vm-detail-pane](./quick/260412-lae-show-patch-data-inline-in-vm-detail-pane/) |
+| 260411-wyg | Fix VMSS and AKS tab and detail panel data bugs — error response guard, hardcoded health/instance stubs, autoscale, metrics | 2026-04-11 | 0295f3c | [260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da](./quick/260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da/) |
+| 260411-x45 | Fix VMSS list health column, VMSS/AKS metrics tabs, and AKS node health — resolve known limitations from previous fix | 2026-04-11 | 83f181e | [260411-x45-fix-vmss-list-health-column-vmss-aks-met](./quick/260411-x45-fix-vmss-list-health-column-vmss-aks-met/) |
 
 ---
 
@@ -422,6 +426,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 13 added: add a new patch management tab and show all the patch related information
 - Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
 - Phase 42 added: surface runbooks in web-ui
+- Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
 
 ---
 

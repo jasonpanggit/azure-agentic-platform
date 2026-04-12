@@ -198,6 +198,10 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
       const res = await fetch(`/api/proxy/vmss/${encoded}`, { headers })
       if (!res.ok) throw new Error(`Status ${res.status}`)
       const data = await res.json()
+      if ('error' in data && typeof data.error === 'string') {
+        setError(data.error)
+        return
+      }
       if (data.fetch_error) {
         setError(`Failed to load scale set details: ${data.fetch_error}`)
       }
@@ -566,8 +570,8 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
 
         {/* Metrics tab */}
         {activeTab === 'metrics' && (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
               <div className="flex items-center gap-1">
                 {(['PT1H', 'PT6H', 'PT24H', 'P7D'] as const).map(r => (
@@ -672,6 +676,9 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                 <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   No metrics available
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Metrics may be unavailable if the scale set has no running instances.
                 </p>
               </div>
             ) : (
