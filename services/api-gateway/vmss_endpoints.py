@@ -109,16 +109,13 @@ async def list_vmss(
 | where type =~ 'microsoft.compute/virtualmachinescalesets'
 | project id, name, resourceGroup, subscriptionId, location,
     sku = tostring(sku.name),
-    instance_count = toint(sku.capacity),
+    instance_count = toint(coalesce(toint(sku.capacity), 0)),
     os_type = tostring(properties.virtualMachineProfile.storageProfile.osDisk.osType),
-    os_image_version = strcat(
-        tostring(properties.virtualMachineProfile.storageProfile.imageReference.offer),
-        ' ',
-        tostring(properties.virtualMachineProfile.storageProfile.imageReference.sku)
-    ),
+    os_image_offer = tostring(properties.virtualMachineProfile.storageProfile.imageReference.offer),
+    os_image_sku = tostring(properties.virtualMachineProfile.storageProfile.imageReference.sku),
     power_state = 'running',
     health_state = iff(tostring(properties.provisioningState) =~ 'Succeeded', 'available', iff(tostring(properties.provisioningState) =~ 'Failed', 'degraded', 'unknown')),
-    autoscale_enabled = tobool(coalesce(tobool(properties.automaticRepairsPolicy.enabled), false)),
+    autoscale_raw = tostring(properties.automaticRepairsPolicy.enabled),
     active_alert_count = 0"""
 
         if search:
@@ -139,14 +136,19 @@ async def list_vmss(
                 "subscription_id": r.get("subscriptionId", ""),
                 "location": r.get("location", ""),
                 "sku": r.get("sku", ""),
-                "instance_count": r.get("instance_count", 0),
-                "healthy_instance_count": r.get("instance_count", 0),
+                "instance_count": r.get("instance_count", 0) or 0,
+                "healthy_instance_count": r.get("instance_count", 0) or 0,
                 "os_type": r.get("os_type", ""),
-                "os_image_version": (r.get("os_image_version") or "").strip(),
+                # Combine offer + sku, strip whitespace, return "" if both empty
+                "os_image_version": " ".join(filter(None, [
+                    (r.get("os_image_offer") or "").strip(),
+                    (r.get("os_image_sku") or "").strip(),
+                ])),
                 "power_state": r.get("power_state", "running"),
                 "health_state": r.get("health_state", "unknown"),
-                "autoscale_enabled": r.get("autoscale_enabled", False),
-                "active_alert_count": r.get("active_alert_count", 0),
+                # autoscale_raw is a string "true"/"false"/"" from ARG — normalise to bool
+                "autoscale_enabled": str(r.get("autoscale_raw", "")).lower() == "true",
+                "active_alert_count": r.get("active_alert_count", 0) or 0,
             }
             for r in rows
         ]

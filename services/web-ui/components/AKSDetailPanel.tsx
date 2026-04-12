@@ -366,14 +366,14 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                   <div key={i} className="h-16 rounded" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
-            ) : detail ? (
+            ) : detail && !(detail as AKSDetail & { fetch_error?: string }).fetch_error ? (
               <>
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Nodes Ready', value: `${detail.ready_nodes}/${detail.total_nodes}`, color: detail.ready_nodes === detail.total_nodes ? 'var(--accent-green)' : 'var(--accent-yellow)' },
-                    { label: 'Node Pools', value: `${detail.node_pools_ready}/${detail.node_pool_count}`, color: detail.node_pools_ready === detail.node_pool_count ? 'var(--accent-green)' : 'var(--accent-yellow)' },
-                    { label: 'K8s Version', value: detail.kubernetes_version, color: 'var(--text-primary)' },
+                    { label: 'Nodes Ready', value: `${detail.ready_nodes}/${detail.total_nodes}`, color: detail.ready_nodes === detail.total_nodes && detail.total_nodes > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)' },
+                    { label: 'Node Pools', value: `${detail.node_pools_ready}/${detail.node_pool_count}`, color: detail.node_pools_ready === detail.node_pool_count && detail.node_pool_count > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)' },
+                    { label: 'K8s Version', value: detail.kubernetes_version || '—', color: 'var(--text-primary)' },
                     { label: 'System Pods', value: detail.system_pod_health, color: detail.system_pod_health === 'healthy' ? 'var(--accent-green)' : detail.system_pod_health === 'degraded' ? 'var(--accent-yellow)' : 'var(--text-muted)' },
                   ].map(card => (
                     <div
@@ -400,7 +400,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                     Cluster Configuration
                   </p>
                   {[
-                    ['Location', detail.location],
+                    ['Location', detail.location || '—'],
                     ['FQDN', detail.fqdn ?? '—'],
                     ['Network Plugin', detail.network_plugin || '—'],
                     ['RBAC Enabled', detail.rbac_enabled ? 'Yes' : 'No'],

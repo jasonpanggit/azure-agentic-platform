@@ -360,7 +360,7 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                   <div key={i} className="h-16 rounded" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
-            ) : detail ? (
+            ) : detail && !(detail as VMSSDetail & { fetch_error?: string }).fetch_error ? (
               <>
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 gap-3">
@@ -395,10 +395,10 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                   </p>
                   {[
                     ['SKU', detail.sku || '—'],
-                    ['Location', detail.location],
+                    ['Location', detail.location || '—'],
                     ['OS Image', detail.os_image_version || '—'],
                     ['Upgrade Policy', detail.upgrade_policy || '—'],
-                    ['Scale Range', `${detail.min_count} – ${detail.max_count}`],
+                    ['Scale Range', detail.min_count === 0 && detail.max_count === 0 ? '—' : `${detail.min_count} – ${detail.max_count}`],
                     ['Health State', detail.health_state],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between py-1 text-xs" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -556,7 +556,7 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                   <div key={i} className="h-16 rounded" style={{ background: 'var(--bg-subtle)' }} />
                 ))}
               </div>
-            ) : detail ? (
+            ) : detail && !(detail as VMSSDetail & { fetch_error?: string }).fetch_error ? (
               <div className="space-y-4">
                 <div
                   className="p-3 rounded-lg"
