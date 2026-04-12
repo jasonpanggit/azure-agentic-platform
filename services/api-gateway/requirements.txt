@@ -48,6 +48,8 @@ azure-mgmt-monitor>=6.0.0
 azure-mgmt-resourcehealth==1.0.0b6
 
 # VM Cost Summary — Azure Advisor rightsizing recommendations (Phase 39)
+# six is a required transitive dep of azure-mgmt-advisor 9.x (not auto-installed in slim images)
+six>=1.16.0
 azure-mgmt-advisor>=9.0.0
 
 # AKS cluster detail — ContainerServiceClient (managed_clusters.get, node pools)
