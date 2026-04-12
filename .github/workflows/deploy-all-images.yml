@@ -8,6 +8,11 @@ on:
         required: false
         default: ''
         type: string
+      force_all:
+        description: 'Force rebuild all images regardless of changes'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -18,7 +23,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Phase 0: Resolve the image tag once (github.sha when input is empty)
+  # Phase 0: Resolve image tag + detect which source paths changed
   # ---------------------------------------------------------------------------
   resolve-tag:
     name: Resolve Image Tag
@@ -41,12 +46,112 @@ jobs:
 
           printf 'image_tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
 
+  detect-changes:
+    name: Detect Changed Images
+    runs-on: [self-hosted, azure, linux]
+    outputs:
+      base:            ${{ steps.changes.outputs.base }}
+      orchestrator:    ${{ steps.changes.outputs.orchestrator }}
+      compute:         ${{ steps.changes.outputs.compute }}
+      network:         ${{ steps.changes.outputs.network }}
+      storage:         ${{ steps.changes.outputs.storage }}
+      security:        ${{ steps.changes.outputs.security }}
+      sre:             ${{ steps.changes.outputs.sre }}
+      arc:             ${{ steps.changes.outputs.arc }}
+      patch:           ${{ steps.changes.outputs.patch }}
+      eol:             ${{ steps.changes.outputs.eol }}
+      api_gateway:     ${{ steps.changes.outputs.api_gateway }}
+      arc_mcp_server:  ${{ steps.changes.outputs.arc_mcp_server }}
+      teams_bot:       ${{ steps.changes.outputs.teams_bot }}
+      web_ui:          ${{ steps.changes.outputs.web_ui }}
+      azure_mcp_server: ${{ steps.changes.outputs.azure_mcp_server }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes since last successful deploy
+        id: changes
+        run: |
+          FORCE="${{ inputs.force_all }}"
+
+          # Find the previous commit to diff against.
+          # For workflow_dispatch on main this is HEAD~1.
+          PREV=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+
+          set_output() {
+            local name="$1"
+            local changed="$2"
+            if [ "$FORCE" = "true" ]; then
+              changed="true"
+            fi
+            echo "${name}=${changed}" >> "$GITHUB_OUTPUT"
+            echo "  ${name}: ${changed}"
+          }
+
+          echo "Changed images:"
+
+          if [ -z "$PREV" ]; then
+            # First commit — build everything
+            for img in base orchestrator compute network storage security sre arc patch eol api_gateway arc_mcp_server teams_bot web_ui azure_mcp_server; do
+              set_output "$img" "true"
+            done
+            exit 0
+          fi
+
+          changed_files=$(git diff --name-only "$PREV" HEAD)
+          echo "Files changed since $PREV:"
+          echo "$changed_files"
+          echo ""
+
+          has_change() {
+            echo "$changed_files" | grep -q "^$1"
+          }
+
+          # Base image: Dockerfile.base, shared deps, or requirements-base.txt
+          if has_change "agents/Dockerfile.base" || has_change "agents/requirements-base.txt" || has_change "agents/shared/"; then
+            BASE_CHANGED="true"
+          else
+            BASE_CHANGED="false"
+          fi
+          set_output "base" "$BASE_CHANGED"
+
+          # Agent images: changed if their own source changed OR base changed
+          # (base changed means the BASE_IMAGE arg changes → must rebuild)
+          agent_changed() {
+            local path="$1"
+            if [ "$BASE_CHANGED" = "true" ] || has_change "$path"; then
+              echo "true"
+            else
+              echo "false"
+            fi
+          }
+
+          set_output "orchestrator"   "$(agent_changed agents/orchestrator/)"
+          set_output "compute"        "$(agent_changed agents/compute/)"
+          set_output "network"        "$(agent_changed agents/network/)"
+          set_output "storage"        "$(agent_changed agents/storage/)"
+          set_output "security"       "$(agent_changed agents/security/)"
+          set_output "sre"            "$(agent_changed agents/sre/)"
+          set_output "arc"            "$(agent_changed agents/arc/)"
+          set_output "patch"          "$(agent_changed agents/patch/)"
+          set_output "eol"            "$(agent_changed agents/eol/)"
+
+          # Service images: independent — only their own source path matters
+          has_change "services/api-gateway/"     && set_output "api_gateway"      "true" || set_output "api_gateway"      "false"
+          has_change "services/arc-mcp-server/"  && set_output "arc_mcp_server"   "true" || set_output "arc_mcp_server"   "false"
+          has_change "services/teams-bot/"       && set_output "teams_bot"        "true" || set_output "teams_bot"        "false"
+          has_change "services/web-ui/"          && set_output "web_ui"           "true" || set_output "web_ui"           "false"
+          has_change "services/azure-mcp-server/" && set_output "azure_mcp_server" "true" || set_output "azure_mcp_server" "false"
+
   # ---------------------------------------------------------------------------
-  # Phase 1: Build agent base image (all agent images depend on this)
+  # Phase 1: Build agent base image
   # ---------------------------------------------------------------------------
   build-agent-base:
     name: Build Agent Base Image
-    needs: resolve-tag
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.base == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/base
@@ -60,11 +165,15 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   # ---------------------------------------------------------------------------
-  # Phase 2a: Agent images (depend on base image, build in parallel)
+  # Phase 2a: Agent images (parallel, each skips if unchanged)
   # ---------------------------------------------------------------------------
   build-orchestrator:
     name: Build Orchestrator
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.orchestrator == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/orchestrator
@@ -81,7 +190,11 @@ jobs:
 
   build-compute:
     name: Build Compute Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.compute == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/compute
@@ -98,7 +211,11 @@ jobs:
 
   build-network:
     name: Build Network Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.network == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/network
@@ -115,7 +232,11 @@ jobs:
 
   build-storage:
     name: Build Storage Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.storage == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/storage
@@ -132,7 +253,11 @@ jobs:
 
   build-security:
     name: Build Security Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.security == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/security
@@ -149,7 +274,11 @@ jobs:
 
   build-sre:
     name: Build SRE Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.sre == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/sre
@@ -166,7 +295,11 @@ jobs:
 
   build-arc:
     name: Build Arc Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.arc == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/arc
@@ -183,7 +316,11 @@ jobs:
 
   build-patch:
     name: Build Patch Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.patch == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/patch
@@ -200,7 +337,11 @@ jobs:
 
   build-eol:
     name: Build EOL Agent
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes, build-agent-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.eol == 'true' &&
+      (needs.build-agent-base.result == 'success' || needs.build-agent-base.result == 'skipped')
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: agents/eol
@@ -220,7 +361,8 @@ jobs:
   # ---------------------------------------------------------------------------
   build-api-gateway:
     name: Build API Gateway
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.api_gateway == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/api-gateway
@@ -235,7 +377,8 @@ jobs:
 
   build-arc-mcp-server:
     name: Build Arc MCP Server
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.arc_mcp_server == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/arc-mcp-server
@@ -250,7 +393,8 @@ jobs:
 
   build-teams-bot:
     name: Build Teams Bot
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.teams_bot == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/teams-bot
@@ -265,7 +409,8 @@ jobs:
 
   build-web-ui:
     name: Build Web UI
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.web_ui == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/web-ui
@@ -280,7 +425,8 @@ jobs:
 
   build-azure-mcp-server:
     name: Build Azure MCP Server
-    needs: [resolve-tag, build-agent-base]
+    needs: [resolve-tag, detect-changes]
+    if: needs.detect-changes.outputs.azure_mcp_server == 'true'
     uses: ./.github/workflows/docker-push.yml
     with:
       image_name: services/azure-mcp-server
@@ -294,7 +440,7 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   # ---------------------------------------------------------------------------
-  # Summary: list all built images and their statuses
+  # Summary
   # ---------------------------------------------------------------------------
   summary:
     name: Deployment Summary
@@ -302,6 +448,7 @@ jobs:
     if: always()
     needs:
       - resolve-tag
+      - detect-changes
       - build-agent-base
       - build-orchestrator
       - build-compute
@@ -323,31 +470,32 @@ jobs:
           echo "## Deploy All Images — Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Tag:** \`${{ needs.resolve-tag.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Force all:** \`${{ inputs.force_all }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Agent Images" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/base | ${{ needs.build-agent-base.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/orchestrator | ${{ needs.build-orchestrator.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/compute | ${{ needs.build-compute.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/network | ${{ needs.build-network.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/storage | ${{ needs.build-storage.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/security | ${{ needs.build-security.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/sre | ${{ needs.build-sre.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/arc | ${{ needs.build-arc.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/patch | ${{ needs.build-patch.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| agents/eol | ${{ needs.build-eol.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | Changed | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|---------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/base | ${{ needs.detect-changes.outputs.base }} | ${{ needs.build-agent-base.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/orchestrator | ${{ needs.detect-changes.outputs.orchestrator }} | ${{ needs.build-orchestrator.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/compute | ${{ needs.detect-changes.outputs.compute }} | ${{ needs.build-compute.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/network | ${{ needs.detect-changes.outputs.network }} | ${{ needs.build-network.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/storage | ${{ needs.detect-changes.outputs.storage }} | ${{ needs.build-storage.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/security | ${{ needs.detect-changes.outputs.security }} | ${{ needs.build-security.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/sre | ${{ needs.detect-changes.outputs.sre }} | ${{ needs.build-sre.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/arc | ${{ needs.detect-changes.outputs.arc }} | ${{ needs.build-arc.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/patch | ${{ needs.detect-changes.outputs.patch }} | ${{ needs.build-patch.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| agents/eol | ${{ needs.detect-changes.outputs.eol }} | ${{ needs.build-eol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Service Images" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| services/api-gateway | ${{ needs.build-api-gateway.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| services/arc-mcp-server | ${{ needs.build-arc-mcp-server.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| services/teams-bot | ${{ needs.build-teams-bot.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| services/web-ui | ${{ needs.build-web-ui.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| services/azure-mcp-server | ${{ needs.build-azure-mcp-server.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | Changed | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|---------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/api-gateway | ${{ needs.detect-changes.outputs.api_gateway }} | ${{ needs.build-api-gateway.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/arc-mcp-server | ${{ needs.detect-changes.outputs.arc_mcp_server }} | ${{ needs.build-arc-mcp-server.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/teams-bot | ${{ needs.detect-changes.outputs.teams_bot }} | ${{ needs.build-teams-bot.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/web-ui | ${{ needs.detect-changes.outputs.web_ui }} | ${{ needs.build-web-ui.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| services/azure-mcp-server | ${{ needs.detect-changes.outputs.azure_mcp_server }} | ${{ needs.build-azure-mcp-server.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if any image build failed
         if: contains(needs.*.result, 'failure')
