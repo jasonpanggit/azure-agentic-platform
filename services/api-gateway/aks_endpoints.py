@@ -624,6 +624,166 @@ async def get_aks_metrics(
         }
 
 
+
+@router.get("/{resource_id_base64}/metrics/logs")
+async def get_aks_la_metrics(
+    resource_id_base64: str,
+    timespan: str = Query("PT24H", description="ISO 8601 duration like PT1H, PT6H, PT24H, P7D"),
+    interval: str = Query("PT5M", description="ISO 8601 bucket interval"),
+    _token: str = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Query Container Insights (Log Analytics) for AKS node metrics.
+
+    Queries Perf table for:
+      - Node CPU utilisation percentage
+      - Node memory working set percentage
+      - Node disk reads/writes
+
+    Returns MetricSeries-compatible list so the frontend can render sparklines.
+    Returns empty metrics with source="log_analytics" if Container Insights is not
+    configured or has no data.
+    """
+    start_time = time.monotonic()
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError:
+        return {"resource_id": "", "timespan": timespan, "metrics": [], "source": "log_analytics"}
+
+    if not _LOGS_QUERY_AVAILABLE:
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
+            "fetch_error": "azure-monitor-query not installed",
+        }
+
+    # Resolve workspace from omsagent config
+    subscription_id = _extract_subscription_id(resource_id)
+    parts = resource_id.split("/")
+    rg_index = next((i for i, p in enumerate(parts) if p.lower() == "resourcegroups"), -1)
+    resource_group = parts[rg_index + 1] if rg_index >= 0 else ""
+    cluster_name = parts[-1]
+
+    la_workspace_resource_id: Optional[str] = None
+    try:
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+        credential = DefaultAzureCredential()
+        aks_client = ContainerServiceClient(credential, subscription_id)
+        cluster = aks_client.managed_clusters.get(resource_group, cluster_name)
+        profiles = cluster.addon_profiles or {}
+        omsagent = profiles.get("omsagent")
+        omsagent_config = getattr(omsagent, "config", None) or {}
+        la_workspace_resource_id = (
+            omsagent_config.get("logAnalyticsWorkspaceResourceID")
+            or os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "") or None
+        )
+    except Exception as exc:
+        logger.warning("aks_la_metrics: failed to resolve workspace error=%s", exc)
+
+    if not la_workspace_resource_id:
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
+            "fetch_error": "No Log Analytics workspace configured for this cluster",
+        }
+
+    # Map ISO 8601 timespan to timedelta
+    from datetime import timedelta
+    _TIMESPAN_MAP: Dict[str, timedelta] = {
+        "PT1H": timedelta(hours=1),
+        "PT6H": timedelta(hours=6),
+        "PT24H": timedelta(hours=24),
+        "P7D": timedelta(days=7),
+    }
+    td = _TIMESPAN_MAP.get(timespan, timedelta(hours=24))
+
+    # Map ISO 8601 interval to minutes for KQL bin()
+    _INTERVAL_MINUTES: Dict[str, int] = {
+        "PT1M": 1, "PT5M": 5, "PT15M": 15, "PT30M": 30, "PT1H": 60,
+    }
+    bin_minutes = _INTERVAL_MINUTES.get(interval, 5)
+
+    try:
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]  # noqa: F811
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+        credential = DefaultAzureCredential()
+        client = LogsQueryClient(credential)
+
+        kql = f"""
+Perf
+| where TimeGenerated > ago({int(td.total_seconds())}s)
+| where ObjectName == "K8SNode"
+| where CounterName in ("cpuUsageNanoCores", "memoryWorkingSetBytes", "memoryRssBytes")
+| where Computer has "{cluster_name}"
+| summarize avg(CounterValue) by bin(TimeGenerated, {bin_minutes}m), Computer, CounterName
+| order by TimeGenerated asc
+"""
+        result = client.query_resource(
+            la_workspace_resource_id,
+            kql,
+            timespan=td,
+        )
+
+        metrics_out: List[Dict[str, Any]] = []
+        if result.status == LogsQueryStatus.SUCCESS and result.tables:
+            table = result.tables[0]
+            cols = [c.name for c in table.columns]
+
+            # Group rows by (Computer, CounterName)
+            from collections import defaultdict
+            series_map: Dict[tuple, List[Dict]] = defaultdict(list)
+            for row in table.rows:
+                row_dict = dict(zip(cols, row))
+                key = (str(row_dict.get("Computer", "")), str(row_dict.get("CounterName", "")))
+                series_map[key].append(row_dict)
+
+            _COUNTER_LABELS = {
+                "cpuUsageNanoCores": ("Node CPU (nanocores)", "NanoCores"),
+                "memoryWorkingSetBytes": ("Node Memory Working Set", "Bytes"),
+                "memoryRssBytes": ("Node Memory RSS", "Bytes"),
+            }
+
+            for (computer, counter_name), rows in series_map.items():
+                label, unit = _COUNTER_LABELS.get(counter_name, (counter_name, ""))
+                timeseries = [
+                    {
+                        "timestamp": str(r.get("TimeGenerated", "")),
+                        "average": float(r.get("avg_CounterValue", 0) or 0),
+                        "maximum": None,
+                    }
+                    for r in sorted(rows, key=lambda r: str(r.get("TimeGenerated", "")))
+                ]
+                metrics_out.append({
+                    "name": f"{label} ({computer.split('/')[-1]})",
+                    "unit": unit,
+                    "timeseries": timeseries,
+                })
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info("aks_la_metrics: resource=%s series=%d duration_ms=%.0f", resource_id[-60:], len(metrics_out), duration_ms)
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": metrics_out,
+            "source": "log_analytics",
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error("aks_la_metrics: error=%s duration_ms=%.0f", exc, duration_ms)
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
+            "fetch_error": str(exc),
+        }
+
+
 @router.post("/{resource_id_base64}/monitoring")
 async def enable_aks_container_insights(
     resource_id_base64: str,

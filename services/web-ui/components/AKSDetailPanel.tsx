@@ -160,6 +160,8 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [detail, setDetail] = useState<AKSDetail | null>(null)
   const [metrics, setMetrics] = useState<MetricSeries[]>([])
   const [metricsTimespan, setMetricsTimespan] = useState<'PT1H' | 'PT6H' | 'PT24H' | 'P7D'>('PT24H')
+  // 'platform' = Azure Monitor platform metrics, 'logs' = Container Insights (LA), 'prometheus' = Managed Prometheus
+  const [metricsSource, setMetricsSource] = useState<'platform' | 'logs' | 'prometheus'>('platform')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -230,21 +232,35 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
     }
   }
 
-  async function fetchMetrics(timespan: string) {
+  async function fetchMetrics(timespan: string, source?: 'platform' | 'logs' | 'prometheus') {
     if (!resourceId) return
+    const activeSource = source ?? metricsSource
     setLoadingMetrics(true)
     try {
       const encoded = encodeResourceId(resourceId)
       const token = await getAccessToken()
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(
-        `/api/proxy/aks/${encoded}/metrics?timespan=${timespan}&metrics=${encodeURIComponent(selectedMetrics.join(','))}`,
-        { headers }
-      )
-      if (res.ok) {
-        const data = await res.json()
-        setMetrics(data.metrics ?? [])
+
+      if (activeSource === 'logs') {
+        const res = await fetch(
+          `/api/proxy/aks/${encoded}/metrics/logs?timespan=${timespan}&interval=PT5M`,
+          { headers }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setMetrics(data.metrics ?? [])
+        }
+      } else {
+        // platform metrics (prometheus shows a static info panel, no fetch needed)
+        const res = await fetch(
+          `/api/proxy/aks/${encoded}/metrics?timespan=${timespan}&metrics=${encodeURIComponent(selectedMetrics.join(','))}`,
+          { headers }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setMetrics(data.metrics ?? [])
+        }
       }
     } catch {
       // Non-fatal
@@ -338,6 +354,13 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   useEffect(() => {
     if (activeTab === 'metrics') fetchMetrics(metricsTimespan)
   }, [metricsTimespan, selectedMetrics]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (activeTab === 'metrics') {
+      setMetrics([])
+      fetchMetrics(metricsTimespan, metricsSource)
+    }
+  }, [metricsSource]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -664,9 +687,38 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
               </div>
             )}
 
+            {/* Metrics source selector */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {([
+                { key: 'platform', label: 'Platform Metrics', always: true },
+                { key: 'logs',     label: 'Container Insights', always: false },
+                { key: 'prometheus', label: 'Managed Prometheus', always: false },
+              ] as { key: 'platform' | 'logs' | 'prometheus'; label: string; always: boolean }[])
+                .filter(s => s.always || (s.key === 'logs' && detail?.container_insights_enabled) || (s.key === 'prometheus' && detail?.managed_prometheus_enabled))
+                .map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setMetricsSource(s.key)}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer transition-colors"
+                    style={{
+                      background: metricsSource === s.key
+                        ? 'var(--accent-blue)'
+                        : 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                      color: metricsSource === s.key ? '#fff' : 'var(--accent-blue)',
+                      border: `1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)`,
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))
+              }
+            </div>
+
             {/* Time range selector */}
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Azure Monitor Metrics</p>
+              <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                {metricsSource === 'platform' ? 'Azure Monitor Metrics' : metricsSource === 'logs' ? 'Container Insights (Log Analytics)' : 'Managed Prometheus'}
+              </p>
               <div className="flex items-center gap-1">
                 {(['PT1H', 'PT6H', 'PT24H', 'P7D'] as const).map(r => (
                   <button
@@ -681,8 +733,8 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                     {r.replace('PT', '').replace('P', '').replace('H', 'h').replace('D', 'd')}
                   </button>
                 ))}
-                {/* Metric selector */}
-                <div className="relative ml-1">
+                {/* Metric selector — only for platform metrics */}
+                {metricsSource === 'platform' && <div className="relative ml-1">
                   <button
                     onClick={() => setMetricSelectorOpen(v => !v)}
                     className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer font-bold"
@@ -755,11 +807,41 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             </div>
 
-            {loadingMetrics ? (
+            {metricsSource === 'prometheus' ? (
+              /* Managed Prometheus — queries require Azure Managed Grafana */
+              <div
+                className="rounded-lg p-4 space-y-3"
+                style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-start gap-3">
+                  <Info className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'var(--accent-blue)' }} />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                      Managed Prometheus enabled
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      Prometheus metrics are stored in Azure Monitor managed service for Prometheus.
+                      Query them via <strong>Azure Managed Grafana</strong> or the Azure Monitor portal.
+                    </p>
+                    {detail?.fqdn && (
+                      <a
+                        href={`https://portal.azure.com/#@/resource${detail.id}/metrics`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium underline cursor-pointer"
+                        style={{ color: 'var(--accent-blue)' }}
+                      >
+                        Open in Azure Portal →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : loadingMetrics ? (
               <div className="space-y-2">
                 {[...Array(selectedMetrics.length || 4)].map((_, i) => (
                   <div key={i} className="h-10 rounded animate-pulse" style={{ background: 'var(--bg-subtle)' }} />
@@ -771,9 +853,13 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
               <div className="py-8 text-center space-y-3">
                 <Activity className="h-8 w-8 mx-auto" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  No metrics available
+                  {metricsSource === 'logs' ? 'No Container Insights data available' : 'No metrics available'}
                 </p>
-                {detail && !detail.container_insights_enabled ? (
+                {metricsSource === 'logs' ? (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    The omsagent may not be sending data to this workspace yet. Data can take up to 15 minutes to appear after enabling Container Insights.
+                  </p>
+                ) : detail && !detail.container_insights_enabled ? (
                   <>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       Enable Container Insights to collect node-level metrics.
