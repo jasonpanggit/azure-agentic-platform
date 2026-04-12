@@ -159,7 +159,7 @@ async def list_aks_clusters(
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.error("aks_list: error=%s duration_ms=%.1f", exc, duration_ms)
-        return {"clusters": [], "total": 0}
+        return {"clusters": [], "total": 0, "fetch_error": str(exc)}
 
 
 @router.get("/{resource_id_base64}")

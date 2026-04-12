@@ -114,9 +114,17 @@ export function AKSTab({ subscriptions, onAKSClick }: AKSTabProps) {
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`/api/proxy/aks?${params}`, { headers })
       const data = await res.json()
-      setClusters(data.clusters ?? [])
-    } catch {
-      setError('Failed to load AKS clusters')
+      if (!res.ok) {
+        setError(data?.error ?? `Failed to load AKS clusters (${res.status})`)
+        setClusters([])
+      } else if (data?.fetch_error) {
+        setError(`AKS query failed: ${data.fetch_error}`)
+        setClusters([])
+      } else {
+        setClusters(data.clusters ?? [])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load AKS clusters')
     } finally {
       setLoading(false)
     }

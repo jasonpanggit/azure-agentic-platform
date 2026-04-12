@@ -34,17 +34,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       signal: AbortSignal.timeout(15000),
     });
 
+    const data = await res.json();
+
     if (!res.ok) {
-      log.debug('aks endpoint not ready, returning empty list', { status: res.status });
-      return NextResponse.json({ clusters: [], total: 0 });
+      log.error('aks upstream error', { status: res.status, error: data?.detail ?? data?.error });
+      return NextResponse.json(
+        { error: data?.detail ?? data?.error ?? `Gateway error: ${res.status}`, clusters: [], total: 0 },
+        { status: res.status }
+      );
     }
 
-    const data = await res.json();
     log.debug('aks list response', { total: data?.total });
     return NextResponse.json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    log.debug('gateway unreachable, returning empty aks list', { error: message });
-    return NextResponse.json({ clusters: [], total: 0 });
+    log.error('gateway unreachable for aks list', { error: message });
+    return NextResponse.json(
+      { error: `Failed to reach API gateway: ${message}`, clusters: [], total: 0 },
+      { status: 502 }
+    );
   }
 }
