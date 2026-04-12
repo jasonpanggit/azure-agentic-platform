@@ -224,6 +224,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
   const [patchLoading, setPatchLoading] = useState(false)
   const [patchError, setPatchError] = useState<string | null>(null)
   const [patchDays, setPatchDays] = useState<DaysOption>('90')
+  const [expandedCves, setExpandedCves] = useState<Set<string>>(new Set())
   const patchLoadedRef = useRef(false)
 
   // ── Panel resize state ───────────────────────────────────────────────────
@@ -1397,27 +1398,61 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                               </span>
                             )}
                           </div>
-                          {p.cves && p.cves.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {p.cves.slice(0, 3).map(cve => (
-                                <span
-                                  key={cve}
-                                  className="font-mono text-[9px] px-1 py-0.5 rounded"
-                                  style={{
-                                    background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
-                                    color: 'var(--accent-blue)',
-                                  }}
-                                >
-                                  {cve}
-                                </span>
-                              ))}
-                              {p.cves.length > 3 && (
-                                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                                  +{p.cves.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          {p.cves && p.cves.length > 0 && (() => {
+                            const key = `pending-${idx}`
+                            const isExpanded = expandedCves.has(key)
+                            const shown = isExpanded ? p.cves : p.cves.slice(0, 3)
+                            const overflow = p.cves.length - 3
+                            return (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {shown.map(cve => (
+                                  <a
+                                    key={cve}
+                                    href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-mono text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                    style={{
+                                      background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                                      color: 'var(--accent-blue)',
+                                      textDecoration: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {cve}
+                                  </a>
+                                ))}
+                                {!isExpanded && overflow > 0 && (
+                                  <button
+                                    onClick={() => setExpandedCves(prev => new Set([...prev, key]))}
+                                    className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                    style={{
+                                      background: 'var(--bg-subtle)',
+                                      color: 'var(--accent-blue)',
+                                      cursor: 'pointer',
+                                      border: 'none',
+                                    }}
+                                  >
+                                    +{overflow} more
+                                  </button>
+                                )}
+                                {isExpanded && (
+                                  <button
+                                    onClick={() => setExpandedCves(prev => { const s = new Set(prev); s.delete(key); return s })}
+                                    className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                    style={{
+                                      background: 'var(--bg-subtle)',
+                                      color: 'var(--text-muted)',
+                                      cursor: 'pointer',
+                                      border: 'none',
+                                    }}
+                                  >
+                                    show less
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       ))}
                     </div>
@@ -1470,27 +1505,61 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                                 </span>
                               )}
                             </div>
-                            {p.cves && p.cves.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                {p.cves.slice(0, 3).map(cve => (
-                                  <span
-                                    key={cve}
-                                    className="font-mono text-[9px] px-1 py-0.5 rounded"
-                                    style={{
-                                      background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
-                                      color: 'var(--accent-blue)',
-                                    }}
-                                  >
-                                    {cve}
-                                  </span>
-                                ))}
-                                {p.cves.length > 3 && (
-                                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                                    +{p.cves.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            {p.cves && p.cves.length > 0 && (() => {
+                              const key = `installed-${idx}`
+                              const isExpanded = expandedCves.has(key)
+                              const shown = isExpanded ? p.cves : p.cves.slice(0, 3)
+                              const overflow = p.cves.length - 3
+                              return (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {shown.map(cve => (
+                                    <a
+                                      key={cve}
+                                      href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-mono text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                      style={{
+                                        background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                                        color: 'var(--accent-blue)',
+                                        textDecoration: 'none',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {cve}
+                                    </a>
+                                  ))}
+                                  {!isExpanded && overflow > 0 && (
+                                    <button
+                                      onClick={() => setExpandedCves(prev => new Set([...prev, key]))}
+                                      className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                      style={{
+                                        background: 'var(--bg-subtle)',
+                                        color: 'var(--accent-blue)',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                      }}
+                                    >
+                                      +{overflow} more
+                                    </button>
+                                  )}
+                                  {isExpanded && (
+                                    <button
+                                      onClick={() => setExpandedCves(prev => { const s = new Set(prev); s.delete(key); return s })}
+                                      className="text-[9px] px-1 py-0.5 rounded transition-opacity hover:opacity-70"
+                                      style={{
+                                        background: 'var(--bg-subtle)',
+                                        color: 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                      }}
+                                    >
+                                      show less
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })}
