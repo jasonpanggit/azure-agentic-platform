@@ -732,7 +732,11 @@ def _fetch_arc_vm_metrics_sync(
         rows: List[Dict[str, Any]] = []
         tables = getattr(response, "tables", []) or []
         for table in tables:
-            col_names = [col.name for col in table.columns]
+            # azure-monitor-query v2 returns columns as strings; v1 returns objects with .name
+            col_names = [
+                col if isinstance(col, str) else col.name
+                for col in table.columns
+            ]
             for row in table.rows:
                 rows.append(
                     dict(zip(col_names, [str(v) if v is not None else None for v in row]))
