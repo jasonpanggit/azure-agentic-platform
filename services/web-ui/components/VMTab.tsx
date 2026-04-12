@@ -274,7 +274,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                             </span>
                             {eol.eol_date && (
                               <span style={{ color: 'var(--text-muted)' }}>
-                                {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                {new Date(eol.eol_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </span>
                             )}
                           </span>
@@ -283,7 +283,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                       if (eol.eol_date) {
                         return (
                           <span style={{ color: 'var(--text-secondary)' }}>
-                            {new Date(eol.eol_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                            {new Date(eol.eol_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
                         )
                       }
