@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -17,9 +17,10 @@ import { AKSTab } from './AKSTab'
 import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
 import { RunbookTab } from './RunbookTab'
+import { OpsTab } from './OpsTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks'
 
 interface FilterState {
   severity?: string
@@ -28,6 +29,7 @@ interface FilterState {
 }
 
 const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }[] = [
+  { id: 'ops', label: 'Ops', Icon: LayoutDashboard },
   { id: 'alerts', label: 'Alerts', Icon: Bell },
   { id: 'audit', label: 'Audit', Icon: ClipboardList },
   { id: 'topology', label: 'Topology', Icon: Network },
@@ -48,7 +50,7 @@ interface DashboardPanelProps {
 }
 
 export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: DashboardPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('alerts')
+  const [activeTab, setActiveTab] = useState<TabId>('ops')
   const [filters, setFilters] = useState<FilterState>({})
   const [vmDetailOpen, setVMDetailOpen] = useState(false)
   const [selectedVM, setSelectedVM] = useState<{
@@ -166,6 +168,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
       {/* Tab panels */}
       <div className="flex-1 overflow-auto p-6">
+        <div id="tabpanel-ops" role="tabpanel" aria-labelledby="tab-ops" hidden={activeTab !== 'ops'}>
+          <OpsTab subscriptions={selectedSubscriptions} />
+        </div>
+
         <div id="tabpanel-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden={activeTab !== 'alerts'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
