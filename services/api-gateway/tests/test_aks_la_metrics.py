@@ -117,12 +117,11 @@ class TestAKSLAMetricsPartialResult:
         mock_result = _make_la_metrics_result("Partial", partial_rows)
         mock_cluster = _mock_aks_cluster()
 
-        # Mock ContainerServiceClient at the module attribute level so the
-        # runtime `from azure.mgmt.containerservice import ContainerServiceClient`
-        # inside the endpoint resolves to our mock.
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        # Patch ContainerServiceClient regardless of whether the real package is
+        # installed (CI/Python 3.12) or shimmed via sys.modules (local/Python 3.9).
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
@@ -154,7 +153,7 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
@@ -180,7 +179,7 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
@@ -204,7 +203,7 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
