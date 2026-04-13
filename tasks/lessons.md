@@ -58,6 +58,48 @@ When the CI workflow runs `terraform apply -var-file credentials.tfvars -var-fil
 ### 2026-04-12: Optional cache layers must not gate required functionality
 The EOL endpoint's endoflife.date API call was inside a `try` block that required a successful PostgreSQL connection. When DB failed, the entire loop was skipped -- the public REST API (which needs no DB) was unreachable dead code. **Rule**: When a feature has an optional cache and a required data source, structure the code so cache failure degrades gracefully (skip cache, proceed to source) rather than aborting the entire operation. Test this by mocking the cache as unavailable and asserting the source is still called.
 
+### 2026-04-13: Never deploy manually with az containerapp update :latest — always use GH workflow
+
+**What happened:** During a debugging session, `az acr build ... --image api-gateway:latest` was used to build, then `az containerapp update --image ...:latest` to deploy. The second `update` call didn't create a new Container App revision because the image reference string (`...:latest`) hadn't changed, so Azure saw no diff. The old running revision kept serving traffic with the old code.
+
+**Root cause:** Container Apps tracks revisions by image reference string. `:latest` is a mutable tag — pushing a new image to `:latest` doesn't change the string, so no revision rolls. The GH workflow uses `${{ github.sha }}` as the image tag, which changes on every commit and always forces a new revision.
+
+**Rules:**
+1. **Never** use `az containerapp update` with `:latest` to deploy code changes — it silently does nothing if already on `:latest`.
+2. **Always** deploy via the GH workflow (`api-gateway-build.yml` on push to `main`). Commit your fix to main and let CI handle it.
+3. If you need to verify manually: `az containerapp revision list` to check the latest revision's `createdTime` — if it's old, the deploy didn't take.
+4. `az acr build` is fine for building, but the deploy step must use a SHA-tagged image reference.
+
+---
+
+### 2026-04-13: system_pod_health "unknown" — per-cluster omsagent workspace, not platform-wide env var
+
+**What happened:** `system_pod_health` returned `"unknown"` for all AKS clusters even after deploying the `_fetch_system_pod_health_batch()` code. The list endpoint was querying `LOG_ANALYTICS_WORKSPACE_RESOURCE_ID` (platform-wide env var pointing to `workspace-agentic-aiops-demo`) for `KubePodInventory` data. But `aks-srelab` ships Container Insights to `log-srelab` — a different workspace stored in `properties.addonProfiles.omsagent.config.logAnalyticsWorkspaceResourceID`.
+
+**Root cause:** The enrichment code used a single shared workspace for all clusters. In real deployments, each AKS cluster's omsagent is configured to send data to its own dedicated workspace, not a platform-wide one.
+
+**Fix:** Extended the ARG KQL query to project `omsagent_workspace` and `omsagent_enabled` per cluster. The enrichment loop now groups clusters by their per-cluster workspace and queries each workspace independently. Falls back to `LOG_ANALYTICS_WORKSPACE_RESOURCE_ID` for clusters without an explicit omsagent workspace.
+
+**Rule:** When enriching AKS list data from Log Analytics, always read the workspace from the cluster's `addonProfiles.omsagent.config.logAnalyticsWorkspaceResourceID` (via ARG), not a platform env var. The env var is only a fallback.
+
+---
+
+### 2026-04-13: system_pod_health may correctly return "unknown" — verify data before calling it a bug
+
+**What happened:** After fixing the workspace resolution, `system_pod_health` still returned `"unknown"`. Spent time on more code fixes before directly querying the LA workspace to verify if `KubePodInventory` has any rows.
+
+**Root cause:** `KubePodInventory` in `log-srelab` genuinely has no data — the omsagent is configured but Container Insights isn't actively shipping pod inventory data. This is a real limitation (no data), not a code bug. The `"unknown"` result is correct behavior.
+
+**Rule:** Before assuming `"unknown"` / empty data is a code bug: directly query the Log Analytics workspace first:
+```bash
+az monitor log-analytics query -w <workspace-guid> \
+  --analytics-query "KubePodInventory | where TimeGenerated > ago(4h) | summarize count() by ClusterName" \
+  -o json
+```
+If this returns `[]`, the issue is data availability, not code. Don't spend time on further code fixes.
+
+---
+
 ## Lesson: Always merge to main before starting a new phase
 
 **Pattern:** Before starting research/planning for a new phase, always:
