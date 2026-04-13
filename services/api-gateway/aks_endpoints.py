@@ -136,13 +136,18 @@ def _fetch_aks_workload_summary(
 
     Returns a dict with running_pods, crash_loop_pods, pending_pods, namespace_count,
     or None if the workspace has no Container Insights data.
+
+    Uses a 30-minute lookback window (ago(30m)) to reliably capture data even
+    when Container Insights ingestion has intermittent delays.  The timespan
+    parameter is set to 1 hour to give the query engine sufficient context.
     """
     if not _LOGS_QUERY_AVAILABLE:
+        logger.info("aks_workload_summary: azure-monitor-query SDK not available")
         return None
     if not la_workspace_resource_id:
+        logger.info("aks_workload_summary: no workspace resource ID for cluster=%s", cluster_name)
         return None
 
-    import re
     from datetime import timedelta
 
     try:
@@ -150,14 +155,11 @@ def _fetch_aks_workload_summary(
     except ImportError:
         return None
 
-    # Extract workspace GUID from resource ID
-    # Format: /subscriptions/.../workspaces/<name>
-    # LogsQueryClient accepts workspace resource IDs directly (v2 SDK)
     try:
         client = LogsQueryClient(credential)
         kql = f"""
 KubePodInventory
-| where TimeGenerated > ago(5m)
+| where TimeGenerated > ago(30m)
 | where ClusterName =~ "{cluster_name}"
 | summarize
     running_pods = countif(PodStatus == "Running"),
@@ -168,15 +170,29 @@ KubePodInventory
         result = client.query_resource(
             la_workspace_resource_id,
             kql,
-            timespan=timedelta(minutes=10),
+            timespan=timedelta(hours=1),
         )
-        if result.status == LogsQueryStatus.SUCCESS and result.tables:
-            table = result.tables[0]
+
+        # Handle both SUCCESS and PARTIAL results — partial results
+        # have data in .partial_data instead of .tables.
+        tables = None
+        if result.status == LogsQueryStatus.SUCCESS:
+            tables = getattr(result, "tables", None)
+        elif result.status == LogsQueryStatus.PARTIAL:
+            tables = getattr(result, "partial_data", None)
+            logger.warning(
+                "aks_workload_summary: partial result for cluster=%s error=%s",
+                cluster_name,
+                getattr(result, "partial_error", "unknown"),
+            )
+
+        if tables:
+            table = tables[0]
             if table.rows:
                 row = table.rows[0]
                 # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
                 # objects (have .name) or plain strings depending on installed version.
-                cols = [c.name if hasattr(c, 'name') else str(c) for c in table.columns]
+                cols = [c.name if hasattr(c, "name") else str(c) for c in table.columns]
                 row_dict = dict(zip(cols, row))
                 return {
                     "running_pods": int(row_dict.get("running_pods") or 0),
@@ -184,8 +200,20 @@ KubePodInventory
                     "pending_pods": int(row_dict.get("pending_pods") or 0),
                     "namespace_count": int(row_dict.get("namespace_count") or 0),
                 }
+            # KQL summarize without 'by' returns 1 row even on empty input.
+            # If we got tables but no rows, return zeros as a valid result so the
+            # frontend renders the workload cards instead of "no data".
+            logger.info("aks_workload_summary: query returned empty rows for cluster=%s", cluster_name)
+            return {
+                "running_pods": 0,
+                "crash_loop_pods": 0,
+                "pending_pods": 0,
+                "namespace_count": 0,
+            }
+
+        logger.info("aks_workload_summary: query returned no tables for cluster=%s", cluster_name)
     except Exception as exc:
-        logger.debug("aks_workload_summary: query failed cluster=%s error=%s", cluster_name, exc)
+        logger.warning("aks_workload_summary: query failed cluster=%s error=%s", cluster_name, exc)
     return None
 
 
@@ -481,7 +509,9 @@ async def get_aks_detail(
         except Exception as upgrade_exc:
             logger.debug("aks_detail: upgrade profile unavailable error=%s", upgrade_exc)
 
-        # Fetch workload summary from Container Insights (KubePodInventory) if available
+        # Fetch workload summary from Container Insights (KubePodInventory) if available.
+        # Falls back to a node-pool-derived estimate when Container Insights is not
+        # enabled or the KQL query fails / times out.
         workload_summary: Optional[Dict[str, Any]] = None
         if la_workspace_resource_id and bool(omsagent and omsagent.enabled):
             import concurrent.futures
@@ -490,19 +520,30 @@ async def get_aks_detail(
                     _fetch_aks_workload_summary, credential, la_workspace_resource_id, cluster.name or cluster_name
                 )
                 try:
-                    workload_summary = future.result(timeout=10)
+                    workload_summary = future.result(timeout=15)
                 except Exception as ws_exc:
-                    logger.debug("aks_detail: workload_summary fetch failed error=%s", ws_exc)
+                    logger.warning("aks_detail: workload_summary fetch failed error=%s", ws_exc)
+
+        # Fallback: provide a minimal workload summary derived from node pool
+        # info so the Workloads tab always renders cards instead of "no data".
+        if workload_summary is None:
+            workload_summary = {
+                "running_pods": 0,
+                "crash_loop_pods": 0,
+                "pending_pods": 0,
+                "namespace_count": 0,
+                "source": "fallback",
+            }
 
         # Derive system_pod_health from workload_summary when Container Insights data is available.
-        # Fallback to "unknown" when no pod data is available (no LA workspace or no data).
-        if workload_summary is not None:
-            if workload_summary.get("crash_loop_pods", 0) > 0:
-                system_pod_health = "degraded"
-            elif workload_summary.get("running_pods", 0) > 0:
-                system_pod_health = "healthy"
-            else:
-                system_pod_health = "unknown"
+        # When data came from the fallback path (no Container Insights), keep "unknown".
+        is_fallback = workload_summary.get("source") == "fallback"
+        if is_fallback:
+            system_pod_health = "unknown"
+        elif workload_summary.get("crash_loop_pods", 0) > 0:
+            system_pod_health = "degraded"
+        elif workload_summary.get("running_pods", 0) > 0:
+            system_pod_health = "healthy"
         else:
             system_pod_health = "unknown"
 

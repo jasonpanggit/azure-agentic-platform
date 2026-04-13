@@ -169,4 +169,5 @@ export interface AKSWorkloadSummary {
   crash_loop_pods: number
   pending_pods: number
   namespace_count: number
+  source?: 'fallback' | string
 }

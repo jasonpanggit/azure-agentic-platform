@@ -626,12 +626,28 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
               </div>
             ) : detail?.workload_summary ? (
               <>
+                {/* Info banner when data is from fallback (Container Insights unavailable) */}
+                {detail.workload_summary.source === 'fallback' && (
+                  <div
+                    className="flex items-start gap-3 px-3 py-2.5 rounded-lg text-xs"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-yellow) 12%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent-yellow) 30%, transparent)',
+                    }}
+                  >
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: 'var(--accent-yellow)' }} />
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Container Insights data unavailable. Counts may not reflect live workloads.
+                      Use <strong style={{ color: 'var(--text-primary)' }}>AI Chat</strong> for detailed investigation.
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Running Pods', value: String(detail.workload_summary.running_pods), color: 'var(--accent-green)' },
+                    { label: 'Running Pods', value: String(detail.workload_summary.running_pods), color: detail.workload_summary.running_pods > 0 ? 'var(--accent-green)' : 'var(--text-muted)' },
                     { label: 'CrashLoopBackOff', value: String(detail.workload_summary.crash_loop_pods), color: detail.workload_summary.crash_loop_pods > 0 ? 'var(--accent-red)' : 'var(--text-muted)' },
                     { label: 'Pending Pods', value: String(detail.workload_summary.pending_pods), color: detail.workload_summary.pending_pods > 0 ? 'var(--accent-yellow)' : 'var(--text-muted)' },
-                    { label: 'Namespaces', value: String(detail.workload_summary.namespace_count), color: 'var(--text-primary)' },
+                    { label: 'Namespaces', value: String(detail.workload_summary.namespace_count), color: detail.workload_summary.namespace_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' },
                   ].map(card => (
                     <div
                       key={card.label}
