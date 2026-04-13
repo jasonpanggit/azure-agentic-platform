@@ -39,6 +39,13 @@ try:
 except ImportError:
     _AKSClient = None  # type: ignore[assignment,misc]
 
+try:
+    from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    _LOGS_QUERY_AVAILABLE = True
+except ImportError:
+    _LOGS_QUERY_AVAILABLE = False
+    logger.warning("azure-monitor-query not available — AKS workload summary unavailable")
+
 # AKS platform metric names (Microsoft.ContainerService/managedClusters namespace).
 # metricnamespace MUST be specified or these will return empty.
 # NOTE: apiserver_request_total is Prometheus-only — NOT a platform metric; excluded.
@@ -118,6 +125,194 @@ def _enum_value(obj: Any, default: str) -> str:
     if hasattr(obj, "value"):
         return obj.value or default
     return str(obj) or default
+
+
+def _fetch_aks_workload_summary(
+    credential: Any,
+    la_workspace_resource_id: str,
+    cluster_name: str,
+) -> Optional[Dict[str, Any]]:
+    """Query KubePodInventory in Log Analytics to get workload summary for an AKS cluster.
+
+    Returns a dict with running_pods, crash_loop_pods, pending_pods, namespace_count,
+    or None if the workspace has no Container Insights data.
+
+    Uses a 30-minute lookback window (ago(30m)) to reliably capture data even
+    when Container Insights ingestion has intermittent delays.  The timespan
+    parameter is set to 1 hour to give the query engine sufficient context.
+    """
+    if not _LOGS_QUERY_AVAILABLE:
+        logger.info("aks_workload_summary: azure-monitor-query SDK not available")
+        return None
+    if not la_workspace_resource_id:
+        logger.info("aks_workload_summary: no workspace resource ID for cluster=%s", cluster_name)
+        return None
+
+    from datetime import timedelta
+
+    try:
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    except ImportError:
+        return None
+
+    try:
+        client = LogsQueryClient(credential)
+        # Use a 2-hour lookback to handle Container Insights ingestion delays
+        # (typically 5-15 min but can be up to 90 min in degraded conditions).
+        kql = f"""
+KubePodInventory
+| where TimeGenerated > ago(2h)
+| where ClusterName =~ "{cluster_name}"
+| summarize
+    running_pods = countif(PodStatus == "Running"),
+    crash_loop_pods = countif(ContainerStatusReason == "CrashLoopBackOff"),
+    pending_pods = countif(PodStatus == "Pending"),
+    namespace_count = dcount(Namespace)
+"""
+        result = client.query_resource(
+            la_workspace_resource_id,
+            kql,
+            timespan=timedelta(hours=3),
+        )
+
+        # Handle both SUCCESS and PARTIAL results — partial results
+        # have data in .partial_data instead of .tables.
+        tables = None
+        if result.status == LogsQueryStatus.SUCCESS:
+            tables = getattr(result, "tables", None)
+        elif result.status == LogsQueryStatus.PARTIAL:
+            tables = getattr(result, "partial_data", None)
+            logger.warning(
+                "aks_workload_summary: partial result for cluster=%s error=%s",
+                cluster_name,
+                getattr(result, "partial_error", "unknown"),
+            )
+
+        if tables:
+            table = tables[0]
+            if table.rows:
+                row = table.rows[0]
+                # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
+                # objects (have .name) or plain strings depending on installed version.
+                cols = [c.name if hasattr(c, "name") else str(c) for c in table.columns]
+                row_dict = dict(zip(cols, row))
+                running = int(row_dict.get("running_pods") or 0)
+                crash = int(row_dict.get("crash_loop_pods") or 0)
+                pending = int(row_dict.get("pending_pods") or 0)
+                ns_count = int(row_dict.get("namespace_count") or 0)
+                # Distinguish "KQL ran and found real data" from "KQL returned zeros"
+                # so the frontend can show an appropriate message.
+                source = "kql" if (running + crash + pending + ns_count) > 0 else "kql_empty"
+                logger.info(
+                    "aks_workload_summary: cluster=%s running=%d crash=%d pending=%d ns=%d source=%s",
+                    cluster_name, running, crash, pending, ns_count, source,
+                )
+                return {
+                    "running_pods": running,
+                    "crash_loop_pods": crash,
+                    "pending_pods": pending,
+                    "namespace_count": ns_count,
+                    "source": source,
+                }
+            # KQL summarize without 'by' returns 1 row even on empty input.
+            # If we got tables but no rows, return zeros with kql_empty source.
+            logger.info("aks_workload_summary: query returned empty rows for cluster=%s", cluster_name)
+            return {
+                "running_pods": 0,
+                "crash_loop_pods": 0,
+                "pending_pods": 0,
+                "namespace_count": 0,
+                "source": "kql_empty",
+            }
+
+        logger.info("aks_workload_summary: query returned no tables for cluster=%s", cluster_name)
+    except Exception as exc:
+        logger.warning("aks_workload_summary: query failed cluster=%s error=%s", cluster_name, exc)
+    return None
+
+
+def _fetch_system_pod_health_batch(
+    credential: Any,
+    la_workspace_resource_id: str,
+    cluster_names: List[str],
+) -> Dict[str, str]:
+    """Batch-query Container Insights for kube-system pod health across multiple AKS clusters.
+
+    Queries KubePodInventory in Log Analytics filtered to Namespace == 'kube-system',
+    grouped by ClusterName.  Returns a dict mapping cluster_name -> 'healthy' | 'degraded' | 'unknown'.
+
+    Uses a 30-minute lookback to reliably capture data even with ingestion delays.
+    Clusters not present in the result are omitted from the returned dict (caller
+    should fall back to 'unknown').
+    """
+    if not _LOGS_QUERY_AVAILABLE:
+        return {}
+    if not la_workspace_resource_id or not cluster_names:
+        return {}
+
+    from datetime import timedelta
+
+    try:
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    except ImportError:
+        return {}
+
+    try:
+        client = LogsQueryClient(credential)
+        # Build a case-insensitive cluster name filter for KQL
+        cluster_filter = ", ".join(f'"{name}"' for name in cluster_names)
+        kql = f"""
+KubePodInventory
+| where TimeGenerated > ago(2h)
+| where Namespace == "kube-system"
+| where ClusterName in~ ({cluster_filter})
+| summarize
+    running_pods = countif(PodStatus == "Running"),
+    crash_loop_pods = countif(ContainerStatusReason == "CrashLoopBackOff"),
+    pending_pods = countif(PodStatus == "Pending"),
+    failed_pods = countif(PodStatus == "Failed")
+    by ClusterName
+"""
+        result = client.query_resource(
+            la_workspace_resource_id,
+            kql,
+            timespan=timedelta(hours=3),
+        )
+
+        tables = None
+        if result.status == LogsQueryStatus.SUCCESS:
+            tables = getattr(result, "tables", None)
+        elif result.status == LogsQueryStatus.PARTIAL:
+            tables = getattr(result, "partial_data", None)
+            logger.warning("system_pod_health_batch: partial result")
+
+        health_map: Dict[str, str] = {}
+        if tables:
+            table = tables[0]
+            cols = [c.name if hasattr(c, "name") else str(c) for c in table.columns]
+            for row in table.rows:
+                row_dict = dict(zip(cols, row))
+                cluster = str(row_dict.get("ClusterName", ""))
+                crash_count = int(row_dict.get("crash_loop_pods") or 0)
+                failed_count = int(row_dict.get("failed_pods") or 0)
+                running_count = int(row_dict.get("running_pods") or 0)
+                pending_count = int(row_dict.get("pending_pods") or 0)
+
+                if crash_count > 0 or failed_count > 0:
+                    health_map[cluster] = "degraded"
+                elif running_count > 0 and pending_count == 0:
+                    health_map[cluster] = "healthy"
+                elif running_count > 0:
+                    # Some pods running but others pending
+                    health_map[cluster] = "degraded"
+                else:
+                    health_map[cluster] = "unknown"
+
+        logger.info("system_pod_health_batch: queried %d clusters, resolved %d", len(cluster_names), len(health_map))
+        return health_map
+    except Exception as exc:
+        logger.warning("system_pod_health_batch: query failed error=%s", exc)
+        return {}
 
 
 def _fetch_single_metric_aks(
@@ -216,6 +411,11 @@ async def list_aks_clusters(
         kql = """Resources
 | where type =~ 'microsoft.containerservice/managedclusters'
 | extend agentPools = properties.agentPoolProfiles
+| extend total_nodes = toint(coalesce(agentPools[0]['count'], '0'))
+    + toint(coalesce(agentPools[1]['count'], '0'))
+    + toint(coalesce(agentPools[2]['count'], '0'))
+    + toint(coalesce(agentPools[3]['count'], '0'))
+    + toint(coalesce(agentPools[4]['count'], '0'))
 | project id, name, resourceGroup, subscriptionId, location,
     kubernetes_version = tostring(properties.kubernetesVersion),
     fqdn = tostring(properties.fqdn),
@@ -223,7 +423,7 @@ async def list_aks_clusters(
     rbac_enabled = iff(tobool(properties.enableRBAC) == true, 1, 0),
     node_pool_count = array_length(agentPools),
     node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(agentPools), 0),
-    system_pod_health = 'unknown',
+    total_nodes,
     active_alert_count = 0"""
 
         if search:
@@ -247,9 +447,9 @@ async def list_aks_clusters(
                 "latest_available_version": None,
                 "node_pool_count": r.get("node_pool_count", 0) or 0,
                 "node_pools_ready": r.get("node_pools_ready", 0) or 0,
-                "total_nodes": 0,   # Not available in list view; accurate count available in detail endpoint
+                "total_nodes": r.get("total_nodes", 0) or 0,   # Summed from agentPoolProfiles via ARG
                 "ready_nodes": 0,   # Not available in list view; accurate count available in detail endpoint
-                "system_pod_health": "unknown",
+                "system_pod_health": "unknown",  # enriched below via Container Insights
                 "fqdn": r.get("fqdn") or None,
                 "network_plugin": r.get("network_plugin", ""),
                 # ARG tobool() returns int 0/1 — normalise to Python bool
@@ -258,6 +458,32 @@ async def list_aks_clusters(
             }
             for r in rows
         ]
+
+        # Enrich system_pod_health via batch Container Insights query.
+        # Uses LOG_ANALYTICS_WORKSPACE_RESOURCE_ID env var as the shared workspace.
+        # Falls back gracefully to 'unknown' if CI is unavailable.
+        if clusters and _LOGS_QUERY_AVAILABLE:
+            la_workspace = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
+            if la_workspace:
+                cluster_names = [c["name"] for c in clusters]
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        _fetch_system_pod_health_batch,
+                        credential,
+                        la_workspace,
+                        cluster_names,
+                    )
+                    try:
+                        health_map = future.result(timeout=10)
+                    except Exception as health_exc:
+                        logger.warning("aks_list: system_pod_health enrichment failed error=%s", health_exc)
+                        health_map = {}
+
+                for cluster in clusters:
+                    health = health_map.get(cluster["name"])
+                    if health is not None:
+                        cluster["system_pod_health"] = health
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_list: total=%d duration_ms=%.1f", len(clusters), duration_ms)
@@ -382,6 +608,12 @@ async def get_aks_detail(
         profiles = cluster.addon_profiles or {}
         omsagent = profiles.get("omsagent")
         azmon = profiles.get("azureMonitorMetrics")
+        # Extract the linked LA workspace resource ID from the omsagent config (if present)
+        omsagent_config = getattr(omsagent, "config", None) or {}
+        la_workspace_resource_id: Optional[str] = (
+            omsagent_config.get("logAnalyticsWorkspaceResourceID")
+            or os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "") or None
+        )
 
         # Fetch the latest available K8s version from the upgrade profile
         latest_available_version: Optional[str] = None
@@ -400,8 +632,52 @@ async def get_aks_detail(
         except Exception as upgrade_exc:
             logger.debug("aks_detail: upgrade profile unavailable error=%s", upgrade_exc)
 
+        # Fetch workload summary from Container Insights (KubePodInventory) if available.
+        # Falls back to a node-pool-derived estimate when Container Insights is not
+        # enabled or the KQL query fails / times out.
+        workload_summary: Optional[Dict[str, Any]] = None
+        if la_workspace_resource_id and bool(omsagent and omsagent.enabled):
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    _fetch_aks_workload_summary, credential, la_workspace_resource_id, cluster.name or cluster_name
+                )
+                try:
+                    workload_summary = future.result(timeout=15)
+                except Exception as ws_exc:
+                    logger.warning("aks_detail: workload_summary fetch failed error=%s", ws_exc)
+
+        # Fallback: provide a minimal workload summary derived from node pool
+        # info so the Workloads tab always renders cards instead of "no data".
+        if workload_summary is None:
+            workload_summary = {
+                "running_pods": 0,
+                "crash_loop_pods": 0,
+                "pending_pods": 0,
+                "namespace_count": 0,
+                "source": "fallback",
+            }
+
+        # Derive system_pod_health from kube-system namespace pods specifically.
+        # The workload_summary covers ALL namespaces — system pod health must
+        # reflect only kube-system pods (coredns, kube-proxy, etc.).
+        system_pod_health = "unknown"
+        is_fallback = workload_summary.get("source") == "fallback"
+        if not is_fallback and la_workspace_resource_id:
+            health_map = _fetch_system_pod_health_batch(
+                credential, la_workspace_resource_id, [cluster.name or cluster_name]
+            )
+            system_pod_health = health_map.get(cluster.name or cluster_name, "unknown")
+        elif not is_fallback:
+            # Container Insights data available but no workspace ID for targeted query;
+            # fall back to all-namespace derivation.
+            if workload_summary.get("crash_loop_pods", 0) > 0:
+                system_pod_health = "degraded"
+            elif workload_summary.get("running_pods", 0) > 0:
+                system_pod_health = "healthy"
+
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("aks_detail: resource_id=%s node_pools=%d duration_ms=%.1f", resource_id[:60], len(node_pools), duration_ms)
+        logger.info("aks_detail: resource_id=%s node_pools=%d workload_summary=%s system_pod_health=%s duration_ms=%.1f", resource_id[:60], len(node_pools), workload_summary is not None, system_pod_health, duration_ms)
         return {
             "id": resource_id,
             "name": cluster.name or cluster_name,
@@ -414,15 +690,16 @@ async def get_aks_detail(
             "node_pools_ready": pools_ready,
             "total_nodes": total_nodes,
             "ready_nodes": ready_nodes,
-            "system_pod_health": "unknown",
+            "system_pod_health": system_pod_health,
             "fqdn": cluster.fqdn,
             "network_plugin": (cluster.network_profile.network_plugin if cluster.network_profile else ""),
             "rbac_enabled": cluster.enable_rbac or False,
             "active_alert_count": 0,
             "container_insights_enabled": bool(omsagent and omsagent.enabled),
             "managed_prometheus_enabled": bool(azmon and azmon.enabled),
+            "log_analytics_workspace_resource_id": la_workspace_resource_id,
             "node_pools": node_pools,
-            "workload_summary": None,
+            "workload_summary": workload_summary,
             "active_incidents": [],
         }
 
@@ -533,6 +810,168 @@ async def get_aks_metrics(
             "timespan": timespan,
             "interval": interval,
             "metrics": [],
+            "fetch_error": str(exc),
+        }
+
+
+
+@router.get("/{resource_id_base64}/metrics/logs")
+async def get_aks_la_metrics(
+    resource_id_base64: str,
+    timespan: str = Query("PT24H", description="ISO 8601 duration like PT1H, PT6H, PT24H, P7D"),
+    interval: str = Query("PT5M", description="ISO 8601 bucket interval"),
+    _token: str = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Query Container Insights (Log Analytics) for AKS node metrics.
+
+    Queries Perf table for:
+      - Node CPU utilisation percentage
+      - Node memory working set percentage
+      - Node disk reads/writes
+
+    Returns MetricSeries-compatible list so the frontend can render sparklines.
+    Returns empty metrics with source="log_analytics" if Container Insights is not
+    configured or has no data.
+    """
+    start_time = time.monotonic()
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError:
+        return {"resource_id": "", "timespan": timespan, "metrics": [], "source": "log_analytics"}
+
+    if not _LOGS_QUERY_AVAILABLE:
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
+            "fetch_error": "azure-monitor-query not installed",
+        }
+
+    # Resolve workspace from omsagent config
+    subscription_id = _extract_subscription_id(resource_id)
+    parts = resource_id.split("/")
+    rg_index = next((i for i, p in enumerate(parts) if p.lower() == "resourcegroups"), -1)
+    resource_group = parts[rg_index + 1] if rg_index >= 0 else ""
+    cluster_name = parts[-1]
+
+    la_workspace_resource_id: Optional[str] = None
+    try:
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]
+        from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+        credential = DefaultAzureCredential()
+        aks_client = ContainerServiceClient(credential, subscription_id)
+        cluster = aks_client.managed_clusters.get(resource_group, cluster_name)
+        profiles = cluster.addon_profiles or {}
+        omsagent = profiles.get("omsagent")
+        omsagent_config = getattr(omsagent, "config", None) or {}
+        la_workspace_resource_id = (
+            omsagent_config.get("logAnalyticsWorkspaceResourceID")
+            or os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "") or None
+        )
+    except Exception as exc:
+        logger.warning("aks_la_metrics: failed to resolve workspace error=%s", exc)
+
+    if not la_workspace_resource_id:
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
+            "fetch_error": "No Log Analytics workspace configured for this cluster",
+        }
+
+    # Map ISO 8601 timespan to timedelta
+    from datetime import timedelta
+    _TIMESPAN_MAP: Dict[str, timedelta] = {
+        "PT1H": timedelta(hours=1),
+        "PT6H": timedelta(hours=6),
+        "PT24H": timedelta(hours=24),
+        "P7D": timedelta(days=7),
+    }
+    td = _TIMESPAN_MAP.get(timespan, timedelta(hours=24))
+
+    # Map ISO 8601 interval to minutes for KQL bin()
+    _INTERVAL_MINUTES: Dict[str, int] = {
+        "PT1M": 1, "PT5M": 5, "PT15M": 15, "PT30M": 30, "PT1H": 60,
+    }
+    bin_minutes = _INTERVAL_MINUTES.get(interval, 5)
+
+    try:
+        from azure.identity import DefaultAzureCredential  # type: ignore[import]  # noqa: F811
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+        credential = DefaultAzureCredential()
+        client = LogsQueryClient(credential)
+
+        kql = f"""
+Perf
+| where TimeGenerated > ago({int(td.total_seconds())}s)
+| where ObjectName == "K8SNode"
+| where CounterName in ("cpuUsageNanoCores", "memoryWorkingSetBytes", "memoryRssBytes")
+| where Computer has "{cluster_name}"
+| summarize avg(CounterValue) by bin(TimeGenerated, {bin_minutes}m), Computer, CounterName
+| order by TimeGenerated asc
+"""
+        result = client.query_resource(
+            la_workspace_resource_id,
+            kql,
+            timespan=td,
+        )
+
+        metrics_out: List[Dict[str, Any]] = []
+        if result.status == LogsQueryStatus.SUCCESS and result.tables:
+            table = result.tables[0]
+            # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
+            # objects (have .name) or plain strings depending on installed version.
+            cols = [c.name if hasattr(c, 'name') else str(c) for c in table.columns]
+
+            # Group rows by (Computer, CounterName)
+            from collections import defaultdict
+            series_map: Dict[tuple, List[Dict]] = defaultdict(list)
+            for row in table.rows:
+                row_dict = dict(zip(cols, row))
+                key = (str(row_dict.get("Computer", "")), str(row_dict.get("CounterName", "")))
+                series_map[key].append(row_dict)
+
+            _COUNTER_LABELS = {
+                "cpuUsageNanoCores": ("Node CPU (nanocores)", "NanoCores"),
+                "memoryWorkingSetBytes": ("Node Memory Working Set", "Bytes"),
+                "memoryRssBytes": ("Node Memory RSS", "Bytes"),
+            }
+
+            for (computer, counter_name), rows in series_map.items():
+                label, unit = _COUNTER_LABELS.get(counter_name, (counter_name, ""))
+                timeseries = [
+                    {
+                        "timestamp": str(r.get("TimeGenerated", "")),
+                        "average": float(r.get("avg_CounterValue", 0) or 0),
+                        "maximum": None,
+                    }
+                    for r in sorted(rows, key=lambda r: str(r.get("TimeGenerated", "")))
+                ]
+                metrics_out.append({
+                    "name": f"{label} ({computer.split('/')[-1]})",
+                    "unit": unit,
+                    "timeseries": timeseries,
+                })
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info("aks_la_metrics: resource=%s series=%d duration_ms=%.0f", resource_id[-60:], len(metrics_out), duration_ms)
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": metrics_out,
+            "source": "log_analytics",
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error("aks_la_metrics: error=%s duration_ms=%.0f", exc, duration_ms)
+        return {
+            "resource_id": resource_id,
+            "timespan": timespan,
+            "metrics": [],
+            "source": "log_analytics",
             "fetch_error": str(exc),
         }
 
