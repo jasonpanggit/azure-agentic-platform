@@ -161,53 +161,53 @@ class TestCreateEolAgent:
     def test_agent_name_is_eol_agent(self):
         """Agent must be constructed with name='eol-agent'."""
         mock_af = _make_agent_framework_mock()
-        mock_af.Agent.return_value = MagicMock()
+        mock_af.ChatAgent.return_value = MagicMock()
 
         env = {k: v for k, v in os.environ.items() if k != "AZURE_MCP_SERVER_URL"}
         _import_eol_agent_with_af(mock_af, extra_env=env)
 
-        call_kwargs = mock_af.Agent.call_args[1]
+        call_kwargs = mock_af.ChatAgent.call_args[1]
         assert call_kwargs.get("name") == "eol-agent"
 
     def test_agent_has_9_tools_without_mcp(self):
-        """Without AZURE_MCP_SERVER_URL, Agent should receive exactly 9 tools."""
+        """Without AZURE_MCP_SERVER_URL, ChatAgent should receive exactly 9 tools."""
         mock_af = _make_agent_framework_mock()
-        mock_af.Agent.return_value = MagicMock()
+        mock_af.ChatAgent.return_value = MagicMock()
 
         env = {k: v for k, v in os.environ.items() if k != "AZURE_MCP_SERVER_URL"}
         _import_eol_agent_with_af(mock_af, extra_env=env)
 
-        call_kwargs = mock_af.Agent.call_args[1]
+        call_kwargs = mock_af.ChatAgent.call_args[1]
         tools = call_kwargs.get("tools")
-        assert tools is not None, "tools argument not passed to Agent"
+        assert tools is not None, "tools argument not passed to ChatAgent"
         assert len(tools) == 9
 
     def test_agent_has_10_tools_with_mcp(self):
-        """With AZURE_MCP_SERVER_URL set, Agent should receive 10 tools."""
+        """With AZURE_MCP_SERVER_URL set, ChatAgent should receive 10 tools."""
         mock_af = _make_agent_framework_mock()
-        mock_af.Agent.return_value = MagicMock()
+        mock_af.ChatAgent.return_value = MagicMock()
         mock_mcp_instance = MagicMock()
-        mock_af.MCPStreamableHTTPTool.return_value = mock_mcp_instance
+        mock_af.MCPTool.return_value = mock_mcp_instance
 
         env = {k: v for k, v in os.environ.items()}
         env["AZURE_MCP_SERVER_URL"] = "http://localhost/mcp"
         _import_eol_agent_with_af(mock_af, extra_env=env)
 
-        call_kwargs = mock_af.Agent.call_args[1]
+        call_kwargs = mock_af.ChatAgent.call_args[1]
         tools = call_kwargs.get("tools")
-        assert tools is not None, "tools argument not passed to Agent"
+        assert tools is not None, "tools argument not passed to ChatAgent"
         assert len(tools) == 10
-        mock_af.MCPStreamableHTTPTool.assert_called_once()
+        mock_af.MCPTool.assert_called_once()
 
     def test_agent_description_contains_eol(self):
         """Agent description must mention EOL or End-of-Life."""
         mock_af = _make_agent_framework_mock()
-        mock_af.Agent.return_value = MagicMock()
+        mock_af.ChatAgent.return_value = MagicMock()
 
         env = {k: v for k, v in os.environ.items() if k != "AZURE_MCP_SERVER_URL"}
         _import_eol_agent_with_af(mock_af, extra_env=env)
 
-        call_kwargs = mock_af.Agent.call_args[1]
+        call_kwargs = mock_af.ChatAgent.call_args[1]
         description = call_kwargs.get("description", "")
         assert (
             "End-of-Life" in description
@@ -218,15 +218,15 @@ class TestCreateEolAgent:
     def test_agent_uses_foundry_client(self):
         """create_eol_agent must call get_foundry_client().
 
-        We verify get_foundry_client is invoked by checking that Agent() is
+        We verify get_foundry_client is invoked by checking that ChatAgent() is
         called at all (the module-level shared_auth mock already provides it).
         """
         mock_af = _make_agent_framework_mock()
-        mock_af.Agent.return_value = MagicMock()
+        mock_af.ChatAgent.return_value = MagicMock()
 
         env = {k: v for k, v in os.environ.items() if k != "AZURE_MCP_SERVER_URL"}
         _import_eol_agent_with_af(mock_af, extra_env=env)
 
-        # Agent factory was called — get_foundry_client was invoked as part of create_eol_agent()
-        mock_af.Agent.assert_called_once()
+        # ChatAgent factory was called — get_foundry_client was invoked as part of create_eol_agent()
+        mock_af.ChatAgent.assert_called_once()
 
