@@ -538,41 +538,6 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                   ))}
                 </div>
 
-                {/* Container Insights status */}
-                <div
-                  className="rounded-lg p-3"
-                  style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
-                    Observability
-                  </p>
-                  <div className="flex items-center justify-between py-1 text-xs" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Container Insights</span>
-                    {detail.container_insights_enabled ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-                        style={{ background: 'color-mix(in srgb, var(--accent-green) 15%, transparent)', color: 'var(--accent-green)' }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-green)' }} />
-                        Enabled
-                      </span>
-                    ) : (
-                      <button
-                        onClick={handleEnableContainerInsights}
-                        disabled={enablingContainerInsights}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-opacity disabled:opacity-60 cursor-pointer"
-                        style={{ background: 'var(--accent-blue)', color: '#fff' }}
-                      >
-                        {enablingContainerInsights ? 'Enabling…' : 'Enable'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between py-1 text-xs">
-                    <span style={{ color: 'var(--text-secondary)' }}>Managed Prometheus</span>
-                    <span style={{ color: detail.managed_prometheus_enabled ? 'var(--accent-green)' : 'var(--text-muted)' }}>
-                      {detail.managed_prometheus_enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                </div>
-
                 {/* Active incidents */}
                 {detail.active_incidents?.length > 0 && (
                   <div
