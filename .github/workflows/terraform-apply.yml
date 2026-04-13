@@ -20,7 +20,7 @@ jobs:
   apply-prod:
     name: Apply (prod)
     runs-on: [self-hosted, azure, linux]
-    environment: production
+    environment: prod
 
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -28,7 +28,16 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+      TF_VAR_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+      TF_VAR_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
       TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      TF_VAR_fabric_admin_email: ${{ secrets.FABRIC_ADMIN_EMAIL }}
+      TF_VAR_web_ui_public_url: ${{ secrets.WEB_UI_PUBLIC_URL }}
+      TF_VAR_teams_bot_id: ${{ secrets.TEAMS_BOT_ID }}
+      TF_VAR_teams_bot_password: ${{ secrets.TEAMS_BOT_PASSWORD }}
+      TF_VAR_teams_channel_id: ${{ secrets.TEAMS_CHANNEL_ID }}
+      TF_VAR_postgres_dsn: ${{ secrets.POSTGRES_DSN }}
+      TF_VAR_pgvector_connection_string: ${{ secrets.PGVECTOR_CONNECTION_STRING }}
       # Controls API Gateway auth mode without touching tfvars.
       # Set the "API_GATEWAY_AUTH_MODE" GitHub Actions variable to "disabled"
       # to bypass Entra auth (e.g. for testing), or "entra" to enforce it.
@@ -85,12 +94,6 @@ jobs:
           pip install --quiet "azure-ai-projects>=2.0.1" "azure-ai-agents" "azure-identity"
           python scripts/provision-foundry-agents.py --no-deploy
 
-      - name: Write Prod Credentials
-        env:
-          PROD_CREDENTIALS_TFVARS: ${{ secrets.PROD_CREDENTIALS_TFVARS }}
-        run: |
-          echo "$PROD_CREDENTIALS_TFVARS" > terraform/envs/prod/credentials.tfvars
-
       - name: Enable Key Vault Public Access for Terraform
         run: |
           # Terraform's azurerm provider uses the autorest HTTP client which resolves
@@ -107,15 +110,14 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/envs/prod
         run: |
-          # credentials.tfvars is applied FIRST so terraform.tfvars (auto-loaded last) wins.
-          # This prevents stale values in the secret (e.g. old agent IDs) from overriding
-          # the correct values in terraform.tfvars.
+          # Sensitive variables are injected via TF_VAR_* env vars (set in job env above).
+          # TF_VAR_* env vars take highest precedence — they override any tfvars file values.
           # Variable precedence (highest to lowest): env vars > -var > last -var-file > auto-loaded tfvars
           EXTRA_VARS=""
           if [ -f "../../../scripts/agents.tfvars" ]; then
             EXTRA_VARS="-var-file ../../../scripts/agents.tfvars"
           fi
-          terraform apply -auto-approve -input=false -var-file credentials.tfvars -var-file terraform.tfvars $EXTRA_VARS
+          terraform apply -auto-approve -input=false $EXTRA_VARS
 
       - name: Restore Key Vault Public Access to Disabled
         if: always()
