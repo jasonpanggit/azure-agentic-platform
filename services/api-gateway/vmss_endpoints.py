@@ -194,6 +194,38 @@ def _get_vmss_health_states(
     return results
 
 
+def _get_vmss_instance_counts(
+    subscription_ids: List[str],
+    credential: Any,
+) -> Dict[str, int]:
+    """Query ARG for actual VMSS VM instance counts.
+
+    Returns a dict mapping parent VMSS resource_id.lower() → running instance
+    count.  Falls back to empty dict on any error.  This supplements
+    ``sku.capacity`` which may be 0 for AKS-managed VMSS.
+    """
+    if not _ARG_AVAILABLE:
+        return {}
+
+    kql = """Resources
+| where type =~ 'microsoft.compute/virtualmachinescalesets/virtualmachines'
+| extend vmssId = tolower(strcat_array(array_slice(split(id, '/'), 0, 8), '/'))
+| summarize instance_count = count() by vmssId"""
+
+    try:
+        client = ResourceGraphClient(credential)
+        request = QueryRequest(subscriptions=subscription_ids, query=kql)
+        response = client.resources(request)
+        rows = response.data or []
+        return {
+            r.get("vmssId", "").lower(): int(r.get("instance_count", 0) or 0)
+            for r in rows
+        }
+    except Exception as exc:
+        logger.debug("vmss_instance_counts: failed error=%s", exc)
+        return {}
+
+
 def _enrich_aks_vmss_node_counts(
     vmss_list: List[Dict[str, Any]],
     credential: Any,
@@ -203,7 +235,8 @@ def _enrich_aks_vmss_node_counts(
     AKS-managed VMSS live in resource groups that start with "MC_" and have
     sku.capacity == 0 in ARG because AKS controls scaling internally.  This
     helper calls ``agent_pools.list()`` for each unique (subscription, cluster)
-    pair and patches the matching VMSS items.
+    pair and patches the matching VMSS items that still show instance_count == 0
+    after the ARG VM count query.
 
     Non-AKS or already-correct items are left unchanged.  All errors are
     swallowed so the list endpoint still returns ARG data if AKS calls fail.
@@ -416,27 +449,43 @@ async def list_vmss(
             for r in rows
         ]
 
-        # Enrich health_state from Resource Health API (best-effort, falls back to "unknown")
+        # Enrich instance counts from ARG VMSS VM query (sku.capacity is
+        # unreliable for AKS-managed VMSS — may report 0)
         if vmss_list:
-            resource_ids = [item["id"] for item in vmss_list if item["id"]]
+            import asyncio
             loop = asyncio.get_event_loop()
+            instance_counts = await loop.run_in_executor(
+                None, _get_vmss_instance_counts, subscription_ids, credential
+            )
+            for item in vmss_list:
+                real_count = instance_counts.get(item["id"].lower(), 0)
+                if real_count > 0 and item["instance_count"] == 0:
+                    item["instance_count"] = real_count
+                    item["healthy_instance_count"] = real_count
+
+            # Enrich health_state from Resource Health API (best-effort).
+            # Only overwrite the ARG-derived health when Resource Health returns a
+            # definitive state (not "unknown").  This prevents AKS-managed VMSS
+            # (where Resource Health often returns "Unknown") from losing the
+            # provisioningState-derived "available" signal.
+            resource_ids = [item["id"] for item in vmss_list if item["id"]]
             health_map = await loop.run_in_executor(
                 None, _get_vmss_health_states, resource_ids, credential
             )
             for item in vmss_list:
-                state = health_map.get(item["id"].lower(), "unknown")
-                # Only override health_state when Resource Health returns a definitive state.
-                # "Unknown" from Resource Health means no data — keep the ARG-derived value.
-                if state.lower() != "unknown":
-                    item["health_state"] = state.lower()
-                    # Derive power_state from health_state
-                    if state.lower() == "available":
+                rh_state = health_map.get(item["id"].lower(), "unknown").lower()
+                if rh_state != "unknown":
+                    # Resource Health gave a definitive answer — use it
+                    item["health_state"] = rh_state
+                    if rh_state == "available":
                         item["power_state"] = "Running"
                     else:
-                        item["power_state"] = state.capitalize()
+                        item["power_state"] = rh_state.capitalize()
+                # else: keep the ARG-derived health_state (from provisioningState)
 
         # Enrich instance_count for AKS-managed VMSS (sku.capacity==0 in ARG).
-        # Runs best-effort — failures leave ARG values untouched.
+        # Runs best-effort after the ARG VM count query — only patches items
+        # still showing 0 by querying the AKS agent pools API directly.
         if vmss_list:
             await asyncio.get_event_loop().run_in_executor(
                 None, _enrich_aks_vmss_node_counts, vmss_list, credential

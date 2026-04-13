@@ -808,6 +808,33 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
             {activeTab === 'overview' && (
               <div className="p-4 space-y-4">
 
+                {/* Resource name heading */}
+                <div className="mb-1">
+                  <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {resourceName ?? 'VM Detail'}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      Virtual Machine
+                    </p>
+                    {vm?.vm_type && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                        style={{
+                          background: vm.vm_type === 'Arc VM'
+                            ? 'color-mix(in srgb, var(--accent-purple, #8b5cf6) 15%, transparent)'
+                            : 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                          color: vm.vm_type === 'Arc VM'
+                            ? 'var(--accent-purple, #8b5cf6)'
+                            : 'var(--accent-blue)',
+                        }}
+                      >
+                        {vm.vm_type}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Stat cards */}
                 {vm ? (
                   <div className="grid grid-cols-2 gap-3">

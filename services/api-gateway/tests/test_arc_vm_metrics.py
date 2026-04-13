@@ -117,6 +117,39 @@ class TestBuildArcMetricsKql:
 
 
 # ---------------------------------------------------------------------------
+# Unit tests: _iso_to_timedelta
+# ---------------------------------------------------------------------------
+
+class TestIsoToTimedelta:
+    def test_known_timespans_return_timedelta(self):
+        import datetime
+        from services.api_gateway.vm_detail import _iso_to_timedelta
+
+        assert _iso_to_timedelta("PT1H") == datetime.timedelta(hours=1)
+        assert _iso_to_timedelta("PT6H") == datetime.timedelta(hours=6)
+        assert _iso_to_timedelta("PT24H") == datetime.timedelta(hours=24)
+        assert _iso_to_timedelta("P7D") == datetime.timedelta(days=7)
+        assert _iso_to_timedelta("P30D") == datetime.timedelta(days=30)
+
+    def test_unknown_returns_none(self):
+        from services.api_gateway.vm_detail import _iso_to_timedelta
+
+        assert _iso_to_timedelta("P999D") is None
+        assert _iso_to_timedelta("") is None
+        assert _iso_to_timedelta("garbage") is None
+
+    def test_never_returns_string(self):
+        """Ensure no value in the mapping is a string — that would break the SDK call."""
+        import datetime
+        from services.api_gateway.vm_detail import _ISO_TO_TIMEDELTA
+
+        for iso, td in _ISO_TO_TIMEDELTA.items():
+            assert isinstance(td, datetime.timedelta), (
+                f"_ISO_TO_TIMEDELTA[{iso!r}] is {td!r}, expected timedelta"
+            )
+
+
+# ---------------------------------------------------------------------------
 # Unit tests: _parse_arc_metrics_response
 # ---------------------------------------------------------------------------
 
@@ -368,6 +401,68 @@ class TestFetchArcVmMetricsSync:
             interval="PT5M",
         )
         assert result == []
+
+    @patch("services.api_gateway.vm_detail.LogsQueryClient")
+    @patch("services.api_gateway.vm_detail.LogsQueryStatus")
+    def test_timespan_passed_as_timedelta_not_string(self, mock_status_cls, mock_client_cls):
+        """query_workspace must receive a timedelta, never a raw ISO 8601 string.
+
+        Passing a string (e.g. 'P7D') causes construct_iso8601() inside the SDK
+        to raise ValueError, which our except-clause silently swallows → empty results.
+        """
+        import datetime
+        from services.api_gateway.vm_detail import _fetch_arc_vm_metrics_sync
+
+        mock_status_cls.SUCCESS = "Success"
+        rows = [
+            {"CounterName": "% Processor Time", "TimeGenerated": "2026-04-09T01:00:00Z", "avg_CounterValue": "30.0"},
+        ]
+        mock_client_cls.return_value.query_workspace.return_value = _mock_la_query_response(rows)
+
+        _fetch_arc_vm_metrics_sync(
+            credential=MagicMock(),
+            workspace_guid="abc-guid",
+            resource_id=ARC_RID,
+            metric_names=["Percentage CPU"],
+            timespan="P7D",
+            interval="PT1H",
+        )
+
+        call_kwargs = mock_client_cls.return_value.query_workspace.call_args
+        passed_timespan = call_kwargs.kwargs.get("timespan") or call_kwargs[1].get("timespan")
+        # Must be a timedelta (or None), never a raw string
+        assert not isinstance(passed_timespan, str), (
+            f"timespan was passed as a string ({passed_timespan!r}) — "
+            "the SDK will raise ValueError and return empty results"
+        )
+        assert passed_timespan == datetime.timedelta(days=7)
+
+    @patch("services.api_gateway.vm_detail.LogsQueryClient")
+    @patch("services.api_gateway.vm_detail.LogsQueryStatus")
+    def test_partial_failure_returns_partial_rows(self, mock_status_cls, mock_client_cls):
+        """PARTIAL_FAILURE should return whatever rows are available, not empty list."""
+        from services.api_gateway.vm_detail import _fetch_arc_vm_metrics_sync
+
+        mock_status_cls.SUCCESS = "Success"
+        rows = [
+            {"CounterName": "% Processor Time", "TimeGenerated": "2026-04-09T01:00:00Z", "avg_CounterValue": "55.0"},
+            {"CounterName": "% Processor Time", "TimeGenerated": "2026-04-09T02:00:00Z", "avg_CounterValue": "60.0"},
+        ]
+        partial_response = _mock_la_query_response(rows, status="PartialFailure")
+        mock_client_cls.return_value.query_workspace.return_value = partial_response
+
+        result = _fetch_arc_vm_metrics_sync(
+            credential=MagicMock(),
+            workspace_guid="abc-guid",
+            resource_id=ARC_RID,
+            metric_names=["Percentage CPU"],
+            timespan="PT24H",
+            interval="PT1H",
+        )
+        # Partial data must be returned, not silently dropped
+        assert len(result) == 1
+        assert result[0]["name"] == "Percentage CPU"
+        assert len(result[0]["timeseries"]) == 2
 
 
 # ---------------------------------------------------------------------------
