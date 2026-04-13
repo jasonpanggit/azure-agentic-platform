@@ -38,6 +38,7 @@ jobs:
       TF_VAR_teams_channel_id: ${{ secrets.TEAMS_CHANNEL_ID }}
       TF_VAR_postgres_dsn: ${{ secrets.POSTGRES_DSN }}
       TF_VAR_pgvector_connection_string: ${{ secrets.PGVECTOR_CONNECTION_STRING }}
+      TF_VAR_github_pat: ${{ secrets.RUNNER_GITHUB_PAT }}
       # Controls API Gateway auth mode without touching tfvars.
       # Set the "API_GATEWAY_AUTH_MODE" GitHub Actions variable to "disabled"
       # to bypass Entra auth (e.g. for testing), or "entra" to enforce it.
