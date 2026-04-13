@@ -93,6 +93,13 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
   }
 
   function handleTabChange(tab: TabId) {
+    // Close any open detail panels when switching tabs to prevent stacked overlays
+    setVMDetailOpen(false)
+    setSelectedVM(null)
+    setVMSSDetailOpen(false)
+    setSelectedVMSS(null)
+    setAKSDetailOpen(false)
+    setSelectedAKS(null)
     setActiveTab(tab)
     onTabChange?.(tab)
   }

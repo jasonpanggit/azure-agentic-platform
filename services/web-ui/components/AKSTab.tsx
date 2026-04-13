@@ -245,7 +245,16 @@ export function AKSTab({ subscriptions, onAKSClick }: AKSTabProps) {
                     <K8sVersionBadge version={cluster.kubernetes_version} latestAvailable={cluster.latest_available_version} />
                   </td>
                   <td className="px-4 py-3">
-                    <NodeHealthBadge ready={cluster.ready_nodes} total={cluster.total_nodes} />
+                    <NodeHealthBadge
+                      ready={
+                        cluster.ready_nodes > 0
+                          ? cluster.ready_nodes
+                          : cluster.node_pools_ready === cluster.node_pool_count
+                            ? cluster.total_nodes
+                            : 0
+                      }
+                      total={cluster.total_nodes}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <SystemPodBadge health={cluster.system_pod_health} />
