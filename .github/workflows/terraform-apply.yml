@@ -70,6 +70,8 @@ jobs:
             az storage account update --name "$SA_NAME" --resource-group "$RG_NAME" \
               --public-network-access Enabled --output none
             echo "Public network access re-enabled on $SA_NAME"
+            # Wait for the change to propagate before terraform init hits the storage account
+            sleep 10
           else
             echo "Tfstate storage $SA_NAME publicNetworkAccess is Enabled (OK)"
           fi
