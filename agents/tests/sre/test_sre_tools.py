@@ -936,6 +936,7 @@ class TestQueryContainerAppHealth:
         assert "SDK not installed" in result["error"]
         assert "duration_ms" in result
 
+    @patch("agents.sre.tools.ContainerAppsAPIClient", MagicMock())
     def test_missing_subscription_id_returns_error(self):
         from agents.sre.tools import query_container_app_health
 
