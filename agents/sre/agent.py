@@ -36,6 +36,7 @@ from sre.tools import (
     query_advisor_recommendations,
     query_availability_metrics,
     query_change_analysis,
+    query_container_app_health,
     query_performance_baselines,
     query_service_health,
 )
@@ -106,6 +107,18 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 - MUST state: "Full Arc diagnostics require Phase 3 Arc MCP Server."
 - Use Azure Monitor-based signals for what visibility is available.
 
+## Platform Self-Monitoring
+
+You can inspect AAP agent Container Apps to diagnose platform health issues:
+- Call `query_container_app_health` with the Container App name and resource group
+  to check provisioning state, active revisions, replica count, and running state.
+- AAP agent Container Apps follow the naming convention `ca-{agent}-prod` in
+  resource group `rg-aap-prod` (e.g., `ca-compute-prod`, `ca-sre-prod`,
+  `ca-api-gateway-prod`, `ca-orchestrator-prod`).
+- Use the `containerapps` MCP tool for listing all Container Apps in a subscription.
+- The `advisor` MCP tool supports category filtering including `OperationalExcellence`
+  for operational best-practice recommendations (resource configuration, scaling, diagnostics).
+
 ## Safety Constraints
 
 - MUST NOT modify any Azure resource — Reader + Monitoring Reader roles only.
@@ -129,6 +142,7 @@ When handling Arc incidents forwarded from the Arc Agent stub:
     "query_change_analysis",
     "correlate_cross_domain",
     "propose_remediation",
+    "query_container_app_health",
 ]))
 
 
@@ -159,6 +173,7 @@ def create_sre_agent() -> ChatAgent:
             query_change_analysis,
             correlate_cross_domain,
             propose_remediation,
+            query_container_app_health,
         ],
     )
     logger.info("create_sre_agent: ChatAgent created successfully")
@@ -193,6 +208,7 @@ def create_sre_agent_version(project: "AIProjectClient") -> object:
                 query_change_analysis,
                 correlate_cross_domain,
                 propose_remediation,
+                query_container_app_health,
             ],
         ),
     )
