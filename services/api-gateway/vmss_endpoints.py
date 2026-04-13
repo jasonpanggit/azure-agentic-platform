@@ -349,12 +349,15 @@ async def list_vmss(
             )
             for item in vmss_list:
                 state = health_map.get(item["id"].lower(), "unknown")
-                item["health_state"] = state.lower()
-                # Derive power_state from health_state
-                if state.lower() == "available":
-                    item["power_state"] = "Running"
-                elif state.lower() != "unknown":
-                    item["power_state"] = state.capitalize()
+                # Only override health_state when Resource Health returns a definitive state.
+                # "Unknown" from Resource Health means no data — keep the ARG-derived value.
+                if state.lower() != "unknown":
+                    item["health_state"] = state.lower()
+                    # Derive power_state from health_state
+                    if state.lower() == "available":
+                        item["power_state"] = "Running"
+                    else:
+                        item["power_state"] = state.capitalize()
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_list: total=%d duration_ms=%.1f", len(vmss_list), duration_ms)

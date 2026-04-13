@@ -283,6 +283,11 @@ async def list_aks_clusters(
         kql = """Resources
 | where type =~ 'microsoft.containerservice/managedclusters'
 | extend agentPools = properties.agentPoolProfiles
+| extend total_nodes = toint(coalesce(agentPools[0]['count'], '0'))
+    + toint(coalesce(agentPools[1]['count'], '0'))
+    + toint(coalesce(agentPools[2]['count'], '0'))
+    + toint(coalesce(agentPools[3]['count'], '0'))
+    + toint(coalesce(agentPools[4]['count'], '0'))
 | project id, name, resourceGroup, subscriptionId, location,
     kubernetes_version = tostring(properties.kubernetesVersion),
     fqdn = tostring(properties.fqdn),
@@ -290,6 +295,7 @@ async def list_aks_clusters(
     rbac_enabled = iff(tobool(properties.enableRBAC) == true, 1, 0),
     node_pool_count = array_length(agentPools),
     node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(agentPools), 0),
+    total_nodes,
     system_pod_health = 'unknown',
     active_alert_count = 0"""
 
@@ -314,7 +320,7 @@ async def list_aks_clusters(
                 "latest_available_version": None,
                 "node_pool_count": r.get("node_pool_count", 0) or 0,
                 "node_pools_ready": r.get("node_pools_ready", 0) or 0,
-                "total_nodes": 0,   # Not available in list view; accurate count available in detail endpoint
+                "total_nodes": r.get("total_nodes", 0) or 0,   # Summed from agentPoolProfiles via ARG
                 "ready_nodes": 0,   # Not available in list view; accurate count available in detail endpoint
                 "system_pod_health": "unknown",
                 "fqdn": r.get("fqdn") or None,
