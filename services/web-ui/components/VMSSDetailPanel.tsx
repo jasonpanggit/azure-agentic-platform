@@ -484,13 +484,16 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
                     ['OS Image', detail.os_image_version || '—'],
                     ['Upgrade Policy', detail.upgrade_policy || '—'],
                     ['Scale Range', detail.min_count === 0 && detail.max_count === 0 ? '—' : `${detail.min_count} – ${detail.max_count}`],
-                    ['Health State', detail.health_state],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between py-1 text-xs" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>{k}</span>
                       <span style={{ color: 'var(--text-primary)' }}>{v}</span>
                     </div>
                   ))}
+                  <div className="flex justify-between py-1 text-xs" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Health State</span>
+                    <HealthStateBadge state={detail.health_state || 'unknown'} />
+                  </div>
                 </div>
 
                 {/* Active incidents */}
