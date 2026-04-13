@@ -40,6 +40,12 @@ try:
 except ImportError:
     AzureChangeAnalysisManagementClient = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-appcontainers may not be installed in all envs
+try:
+    from azure.mgmt.containerapp import ContainerAppsAPIClient
+except ImportError:
+    ContainerAppsAPIClient = None  # type: ignore[assignment,misc]
+
 tracer = setup_telemetry("aiops-sre-agent")
 logger = logging.getLogger(__name__)
 
@@ -60,6 +66,7 @@ def _log_sdk_availability() -> None:
         "azure-mgmt-resourcehealth": "azure.mgmt.resourcehealth",
         "azure-mgmt-advisor": "azure.mgmt.advisor",
         "azure-mgmt-changeanalysis": "azure.mgmt.changeanalysis",
+        "azure-mgmt-appcontainers": "azure.mgmt.containerapp",
     }
     for pkg, module in packages.items():
         try:
