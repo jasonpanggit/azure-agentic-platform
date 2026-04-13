@@ -433,6 +433,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
 - Phase 42 added: surface runbooks in web-ui
 - Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
+- Phase 45 added: Azure MCP Server v2 Upgrade and New Capabilities — upgrade from archived Azure/azure-mcp to microsoft/mcp v2.0.0, wire advisor namespace into SRE agent and containerapps namespace for self-monitoring
 
 ---
 

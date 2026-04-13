@@ -1328,6 +1328,16 @@ When all phases 34–40 complete:
 **Depends on:** Phase 63
 **Success metric:** Two tenants provisioned with different subscriptions; operator from Tenant A gets 403 attempting to read Tenant B incidents; both see correct separate incident feeds
 
+### Phase 45: Azure MCP Server v2 Upgrade and New Capabilities
+
+**Goal:** Upgrade from Azure MCP Server v1 (`@azure/mcp`, archived `Azure/azure-mcp` repo) to v2 (`Azure.Mcp.Server 2.0.0`, `microsoft/mcp` repo). Wire two new high-value namespaces: `advisor` into the SRE agent and `containerapps` for platform self-monitoring. Update CLAUDE.md package references.
+**Requirements**: Update package reference and Docker image; smoke-test existing tools; wire `advisor` tools into SRE agent; wire `containerapps` tools into Orchestrator or SRE agent for self-monitoring
+**Depends on:** Phase 44
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 45 to break down)
+
 ---
 
 ## World-Class v3.0 Success Criteria
