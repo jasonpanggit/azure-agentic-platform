@@ -57,7 +57,7 @@ def test_cost_summary_route_not_swallowed_by_vm_detail_wildcard():
     assert res.status_code == 200, f"Expected 200 but got {res.status_code}: {res.text}"
     data = res.json()
     # Should have the cost-summary response shape, not a vm_detail error
-    assert "vms" in data
+    assert "recommendations" in data
     assert "base64url" not in res.text.lower()
 
 
@@ -85,7 +85,8 @@ def test_cost_summary_returns_empty_when_no_recommendations():
 
     assert res.status_code == 200
     data = res.json()
-    assert data["vms"] == []
+    assert data["recommendations"] == []
+    assert data["vms"] == []  # deprecated alias still present
     assert data["total_recommendations"] == 0
     assert data["subscription_id"] == "sub-123"
 
@@ -106,7 +107,8 @@ def test_cost_summary_returns_error_when_sdk_missing():
     assert res.status_code == 200
     data = res.json()
     assert "error" in data
-    assert data["vms"] == []
+    assert data["recommendations"] == []
+    assert data["vms"] == []  # deprecated alias
 
 
 def test_cost_summary_requires_subscription_id():
@@ -120,14 +122,15 @@ def test_cost_summary_requires_subscription_id():
     assert res.status_code == 422
 
 
-def test_cost_summary_filters_vm_recommendations():
-    """Verify that only Cost+VM recommendations are returned."""
+def test_cost_summary_returns_all_cost_recommendations():
+    """Verify that ALL Cost recommendations are returned regardless of
+    resource type.  Performance recommendations are still excluded."""
     from fastapi.testclient import TestClient
 
     app = _setup_app_state()
     client = TestClient(app, raise_server_exceptions=False)
 
-    # Build mock recommendations: 1 Cost/VM, 1 Cost/non-VM, 1 non-Cost
+    # Build mock recommendations: 1 Cost/VM, 1 Cost/Storage, 1 non-Cost
     cost_vm_rec = MagicMock()
     cost_vm_rec.category = "Cost"
     cost_vm_rec.impacted_field = "Microsoft.Compute/virtualMachines"
@@ -152,6 +155,21 @@ def test_cost_summary_filters_vm_recommendations():
     cost_storage_rec = MagicMock()
     cost_storage_rec.category = "Cost"
     cost_storage_rec.impacted_field = "Microsoft.Storage/storageAccounts"
+    cost_storage_rec.impacted_value = "stgolddata"
+    cost_storage_rec.impact = "Medium"
+    cost_storage_rec.extended_properties = {
+        "savingsAmount": "75.50",
+        "annualSavingsAmount": "906.00",
+        "savingsCurrency": "USD",
+    }
+    cost_storage_rec.resource_metadata = MagicMock()
+    cost_storage_rec.resource_metadata.resource_id = (
+        "/subscriptions/sub-1/resourceGroups/rg-data/providers/"
+        "Microsoft.Storage/storageAccounts/stgolddata"
+    )
+    cost_storage_rec.short_description = MagicMock()
+    cost_storage_rec.short_description.solution = "Move to cool tier"
+    cost_storage_rec.last_updated = None
 
     perf_vm_rec = MagicMock()
     perf_vm_rec.category = "Performance"
@@ -173,8 +191,25 @@ def test_cost_summary_filters_vm_recommendations():
 
     assert res.status_code == 200
     data = res.json()
-    assert data["total_recommendations"] == 1
-    assert len(data["vms"]) == 1
-    assert data["vms"][0]["vm_name"] == "vm-expensive"
-    assert data["vms"][0]["estimated_monthly_savings"] == 150.0
-    assert data["vms"][0]["current_sku"] == "Standard_D4s_v3"
+
+    # Both Cost recs included; Performance rec excluded
+    assert data["total_recommendations"] == 2
+    assert len(data["recommendations"]) == 2
+    # Deprecated alias also present and identical
+    assert len(data["vms"]) == 2
+
+    # Sorted by savings descending: VM ($150) first, then Storage ($75.50)
+    vm_rec = data["recommendations"][0]
+    storage_rec = data["recommendations"][1]
+
+    assert vm_rec["resource_name"] == "vm-expensive"
+    assert vm_rec["resource_type"] == "Microsoft.Compute/virtualMachines"
+    assert vm_rec["estimated_monthly_savings"] == 150.0
+    assert vm_rec["current_sku"] == "Standard_D4s_v3"
+    assert vm_rec["resource_group"] == "rg-prod"
+
+    assert storage_rec["resource_name"] == "stgolddata"
+    assert storage_rec["resource_type"] == "Microsoft.Storage/storageAccounts"
+    assert storage_rec["estimated_monthly_savings"] == 75.5
+    assert storage_rec["resource_group"] == "rg-data"
+    assert storage_rec["description"] == "Move to cool tier"

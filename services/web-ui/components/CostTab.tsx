@@ -19,8 +19,9 @@ import { TrendingDown, RefreshCw, DollarSign } from 'lucide-react';
 // Types
 // ---------------------------------------------------------------------------
 
-interface CostVM {
-  vm_name: string;
+interface CostRecommendation {
+  resource_name: string;
+  resource_type: string;
   resource_group: string;
   resource_id: string;
   current_sku: string;
@@ -36,7 +37,8 @@ interface CostVM {
 interface CostSummaryResponse {
   subscription_id: string;
   total_recommendations: number;
-  vms: CostVM[];
+  recommendations?: CostRecommendation[];
+  vms?: CostRecommendation[];  // deprecated alias — backend sends both
   data_lag_note?: string;
   error?: string;
 }
@@ -64,12 +66,18 @@ function formatCurrency(amount: number, currency: string): string {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
+/** Strip "Microsoft." prefix for compact display, e.g. "Compute/virtualMachines" */
+function formatResourceType(resourceType: string): string {
+  if (!resourceType) return '';
+  return resourceType.replace(/^Microsoft\./i, '');
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function CostTab({ subscriptions }: CostTabProps) {
-  const [vms, setVMs] = useState<CostVM[]>([]);
+  const [recommendations, setRecommendations] = useState<CostRecommendation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataLagNote, setDataLagNote] = useState<string | null>(null);
@@ -77,7 +85,7 @@ export function CostTab({ subscriptions }: CostTabProps) {
 
   const fetchCostData = useCallback(async () => {
     if (subscriptions.length === 0) {
-      setVMs([]);
+      setRecommendations([]);
       return;
     }
 
@@ -102,13 +110,14 @@ export function CostTab({ subscriptions }: CostTabProps) {
         throw new Error(data.error);
       }
 
-      setVMs(data.vms ?? []);
+      // Read from "recommendations" first, fall back to deprecated "vms" key
+      setRecommendations(data.recommendations ?? data.vms ?? []);
       setDataLagNote(data.data_lag_note ?? null);
       setLastRefresh(new Date());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(`Failed to load cost data: ${message}`);
-      setVMs([]);
+      setRecommendations([]);
     } finally {
       setLoading(false);
     }
@@ -151,19 +160,19 @@ export function CostTab({ subscriptions }: CostTabProps) {
     );
   }
 
-  if (vms.length === 0) {
+  if (recommendations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--text-secondary)' }}>
         <DollarSign className="h-10 w-10 opacity-30" />
-        <p className="text-sm">No rightsizing recommendations found.</p>
+        <p className="text-sm">No cost recommendations found.</p>
         <p className="text-xs opacity-60">Azure Advisor refreshes recommendations every 24 hours.</p>
       </div>
     );
   }
 
   // Calculate total potential savings
-  const totalMonthlySavings = vms.reduce((sum, vm) => sum + vm.estimated_monthly_savings, 0);
-  const currency = vms[0]?.savings_currency ?? 'USD';
+  const totalMonthlySavings = recommendations.reduce((sum, r) => sum + r.estimated_monthly_savings, 0);
+  const currency = recommendations[0]?.savings_currency ?? 'USD';
 
   return (
     <div>
@@ -172,10 +181,10 @@ export function CostTab({ subscriptions }: CostTabProps) {
         <div className="flex items-center gap-2">
           <TrendingDown className="h-4 w-4" style={{ color: 'var(--accent-blue)' }} />
           <span className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
-            Top Rightsizing Opportunities
+            Top Cost Optimization Opportunities
           </span>
           <Badge variant="outline" className="text-[11px]">
-            {vms.length} VMs
+            {recommendations.length} resources
           </Badge>
           <span
             className="text-[12px] px-2 py-0.5 rounded"
@@ -213,7 +222,7 @@ export function CostTab({ subscriptions }: CostTabProps) {
           className="px-4 py-2 text-[11px]"
           style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }}
         >
-          ⏱ {dataLagNote}
+          {dataLagNote}
         </div>
       )}
 
@@ -221,7 +230,8 @@ export function CostTab({ subscriptions }: CostTabProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-[12px]">VM Name</TableHead>
+            <TableHead className="text-[12px]">Resource</TableHead>
+            <TableHead className="text-[12px]">Resource Type</TableHead>
             <TableHead className="text-[12px]">Resource Group</TableHead>
             <TableHead className="text-[12px]">Current SKU</TableHead>
             <TableHead className="text-[12px]">Recommended SKU</TableHead>
@@ -231,39 +241,42 @@ export function CostTab({ subscriptions }: CostTabProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {vms.map((vm) => (
-            <TableRow key={vm.resource_id || vm.vm_name}>
+          {recommendations.map((rec) => (
+            <TableRow key={rec.resource_id || rec.resource_name}>
               <TableCell className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                {vm.vm_name || '—'}
+                {rec.resource_name || '\u2014'}
               </TableCell>
               <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {vm.resource_group || '—'}
+                {formatResourceType(rec.resource_type) || '\u2014'}
+              </TableCell>
+              <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                {rec.resource_group || '\u2014'}
               </TableCell>
               <TableCell className="text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-                {vm.current_sku || '—'}
+                {rec.current_sku || '\u2014'}
               </TableCell>
               <TableCell className="text-[12px] font-mono" style={{ color: 'var(--accent-blue)' }}>
-                {vm.target_sku || '—'}
+                {rec.target_sku || '\u2014'}
               </TableCell>
               <TableCell className="text-[12px] font-semibold" style={{ color: 'var(--accent-green)' }}>
-                {vm.estimated_monthly_savings > 0
-                  ? formatCurrency(vm.estimated_monthly_savings, vm.savings_currency)
-                  : '—'}
+                {rec.estimated_monthly_savings > 0
+                  ? formatCurrency(rec.estimated_monthly_savings, rec.savings_currency)
+                  : '\u2014'}
               </TableCell>
               <TableCell>
                 <span
                   className="text-[11px] px-2 py-0.5 rounded font-medium"
-                  style={impactBadgeStyle(vm.impact)}
+                  style={impactBadgeStyle(rec.impact)}
                 >
-                  {vm.impact}
+                  {rec.impact}
                 </span>
               </TableCell>
               <TableCell
                 className="text-[12px] max-w-[250px] truncate"
                 style={{ color: 'var(--text-secondary)' }}
-                title={vm.description}
+                title={rec.description}
               >
-                {vm.description || '—'}
+                {rec.description || '\u2014'}
               </TableCell>
             </TableRow>
           ))}

@@ -1,11 +1,12 @@
-"""VM cost summary endpoint.
+"""Cost summary endpoint.
 
-GET /api/v1/vms/cost-summary — returns top-N underutilized VMs by cost with
-Azure Advisor rightsizing recommendations for display in the CostTab.
+GET /api/v1/vms/cost-summary — returns top-N Azure Advisor Cost recommendations
+across all resource types (VMs, storage accounts, SQL, App Services, etc.)
+for display in the CostTab.
 
 Design notes:
 - Queries Azure Advisor for all Cost category recommendations in all in-scope subscriptions
-- Returns the top-N VMs sorted by highest estimated monthly savings opportunity
+- Returns the top-N resources sorted by highest estimated monthly savings opportunity
 - 24-48h data lag for Cost Management data is documented in response
 """
 from __future__ import annotations
@@ -41,18 +42,20 @@ async def get_vm_cost_summary(
     _token: str = Depends(verify_token),
     credential: Any = Depends(get_credential),
 ) -> Dict[str, Any]:
-    """Return top-N underutilized VMs by estimated savings from Azure Advisor.
+    """Return top-N cost optimization recommendations from Azure Advisor.
 
     Queries Azure Advisor Cost recommendations for the subscription and returns
-    the VMs with the highest rightsizing savings opportunity, sorted descending
-    by estimated monthly savings.
+    the resources with the highest savings opportunity, sorted descending
+    by estimated monthly savings.  Covers all resource types (VMs, storage
+    accounts, SQL databases, App Services, etc.).
 
     Returns:
         {
           "subscription_id": str,
           "total_recommendations": int,
-          "vms": [{
-            "vm_name": str,
+          "recommendations": [{
+            "resource_name": str,
+            "resource_type": str,        # e.g. "Microsoft.Compute/virtualMachines"
             "resource_group": str,
             "resource_id": str,
             "current_sku": str,          # from extended_properties if available
@@ -64,24 +67,24 @@ async def get_vm_cost_summary(
             "description": str,
             "last_updated": str,
           }],
+          "vms": [...],                  # deprecated alias for "recommendations"
           "data_lag_note": str
         }
     """
     if AdvisorManagementClient is None:
         return {
             "error": f"azure-mgmt-advisor not installed: {_ADVISOR_IMPORT_ERROR}" if _ADVISOR_IMPORT_ERROR else "azure-mgmt-advisor not installed",
-            "vms": [],
+            "recommendations": [],
+            "vms": [],  # deprecated alias
             "total_recommendations": 0,
         }
 
     try:
         client = AdvisorManagementClient(credential, subscription_id)
 
-        vms: List[Dict[str, Any]] = []
+        recommendations: List[Dict[str, Any]] = []
         for rec in client.recommendations.list():
             if rec.category != "Cost":
-                continue
-            if not rec.impacted_field or "virtualmachines" not in rec.impacted_field.lower():
                 continue
 
             ext = rec.extended_properties or {}
@@ -97,8 +100,9 @@ async def get_vm_cost_summary(
                 except (ValueError, IndexError):
                     pass
 
-            vms.append({
-                "vm_name": rec.impacted_value or "",
+            recommendations.append({
+                "resource_name": rec.impacted_value or "",
+                "resource_type": rec.impacted_field or "",
                 "resource_group": resource_group,
                 "resource_id": resource_id,
                 "current_sku": ext.get("currentSku", ext.get("currentSkuName", "")),
@@ -112,14 +116,15 @@ async def get_vm_cost_summary(
             })
 
         # Sort by highest monthly savings, take top-N
-        vms.sort(key=lambda v: v["estimated_monthly_savings"], reverse=True)
-        total_recommendations = len(vms)
-        vms = vms[:top]
+        recommendations.sort(key=lambda v: v["estimated_monthly_savings"], reverse=True)
+        total_recommendations = len(recommendations)
+        recommendations = recommendations[:top]
 
         return {
             "subscription_id": subscription_id,
             "total_recommendations": total_recommendations,
-            "vms": vms,
+            "recommendations": recommendations,
+            "vms": recommendations,  # deprecated alias for backward compat
             "data_lag_note": "Advisor recommendations are refreshed every 24 hours.",
         }
 
@@ -127,7 +132,8 @@ async def get_vm_cost_summary(
         logger.warning("get_vm_cost_summary error: %s", exc)
         return {
             "error": str(exc),
-            "vms": [],
+            "recommendations": [],
+            "vms": [],  # deprecated alias
             "total_recommendations": 0,
             "subscription_id": subscription_id,
         }
