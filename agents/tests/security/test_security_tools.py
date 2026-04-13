@@ -27,22 +27,20 @@ def _mock_with_name(mock_name: str, **kwargs) -> MagicMock:
 class TestAllowedMcpTools:
     """Verify ALLOWED_MCP_TOOLS list is correct and has no wildcards."""
 
-    def test_allowed_mcp_tools_has_exactly_seven_entries(self):
+    def test_allowed_mcp_tools_has_exactly_five_entries(self):
         from agents.security.tools import ALLOWED_MCP_TOOLS
 
-        assert len(ALLOWED_MCP_TOOLS) == 7
+        assert len(ALLOWED_MCP_TOOLS) == 5
 
     def test_allowed_mcp_tools_contains_expected_entries(self):
         from agents.security.tools import ALLOWED_MCP_TOOLS
 
         expected = [
-            "keyvault.list_vaults",
-            "keyvault.get_vault",
-            "role.list_assignments",
-            "monitor.query_logs",
-            "monitor.query_metrics",
-            "resourcehealth.get_availability_status",
-            "advisor.list_recommendations",
+            "keyvault",
+            "role",
+            "monitor",
+            "resourcehealth",
+            "advisor",
         ]
         for tool in expected:
             assert tool in ALLOWED_MCP_TOOLS, f"Missing: {tool}"
@@ -52,6 +50,15 @@ class TestAllowedMcpTools:
 
         for tool in ALLOWED_MCP_TOOLS:
             assert "*" not in tool, f"Wildcard found in tool: {tool}"
+
+    def test_allowed_mcp_tools_no_dotted_names(self):
+        """v2 uses namespace names, not dotted names."""
+        from agents.security.tools import ALLOWED_MCP_TOOLS
+
+        for tool in ALLOWED_MCP_TOOLS:
+            assert "." not in tool, (
+                f"Dotted tool name '{tool}' found — must use v2 namespace name"
+            )
 
 
 # ---------------------------------------------------------------------------
