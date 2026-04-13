@@ -27,7 +27,11 @@ os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 
 _mock_containerservice = MagicMock()
 if "azure.mgmt.containerservice" not in sys.modules:
-    sys.modules.setdefault("azure.mgmt.containerservice", _mock_containerservice)
+    sys.modules["azure.mgmt.containerservice"] = _mock_containerservice
+    # Also register as attribute on azure.mgmt so patch() can resolve the dotted path
+    import azure.mgmt as _azure_mgmt
+    if not hasattr(_azure_mgmt, "containerservice"):
+        setattr(_azure_mgmt, "containerservice", _mock_containerservice)
 
 
 # ---------------------------------------------------------------------------
@@ -119,13 +123,11 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        # Patch ContainerServiceClient regardless of whether the real package is
-        # installed (CI/Python 3.12) or shimmed via sys.modules (local/Python 3.9).
-        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
             patch("azure.identity.DefaultAzureCredential"),
+            patch("azure.mgmt.containerservice.ContainerServiceClient", mock_csc),
             patch("azure.monitor.query.LogsQueryClient") as MockLogs,
         ):
             MockLogs.return_value.query_resource.return_value = mock_result
@@ -153,11 +155,11 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
             patch("azure.identity.DefaultAzureCredential"),
+            patch("azure.mgmt.containerservice.ContainerServiceClient", mock_csc),
             patch("azure.monitor.query.LogsQueryClient") as MockLogs,
         ):
             MockLogs.return_value.query_resource.return_value = mock_result
