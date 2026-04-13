@@ -752,8 +752,13 @@ def test_enable_diag_settings_success(mock_token, mock_req_get, mock_dcr, mock_a
     vm_mod._LA_WORKSPACE_RESOURCE_ID = original_ws
 
 
-def test_enable_diag_settings_arc_vm_rejected():
-    """POST returns 400 for Arc VM resource IDs."""
+def test_enable_diag_settings_arc_vm_accepted():
+    """POST accepts Arc VM resource IDs and proceeds to DCR creation path (CENTRAL-005).
+
+    Phase 43 removed the explicit 400 rejection for Arc VMs. The endpoint now attempts
+    DCR creation using the Microsoft.HybridCompute extension type. In the test environment
+    the ARM call fails with a mock credential error (502), confirming the Arc path is reached.
+    """
     import services.api_gateway.vm_detail as vm_mod
 
     original_ws = vm_mod._LA_WORKSPACE_RESOURCE_ID
@@ -775,7 +780,11 @@ def test_enable_diag_settings_arc_vm_rejected():
         headers={"Authorization": "Bearer test-token"},
     )
 
-    assert resp.status_code == 400
-    assert "Arc VM" in resp.json()["detail"]
+    # Arc VMs are no longer rejected with 400 — they proceed into the DCR path.
+    # With mock credentials the ARM call fails, producing a 502. Any non-400 response
+    # confirms the Arc rejection guard was removed successfully.
+    assert resp.status_code != 400, (
+        "Arc VMs should no longer be rejected at the gateway level (CENTRAL-005 fix)"
+    )
 
     vm_mod._LA_WORKSPACE_RESOURCE_ID = original_ws

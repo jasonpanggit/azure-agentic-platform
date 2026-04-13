@@ -1096,7 +1096,14 @@ def _create_dcr_association(credential: Any, resource_id: str, dcr_id: str) -> N
 def _install_ama_extension(
     credential: Any, resource_id: str, os_type: str, location: str
 ) -> None:
-    """Install the Azure Monitor Agent extension on the VM."""
+    """Install the Azure Monitor Agent extension on the VM.
+
+    Handles both Azure VMs (Microsoft.Compute/virtualMachines/extensions,
+    api-version 2023-03-01) and Arc-enabled servers
+    (Microsoft.HybridCompute/machines/extensions, api-version 2024-07-10).
+    The publisher and type names are identical; only the resource path and
+    API version differ between the two resource types.
+    """
     token = _arm_token(credential)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
@@ -1115,10 +1122,13 @@ def _install_ama_extension(
         },
     }
 
+    # Arc VMs use the HybridCompute extensions API (different api-version).
+    # Azure VMs use the Compute extensions API.
+    api_version = "2024-07-10" if _is_arc_vm(resource_id) else "2023-03-01"
     url = f"{_ARM_BASE}{resource_id}/extensions/{ext_name}"
     resp = requests.put(
         url,
-        params={"api-version": "2023-03-01"},
+        params={"api-version": api_version},
         headers=headers,
         json=body,
         timeout=60,
@@ -1134,7 +1144,7 @@ def _install_ama_extension(
 @router.get("/{resource_id_base64}/diagnostic-settings")
 async def get_diagnostic_settings(
     resource_id_base64: str,
-    os_type: str = Query("windows", description="VM OS type: windows or linux"),
+    os_type: str = Query("linux", description="VM OS type: windows or linux"),
     credential=Depends(get_credential),
     _user=Depends(verify_token),
 ) -> Dict[str, Any]:
@@ -1186,14 +1196,6 @@ async def enable_diagnostic_settings(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Arc VMs: not supported via this API
-    if _is_arc_vm(resource_id):
-        raise HTTPException(
-            status_code=400,
-            detail="AMA installation via this API is not supported for Arc VMs. "
-            "Use Azure Policy or Arc extension management.",
-        )
-
     workspace_resource_id = _LA_WORKSPACE_RESOURCE_ID
     if not workspace_resource_id:
         raise HTTPException(
@@ -1202,8 +1204,8 @@ async def enable_diagnostic_settings(
         )
 
     logger.info(
-        "diag_settings: enable | resource=%s workspace=%s os_type=%s",
-        resource_id[-60:], workspace_resource_id[-60:], os_type,
+        "diag_settings: enable | resource=%s workspace=%s os_type=%s arc=%s",
+        resource_id[-60:], workspace_resource_id[-60:], os_type, _is_arc_vm(resource_id),
     )
 
     try:
@@ -1214,11 +1216,13 @@ async def enable_diagnostic_settings(
         resource_group = parts[rg_idx + 1]
 
         # Get the VM's own location (required for AMA extension install).
+        # Arc VMs use the HybridCompute API version; Azure VMs use the Compute one.
         # Do NOT use the workspace location — it may be in a different region.
         token = _arm_token(credential)
+        vm_api_version = "2024-07-10" if _is_arc_vm(resource_id) else "2023-03-01"
         vm_resp = requests.get(
             f"{_ARM_BASE}{resource_id}",
-            params={"api-version": "2023-03-01"},
+            params={"api-version": vm_api_version},
             headers={"Authorization": f"Bearer {token}"},
             timeout=15,
         )
