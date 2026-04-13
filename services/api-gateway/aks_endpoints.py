@@ -424,7 +424,9 @@ async def list_aks_clusters(
     node_pool_count = array_length(agentPools),
     node_pools_ready = iff(tostring(properties.provisioningState) =~ 'Succeeded', array_length(agentPools), 0),
     total_nodes,
-    active_alert_count = 0"""
+    active_alert_count = 0,
+    omsagent_workspace = tostring(properties.addonProfiles.omsagent.config.logAnalyticsWorkspaceResourceID),
+    omsagent_enabled = tobool(properties.addonProfiles.omsagent.enabled)"""
 
         if search:
             search_safe = search.replace("'", "")
@@ -436,6 +438,7 @@ async def list_aks_clusters(
         response = client.resources(request)
         rows = response.data or []
 
+        fallback_workspace = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
         clusters = [
             {
                 "id": r.get("id", ""),
@@ -455,35 +458,55 @@ async def list_aks_clusters(
                 # ARG tobool() returns int 0/1 — normalise to Python bool
                 "rbac_enabled": bool(r.get("rbac_enabled", False)),
                 "active_alert_count": 0,
+                # Per-cluster Container Insights workspace (may be empty string if CI not enabled)
+                "_la_workspace": r.get("omsagent_workspace") or fallback_workspace,
             }
             for r in rows
         ]
 
         # Enrich system_pod_health via batch Container Insights query.
-        # Uses LOG_ANALYTICS_WORKSPACE_RESOURCE_ID env var as the shared workspace.
+        # Groups clusters by their per-cluster omsagent workspace so that clusters
+        # reporting to different workspaces are all handled correctly.
         # Falls back gracefully to 'unknown' if CI is unavailable.
         if clusters and _LOGS_QUERY_AVAILABLE:
-            la_workspace = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
-            if la_workspace:
-                cluster_names = [c["name"] for c in clusters]
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        _fetch_system_pod_health_batch,
-                        credential,
-                        la_workspace,
-                        cluster_names,
-                    )
-                    try:
-                        health_map = future.result(timeout=10)
-                    except Exception as health_exc:
-                        logger.warning("aks_list: system_pod_health enrichment failed error=%s", health_exc)
-                        health_map = {}
+            import concurrent.futures
+            from collections import defaultdict
 
-                for cluster in clusters:
-                    health = health_map.get(cluster["name"])
-                    if health is not None:
-                        cluster["system_pod_health"] = health
+            # Group clusters by their Log Analytics workspace resource ID
+            workspace_to_clusters: dict = defaultdict(list)
+            for c in clusters:
+                ws = c["_la_workspace"]
+                if ws:
+                    workspace_to_clusters[ws].append(c)
+
+            if workspace_to_clusters:
+                futures_map = {}
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    for ws, ws_clusters in workspace_to_clusters.items():
+                        cluster_names = [c["name"] for c in ws_clusters]
+                        f = executor.submit(
+                            _fetch_system_pod_health_batch,
+                            credential,
+                            ws,
+                            cluster_names,
+                        )
+                        futures_map[f] = ws_clusters
+
+                    for future, ws_clusters in futures_map.items():
+                        try:
+                            health_map = future.result(timeout=10)
+                        except Exception as health_exc:
+                            logger.warning("aks_list: system_pod_health enrichment failed error=%s", health_exc)
+                            health_map = {}
+
+                        for cluster in ws_clusters:
+                            health = health_map.get(cluster["name"])
+                            if health is not None:
+                                cluster["system_pod_health"] = health
+
+        # Strip internal enrichment field before returning
+        for c in clusters:
+            c.pop("_la_workspace", None)
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_list: total=%d duration_ms=%.1f", len(clusters), duration_ms)
