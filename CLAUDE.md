@@ -87,9 +87,12 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Attribute | Value |
 |---|---|
 | **Package** | `@azure/mcp` (npm, run as sidecar) OR invoke via `npx @azure/mcp@latest start` |
-| **Distribution** | npm package `@azure/mcp`; also `azmcp` binary |
+| **Repository** | `microsoft/mcp` (moved from Azure/azure-mcp, now archived) |
+| **Distribution** | npm package `@azure/mcp`; also `azmcp` platform-specific native binary |
+| **Version** | `2.0.0` GA |
 | **Status** | ✅ **GA** |
 | **Authentication** | Entra ID via `DefaultAzureCredential` / managed identity |
+| **Tool architecture** | v2 uses namespace-level intent tools (e.g., `monitor` with `intent` parameter) instead of v1 dotted names (e.g., `monitor.query_logs`). 61 namespace-level tools replace 131+ individual tools. |
 #### Covered Services (confirmed in docs, March 2026)
 | Domain | Tools Available |
 |---|---|
@@ -104,7 +107,8 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Messaging/Events | `eventhubs`, `servicebus`, `eventgrid` |
 | DevOps | `deploy`, `bicepschema`, `grafana`, `loadtesting` |
 | Identity | `role` (RBAC assignments) |
-| Containers | `acr` (list) |
+| Containers | `acr` (list), `containerapps` (list) |
+| Azure Policy | `policy` |
 #### Arc Coverage Gap (CONFIRMED)
 - Arc-enabled servers (`Microsoft.HybridCompute/machines`)
 - Arc-enabled Kubernetes (`Microsoft.Kubernetes/connectedClusters`)
@@ -305,7 +309,7 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Agent Framework | `agent-framework` | `1.0.0rc5` | ⚠️ Pre-release RC |
 | Hosting Adapter | `azure-ai-agentserver-agentframework` | latest | ⚠️ Preview |
 | Foundry SDK | `azure-ai-projects` | `2.0.1` | ✅ GA |
-| Azure MCP Server | `@azure/mcp` (npm) | GA | ✅ GA |
+| Azure MCP Server | `@azure/mcp` (npm, `microsoft/mcp` repo) | `2.0.0` | ✅ GA |
 | Arc MCP Framework | `mcp[cli]` | `1.26.0` | ✅ Stable |
 | Fabric Eventhouse | (Fabric SaaS) | GA | ✅ GA |
 | Fabric Activator | (Fabric SaaS) | GA | ✅ GA |
@@ -383,7 +387,7 @@ FastAPI thin router (`services/api-gateway/`) — routes requests to domain agen
 
 ### MCP Surfaces
 
-- **Azure MCP Server** (GA) — `ca-azure-mcp-prod`, internal-only Container App; covers ARM, Compute, Storage, Databases, Monitoring, Security, Messaging
+- **Azure MCP Server** (GA, v2.0.0) — `ca-azure-mcp-prod`, internal-only Container App; covers ARM, Compute, Storage, Databases, Monitoring, Security, Messaging, Container Apps. v2 uses namespace-level intent tools (e.g., `monitor` with `intent` parameter) instead of v1 dotted names.
 - **Custom Arc MCP Server** — `ca-arc-mcp-prod`, internal-only Container App; covers Arc-enabled servers, Kubernetes, data services (Azure MCP Server gap)
 - Both registered as Foundry MCP connections (`category = "CustomKeys"`)
 
