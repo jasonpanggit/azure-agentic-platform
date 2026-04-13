@@ -730,6 +730,193 @@ async def get_aks_detail(
         }
 
 
+@router.get("/{resource_id_base64}/workloads")
+async def get_aks_workloads(
+    resource_id_base64: str,
+    status_filter: str = Query(
+        "",
+        description="Filter pods by status: 'Running', 'CrashLoopBackOff', 'Pending', or '' for all",
+    ),
+    _token: str = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Get detailed workload data for an AKS cluster.
+
+    Returns pod lists per status and namespace breakdown.
+    Queries KubePodInventory in Log Analytics (Container Insights).
+
+    Returns:
+        pods: list of {name, namespace, status, node, controller_name} (max 200)
+        namespaces: list of {name, running_pods, crash_loop_pods, pending_pods, total_pods}
+        total_pods: aggregate pod count
+        source: 'kql' | 'kql_empty' | 'unavailable'
+    """
+    start_time = time.monotonic()
+    try:
+        resource_id = _decode_resource_id(resource_id_base64)
+    except ValueError:
+        return {"error": "Invalid resource ID", "pods": [], "namespaces": [], "total_pods": 0, "source": "unavailable"}
+
+    if not _LOGS_QUERY_AVAILABLE:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info("aks_workloads: logs_unavailable resource_id=%s duration_ms=%.1f", resource_id[:60], duration_ms)
+        return {"pods": [], "namespaces": [], "total_pods": 0, "source": "unavailable"}
+
+    from datetime import timedelta
+
+    try:
+        from azure.monitor.query import LogsQueryClient, LogsQueryStatus  # type: ignore[import]
+    except ImportError:
+        return {"pods": [], "namespaces": [], "total_pods": 0, "source": "unavailable"}
+
+    # Resolve Log Analytics workspace from the cluster detail endpoint logic —
+    # we need the workspace resource ID.  Re-derive it from the cluster's addon profile.
+    workspace_resource_id: Optional[str] = None
+    cluster_name = resource_id.split("/")[-1]
+    subscription_id = _extract_subscription_id(resource_id)
+    parts = resource_id.split("/")
+    rg_index = next((i for i, p in enumerate(parts) if p.lower() == "resourcegroups"), -1)
+    resource_group = parts[rg_index + 1] if rg_index >= 0 else ""
+
+    if _ARG_AVAILABLE:
+        try:
+            from azure.identity import DefaultAzureCredential  # type: ignore[import]
+            from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+            credential = DefaultAzureCredential()
+            aks_client = ContainerServiceClient(credential, subscription_id)
+            cluster = aks_client.managed_clusters.get(resource_group, cluster_name)
+            addon = getattr(cluster, "addon_profiles", None) or {}
+            oms = addon.get("omsagent") or addon.get("omsAgent")
+            if oms and getattr(oms, "enabled", False):
+                la_config = getattr(oms, "config", None) or {}
+                workspace_resource_id = la_config.get("logAnalyticsWorkspaceResourceID") or la_config.get("logAnalyticsWorkspaceResourceId")
+        except Exception as exc:
+            logger.warning("aks_workloads: workspace_discovery failed cluster=%s error=%s", cluster_name, exc)
+
+    if not workspace_resource_id:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info("aks_workloads: no_workspace cluster=%s duration_ms=%.1f", cluster_name, duration_ms)
+        return {"pods": [], "namespaces": [], "total_pods": 0, "source": "unavailable", "reason": "No Log Analytics workspace configured"}
+
+    try:
+        credential = DefaultAzureCredential()  # type: ignore[possibly-undefined]
+        client = LogsQueryClient(credential)
+
+        # Build status filter clause
+        status_clause = ""
+        if status_filter == "CrashLoopBackOff":
+            status_clause = '| where ContainerStatusReason == "CrashLoopBackOff"'
+        elif status_filter in ("Running", "Pending"):
+            status_clause = f'| where PodStatus == "{status_filter}"'
+
+        # Query 1: Pod list (max 200 rows, most recent snapshot per pod)
+        pod_kql = f"""
+KubePodInventory
+| where TimeGenerated > ago(2h)
+| where ClusterName =~ "{cluster_name}"
+{status_clause}
+| summarize arg_max(TimeGenerated, *) by PodUid
+| project
+    Name = PodName,
+    Namespace,
+    Status = PodStatus,
+    StatusReason = ContainerStatusReason,
+    Node = Computer,
+    ControllerName,
+    ControllerKind
+| take 200
+"""
+        # Query 2: Namespace breakdown
+        ns_kql = f"""
+KubePodInventory
+| where TimeGenerated > ago(2h)
+| where ClusterName =~ "{cluster_name}"
+| summarize arg_max(TimeGenerated, *) by PodUid
+| summarize
+    running_pods = countif(PodStatus == "Running"),
+    crash_loop_pods = countif(ContainerStatusReason == "CrashLoopBackOff"),
+    pending_pods = countif(PodStatus == "Pending"),
+    total_pods = count()
+  by Namespace
+| order by total_pods desc
+"""
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _run_pod_query() -> List[Dict[str, Any]]:
+            result = client.query_resource(workspace_resource_id, pod_kql, timespan=timedelta(hours=3))
+            pods: List[Dict[str, Any]] = []
+            tables = None
+            if result.status == LogsQueryStatus.SUCCESS:
+                tables = getattr(result, "tables", None)
+            elif result.status == LogsQueryStatus.PARTIAL:
+                tables = getattr(result, "partial_data", None)
+            if tables and tables[0].rows:
+                table = tables[0]
+                cols = [c.name if hasattr(c, "name") else str(c) for c in table.columns]
+                for row in table.rows:
+                    rd = dict(zip(cols, row))
+                    status = str(rd.get("Status") or "")
+                    reason = str(rd.get("StatusReason") or "")
+                    display_status = reason if reason and reason != "None" else status
+                    pods.append({
+                        "name": str(rd.get("Name") or ""),
+                        "namespace": str(rd.get("Namespace") or ""),
+                        "status": display_status,
+                        "node": str(rd.get("Node") or "").split(".")[0],  # short hostname
+                        "controller_name": str(rd.get("ControllerName") or ""),
+                        "controller_kind": str(rd.get("ControllerKind") or ""),
+                    })
+            return pods
+
+        def _run_ns_query() -> List[Dict[str, Any]]:
+            result = client.query_resource(workspace_resource_id, ns_kql, timespan=timedelta(hours=3))
+            namespaces: List[Dict[str, Any]] = []
+            tables = None
+            if result.status == LogsQueryStatus.SUCCESS:
+                tables = getattr(result, "tables", None)
+            elif result.status == LogsQueryStatus.PARTIAL:
+                tables = getattr(result, "partial_data", None)
+            if tables and tables[0].rows:
+                table = tables[0]
+                cols = [c.name if hasattr(c, "name") else str(c) for c in table.columns]
+                for row in table.rows:
+                    rd = dict(zip(cols, row))
+                    namespaces.append({
+                        "name": str(rd.get("Namespace") or ""),
+                        "running_pods": int(rd.get("running_pods") or 0),
+                        "crash_loop_pods": int(rd.get("crash_loop_pods") or 0),
+                        "pending_pods": int(rd.get("pending_pods") or 0),
+                        "total_pods": int(rd.get("total_pods") or 0),
+                    })
+            return namespaces
+
+        # Run both queries in thread pool (SDK is sync)
+        pods_result, ns_result = await asyncio.gather(
+            loop.run_in_executor(None, _run_pod_query),
+            loop.run_in_executor(None, _run_ns_query),
+        )
+
+        total = sum(n["total_pods"] for n in ns_result)
+        source = "kql" if (len(pods_result) > 0 or total > 0) else "kql_empty"
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "aks_workloads: cluster=%s pods=%d namespaces=%d source=%s duration_ms=%.1f",
+            cluster_name, len(pods_result), len(ns_result), source, duration_ms,
+        )
+        return {
+            "pods": pods_result,
+            "namespaces": ns_result,
+            "total_pods": total,
+            "source": source,
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.warning("aks_workloads: query_failed cluster=%s error=%s duration_ms=%.1f", cluster_name, exc, duration_ms)
+        return {"pods": [], "namespaces": [], "total_pods": 0, "source": "unavailable", "reason": str(exc)}
+
+
 @router.get("/{resource_id_base64}/metrics")
 async def get_aks_metrics(
     resource_id_base64: str,

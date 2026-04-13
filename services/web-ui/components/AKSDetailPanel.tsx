@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react'
-import { X, RefreshCw, Activity, Info } from 'lucide-react'
+import { X, RefreshCw, Activity, Info, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
@@ -9,10 +9,13 @@ import type {
   AKSCluster,
   AKSNodePool,
   AKSWorkloadSummary,
+  AKSWorkloadDetail,
   ActiveIncident,
   MetricSeries,
   ChatMessage,
 } from '@/types/azure-resources'
+
+type WorkloadCardKey = 'running' | 'crash' | 'pending' | 'namespaces'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -170,6 +173,11 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const metricsLoadedForTimeRange = useRef<string | null>(null)
   const [enablingContainerInsights, setEnablingContainerInsights] = useState(false)
 
+  // Workload detail state
+  const [expandedWorkloadCard, setExpandedWorkloadCard] = useState<WorkloadCardKey | null>(null)
+  const [workloadDetail, setWorkloadDetail] = useState<AKSWorkloadDetail | null>(null)
+  const [loadingWorkloadDetail, setLoadingWorkloadDetail] = useState(false)
+
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -266,6 +274,39 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
       // Non-fatal
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  async function fetchWorkloadDetail(cardKey: WorkloadCardKey) {
+    if (!resourceId) return
+    // Toggle off if already open
+    if (expandedWorkloadCard === cardKey) {
+      setExpandedWorkloadCard(null)
+      return
+    }
+    setExpandedWorkloadCard(cardKey)
+    setLoadingWorkloadDetail(true)
+    try {
+      const encoded = encodeResourceId(resourceId)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const statusMap: Record<WorkloadCardKey, string> = {
+        running: 'Running',
+        crash: 'CrashLoopBackOff',
+        pending: 'Pending',
+        namespaces: '',
+      }
+      const statusFilter = statusMap[cardKey]
+      const qs = statusFilter ? `?status_filter=${encodeURIComponent(statusFilter)}` : ''
+      const res = await fetch(`/api/proxy/aks/${encoded}/workloads${qs}`, { headers })
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data = await res.json()
+      setWorkloadDetail(data)
+    } catch {
+      setWorkloadDetail({ pods: [], namespaces: [], total_pods: 0, source: 'unavailable' })
+    } finally {
+      setLoadingWorkloadDetail(false)
     }
   }
 
@@ -652,30 +693,135 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                     </span>
                   </div>
                 )}
+                {/* Clickable summary cards */}
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Running Pods', value: String(detail.workload_summary.running_pods), color: detail.workload_summary.running_pods > 0 ? 'var(--accent-green)' : 'var(--text-muted)' },
-                    { label: 'CrashLoopBackOff', value: String(detail.workload_summary.crash_loop_pods), color: detail.workload_summary.crash_loop_pods > 0 ? 'var(--accent-red)' : 'var(--text-muted)' },
-                    { label: 'Pending Pods', value: String(detail.workload_summary.pending_pods), color: detail.workload_summary.pending_pods > 0 ? 'var(--accent-yellow)' : 'var(--text-muted)' },
-                    { label: 'Namespaces', value: String(detail.workload_summary.namespace_count), color: detail.workload_summary.namespace_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' },
-                  ].map(card => (
-                    <div
-                      key={card.label}
-                      className="p-3 rounded-lg"
-                      style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}
-                    >
-                      <p className="text-[11px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>
-                        {card.label}
-                      </p>
-                      <p className="text-lg font-semibold" style={{ color: card.color }}>
-                        {card.value}
-                      </p>
-                    </div>
-                  ))}
+                  {([
+                    { key: 'running' as WorkloadCardKey, label: 'Running Pods', value: String(detail.workload_summary.running_pods), color: detail.workload_summary.running_pods > 0 ? 'var(--accent-green)' : 'var(--text-muted)' },
+                    { key: 'crash' as WorkloadCardKey, label: 'CrashLoopBackOff', value: String(detail.workload_summary.crash_loop_pods), color: detail.workload_summary.crash_loop_pods > 0 ? 'var(--accent-red)' : 'var(--text-muted)' },
+                    { key: 'pending' as WorkloadCardKey, label: 'Pending Pods', value: String(detail.workload_summary.pending_pods), color: detail.workload_summary.pending_pods > 0 ? 'var(--accent-yellow)' : 'var(--text-muted)' },
+                    { key: 'namespaces' as WorkloadCardKey, label: 'Namespaces', value: String(detail.workload_summary.namespace_count), color: detail.workload_summary.namespace_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' },
+                  ]).map(card => {
+                    const isExpanded = expandedWorkloadCard === card.key
+                    return (
+                      <button
+                        key={card.key}
+                        onClick={() => fetchWorkloadDetail(card.key)}
+                        className="p-3 rounded-lg text-left transition-all cursor-pointer"
+                        style={{
+                          background: isExpanded ? 'color-mix(in srgb, var(--accent-blue) 8%, var(--bg-canvas))' : 'var(--bg-canvas)',
+                          border: isExpanded ? '1px solid color-mix(in srgb, var(--accent-blue) 40%, transparent)' : '1px solid var(--border)',
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                            {card.label}
+                          </p>
+                          {isExpanded
+                            ? <ChevronDown className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
+                            : <ChevronRight className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
+                          }
+                        </div>
+                        <p className="text-lg font-semibold" style={{ color: card.color }}>
+                          {card.value}
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
-                <p className="text-xs text-center py-2" style={{ color: 'var(--text-muted)' }}>
-                  Use AI Chat for detailed workload investigation.
-                </p>
+
+                {/* Inline detail panel */}
+                {expandedWorkloadCard && (
+                  <div
+                    className="rounded-lg overflow-hidden"
+                    style={{ border: '1px solid var(--border)', background: 'var(--bg-subtle)' }}
+                  >
+                    {loadingWorkloadDetail ? (
+                      <div className="flex items-center justify-center gap-2 py-8 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading…
+                      </div>
+                    ) : !workloadDetail || workloadDetail.source === 'unavailable' ? (
+                      <p className="text-xs text-center py-6" style={{ color: 'var(--text-muted)' }}>
+                        {workloadDetail?.reason ?? 'Workload details unavailable — Container Insights required.'}
+                      </p>
+                    ) : expandedWorkloadCard === 'namespaces' ? (
+                      /* Namespace breakdown table */
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide px-3 pt-3 pb-1.5" style={{ color: 'var(--text-muted)' }}>
+                          Namespace Breakdown
+                        </p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                              {['Namespace', 'Running', 'Pending', 'CrashLoop', 'Total'].map(h => (
+                                <th key={h} className="text-left px-3 py-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {workloadDetail.namespaces.length === 0 ? (
+                              <tr><td colSpan={5} className="text-center px-3 py-4" style={{ color: 'var(--text-muted)' }}>No namespaces found</td></tr>
+                            ) : workloadDetail.namespaces.map(ns => (
+                              <tr key={ns.name} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td className="px-3 py-1.5 font-mono" style={{ color: 'var(--text-primary)' }}>{ns.name}</td>
+                                <td className="px-3 py-1.5" style={{ color: ns.running_pods > 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}>{ns.running_pods}</td>
+                                <td className="px-3 py-1.5" style={{ color: ns.pending_pods > 0 ? 'var(--accent-yellow)' : 'var(--text-muted)' }}>{ns.pending_pods}</td>
+                                <td className="px-3 py-1.5" style={{ color: ns.crash_loop_pods > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{ns.crash_loop_pods}</td>
+                                <td className="px-3 py-1.5" style={{ color: 'var(--text-secondary)' }}>{ns.total_pods}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      /* Pod list table */
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide px-3 pt-3 pb-1.5" style={{ color: 'var(--text-muted)' }}>
+                          {expandedWorkloadCard === 'crash' ? 'CrashLoopBackOff Pods' : expandedWorkloadCard === 'pending' ? 'Pending Pods' : 'Running Pods'}
+                          {workloadDetail.pods.length === 200 && <span className="ml-1 normal-case">(showing first 200)</span>}
+                        </p>
+                        {workloadDetail.pods.length === 0 ? (
+                          <p className="text-xs text-center py-6" style={{ color: 'var(--text-muted)' }}>No pods found</p>
+                        ) : (
+                          <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                            <table className="w-full text-xs">
+                              <thead className="sticky top-0" style={{ background: 'var(--bg-subtle)' }}>
+                                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                  {['Pod', 'Namespace', 'Status', 'Node'].map(h => (
+                                    <th key={h} className="text-left px-3 py-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {workloadDetail.pods.map((pod, idx) => {
+                                  const statusColor = pod.status === 'Running' ? 'var(--accent-green)'
+                                    : pod.status === 'CrashLoopBackOff' ? 'var(--accent-red)'
+                                    : pod.status === 'Pending' ? 'var(--accent-yellow)'
+                                    : 'var(--text-muted)'
+                                  return (
+                                    <tr key={idx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 50%, transparent)' }}>
+                                      <td className="px-3 py-1 font-mono max-w-[160px] truncate" style={{ color: 'var(--text-primary)' }} title={pod.name}>{pod.name}</td>
+                                      <td className="px-3 py-1 font-mono" style={{ color: 'var(--text-secondary)' }}>{pod.namespace}</td>
+                                      <td className="px-3 py-1">
+                                        <span
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                          style={{ background: `color-mix(in srgb, ${statusColor} 15%, transparent)`, color: statusColor }}
+                                        >
+                                          {pod.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-1 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>{pod.node}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-center py-8" style={{ color: 'var(--text-secondary)' }}>

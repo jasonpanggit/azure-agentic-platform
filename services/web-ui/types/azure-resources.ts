@@ -171,3 +171,28 @@ export interface AKSWorkloadSummary {
   namespace_count: number
   source?: 'fallback' | string
 }
+
+export interface AKSPodDetail {
+  name: string
+  namespace: string
+  status: string
+  node: string
+  controller_name: string
+  controller_kind: string
+}
+
+export interface AKSNamespaceDetail {
+  name: string
+  running_pods: number
+  crash_loop_pods: number
+  pending_pods: number
+  total_pods: number
+}
+
+export interface AKSWorkloadDetail {
+  pods: AKSPodDetail[]
+  namespaces: AKSNamespaceDetail[]
+  total_pods: number
+  source: 'kql' | 'kql_empty' | 'unavailable'
+  reason?: string
+}
