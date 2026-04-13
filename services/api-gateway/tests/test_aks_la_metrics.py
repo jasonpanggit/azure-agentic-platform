@@ -20,14 +20,20 @@ os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 
 
 # ---------------------------------------------------------------------------
-# Module shim: azure.mgmt.containerservice is not installed locally.
-# Inject a mock module so `from azure.mgmt.containerservice import ...`
-# succeeds inside the endpoint function body.
+# Module shim: azure.mgmt.containerservice may or may not be installed.
+# Ensure sys.modules has an entry and _mock_containerservice always points
+# to that entry so per-test `.ContainerServiceClient = mock_csc` assignments
+# patch the object the endpoint's local `import` will resolve.
 # ---------------------------------------------------------------------------
 
-_mock_containerservice = MagicMock()
 if "azure.mgmt.containerservice" not in sys.modules:
-    sys.modules.setdefault("azure.mgmt.containerservice", _mock_containerservice)
+    _mock_containerservice = MagicMock()
+    sys.modules["azure.mgmt.containerservice"] = _mock_containerservice
+else:
+    # Real package is installed (CI/Python 3.12): grab the live module so
+    # attribute assignments below land on the same object the local import
+    # inside the endpoint will resolve to.
+    _mock_containerservice = sys.modules["azure.mgmt.containerservice"]  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
