@@ -126,9 +126,9 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--bg-canvas)' }}>
-      {/* Tab bar */}
+      {/* Tab bar — z-35 keeps it above the z-30 backdrop so tabs remain clickable while a detail panel is open */}
       <div
-        className="flex items-end flex-shrink-0 pl-4"
+        className="flex items-end flex-shrink-0 pl-4 relative z-[35]"
         role="tablist"
         aria-label="Dashboard sections"
         style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}
