@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -16,9 +16,10 @@ import { VMSSDetailPanel } from './VMSSDetailPanel'
 import { AKSTab } from './AKSTab'
 import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
+import { RunbookTab } from './RunbookTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch'
+type TabId = 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks'
 
 interface FilterState {
   severity?: string
@@ -37,6 +38,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'cost', label: 'Cost', Icon: TrendingDown },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
+  { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },
 ]
 
 interface DashboardPanelProps {
@@ -233,6 +235,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         <div id="tabpanel-patch" role="tabpanel" aria-labelledby="tab-patch" hidden={activeTab !== 'patch'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <PatchTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
+
+        <div id="tabpanel-runbooks" role="tabpanel" aria-labelledby="tab-runbooks" hidden={activeTab !== 'runbooks'}>
+          <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <RunbookTab />
           </div>
         </div>
       </div>
