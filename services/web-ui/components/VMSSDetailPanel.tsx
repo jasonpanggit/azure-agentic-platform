@@ -52,7 +52,9 @@ function SeverityBadge({ severity }: { severity: string }) {
 function HealthStateBadge({ state }: { state: string }) {
   const config: Record<string, { label: string; color: string }> = {
     available: { label: 'Healthy', color: 'var(--accent-green)' },
+    healthy: { label: 'Healthy', color: 'var(--accent-green)' },
     degraded: { label: 'Degraded', color: 'var(--accent-orange)' },
+    unhealthy: { label: 'Unhealthy', color: 'var(--accent-red)' },
     unavailable: { label: 'Unavailable', color: 'var(--accent-red)' },
     unknown: { label: 'Unknown', color: 'var(--text-muted)' },
     running: { label: 'Running', color: 'var(--accent-green)' },

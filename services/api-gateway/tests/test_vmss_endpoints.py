@@ -388,3 +388,217 @@ def test_list_vmss_sdk_unavailable(client):
     data = resp.json()
     assert data["vmss"] == []
     assert data["total"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — vmss_detail: _derive_instance_fields via the detail endpoint
+# ---------------------------------------------------------------------------
+
+import base64 as _b64
+
+
+def _encode_resource_id(rid: str) -> str:
+    return _b64.urlsafe_b64encode(rid.encode()).decode().rstrip("=")
+
+
+def _make_mock_instance(
+    instance_id: str = "10",
+    name: str = "vmss_10",
+    provisioning_state: str = "Succeeded",
+    status_codes: list[str] | None = None,
+    vm_health_code: str | None = None,
+) -> MagicMock:
+    """Build a MagicMock resembling an azure-mgmt-compute VirtualMachineScaleSetVM."""
+    inst = MagicMock()
+    inst.instance_id = instance_id
+    inst.name = name
+    inst.provisioning_state = provisioning_state
+
+    if status_codes is None:
+        status_codes = ["ProvisioningState/succeeded", "PowerState/running"]
+
+    statuses = []
+    for code in status_codes:
+        s = MagicMock()
+        s.code = code
+        if code.lower().startswith("powerstate/"):
+            s.display_status = "VM " + code.split("/")[1]
+        else:
+            s.display_status = "Provisioning " + code.split("/")[1]
+        statuses.append(s)
+
+    inst.instance_view = MagicMock()
+    inst.instance_view.statuses = statuses
+
+    if vm_health_code is not None:
+        vh = MagicMock()
+        vh.status = MagicMock()
+        vh.status.code = vm_health_code
+        inst.instance_view.vm_health = vh
+    else:
+        inst.instance_view.vm_health = None
+
+    return inst
+
+
+def _make_mock_vmss(sku_capacity: int = 2) -> MagicMock:
+    vmss = MagicMock()
+    vmss.sku = MagicMock()
+    vmss.sku.capacity = sku_capacity
+    vmss.id = _VMSS_RID
+    vmss.name = "aks-system-12345-vmss"
+    return vmss
+
+
+import sys as _sys
+import contextlib as _contextlib
+
+
+@_contextlib.contextmanager
+def _inject_compute_sdk(mock_compute_instance: MagicMock):
+    """Inject mock azure.mgmt.compute and azure.identity into sys.modules so that
+    inline `from azure.mgmt.compute import ComputeManagementClient` inside
+    vmss_detail resolves to a MagicMock class that returns mock_compute_instance.
+    """
+    from services.api_gateway import vmss_endpoints
+
+    mock_cmc_cls = MagicMock(return_value=mock_compute_instance)
+    mock_compute_mod = MagicMock()
+    mock_compute_mod.ComputeManagementClient = mock_cmc_cls
+
+    mock_identity_mod = MagicMock()
+    mock_identity_mod.DefaultAzureCredential = MagicMock(return_value=MagicMock())
+
+    saved = {
+        "azure.mgmt.compute": _sys.modules.get("azure.mgmt.compute"),
+        "azure.identity": _sys.modules.get("azure.identity"),
+    }
+    _sys.modules["azure.mgmt.compute"] = mock_compute_mod
+    _sys.modules["azure.identity"] = mock_identity_mod
+
+    original_arg = vmss_endpoints._ARG_AVAILABLE
+    vmss_endpoints._ARG_AVAILABLE = True
+    try:
+        yield
+    finally:
+        vmss_endpoints._ARG_AVAILABLE = original_arg
+        for key, val in saved.items():
+            if val is None:
+                _sys.modules.pop(key, None)
+            else:
+                _sys.modules[key] = val
+
+
+@patch("services.api_gateway.vmss_endpoints._get_vmss_health_states")
+def test_vmss_detail_instance_running_provisioned_becomes_healthy(
+    mock_health_states, client
+):
+    """Instance with PowerState/running + ProvisioningState/succeeded → health_state='healthy'."""
+    mock_health_states.return_value = {}
+    encoded = _encode_resource_id(_VMSS_RID)
+
+    mock_compute = MagicMock()
+    mock_compute.virtual_machine_scale_sets.get.return_value = _make_mock_vmss(sku_capacity=2)
+    mock_compute.virtual_machine_scale_set_vms.list.return_value = iter([
+        _make_mock_instance(
+            instance_id="10",
+            name="aks-system-12345-vmss_10",
+            status_codes=["ProvisioningState/succeeded", "PowerState/running"],
+        )
+    ])
+
+    with _inject_compute_sdk(mock_compute):
+        resp = client.get(f"/api/v1/vmss/{encoded}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    instances = data.get("instances", [])
+    assert len(instances) == 1
+    assert instances[0]["health_state"] == "healthy"
+    assert "running" in instances[0]["power_state"].lower()
+
+
+@patch("services.api_gateway.vmss_endpoints._get_vmss_health_states")
+def test_vmss_detail_instance_failed_provisioning_becomes_degraded(
+    mock_health_states, client
+):
+    """Instance with ProvisioningState/failed → health_state='degraded'."""
+    mock_health_states.return_value = {}
+    encoded = _encode_resource_id(_VMSS_RID)
+
+    mock_compute = MagicMock()
+    mock_compute.virtual_machine_scale_sets.get.return_value = _make_mock_vmss(sku_capacity=1)
+    mock_compute.virtual_machine_scale_set_vms.list.return_value = iter([
+        _make_mock_instance(
+            instance_id="0",
+            name="aks-system-12345-vmss_0",
+            provisioning_state="Failed",
+            status_codes=["ProvisioningState/failed"],
+        )
+    ])
+
+    with _inject_compute_sdk(mock_compute):
+        resp = client.get(f"/api/v1/vmss/{encoded}")
+
+    assert resp.status_code == 200
+    instances = resp.json().get("instances", [])
+    assert len(instances) == 1
+    assert instances[0]["health_state"] == "degraded"
+
+
+@patch("services.api_gateway.vmss_endpoints._get_vmss_health_states")
+def test_vmss_detail_instance_vm_health_extension_takes_priority(
+    mock_health_states, client
+):
+    """When vmHealth extension is present its code takes priority over derived state."""
+    mock_health_states.return_value = {}
+    encoded = _encode_resource_id(_VMSS_RID)
+
+    mock_compute = MagicMock()
+    mock_compute.virtual_machine_scale_sets.get.return_value = _make_mock_vmss(sku_capacity=1)
+    mock_compute.virtual_machine_scale_set_vms.list.return_value = iter([
+        _make_mock_instance(
+            instance_id="0",
+            name="aks-system-12345-vmss_0",
+            status_codes=["ProvisioningState/succeeded", "PowerState/running"],
+            vm_health_code="HealthState/unhealthy",
+        )
+    ])
+
+    with _inject_compute_sdk(mock_compute):
+        resp = client.get(f"/api/v1/vmss/{encoded}")
+
+    assert resp.status_code == 200
+    instances = resp.json().get("instances", [])
+    assert len(instances) == 1
+    assert instances[0]["health_state"] == "unhealthy"
+
+
+@patch("services.api_gateway.vmss_endpoints._get_vmss_health_states")
+def test_vmss_detail_power_state_read_explicitly_not_last_status(
+    mock_health_states, client
+):
+    """power_state is read from PowerState/* status code, not assumed to be statuses[-1]."""
+    mock_health_states.return_value = {}
+    encoded = _encode_resource_id(_VMSS_RID)
+
+    mock_compute = MagicMock()
+    mock_compute.virtual_machine_scale_sets.get.return_value = _make_mock_vmss(sku_capacity=1)
+    # Put PowerState first, ProvisioningState second — opposite of typical Azure order
+    mock_compute.virtual_machine_scale_set_vms.list.return_value = iter([
+        _make_mock_instance(
+            instance_id="0",
+            name="aks-system-12345-vmss_0",
+            status_codes=["PowerState/running", "ProvisioningState/succeeded"],
+        )
+    ])
+
+    with _inject_compute_sdk(mock_compute):
+        resp = client.get(f"/api/v1/vmss/{encoded}")
+
+    assert resp.status_code == 200
+    instances = resp.json().get("instances", [])
+    assert len(instances) == 1
+    # Regardless of status order, power_state must reflect the PowerState/* code
+    assert "running" in instances[0]["power_state"].lower()
+    assert instances[0]["health_state"] == "healthy"
