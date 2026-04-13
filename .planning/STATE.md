@@ -18,7 +18,7 @@ progress:
 
 > Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
 
-> Last activity: 2026-04-13 - Completed quick task 260413-kx9: validate all git branches and delete those fully merged to main
+> Last activity: 2026-04-13 - Completed quick task 260413-ubf: Fix Container Insights metrics not loading in AKS detail panel
 
 > Last activity: 2026-04-12 - Completed quick task 260412-lae: Show patch data inline in VM detail panel patch tab instead of redirect message
 
@@ -416,6 +416,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260411-wyg | Fix VMSS and AKS tab and detail panel data bugs — error response guard, hardcoded health/instance stubs, autoscale, metrics | 2026-04-11 | 0295f3c | [260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da](./quick/260411-wyg-fix-vmss-and-aks-tab-and-detail-panel-da/) |
 | 260411-x45 | Fix VMSS list health column, VMSS/AKS metrics tabs, and AKS node health — resolve known limitations from previous fix | 2026-04-11 | 83f181e | [260411-x45-fix-vmss-list-health-column-vmss-aks-met](./quick/260411-x45-fix-vmss-list-health-column-vmss-aks-met/) |
 | 260413-kx9 | validate all git branches and delete those fully merged to main | 2026-04-13 | 165c9c9 | [260413-kx9-validate-all-git-branches-and-delete-tho](./quick/260413-kx9-validate-all-git-branches-and-delete-tho/) |
+| 260413-ubf | Fix Container Insights metrics not loading in AKS detail panel | 2026-04-13 | 0f64c6f | [260413-ubf-fix-container-insights-metrics-not-loadi](./quick/260413-ubf-fix-container-insights-metrics-not-loadi/) |
 
 ---
 
