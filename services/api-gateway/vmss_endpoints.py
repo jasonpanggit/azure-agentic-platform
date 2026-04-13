@@ -194,6 +194,82 @@ def _get_vmss_health_states(
     return results
 
 
+def _enrich_aks_vmss_node_counts(
+    vmss_list: List[Dict[str, Any]],
+    credential: Any,
+) -> None:
+    """Enrich instance_count / healthy_instance_count for AKS-managed VMSS in-place.
+
+    AKS-managed VMSS live in resource groups that start with "MC_" and have
+    sku.capacity == 0 in ARG because AKS controls scaling internally.  This
+    helper calls ``agent_pools.list()`` for each unique (subscription, cluster)
+    pair and patches the matching VMSS items.
+
+    Non-AKS or already-correct items are left unchanged.  All errors are
+    swallowed so the list endpoint still returns ARG data if AKS calls fail.
+    """
+    try:
+        from azure.mgmt.containerservice import ContainerServiceClient  # type: ignore[import]
+    except ImportError:
+        return
+
+    # Find AKS-managed VMSS items that still show instance_count == 0
+    aks_items = [
+        item for item in vmss_list
+        if item.get("resource_group", "").upper().startswith("MC_")
+        and item.get("instance_count", 0) == 0
+    ]
+    if not aks_items:
+        return
+
+    # Build unique (subscription_id, original_rg, cluster_name) tuples
+    # MC_<original-rg>_<cluster-name>_<location>
+    cluster_map: Dict[str, Any] = {}  # key = "sub/rg/cluster"
+    for item in aks_items:
+        mc_rg = item.get("resource_group", "")
+        sub_id = item.get("subscription_id", "")
+        parts = mc_rg.split("_")
+        if len(parts) < 4:
+            continue
+        # e.g. MC_rg-srelab-australiaeast_aks-srelab_australiaeast
+        original_rg = parts[1]
+        cluster_name = parts[2]
+        key = f"{sub_id}/{original_rg}/{cluster_name}"
+        if key not in cluster_map:
+            cluster_map[key] = {"sub_id": sub_id, "original_rg": original_rg, "cluster_name": cluster_name, "pools": []}
+
+    # Fetch agent pools for each cluster
+    for key, info in cluster_map.items():
+        try:
+            aks_client = ContainerServiceClient(credential, info["sub_id"])
+            pools = list(aks_client.agent_pools.list(info["original_rg"], info["cluster_name"]))
+            cluster_map[key]["pools"] = pools
+        except Exception as exc:
+            logger.debug("vmss_list: aks agent_pools.list failed cluster=%s error=%s", key, exc)
+
+    # Match pools to VMSS items by pool name appearing in VMSS name
+    for item in aks_items:
+        mc_rg = item.get("resource_group", "")
+        sub_id = item.get("subscription_id", "")
+        parts = mc_rg.split("_")
+        if len(parts) < 4:
+            continue
+        original_rg = parts[1]
+        cluster_name = parts[2]
+        key = f"{sub_id}/{original_rg}/{cluster_name}"
+        pools = cluster_map.get(key, {}).get("pools", [])
+        vmss_name = (item.get("name") or "").lower()
+        for pool in pools:
+            pool_name = (pool.name or "").lower()
+            if pool_name and f"-{pool_name}-" in vmss_name:
+                pool_count = pool.count or 0
+                power_code = getattr(getattr(pool, "power_state", None), "code", None)
+                running = pool_count if (power_code and power_code.lower() == "running") else 0
+                item["instance_count"] = pool_count
+                item["healthy_instance_count"] = running
+                break
+
+
 def _fetch_single_metric_vmss(
     client: Any,
     resource_id: str,
@@ -284,6 +360,7 @@ async def list_vmss(
         return {"vmss": [], "total": 0}
 
     try:
+        import asyncio
         from azure.identity import DefaultAzureCredential  # type: ignore[import]
         credential = DefaultAzureCredential()
         client = ResourceGraphClient(credential)
@@ -341,7 +418,6 @@ async def list_vmss(
 
         # Enrich health_state from Resource Health API (best-effort, falls back to "unknown")
         if vmss_list:
-            import asyncio
             resource_ids = [item["id"] for item in vmss_list if item["id"]]
             loop = asyncio.get_event_loop()
             health_map = await loop.run_in_executor(
@@ -358,6 +434,13 @@ async def list_vmss(
                         item["power_state"] = "Running"
                     else:
                         item["power_state"] = state.capitalize()
+
+        # Enrich instance_count for AKS-managed VMSS (sku.capacity==0 in ARG).
+        # Runs best-effort — failures leave ARG values untouched.
+        if vmss_list:
+            await asyncio.get_event_loop().run_in_executor(
+                None, _enrich_aks_vmss_node_counts, vmss_list, credential
+            )
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_list: total=%d duration_ms=%.1f", len(vmss_list), duration_ms)
@@ -496,9 +579,15 @@ async def get_vmss_detail(
             )
         healthy_instance_count = running_count if total > 0 else 0
 
-        # Derive health_state from healthy ratio
+        # Derive health_state from healthy ratio.
+        # For AKS-managed VMSS with 0 nodes: if the VMSS itself provisioned successfully,
+        # treat as "available" (empty pool is a valid scaled-to-zero state, not "unknown").
+        vmss_provisioning_state = (vmss.provisioning_state or "").lower()
         if total == 0:
-            health_state = "unknown"
+            if is_aks_managed and vmss_provisioning_state == "succeeded":
+                health_state = "available"
+            else:
+                health_state = "unknown"
         elif healthy_instance_count == total:
             health_state = "available"
         elif healthy_instance_count == 0:
