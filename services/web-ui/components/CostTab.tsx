@@ -1,14 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,8 +32,8 @@ interface CostSummaryResponse {
   total_recommendations: number;
   recommendations?: CostRecommendation[];
   vms?: CostRecommendation[];  // deprecated alias — backend sends both
-  data_lag_note?: string;
   error?: string;
+  data_lag_note?: string;
 }
 
 interface CostTabProps {
@@ -66,10 +59,45 @@ function formatCurrency(amount: number, currency: string): string {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
-/** Strip "Microsoft." prefix for compact display, e.g. "Compute/virtualMachines" */
-function formatResourceType(resourceType: string): string {
-  if (!resourceType) return '';
-  return resourceType.replace(/^Microsoft\./i, '');
+/** Extract first sentence from description as a recommendation title. */
+function extractTitle(description: string): string {
+  if (!description) return 'Recommendation';
+  // Split on period followed by space or end-of-string
+  const firstSentence = description.split(/\.\s/)[0];
+  if (firstSentence.length <= 80) {
+    return firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+  }
+  // Truncate at word boundary
+  const truncated = firstSentence.slice(0, 80).replace(/\s+\S*$/, '');
+  return `${truncated}...`;
+}
+
+/** Map resource type to a friendly display name. */
+function cleanServiceType(resourceType: string): string {
+  if (!resourceType) return 'Unknown';
+
+  const lower = resourceType.toLowerCase();
+  if (lower === 'subscriptions/subscriptions' || lower === 'microsoft.subscriptions/subscriptions') {
+    return 'Subscription-level';
+  }
+
+  // Strip "Microsoft." prefix
+  const stripped = resourceType.replace(/^Microsoft\./i, '');
+
+  // Map common types to friendly names
+  const friendlyNames: Record<string, string> = {
+    'Compute/virtualMachines': 'Virtual Machines',
+    'Compute/disks': 'Managed Disks',
+    'Storage/storageAccounts': 'Storage Accounts',
+    'Sql/servers': 'SQL Servers',
+    'Web/sites': 'App Services',
+    'ContainerService/managedClusters': 'AKS Clusters',
+    'Network/publicIPAddresses': 'Public IPs',
+    'DBforPostgreSQL/flexibleServers': 'PostgreSQL Flexible Servers',
+    'CognitiveServices/accounts': 'AI Services',
+  };
+
+  return friendlyNames[stripped] ?? stripped;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +202,11 @@ export function CostTab({ subscriptions }: CostTabProps) {
   const totalMonthlySavings = recommendations.reduce((sum, r) => sum + r.estimated_monthly_savings, 0);
   const currency = recommendations[0]?.savings_currency ?? 'USD';
 
+  // Sort by savings descending (immutable)
+  const sortedRecommendations = [...recommendations].sort(
+    (a, b) => b.estimated_monthly_savings - a.estimated_monthly_savings
+  );
+
   return (
     <div>
       {/* Header */}
@@ -184,7 +217,7 @@ export function CostTab({ subscriptions }: CostTabProps) {
             Top Cost Optimization Opportunities
           </span>
           <Badge variant="outline" className="text-[11px]">
-            {recommendations.length} resources
+            {recommendations.length} recommendations
           </Badge>
           <span
             className="text-[12px] px-2 py-0.5 rounded"
@@ -226,62 +259,76 @@ export function CostTab({ subscriptions }: CostTabProps) {
         </div>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-[12px]">Resource</TableHead>
-            <TableHead className="text-[12px]">Resource Type</TableHead>
-            <TableHead className="text-[12px]">Resource Group</TableHead>
-            <TableHead className="text-[12px]">Current SKU</TableHead>
-            <TableHead className="text-[12px]">Recommended SKU</TableHead>
-            <TableHead className="text-[12px]">Monthly Savings</TableHead>
-            <TableHead className="text-[12px]">Impact</TableHead>
-            <TableHead className="text-[12px]">Description</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {recommendations.map((rec) => (
-            <TableRow key={rec.resource_id || rec.resource_name}>
-              <TableCell className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                {rec.resource_name || '\u2014'}
-              </TableCell>
-              <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {formatResourceType(rec.resource_type) || '\u2014'}
-              </TableCell>
-              <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                {rec.resource_group || '\u2014'}
-              </TableCell>
-              <TableCell className="text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-                {rec.current_sku || '\u2014'}
-              </TableCell>
-              <TableCell className="text-[12px] font-mono" style={{ color: 'var(--accent-blue)' }}>
-                {rec.target_sku || '\u2014'}
-              </TableCell>
-              <TableCell className="text-[12px] font-semibold" style={{ color: 'var(--accent-green)' }}>
-                {rec.estimated_monthly_savings > 0
-                  ? formatCurrency(rec.estimated_monthly_savings, rec.savings_currency)
-                  : '\u2014'}
-              </TableCell>
-              <TableCell>
+      {/* Card grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
+        {sortedRecommendations.map((rec) => (
+          <Card key={rec.resource_id || rec.resource_name}>
+            <CardContent className="p-4">
+              {/* Top row: impact badge + monthly savings */}
+              <div className="flex items-center justify-between mb-2">
                 <span
                   className="text-[11px] px-2 py-0.5 rounded font-medium"
                   style={impactBadgeStyle(rec.impact)}
                 >
                   {rec.impact}
                 </span>
-              </TableCell>
-              <TableCell
-                className="text-[12px] max-w-[250px] truncate"
+                <span
+                  className="text-[16px] font-semibold"
+                  style={{ color: 'var(--accent-green)' }}
+                >
+                  {rec.estimated_monthly_savings > 0
+                    ? `${formatCurrency(rec.estimated_monthly_savings, rec.savings_currency)}/mo`
+                    : '\u2014'}
+                </span>
+              </div>
+
+              {/* Title (extracted from description) */}
+              <p
+                className="text-[14px] font-medium mb-2"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {extractTitle(rec.description)}
+              </p>
+
+              {/* Service type badge */}
+              <span
+                className="inline-block text-[11px] px-2 py-0.5 rounded mb-2"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                  color: 'var(--accent-blue)',
+                }}
+              >
+                {cleanServiceType(rec.resource_type)}
+              </span>
+
+              {/* Full description */}
+              <p
+                className="text-[12px] leading-relaxed mb-3"
                 style={{ color: 'var(--text-secondary)' }}
-                title={rec.description}
               >
                 {rec.description || '\u2014'}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </p>
+
+              {/* Bottom row: annual savings + last updated */}
+              <div
+                className="flex items-center justify-between pt-2"
+                style={{ borderTop: '1px solid var(--border)' }}
+              >
+                <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  {rec.annual_savings > 0
+                    ? `Annual: ${formatCurrency(rec.annual_savings, rec.savings_currency)}/yr`
+                    : ''}
+                </span>
+                <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  {rec.last_updated
+                    ? new Date(rec.last_updated).toLocaleDateString()
+                    : ''}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
