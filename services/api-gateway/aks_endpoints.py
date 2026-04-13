@@ -174,7 +174,9 @@ KubePodInventory
             table = result.tables[0]
             if table.rows:
                 row = table.rows[0]
-                cols = [c.name for c in table.columns]
+                # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
+                # objects (have .name) or plain strings depending on installed version.
+                cols = [c.name if hasattr(c, 'name') else str(c) for c in table.columns]
                 row_dict = dict(zip(cols, row))
                 return {
                     "running_pods": int(row_dict.get("running_pods") or 0),
@@ -749,7 +751,9 @@ Perf
         metrics_out: List[Dict[str, Any]] = []
         if result.status == LogsQueryStatus.SUCCESS and result.tables:
             table = result.tables[0]
-            cols = [c.name for c in table.columns]
+            # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
+            # objects (have .name) or plain strings depending on installed version.
+            cols = [c.name if hasattr(c, 'name') else str(c) for c in table.columns]
 
             # Group rows by (Computer, CounterName)
             from collections import defaultdict
