@@ -1,9 +1,7 @@
 """SRE Agent tool functions — cross-domain monitoring and remediation proposal wrappers.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    monitor.query_logs, monitor.query_metrics, applicationinsights.query,
-    advisor.list_recommendations, resourcehealth.get_availability_status,
-    resourcehealth.list_events
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    monitor, applicationinsights, advisor, resourcehealth, containerapps
 """
 from __future__ import annotations
 
@@ -45,14 +43,13 @@ except ImportError:
 tracer = setup_telemetry("aiops-sre-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted.
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "applicationinsights.query",
-    "advisor.list_recommendations",
-    "resourcehealth.get_availability_status",
-    "resourcehealth.list_events",
+    "monitor",
+    "applicationinsights",
+    "advisor",
+    "resourcehealth",
+    "containerapps",
 ]
 
 
