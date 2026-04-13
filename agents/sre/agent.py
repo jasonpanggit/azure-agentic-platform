@@ -112,7 +112,7 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 You can inspect AAP agent Container Apps to diagnose platform health issues:
 - Call `query_container_app_health` with the Container App name and resource group
   to check provisioning state, active revisions, replica count, and running state.
-- AAP agent Container Apps follow the naming convention `ca-{agent}-prod` in
+- AAP agent Container Apps follow the naming convention `ca-{{agent}}-prod` in
   resource group `rg-aap-prod` (e.g., `ca-compute-prod`, `ca-sre-prod`,
   `ca-api-gateway-prod`, `ca-orchestrator-prod`).
 - Use the `containerapps` MCP tool for listing all Container Apps in a subscription.
