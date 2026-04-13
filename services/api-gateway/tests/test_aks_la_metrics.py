@@ -179,7 +179,7 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
@@ -203,7 +203,7 @@ class TestAKSLAMetricsPartialResult:
 
         mock_csc = MagicMock()
         mock_csc.return_value.managed_clusters.get.return_value = mock_cluster
-        _mock_containerservice.ContainerServiceClient = mock_csc
+        sys.modules["azure.mgmt.containerservice"].ContainerServiceClient = mock_csc
 
         with (
             patch("services.api_gateway.aks_endpoints._LOGS_QUERY_AVAILABLE", True),
