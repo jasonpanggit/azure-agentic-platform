@@ -839,7 +839,7 @@ KubePodInventory
 {status_clause}
 | summarize arg_max(TimeGenerated, *) by PodUid
 | project
-    Name = PodName,
+    Name,
     Namespace,
     Status = PodStatus,
     StatusReason = ContainerStatusReason,
@@ -1118,7 +1118,6 @@ Perf
 | where TimeGenerated > ago({int(td.total_seconds())}s)
 | where ObjectName == "K8SNode"
 | where CounterName in ("cpuUsageNanoCores", "memoryWorkingSetBytes", "memoryRssBytes")
-| where Computer has "{cluster_name}"
 | summarize avg(CounterValue) by bin(TimeGenerated, {bin_minutes}m), Computer, CounterName
 | order by TimeGenerated asc
 """
@@ -1129,8 +1128,20 @@ Perf
         )
 
         metrics_out: List[Dict[str, Any]] = []
-        if result.status == LogsQueryStatus.SUCCESS and result.tables:
-            table = result.tables[0]
+        # Handle both SUCCESS and PARTIAL results — partial results
+        # have data in .partial_data instead of .tables.
+        tables = None
+        if result.status == LogsQueryStatus.SUCCESS:
+            tables = getattr(result, "tables", None)
+        elif result.status == LogsQueryStatus.PARTIAL:
+            tables = getattr(result, "partial_data", None)
+            logger.warning(
+                "aks_la_metrics: partial result for cluster=%s error=%s",
+                cluster_name,
+                getattr(result, "partial_error", "unknown"),
+            )
+        if tables:
+            table = tables[0]
             # azure-monitor-query SDK versions differ: columns may be LogsTableColumn
             # objects (have .name) or plain strings depending on installed version.
             cols = [c.name if hasattr(c, 'name') else str(c) for c in table.columns]
