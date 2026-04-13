@@ -174,6 +174,13 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [metricsError, setMetricsError] = useState<string | null>(null)
   const [enablingContainerInsights, setEnablingContainerInsights] = useState(false)
 
+  // Diagnostic settings state (AMA + DCR for centralized logging)
+  const [diagConfigured, setDiagConfigured] = useState<boolean | null>(null)
+  const [diagAmaInstalled, setDiagAmaInstalled] = useState<boolean | null>(null)
+  const [diagDcrAssociated, setDiagDcrAssociated] = useState<boolean | null>(null)
+  const [diagEnabling, setDiagEnabling] = useState(false)
+  const [diagError, setDiagError] = useState<string | null>(null)
+
   // Workload detail state
   const [expandedWorkloadCard, setExpandedWorkloadCard] = useState<WorkloadCardKey | null>(null)
   const [workloadDetail, setWorkloadDetail] = useState<AKSWorkloadDetail | null>(null)
@@ -337,6 +344,49 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
     }
   }
 
+  async function fetchDiagSettings() {
+    if (!resourceId) return
+    try {
+      const encoded = encodeResourceId(resourceId)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/aks/${encoded}/diagnostic-settings`, { headers })
+      if (!res.ok) return
+      const data = await res.json()
+      setDiagAmaInstalled(data.ama_installed ?? false)
+      setDiagDcrAssociated(data.dcr_associated ?? false)
+      setDiagConfigured(data.configured ?? false)
+    } catch {
+      // non-fatal — leave diag states as null (unknown)
+    }
+  }
+
+  async function enableDiagSettings() {
+    if (!resourceId || diagEnabling) return
+    setDiagEnabling(true)
+    setDiagError(null)
+    try {
+      const encoded = encodeResourceId(resourceId)
+      const token = await getAccessToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/proxy/aks/${encoded}/diagnostic-settings`, {
+        method: 'POST',
+        headers,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setDiagAmaInstalled(true)
+      setDiagDcrAssociated(true)
+      setDiagConfigured(true)
+    } catch (err) {
+      setDiagError(err instanceof Error ? err.message : 'Failed to enable monitoring')
+    } finally {
+      setDiagEnabling(false)
+    }
+  }
+
   async function sendChatMessage(message: string) {
     if (!message.trim() || chatLoading) return
     setChatLoading(true)
@@ -384,8 +434,13 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
     setChatMessages([])
     setChatThreadId(null)
     chatAutoFired.current = false
+    setDiagConfigured(null)
+    setDiagAmaInstalled(null)
+    setDiagDcrAssociated(null)
+    setDiagError(null)
     setActiveTab('overview')
     fetchDetail()
+    fetchDiagSettings()
   }, [resourceId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -601,6 +656,52 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                       </div>
                     ))}
                   </div>
+                )}
+
+                {/* Enable Logging — shown when AMA+DCR status is known */}
+                {diagConfigured === true && (
+                  <div className="text-[11px] flex items-center gap-1" style={{ color: 'var(--accent-green)' }}>
+                    ✓ Azure Monitor Agent active — collecting data to Log Analytics
+                  </div>
+                )}
+                {diagAmaInstalled === true && diagDcrAssociated === false && (
+                  <div
+                    className="rounded-md p-2 text-xs flex items-start justify-between gap-2"
+                    style={{ background: 'color-mix(in srgb, var(--accent-orange) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent-orange) 20%, transparent)' }}
+                  >
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      AMA installed, no data collection rule — click Enable to link a DCR.
+                    </span>
+                    <button
+                      onClick={enableDiagSettings}
+                      disabled={diagEnabling}
+                      className="flex-shrink-0 px-2 py-1 rounded text-[11px] font-medium cursor-pointer disabled:opacity-50"
+                      style={{ background: 'var(--accent-orange)', color: 'white' }}
+                    >
+                      {diagEnabling ? 'Enabling…' : 'Enable'}
+                    </button>
+                  </div>
+                )}
+                {diagConfigured === false && diagAmaInstalled === false && (
+                  <div
+                    className="rounded-md p-2 text-xs flex items-start justify-between gap-2"
+                    style={{ background: 'color-mix(in srgb, var(--accent-blue) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent-blue) 20%, transparent)' }}
+                  >
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Enable monitoring — installs Azure Monitor Agent and Data Collection Rule.
+                    </span>
+                    <button
+                      onClick={enableDiagSettings}
+                      disabled={diagEnabling}
+                      className="flex-shrink-0 px-2 py-1 rounded text-[11px] font-medium cursor-pointer disabled:opacity-50"
+                      style={{ background: 'var(--accent-blue)', color: 'white' }}
+                    >
+                      {diagEnabling ? 'Enabling…' : 'Enable'}
+                    </button>
+                  </div>
+                )}
+                {diagError && (
+                  <div className="text-xs" style={{ color: 'var(--accent-red)' }}>{diagError}</div>
                 )}
               </>
             ) : null}

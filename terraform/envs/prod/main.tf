@@ -289,6 +289,10 @@ module "agent_apps" {
   # Web UI Observability tab
   log_analytics_workspace_customer_id = module.monitoring.log_analytics_workspace_customer_id
 
+  # Phase 43: ARM resource ID for api-gateway DCR-based Enable Logging endpoints.
+  # The full ARM ID is required to create Data Collection Rules targeting the workspace.
+  log_analytics_workspace_resource_id = module.monitoring.log_analytics_workspace_id
+
   # PostgreSQL DSN for agents that need direct DB access (e.g., eol-agent eol_cache table)
   postgres_dsn = var.postgres_dsn
 

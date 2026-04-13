@@ -299,3 +299,16 @@ variable "notification_email_to" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# Phase 43: Centralized Logging — ARM resource ID for the Log Analytics
+# workspace used by the api-gateway's Enable Logging (DCR) endpoints.
+# Distinct from log_analytics_workspace_customer_id (GUID) — the ARM ID is
+# required to create Data Collection Rules targeting the workspace.
+# ---------------------------------------------------------------------------
+
+variable "log_analytics_workspace_resource_id" {
+  description = "ARM resource ID of the Log Analytics workspace used by api-gateway diagnostic settings (LOG_ANALYTICS_WORKSPACE_RESOURCE_ID). Format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{name}"
+  type        = string
+  default     = ""
+}

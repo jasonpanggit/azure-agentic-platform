@@ -921,3 +921,432 @@ When all phases 34–40 complete:
 | Per-VM security posture | TVM CVE count, JIT status, effective NSG, Backup RPO surfaced in triage |
 | Cost visibility | Rightsizing recommendations surfaced via HITL proposal for all underutilized VMs |
 | Arc parity | Arc agent 0 stubs; tool quality matches Azure-native compute agent |
+
+---
+
+## v3.0 — Autonomous AIOps (Phases 44–63)
+
+### Strategic Themes
+
+- **Domain completeness before autonomy**: Fill every coverage gap (Storage, Databases, App Services, Messaging) so the platform can reason over the full Azure estate — not just the domains that happen to have agents. An AIOps platform with blind spots is a liability.
+- **Autonomy where safety is provable**: Shift from human-in-loop to human-on-loop for low-blast-radius actions using policy-driven auto-approval, confidence gates, and continuous rollback monitoring. Never skip HITL — make it optional per action class.
+- **Multi-subscription operational intelligence**: Break the single-subscription ceiling with federated inventory, cross-subscription blast-radius, and cost intelligence that spans the entire enterprise account hierarchy.
+- **Enterprise hardening**: Multi-operator incident war rooms, compliance framework mapping, SLA dashboards, and PWA for on-call operators. This is what separates a demo from a production AIOps platform.
+
+---
+
+### Phase 44: Operations Dashboard ✅ COMPLETE
+
+**Goal:** Give shift operators a real-time situational awareness tab — the first thing they open to understand the entire fleet at a glance before diving into any specific incident.
+**Deliverables:**
+- `OpsTab.tsx` — 6-KPI header row (MTTR, noise reduction, SLO compliance, auto-remediation rate, pipeline lag, savings 30d) with color-coded thresholds; active P1/P2 incident table; imminent breach bars; top recurring pattern cards; error budget portfolio stacked bars; 30s auto-refresh via parallel `Promise.allSettled()`
+- 3 proxy routes: `/api/proxy/ops/platform-health`, `/api/proxy/ops/patterns`, `/api/proxy/ops/imminent-breaches`
+- `DashboardPanel.tsx` updated: Ops is now the first and default tab (12 tabs total)
+**Complexity:** M
+**Depends on:** Phase 28 (platform intelligence endpoints), Phase 26 (forecasts)
+**Status:** 🟩 Complete
+
+---
+
+### Phase 45: Storage Agent Depth
+
+**Goal:** Give operators the ability to investigate, diagnose, and safely remediate Azure Storage incidents without leaving the platform — replacing the current 3-stub agent with a production-ready 12-tool surface.
+
+**Why it matters:** Storage is the second most common source of Azure incidents (after compute) and currently has the widest tool gap on the platform. Every blob/queue/file incident today requires the operator to manually open the portal.
+
+**Deliverables:**
+- `get_storage_account_health` — access tier, replication status, failover state, last failover time, service availability from Azure Monitor
+- `list_storage_containers` / `get_container_metrics` — container count, blob count estimate, storage consumed, access policy, soft-delete status
+- `query_storage_metrics` — E2E latency, availability, transactions, ingress/egress, throttling errors with anomaly flag vs. baseline
+- `get_storage_key_rotation_status` — last key rotation date, rotation recommendation if >90 days, Key Vault integration status
+- `propose_enable_soft_delete` / `propose_enable_versioning` — HITL-gated remediation proposals following WAL pattern
+- 40+ unit tests; orchestrator routing for `domain: storage` incidents
+
+**Complexity:** M
+**Depends on:** Phase 43
+**Success metric:** `POST /api/v1/incidents` with `domain: storage` routes to Storage agent; agent calls ≥3 real SDK tools and produces a triage summary citing metrics, health, and change correlation within 60 seconds
+
+---
+
+### Phase 46: Database Agent
+
+**Goal:** Surface health, performance, and compliance diagnostics for Azure Cosmos DB, PostgreSQL Flexible Server, and Azure SQL Database — the three database engines in the platform's own estate and those most commonly used by monitored workloads.
+
+**Why it matters:** Database degradation is the most impactful incident type by business revenue risk, yet the platform has zero database-specific tools. A slow query or Cosmos DB 429 today produces a generic triage with no actionable diagnosis.
+
+**Deliverables:**
+- Cosmos DB tools: `get_cosmos_account_health`, `get_cosmos_throughput_metrics` (RU/s utilised vs provisioned, throttle rate, hot partition detection), `query_cosmos_diagnostic_logs`, `propose_cosmos_throughput_scale`
+- PostgreSQL tools: `get_postgres_server_health`, `get_postgres_metrics` (connections, CPU, storage, IOPS, replication lag), `query_postgres_slow_queries` via Log Analytics, `propose_postgres_sku_scale`
+- Azure SQL tools: `get_sql_database_health`, `get_sql_dtu_metrics`, `query_sql_query_store`, `propose_sql_elastic_pool_move`
+- New `ca-database-prod` Container App; orchestrator routing; 50+ unit tests
+
+**Complexity:** L
+**Depends on:** Phase 45
+**Success metric:** Database agent triages a simulated Cosmos DB 429 throttle incident: surfaces RU utilisation %, hot partition key, and proposes throughput increase via HITL in <90 seconds
+
+---
+
+### Phase 47: App Service + Function App Agent
+
+**Goal:** Monitor, diagnose, and propose safe restarts/scaling for Azure App Service plans, Web Apps, and Function Apps — filling the PaaS compute coverage gap.
+
+**Why it matters:** App Service and Functions are the most widely deployed PaaS compute surfaces in Azure, yet the platform treats any App Service incident as unroutable. Operators investigating slow API latency or Function timeouts have no in-platform diagnostics.
+
+**Deliverables:**
+- `get_app_service_health` — site status, slot state, SSL cert expiry, custom domain health
+- `get_app_service_metrics` — requests/sec, response time P50/P95, HTTP 5xx rate, CPU %, memory vs plan limits
+- `get_function_app_health` — invocation count, failure rate, duration P95, throttle count
+- `query_app_insights_failures` — exceptions and dependencies from Application Insights
+- `propose_app_service_restart` / `propose_function_app_scale_out` — HITL-gated
+- New `ca-appservice-prod` Container App; orchestrator routing; 40+ unit tests
+
+**Complexity:** M
+**Depends on:** Phase 45
+**Success metric:** Function App with >5% failure rate routes to App Service agent; agent surfaces failure rate, top exception type from App Insights, and proposes restart through HITL in <60 seconds
+
+---
+
+### Phase 48: Container Apps Operational Agent
+
+**Goal:** Add self-monitoring capability to the Container Apps platform that runs AAP itself — and extend this to all Container Apps in monitored subscriptions.
+
+**Why it matters:** Container Apps is the deployment target for all 9 agents. Today the platform cannot diagnose itself. An agent crashing or a revision failing to deploy produces no in-platform alert.
+
+**Deliverables:**
+- `list_container_apps` / `get_container_app_health` — revision status, replica count vs desired, active revision, ingress config
+- `get_container_app_metrics` — request count, response time, replica count history, CPU/memory per replica
+- `get_container_app_logs` — last 100 log lines from `ContainerAppConsoleLogs_CL`, filterable by severity
+- `get_container_app_revisions` — revision history with creation time, traffic weight, active/inactive status
+- `propose_container_app_scale` / `propose_container_app_revision_activate` — HITL-gated
+- Self-monitoring: API gateway Container App registered as a monitored resource
+
+**Complexity:** M
+**Depends on:** Phase 47
+**Success metric:** Simulated Container App revision failure (forced 0 replicas) triggers `domain: container-apps` incident; agent diagnoses replica count = 0, traces to revision config change in Activity Log, proposes scale-out
+
+---
+
+### Phase 49: Messaging Agent (Service Bus + Event Hub)
+
+**Goal:** Bring Service Bus namespace health, queue/topic backlogs, dead-letter monitoring, and Event Hub consumer lag into the operational intelligence surface.
+
+**Why it matters:** Message queue backlogs are one of the most common precursors to cascading failures — a dead-letter queue filling up silently is a ticking clock. None of these signals are currently reachable from any agent.
+
+**Deliverables:**
+- Service Bus tools: `get_servicebus_namespace_health`, `list_servicebus_queues` (depth, DLQ count), `get_servicebus_metrics`, `propose_servicebus_dlq_purge`
+- Event Hub tools: `get_eventhub_namespace_health`, `list_eventhub_consumer_groups` (consumer lag per partition), `get_eventhub_metrics`
+- New `ca-messaging-prod` Container App; orchestrator routing; 35+ unit tests
+- Detection plane KQL `classify_domain()` extended: `microsoft.servicebus` and `microsoft.eventhub` → `messaging`
+
+**Complexity:** M
+**Depends on:** Phase 48
+**Success metric:** Event Hub consumer lag >10,000 messages routes to Messaging agent; agent surfaces lag per partition, consumer group name, last event time; identifies stalled consumer in <60 seconds
+
+---
+
+### Phase 50: Cross-Subscription Federated View
+
+**Goal:** Break the single-subscription ceiling — all inventory endpoints, alert feeds, topology queries, and agent investigations operate across all subscriptions in the Entra tenant simultaneously.
+
+**Why it matters:** Real enterprise Azure estates span dozens of subscriptions. The current single-subscription filter means an operator investigating a cross-subscription networking issue sees only half the picture.
+
+**Deliverables:**
+- `subscription_registry.py` — ARG-backed subscription registry, auto-discovers all subscriptions the managed identity can Reader; refreshes every 6 hours; stored in Cosmos `subscriptions` container
+- All inventory endpoints accept optional `subscriptions[]` query param; default = all
+- Topology graph extended: cross-subscription edges (VNet peering, Private Endpoint, ExpressRoute)
+- UI subscription selector: multi-select with "All subscriptions" default
+- Agent context: all `@ai_function` tools auto-detect subscription from ARM ID
+
+**Complexity:** L
+**Depends on:** Phase 49
+**Success metric:** With 3 test subscriptions registered: `GET /api/v1/vms` returns VMs from all 3; topology blast-radius for cross-subscription peered VNet shows resources from both sides
+
+---
+
+### Phase 51: Autonomous Remediation Policies
+
+**Goal:** Let operators define rule-based auto-approval policies for known-safe, low-blast-radius remediation classes — so the platform can self-heal predictable issues without paging anyone at 3am.
+
+**Why it matters:** 40-60% of production incidents involve the same 10 remediation actions (scale out, restart, flush cache, rotate token). Requiring human approval for an action approved 200 times creates alert fatigue without adding safety.
+
+**Deliverables:**
+- `AutoRemediationPolicy` model: `{ action_class, resource_tag_filter, max_blast_radius, max_daily_executions, require_slo_healthy, maintenance_window_exempt }`
+- `POST/GET/DELETE /api/v1/admin/remediation-policies` CRUD; stored in PostgreSQL `remediation_policies`
+- Policy evaluation engine in `remediation_executor.py`: if matching policy + all guards pass → auto-execute + log `auto_approved_by_policy`
+- Safety guards: blast-radius check, daily execution cap, SLO health gate, resource tag exclusion (`aap-protected: true` blocks all auto-approval)
+- UI: Remediation Policies panel in Settings; last 10 auto-executed actions per policy; success rate
+- Automatic learning suggestion: after 5 HITL-approved identical actions with 0 rollbacks, platform suggests creating a policy
+
+**Complexity:** L
+**Depends on:** Phase 50
+**Success metric:** Policy defined for `restart_container_app` on resources tagged `tier: dev`; next matching incident auto-executes without HITL; audit record shows `auto_approved_by_policy: <policy_id>`; DEGRADED verification triggers auto-rollback regardless of policy
+
+---
+
+### Phase 52: FinOps Intelligence Agent
+
+**Goal:** Build a dedicated FinOps agent that reasons over Azure Cost Management data to surface wasteful spend, forecast monthly bills, and propose cost-saving actions through the existing HITL workflow.
+
+**Why it matters:** Wasted cloud spend is the highest-ROI, lowest-risk intervention available. The current cost surface (Advisor rightsizing on VMs) is a tiny slice of total waste. A FinOps agent that explains "your top 3 cost drivers and how to address them" pays for the entire platform.
+
+**Deliverables:**
+- `get_subscription_cost_breakdown` — Cost Management API: costs by resource group, resource type, tag; 7/30/90 day views; MoM delta
+- `get_resource_cost` — per-resource spend including amortized reserved instance cost
+- `identify_idle_resources` — resources with <2% CPU + 0 network for 72h with monthly cost; generates HITL-gated `propose_deallocate`
+- `get_reserved_instance_utilisation` — RI/savings plan utilisation rate, unused hours, estimated waste
+- `get_cost_forecast` — Azure native cost forecast for current billing period vs budget; burn rate alert if >110% on-track
+- New `ca-finops-prod` Container App; FinOps tab in UI with cost breakdown chart + waste list + savings proposals
+
+**Complexity:** L
+**Depends on:** Phase 50
+**Success metric:** Agent surfaces top-3 cost line items, identifies ≥1 idle resource with monthly cost, generates HITL proposal citing `$X/month` saving
+
+---
+
+### Phase 53: Incident War Room
+
+**Goal:** Enable multi-operator real-time collaboration on P0 incidents — shared investigation thread, live presence indicators, role-based annotation, and structured handoff when shifts change.
+
+**Why it matters:** P0 incidents are never single-operator events. The current platform has no concept of multiple operators working the same thread simultaneously — investigation notes exist only in Teams channels not linked to the incident record.
+
+**Deliverables:**
+- War room data model: `IncidentWarRoom { incident_id, participants[], annotations[], timeline[], handoff_summary }` in Cosmos `war_rooms`
+- `POST /api/v1/incidents/{id}/war-room` — create/join war room; SSE push to all participants when new annotation arrives
+- Presence indicators in UI: AvatarGroup showing operators with open incident tabs (30s heartbeat)
+- Annotation layer: operators pin text + code notes to any agent trace event; persisted to war room timeline
+- Structured handoff: "End my shift" generates GPT-4o handoff summary covering current hypothesis, open questions, pending approvals, recommended next steps
+- Teams war room thread: joining creates a dedicated Teams thread; messages sync bidirectionally
+
+**Complexity:** L
+**Depends on:** Phase 51
+**Success metric:** Two operators join same incident war room; both see each other's annotations in real time (SSE push <2s); handoff summary generated in <30 seconds
+
+---
+
+### Phase 54: Compliance Framework Mapping
+
+**Goal:** Map every security finding, policy compliance result, and Defender recommendation to CIS Benchmark, NIST SP 800-53, and Azure Security Benchmark (ASB) controls — giving compliance teams a continuous audit trail without manual mapping work.
+
+**Why it matters:** Security teams spend weeks preparing audit evidence because findings from Defender, Policy, and Advisor exist in separate systems with no common taxonomy.
+
+**Deliverables:**
+- Compliance mapping library in PostgreSQL `compliance_mappings` table: `{ finding_type, defender_rule_id, cis_control_id, nist_control_id, asb_control_id, severity, remediation_sop_id }` — seeded with 150+ mappings across CIS v8, NIST 800-53 Rev 5, ASB v3
+- `GET /api/v1/compliance/posture` — aggregated compliance score per framework, per subscription; 30-day trend
+- `GET /api/v1/compliance/export` — structured PDF/CSV report of all control statuses for audit
+- Compliance tab in UI: heat-map of controls (passing/failing/not-assessed) per framework; click-through to findings list
+
+**Complexity:** L
+**Depends on:** Phase 52
+**Success metric:** Compliance posture endpoint returns scores for CIS v8, NIST 800-53, ASB for at least 50 controls; export generates valid audit report with every finding attributed to ≥1 control ID
+
+---
+
+### Phase 55: SLA Dashboard + External Reporting
+
+**Goal:** Surface customer-facing SLA compliance as a first-class operational view — separate from internal SLO tracking — with exportable monthly reports suitable for stakeholder distribution.
+
+**Deliverables:**
+- `SLADefinition` model: `{ sla_id, name, target_availability_pct, covered_resources[], measurement_period, customer_name, report_recipients[] }`
+- `POST/GET /api/v1/admin/sla-definitions` CRUD; `GET /api/v1/sla/compliance` — current period attainment per SLA
+- SLA compliance calculation: tick-based availability from Azure Resource Health + incident-based downtime annotations
+- Automated monthly SLA report generation: GPT-4o narrative + attainment table + incident log → PDF; emailed to recipients on 1st of month
+- SLA Dashboard tab in UI: attainment gauge per SLA, 12-month trend sparkline, incidents-contributing-to-breach list
+
+**Complexity:** M
+**Depends on:** Phase 54
+**Success metric:** SLA definition created with 99.9% target; compliance endpoint returns current period attainment; auto-report generated and emailed with correct attainment percentage ± 0.01%
+
+---
+
+### Phase 56: Mobile PWA for On-Call Operators
+
+**Goal:** Give on-call operators a mobile-first experience — push notifications for P0/P1 incidents, approve/reject remediations from a phone at 3am, and see current platform health without opening a laptop.
+
+**Why it matters:** An operator paged at 3am opens their phone, not their laptop. If the approval flow requires a laptop, the HITL gate becomes a bottleneck at the worst possible time.
+
+**Deliverables:**
+- Next.js PWA: `next-pwa` manifest, service worker with offline fallback
+- Push notification service: Web Push API; `POST /api/v1/notifications/subscribe` stores device subscription in Cosmos; sends push on P0/P1 incident creation (<30s target)
+- Mobile-optimised incident card: severity badge, affected resource, 1-tap "Investigate", 1-tap "Approve"/"Reject" with biometric confirm (WebAuthn)
+- Mobile-first Approvals screen: pending approvals sorted by expiry countdown; approve/reject in <3 taps
+- Offline mode: service worker caches last known incident list; queues approve/reject for replay on reconnect
+
+**Complexity:** M
+**Depends on:** Phase 55
+**Success metric:** P0 incident triggers push to test device in <30s; approval submitted from mobile completes HITL flow; PWA installs via "Add to Home Screen" and loads offline from cache
+
+---
+
+### Phase 57: Capacity Planning Engine
+
+**Goal:** Give infrastructure architects a forward-looking capacity view — subscription quota headroom, growth rate projections, and lead-time-aware procurement recommendations.
+
+**Why it matters:** Teams hit vCPU limits or IP space exhaustion mid-deployment and face 2-4 week quota increase lead times. This phase makes capacity constraints visible 90 days in advance.
+
+**Deliverables:**
+- `get_subscription_quota_headroom` — all compute/network/storage quotas; current usage %, growth rate via linear regression, days to exhaustion
+- `get_ip_address_space_headroom` — VNet CIDR utilisation, available IPs per subnet, projected exhaustion
+- `get_aks_node_quota_headroom` — per-cluster node count vs max, node pool SKU quota
+- Capacity forecast model: linear + seasonal growth curve; 90-day projections with confidence intervals
+- `GET /api/v1/capacity/headroom` — top-10 resources approaching exhaustion (<30 days)
+- Capacity tab in UI: quota headroom table with traffic-light indicators; 90-day forecast chart
+
+**Complexity:** M
+**Depends on:** Phase 52 (cost forecasting foundation)
+**Success metric:** For a subscription with known quota constraints, headroom endpoint correctly identifies the constrained resource and projects exhaustion date within ±7 days
+
+---
+
+### Phase 58: IaC Drift Detection
+
+**Goal:** Continuously detect when live Azure infrastructure deviates from the Terraform state it was provisioned from — surfacing drift as incidents the platform can route, reason over, and propose remediations for.
+
+**Why it matters:** Manual portal changes, emergency hotfixes, and control-plane drift accumulate silently. The next `terraform apply` can reverse a critical production fix with no warning.
+
+**Deliverables:**
+- `TerraformStateStore`: reads Terraform state files from Azure Blob Storage; parses `terraform.tfstate` JSON into `TerraformResource` models
+- `DriftDetector`: compares Terraform-declared resource properties against live ARM API state; produces `DriftFinding { resource_id, attribute_path, terraform_value, live_value, drift_severity }`
+- Drift scan scheduled Container Job: runs every 4 hours; writes findings to Cosmos `drift_findings`; sends `POST /api/v1/incidents` with `domain: drift` for HIGH/CRITICAL severity
+- `GET /api/v1/drift/findings` — current findings by resource, age, severity
+- Drift tab in UI: findings table with terraform_value vs live_value diff view; "Propose Terraform fix" generates PR-ready `.tf` patch via GPT-4o
+
+**Complexity:** L
+**Depends on:** Phase 57
+**Success metric:** Manual portal change to a monitored Container App env var detected as HIGH drift finding within 4 hours; drift incident routes through orchestrator; "Propose Terraform fix" generates valid HCL that reconciles the diff
+
+---
+
+### Phase 59: Security Posture Scoring Dashboard
+
+**Goal:** Surface a unified, continuously updated security posture score across all monitored subscriptions — aggregating Defender secure score, policy compliance, and exposure management into a single operator-facing view.
+
+**Why it matters:** Secure Score in the Azure portal is subscription-scoped and doesn't aggregate, doesn't show trends, and doesn't connect findings to remediation SOPs. Security teams export scores to spreadsheets monthly.
+
+**Deliverables:**
+- `SecurityPostureService`: aggregates Defender Secure Score, Policy compliance %, custom control scores; stored in Cosmos `security_posture` with 1h TTL
+- `GET /api/v1/security/posture` — composite score + sub-scores + 30-day trend
+- `GET /api/v1/security/findings` — top-25 open high/critical findings with recommendation + mapped compliance control + SOP link
+- Security Posture tab in UI: composite score gauge (0-100), breakdown radar chart (Identity, Network, Data, Compute, Applications), findings list with "Remediate via agent" action
+- Weekly posture digest: emailed to configured security contacts with score delta and new critical findings
+
+**Complexity:** M
+**Depends on:** Phase 54 (compliance framework)
+**Success metric:** Security posture endpoint returns composite score across 3 test subscriptions; score moves when a Defender finding is resolved; weekly digest email sent with correct score delta
+
+---
+
+### Phase 60: GitOps Integration + Deployment Intelligence
+
+**Goal:** Connect the platform to Azure DevOps pipelines and GitHub Actions to correlate infrastructure incidents with the deployment that caused them — surfacing deployment-to-incident causation in under 60 seconds and enabling one-click pipeline rollbacks through HITL.
+
+**Why it matters:** The change correlation engine (Phase 23) covers ARM-level changes. Deployment-level changes — application code, Helm chart updates, Terraform applies — require a separate integration currently missing entirely.
+
+**Deliverables:**
+- Deployment event ingestion: webhook receiver at `POST /api/v1/deployments` accepting GitHub Actions `deployment` events and Azure DevOps service hook payloads; stored in Cosmos `deployments`
+- `DeploymentCorrelator` enhancement: extends Phase 23 with deployment events as a higher-weighted correlation source
+- `get_recent_deployments` agent tool: returns last 5 deployments to a resource/resource group with pipeline URL, commit SHA, author
+- `propose_pipeline_rollback` HITL tool: posts pipeline rerun/rollback API call through HITL approval gate
+- Deployment badge in incident detail panel: "Deployed 4 min before incident by @user — commit abc123" with link to diff
+
+**Complexity:** M
+**Depends on:** Phase 58
+**Success metric:** GitHub Actions deployment to a Container App followed within 10 minutes by a service degradation alert; incident surfaces "Deployment 4 min before incident" correlation badge; HITL rollback proposal executes pipeline re-run
+
+---
+
+### Phase 61: Multi-Agent Parallel Investigation
+
+**Goal:** Replace sequential orchestrator handoff with parallel multi-agent fan-out for complex incidents — enabling simultaneous investigation of compute, network, and security dimensions with synthesised root cause narrative.
+
+**Why it matters:** P0 incidents rarely have a single-domain cause. Sequential handoff means the operator waits for domain A to finish before domain B starts — doubling or tripling MTTR.
+
+**Deliverables:**
+- `ConcurrentOrchestrator` pattern using Microsoft Agent Framework `concurrent` execution: dispatch up to 3 domain agents simultaneously; collect partial results with timeout (45s per domain)
+- `OrchestratorIntelligence` layer: uses institutional memory (Phase 25) to pre-select optimal agent set per incident; confidence score per domain selection
+- `correlate_multi_domain` synthesis tool: takes partial findings from N agents and produces a ranked hypothesis list with cross-domain evidence linking
+- `event:fan_out` SSE event type: UI shows N parallel investigation streams with per-agent progress spinners; merges into unified finding when all complete
+- Orchestrator routing decision explained in trace: "Dispatching to [Compute, Network] in parallel — historical match: 73% of similar incidents involved both domains"
+
+**Complexity:** XL
+**Depends on:** Phase 60
+**Success metric:** Simulated incident with compute + network cause: both agents complete in parallel (total time < max(individual) + 10s); synthesis produces correlated finding citing both domains
+
+---
+
+### Phase 62: Runbook Automation Studio
+
+**Goal:** Let operators build, test, and publish automation runbooks directly in the platform UI — without writing Python — using a visual step builder backed by the existing HITL approval and WAL execution engine.
+
+**Why it matters:** The SOP library (Phase 31) provides runbooks as documentation. The remediation executor (Phase 27) executes individual tool calls. The gap is composable multi-step automation: "if CPU >90% for 10 min, try restart; if still >90%, propose scale up".
+
+**Deliverables:**
+- Runbook schema extension: add `automation_steps[]` to `Runbook` model — each step is `{ tool_name, parameters_template, condition, on_failure }` with Jinja2 template variables resolved from incident context
+- `RunbookExecutor` service: executes automation steps sequentially; each step uses WAL + HITL gate if `require_approval: true`; `on_failure: rollback | continue | abort` per step
+- Visual Runbook Builder in UI (Runbooks tab): drag-and-drop step editor; step library shows all available `@ai_function` tools; parameter template editor with `{{ incident.resource_id }}` interpolation; one-click dry-run mode
+- `POST /api/v1/runbooks/{id}/execute` — execute runbook against an incident; returns step results via SSE
+- 10 pre-built automation runbooks: VM high CPU response, disk full cleanup, certificate renewal, AKS node drain, Service Bus DLQ drain
+
+**Complexity:** L
+**Depends on:** Phase 61
+**Success metric:** Automation runbook with 3 steps built in UI; executed against a test incident; all 3 steps execute in order; step 2 triggers HITL correctly; WAL record shows all 3 steps with outcomes
+
+---
+
+### Phase 63: AIOps Quality Flywheel
+
+**Goal:** Make the platform continuously smarter by closing the loop between operator decisions and model behaviour — automatic eval regression testing, anomaly detector retraining from confirmed incidents, and SOP quality scoring from execution outcomes.
+
+**Why it matters:** The evaluation harness (Phase 33) runs quality gates on static traces. Every HITL approve/reject and post-remediation outcome is a labelled training example. The platform should be measurably better at diagnosis every month.
+
+**Deliverables:**
+- `FeedbackCapture` pipeline: every `approve/reject` decision + `RESOLVED/DEGRADED` verification outcome → written to `eval_feedback` PostgreSQL table with operator decision, verification outcome, response quality score
+- Eval regression suite: weekly GitHub Actions re-runs all 4 custom evaluators against latest 50 production traces from Fabric OneLake; fails CI if any score drops >0.2 from prior week's P50
+- Forecaster retraining: Holt smoothing parameters auto-tuned monthly using confirmed breach incidents as ground truth; accuracy score tracked in Observability tab
+- SOP effectiveness scoring: `sop_effectiveness_score` = fraction of incidents where cited SOP led to RESOLVED outcome within 1 MTTR window; low-scoring SOPs flagged for review
+- Monthly AIOps Quality Report: auto-generated PDF covering eval scores, MTTR trend, forecasting MAE, SOP effectiveness
+
+**Complexity:** L
+**Depends on:** Phase 62
+**Success metric:** Weekly eval workflow produces quality score report; SOP effectiveness scores computed for ≥10 SOPs; forecaster retraining runs monthly with improved MAE vs. prior month's baseline
+
+---
+
+### Phase 64: Enterprise Multi-Tenant Gateway
+
+**Goal:** Make AAP a multi-tenant AIOps platform — operators from different business units each have isolated data planes, scoped agent permissions, and their own SLA/compliance reporting, all managed through a single platform control plane.
+
+**Why it matters:** Enterprise organizations run dozens of teams with separate Azure subscriptions, separate SLA commitments, and separate compliance requirements. A single shared alert feed and audit log forces all teams together.
+
+**Deliverables:**
+- `Tenant` model: `{ tenant_id, name, subscriptions[], sla_definitions[], compliance_frameworks[], operator_group_id }` in PostgreSQL `tenants`
+- Tenant-scoped middleware: all API endpoints filter Cosmos and PostgreSQL queries by `tenant_id` derived from Entra group membership
+- Per-tenant agent context: orchestrator injects `tenant_id` into every agent thread; agents scope all ARG/ARM queries to `tenant.subscriptions`
+- Tenant admin UI: platform administrators create tenants, assign subscriptions, configure SLA definitions
+- Tenant isolation validation: automated test suite proves operator from Tenant A cannot read incidents, runbooks, or audit records from Tenant B
+
+**Complexity:** XL
+**Depends on:** Phase 63
+**Success metric:** Two tenants provisioned with different subscriptions; operator from Tenant A gets 403 attempting to read Tenant B incidents; both see correct separate incident feeds
+
+---
+
+## World-Class v3.0 Success Criteria
+
+When all phases 44–64 complete:
+
+| Metric | Target |
+|--------|--------|
+| **Domain coverage** | All 10 Azure service domains covered by dedicated agent (Compute, Network, Storage, Database, App Service, Container Apps, Messaging, Arc, Security, FinOps) |
+| **MTTR (P1/P2)** | <15 min for 80% of incidents — down from <30 min at v2.0 |
+| **Alert noise reduction** | >95% raw alerts collapsed to actionable incidents |
+| **Auto-remediation rate** | >60% of repeating incidents resolved by policy-approved automation without HITL |
+| **Cross-subscription coverage** | All subscriptions in tenant covered; zero blind spots |
+| **Forecasting accuracy** | Capacity exhaustion predicted ≥48 hours in advance with ≥80% accuracy |
+| **Compliance automation** | CIS, NIST 800-53, ASB posture continuously tracked; monthly audit export generated without manual effort |
+| **IaC drift** | Drift detected and incident raised within 4 hours of any out-of-band change |
+| **SLA reporting** | Monthly SLA reports auto-generated and emailed; zero manual data collection |
+| **Institutional memory** | Historical pattern match for >75% of repeating incident types |
+| **Eval quality gates** | All 4 custom evaluators score above threshold on weekly regression; no month-over-month regression >0.1 |
+| **Parallel investigation** | P0 incidents with multi-domain cause: parallel fan-out completes in <60 seconds |
+| **Mobile HITL** | P0 approval submitted from mobile in <3 taps; push notification received in <30 seconds |
+| **Multi-tenant isolation** | Zero cross-tenant data leakage; proven by automated isolation test suite on every deploy |

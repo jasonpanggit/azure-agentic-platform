@@ -249,6 +249,18 @@ resource "azurerm_container_app" "agents" {
           value = var.log_analytics_workspace_customer_id
         }
       }
+      # Phase 43: Log Analytics workspace ARM resource ID for api-gateway DCR-based
+      # Enable Logging endpoints (diagnostic-settings). The full ARM ID is required to
+      # create Data Collection Rules; the GUID above is insufficient for that path.
+      # RBAC: api-gateway MI needs Monitoring Contributor + Virtual Machine Contributor.
+      # See docs/ops/enable-logging-rbac.md for the required role assignment commands.
+      dynamic "env" {
+        for_each = contains(["api-gateway"], each.key) && var.log_analytics_workspace_resource_id != "" ? [1] : []
+        content {
+          name  = "LOG_ANALYTICS_WORKSPACE_RESOURCE_ID"
+          value = var.log_analytics_workspace_resource_id
+        }
+      }
       # Web UI specific: API Gateway URL for server-side proxy routes (chat, incidents, approvals)
       dynamic "env" {
         for_each = each.key == "web-ui" ? [1] : []
