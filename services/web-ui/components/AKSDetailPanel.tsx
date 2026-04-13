@@ -171,6 +171,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(AKS_DEFAULT_SELECTED)
   const [metricSelectorOpen, setMetricSelectorOpen] = useState(false)
   const metricsLoadedForTimeRange = useRef<string | null>(null)
+  const [metricsError, setMetricsError] = useState<string | null>(null)
   const [enablingContainerInsights, setEnablingContainerInsights] = useState(false)
 
   // Workload detail state
@@ -244,6 +245,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
     if (!resourceId) return
     const activeSource = source ?? metricsSource
     setLoadingMetrics(true)
+    setMetricsError(null)
     try {
       const encoded = encodeResourceId(resourceId)
       const token = await getAccessToken()
@@ -258,6 +260,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
         if (res.ok) {
           const data = await res.json()
           setMetrics(data.metrics ?? [])
+          if (data.fetch_error) setMetricsError(data.fetch_error)
         }
       } else {
         // platform metrics (prometheus shows a static info panel, no fetch needed)
@@ -268,6 +271,7 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
         if (res.ok) {
           const data = await res.json()
           setMetrics(data.metrics ?? [])
+          if (data.fetch_error) setMetricsError(data.fetch_error)
         }
       }
     } catch {
@@ -1029,7 +1033,9 @@ export function AKSDetailPanel({ resourceId, resourceName, onClose }: AKSDetailP
                 </p>
                 {metricsSource === 'logs' ? (
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    The omsagent may not be sending data to this workspace yet. Data can take up to 15 minutes to appear after enabling Container Insights.
+                    {metricsError
+                      ? metricsError
+                      : 'The omsagent may not be sending data to this workspace yet. Data can take up to 15 minutes to appear after enabling Container Insights.'}
                   </p>
                 ) : detail && !detail.container_insights_enabled ? (
                   <>
