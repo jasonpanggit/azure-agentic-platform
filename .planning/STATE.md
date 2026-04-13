@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: unknown
-last_updated: "2026-04-13T23:43:16.570Z"
+last_updated: "2026-04-11T14:57:51.285Z"
 progress:
   total_phases: 35
   completed_phases: 34
@@ -433,7 +433,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 13 COMPLETE: Patch Management Tab — full-stack: 2 API gateway endpoints, 2 proxy routes, PatchTab component, DashboardPanel wiring, 15 tests
 - Phase 42 added: surface runbooks in web-ui
 - Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
-- Phase 65 added: Azure MCP Server v2 Upgrade and New Capabilities — upgrade from archived Azure/azure-mcp to microsoft/mcp v2.0.0, wire advisor namespace into SRE agent and containerapps namespace for self-monitoring
+- Phase 45 added: Azure MCP Server v2 Upgrade and New Capabilities — upgrade from archived Azure/azure-mcp to microsoft/mcp v2.0.0, wire advisor namespace into SRE agent and containerapps namespace for self-monitoring
 
 ---
 
