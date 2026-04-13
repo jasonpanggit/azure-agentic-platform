@@ -4,12 +4,8 @@ Provides @ai_function tools for querying Activity Log, Log Analytics,
 Resource Health, Azure Monitor metrics, and ARG OS version inventory for
 compute resources.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    compute.list_vms, compute.get_vm, compute.list_disks,
-    monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status,
-    advisor.list_recommendations,
-    appservice.list_apps, appservice.get_app
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    compute, monitor, resourcehealth, advisor, appservice
 """
 from __future__ import annotations
 
@@ -138,17 +134,13 @@ from shared.approval_manager import create_approval_record
 tracer = setup_telemetry("aiops-compute-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted (AGENT-001).
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "compute.list_vms",
-    "compute.get_vm",
-    "compute.list_disks",
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
-    "advisor.list_recommendations",
-    "appservice.list_apps",
-    "appservice.get_app",
+    "compute",
+    "monitor",
+    "resourcehealth",
+    "advisor",
+    "appservice",
 ]
 
 

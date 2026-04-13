@@ -3,10 +3,8 @@
 7 tools covering Defender alerts, Key Vault diagnostics, IAM changes,
 secure score, RBAC assignments, policy compliance, and public endpoint scanning.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    keyvault.list_vaults, keyvault.get_vault, role.list_assignments,
-    monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status, advisor.list_recommendations
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    keyvault, role, monitor, resourcehealth, advisor
 """
 from __future__ import annotations
 
@@ -59,15 +57,13 @@ except ImportError:
 tracer = setup_telemetry("aiops-security-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted.
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "keyvault.list_vaults",
-    "keyvault.get_vault",
-    "role.list_assignments",
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
-    "advisor.list_recommendations",
+    "keyvault",
+    "role",
+    "monitor",
+    "resourcehealth",
+    "advisor",
 ]
 
 
