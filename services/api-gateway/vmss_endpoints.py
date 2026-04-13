@@ -557,15 +557,65 @@ async def get_vmss_detail(
         instances_paged = compute_client.virtual_machine_scale_set_vms.list(
             resource_group, vmss_name, expand="instanceView"
         )
+        def _derive_instance_fields(inst: Any) -> Dict[str, str]:
+            """Extract power_state and health_state from instance view statuses.
+
+            Azure instance view statuses list looks like:
+              [ProvisioningState/succeeded, PowerState/running]
+            The Application Health extension populates vmHealth when present;
+            for AKS-managed nodes it is always None because the extension is
+            not installed.  We fall back to deriving health from the two
+            well-known status codes.
+            """
+            power_state = "unknown"
+            health_state = "unknown"
+            iv = inst.instance_view
+
+            if iv and iv.statuses:
+                # Find the PowerState/* status entry explicitly rather than
+                # assuming it is always the last element.
+                for s in iv.statuses:
+                    code = (s.code or "").lower()
+                    if code.startswith("powerstate/"):
+                        power_state = s.display_status or code
+                    # PowerState/running and ProvisioningState/succeeded together
+                    # indicate the instance is healthy at the infrastructure layer.
+                if not any(
+                    (s.code or "").lower().startswith("powerstate/") for s in iv.statuses
+                ):
+                    # No explicit power state — fall back to last status
+                    power_state = iv.statuses[-1].display_status or "unknown"
+
+                # Derive health from vmHealth extension first, then fall back to
+                # provisioning + power state.
+                if iv.vm_health and iv.vm_health.status:
+                    health_code = (iv.vm_health.status.code or "").lower()
+                    # Check "unhealthy" before "healthy" — "unhealthy" contains "healthy"
+                    if "unhealthy" in health_code:
+                        health_state = "unhealthy"
+                    elif "healthy" in health_code:
+                        health_state = "healthy"
+                    else:
+                        health_state = health_code
+                else:
+                    # No Application Health extension: derive from status codes.
+                    prov_ok = any(
+                        (s.code or "").lower() == "provisioningstate/succeeded"
+                        for s in iv.statuses
+                    )
+                    running = "running" in power_state.lower()
+                    if prov_ok and running:
+                        health_state = "healthy"
+                    elif not prov_ok:
+                        health_state = "degraded"
+
+            return {"power_state": power_state, "health_state": health_state}
+
         instances = [
             {
                 "instance_id": inst.instance_id or "",
                 "name": inst.name or "",
-                "power_state": (inst.instance_view.statuses[-1].display_status
-                                if inst.instance_view and inst.instance_view.statuses
-                                and len(inst.instance_view.statuses) > 0
-                                else "unknown"),
-                "health_state": "unknown",
+                **_derive_instance_fields(inst),
                 "provisioning_state": inst.provisioning_state or "unknown",
             }
             for inst in instances_paged
