@@ -102,6 +102,9 @@ For natural-language queries, determine the domain from the **topic** of the mes
     "site", "webapp", "azure functions", "func app" → call `appservice_agent`
 - Mentions "container app", "container apps", "containerapps", "managed environment",
     "container apps environment", "ca-" agent, "platform agent" → call `containerapps_agent`
+- Mentions "service bus", "servicebus", "queue", "dead letter", "dlq", "topic",
+    "subscription", "event hub", "eventhub", "consumer group", "consumer lag",
+    "messaging namespace", "throughput units" → call `messaging_agent`
 - Mentions "vm", "virtual machine", "aks", "compute", "cpu", "disk" → call `compute_agent`
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → call `network_agent`
 - Mentions "storage", "blob", "file share", "datalake" → call `storage_agent`
@@ -131,7 +134,7 @@ Pass the operator's original question verbatim as the argument to the domain age
 - MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `compute_agent`, `network_agent`, `storage_agent`, `security_agent`,
     `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `database_agent`,
-    `appservice_agent`, `containerapps_agent`, `classify_incident_domain`.
+    `appservice_agent`, `containerapps_agent`, `messaging_agent`, `classify_incident_domain`.
 """
 
 # ---------------------------------------------------------------------------
@@ -151,6 +154,7 @@ DOMAIN_AGENT_MAP: dict = {
     "database": "database_agent",
     "app-service": "appservice_agent",
     "container-apps": "containerapps_agent",
+    "messaging": "messaging_agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -178,6 +182,8 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.sql": "database",
     "microsoft.app/containerapps": "container-apps",
     "microsoft.app/managedenvironments": "container-apps",
+    "microsoft.servicebus": "messaging",
+    "microsoft.eventhub": "messaging",
 }
 
 
@@ -305,6 +311,7 @@ def create_orchestrator() -> ChatAgent:
 _A2A_DOMAINS = [
     "compute", "patch", "network", "security",
     "arc", "sre", "eol", "storage", "database", "appservice", "containerapps",
+    "messaging",  # Phase 49
 ]
 
 
