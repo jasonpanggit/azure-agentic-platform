@@ -105,6 +105,9 @@ For natural-language queries, determine the domain from the **topic** of the mes
 - Mentions "service bus", "servicebus", "queue", "dead letter", "dlq", "topic",
     "subscription", "event hub", "eventhub", "consumer group", "consumer lag",
     "messaging namespace", "throughput units" → call `messaging_agent`
+- Mentions "cost", "spend", "billing", "finops", "budget", "waste", "idle resources",
+    "reserved instance", "ri utilization", "savings plan", "cost breakdown", "cloud cost",
+    "rightsizing", "cost optimization", "monthly bill", "burn rate", "overspend" → call `finops_agent`
 - Mentions "vm", "virtual machine", "aks", "compute", "cpu", "disk" → call `compute_agent`
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → call `network_agent`
 - Mentions "storage", "blob", "file share", "datalake" → call `storage_agent`
@@ -134,7 +137,8 @@ Pass the operator's original question verbatim as the argument to the domain age
 - MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `compute_agent`, `network_agent`, `storage_agent`, `security_agent`,
     `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `database_agent`,
-    `appservice_agent`, `containerapps_agent`, `messaging_agent`, `classify_incident_domain`.
+    `appservice_agent`, `containerapps_agent`, `messaging_agent`, `finops_agent`,
+    `classify_incident_domain`.
 """
 
 # ---------------------------------------------------------------------------
@@ -155,6 +159,8 @@ DOMAIN_AGENT_MAP: dict = {
     "app-service": "appservice_agent",
     "container-apps": "containerapps_agent",
     "messaging": "messaging_agent",
+    "finops": "finops_agent",
+    "cost": "finops_agent",  # alias — conversational "cost" queries route to FinOps agent
 }
 
 # ---------------------------------------------------------------------------
@@ -312,6 +318,7 @@ _A2A_DOMAINS = [
     "compute", "patch", "network", "security",
     "arc", "sre", "eol", "storage", "database", "appservice", "containerapps",
     "messaging",  # Phase 49
+    "finops",  # Phase 52
 ]
 
 
