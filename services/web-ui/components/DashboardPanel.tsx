@@ -171,7 +171,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
       {/* Tab panels */}
       <div className="flex-1 overflow-auto p-6">
         <div id="tabpanel-ops" role="tabpanel" aria-labelledby="tab-ops" hidden={activeTab !== 'ops'}>
-          <OpsTab subscriptions={selectedSubscriptions} />
+          <OpsTab subscriptions={selectedSubscriptions} onNavigateToAlerts={() => handleTabChange('alerts')} />
         </div>
 
         <div id="tabpanel-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden={activeTab !== 'alerts'}>

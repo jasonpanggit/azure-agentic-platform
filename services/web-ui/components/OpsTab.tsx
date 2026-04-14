@@ -21,6 +21,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 30_000;
+const MAX_INCIDENTS_FETCH = 50;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +50,7 @@ interface IncidentSummary {
   resource_name: string;
   created_at: string;
   investigation_status: string;
+  status?: string;
 }
 
 interface ImminentBreach {
@@ -59,11 +61,19 @@ interface ImminentBreach {
 }
 
 interface PatternEntry {
-  pattern_type: string;
-  description: string;
-  occurrence_count: number;
-  affected_domains: string[];
-  recommended_action: string;
+  pattern_type?: string;
+  description?: string;
+  occurrence_count?: number;
+  affected_domains?: string[];
+  recommended_action?: string;
+  pattern_id?: string;
+  domain?: string;
+  resource_type?: string | null;
+  detection_rule?: string | null;
+  incident_count?: number;
+  frequency_per_week?: number;
+  top_title_words?: string[];
+  common_feedback?: string[];
 }
 
 interface PatternAnalysis {
@@ -91,32 +101,61 @@ interface SectionError {
 
 interface OpsTabProps {
   subscriptions: string[];
+  onNavigateToAlerts?: () => void;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers — severity sorting & display
 // ---------------------------------------------------------------------------
 
-const SEVERITY_ORDER: Record<string, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
+const SEVERITY_ORDER: Record<string, number> = {
+  SEV0: 0,
+  P1: 0,
+  SEV1: 1,
+  P2: 1,
+  SEV2: 2,
+  P3: 2,
+  SEV3: 3,
+  P4: 3,
+};
+
+const INACTIVE_INCIDENT_STATUSES = new Set(['closed', 'suppressed_cascade']);
 
 function severityOrder(sev: string): number {
   return SEVERITY_ORDER[sev.toUpperCase()] ?? 99;
 }
 
+function isHighUrgencySeverity(severity: string): boolean {
+  const normalized = severity.toUpperCase();
+  return normalized === 'SEV0' || normalized === 'SEV1' || normalized === 'P1' || normalized === 'P2';
+}
+
+function isActiveIncidentStatus(status: string | undefined): boolean {
+  if (!status) return true;
+  return !INACTIVE_INCIDENT_STATUSES.has(status.toLowerCase());
+}
+
 function severityBadgeStyle(severity: string): React.CSSProperties {
   const s = severity.toUpperCase();
-  if (s === 'P1') {
+  if (s === 'SEV0' || s === 'P1') {
     return {
       background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
       color: 'var(--accent-red)',
       fontWeight: 700,
     };
   }
-  if (s === 'P2') {
+  if (s === 'SEV1' || s === 'P2') {
     return {
       background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)',
       color: 'var(--accent-orange)',
       fontWeight: 600,
+    };
+  }
+  if (s === 'SEV2' || s === 'P3') {
+    return {
+      background: 'color-mix(in srgb, var(--accent-yellow, var(--accent-orange)) 15%, transparent)',
+      color: 'var(--accent-yellow, var(--accent-orange))',
+      fontWeight: 500,
     };
   }
   return {
@@ -178,9 +217,8 @@ function sloLevel(pct: number | null): ThresholdLevel {
 
 function autoRemediationLevel(rate: number | null): ThresholdLevel {
   if (rate === null) return 'blue';
-  const pct = rate * 100;
-  if (pct >= 80) return 'green';
-  if (pct >= 60) return 'yellow';
+  if (rate >= 80) return 'green';
+  if (rate >= 60) return 'yellow';
   return 'red';
 }
 
@@ -317,7 +355,8 @@ function ActiveIncidentsSection({
   onNavigateToAlerts,
 }: ActiveIncidentsSectionProps) {
   const p1p2 = incidents
-    .filter((i) => ['P1', 'P2'].includes(i.severity.toUpperCase()))
+    .filter((incident) => isActiveIncidentStatus(incident.status))
+    .filter((incident) => isHighUrgencySeverity(incident.severity))
     .sort((a, b) => {
       const sevDiff = severityOrder(a.severity) - severityOrder(b.severity);
       if (sevDiff !== 0) return sevDiff;
@@ -328,7 +367,7 @@ function ActiveIncidentsSection({
   const overflow = p1p2.length - shown.length;
 
   return (
-    <Section title="Active Incidents (P1 / P2)" error={error}>
+    <Section title="Active Incidents (Sev0 / Sev1)" error={error}>
       {loading && incidents.length === 0 ? (
         <div className="p-4 flex flex-col gap-2">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
@@ -336,7 +375,7 @@ function ActiveIncidentsSection({
       ) : shown.length === 0 ? (
         <div className="flex items-center gap-2 px-4 py-6" style={{ color: 'var(--accent-green)' }}>
           <CheckCircle2 className="h-4 w-4" />
-          <span className="text-[13px]">No active P1 or P2 incidents</span>
+          <span className="text-[13px]">No active Sev0 or Sev1 incidents</span>
         </div>
       ) : (
         <div>
@@ -516,6 +555,35 @@ function patternTypeColor(type: string): string {
   return PATTERN_TYPE_COLORS[type.toLowerCase()] ?? 'var(--accent-blue)';
 }
 
+function getPatternType(pattern: PatternEntry): string {
+  return pattern.pattern_type ?? pattern.domain ?? 'pattern';
+}
+
+function getPatternDescription(pattern: PatternEntry): string {
+  if (pattern.description) return pattern.description;
+  if (pattern.detection_rule) return pattern.detection_rule;
+  if (pattern.top_title_words && pattern.top_title_words.length > 0) {
+    return pattern.top_title_words.join(', ');
+  }
+  if (pattern.resource_type) return pattern.resource_type;
+  return pattern.pattern_id ?? 'Pattern';
+}
+
+function getPatternOccurrenceCount(pattern: PatternEntry): number {
+  return pattern.occurrence_count ?? pattern.incident_count ?? 0;
+}
+
+function getPatternAffectedDomains(pattern: PatternEntry): string[] {
+  if (pattern.affected_domains && pattern.affected_domains.length > 0) {
+    return pattern.affected_domains;
+  }
+  return pattern.domain ? [pattern.domain] : [];
+}
+
+function getPatternRecommendedAction(pattern: PatternEntry): string {
+  return pattern.recommended_action ?? pattern.common_feedback?.[0] ?? '';
+}
+
 function PatternsSection({ patterns, notFound, error, loading }: PatternsSectionProps) {
   return (
     <Section title="Top Recurring Patterns" error={error}>
@@ -536,7 +604,12 @@ function PatternsSection({ patterns, notFound, error, loading }: PatternsSection
       ) : (
         <div className="p-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {patterns.top_patterns.map((p, idx) => {
-            const typeColor = patternTypeColor(p.pattern_type);
+            const patternType = getPatternType(p);
+            const description = getPatternDescription(p);
+            const occurrenceCount = getPatternOccurrenceCount(p);
+            const affectedDomains = getPatternAffectedDomains(p);
+            const recommendedAction = getPatternRecommendedAction(p);
+            const typeColor = patternTypeColor(patternType);
             return (
               <div
                 key={idx}
@@ -554,21 +627,21 @@ function PatternsSection({ patterns, notFound, error, loading }: PatternsSection
                       color: typeColor,
                     }}
                   >
-                    {p.pattern_type}
+                    {patternType}
                   </span>
                   <span
                     className="text-[11px] font-semibold tabular-nums shrink-0"
                     style={{ color: 'var(--text-secondary)' }}
                   >
-                    ×{p.occurrence_count}
+                    ×{occurrenceCount}
                   </span>
                 </div>
                 <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                  {p.description}
+                  {description}
                 </p>
-                {p.affected_domains.length > 0 && (
+                {affectedDomains.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {p.affected_domains.map((d) => (
+                    {affectedDomains.map((d) => (
                       <span
                         key={d}
                         className="text-[10px] px-1.5 py-0.5 rounded"
@@ -579,12 +652,12 @@ function PatternsSection({ patterns, notFound, error, loading }: PatternsSection
                     ))}
                   </div>
                 )}
-                {p.recommended_action && (
+                {recommendedAction && (
                   <p
                     className="text-[11px] italic border-t pt-2 mt-1"
                     style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
                   >
-                    → {p.recommended_action}
+                    → {recommendedAction}
                   </p>
                 )}
               </div>
@@ -681,7 +754,7 @@ function ErrorBudgetSection({ portfolio, loading }: ErrorBudgetSectionProps) {
 // Main OpsTab
 // ---------------------------------------------------------------------------
 
-export function OpsTab({ subscriptions }: OpsTabProps) {
+export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
   const [data, setData] = useState<OpsData>({
     platformHealth: null,
     incidents: [],
@@ -703,10 +776,12 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
   void subscriptions;
 
   const fetchAll = useCallback(async () => {
-    // Fire all 5 fetches in parallel; each section handles its own error
+    // Fire all fetches in parallel; each section handles its own error
     const [phRes, incRes, brRes, patRes] = await Promise.allSettled([
       fetch('/api/proxy/ops/platform-health', { signal: AbortSignal.timeout(15000) }),
-      fetch('/api/proxy/incidents?status=open&limit=20', { signal: AbortSignal.timeout(15000) }),
+      // Fetch a broader window and filter active Sev0/Sev1 incidents client-side.
+      // The backend supports exact statuses like new/acknowledged/closed, not status=open.
+      fetch(`/api/proxy/incidents?limit=${MAX_INCIDENTS_FETCH}`, { signal: AbortSignal.timeout(15000) }),
       fetch('/api/proxy/ops/imminent-breaches', { signal: AbortSignal.timeout(15000) }),
       fetch('/api/proxy/ops/patterns', { signal: AbortSignal.timeout(15000) }),
     ]);
@@ -718,6 +793,15 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
       const res = phRes.value;
       if (res.ok) {
         platformHealth = await res.json().catch(() => null);
+        if (
+          platformHealth?.auto_remediation_success_rate !== null &&
+          platformHealth.auto_remediation_success_rate <= 1
+        ) {
+          platformHealth = {
+            ...platformHealth,
+            auto_remediation_success_rate: platformHealth.auto_remediation_success_rate * 100,
+          };
+        }
       } else {
         const body = await res.json().catch(() => ({}));
         phError = body?.error ?? `Platform health unavailable (HTTP ${res.status})`;
@@ -749,8 +833,8 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
     if (brRes.status === 'fulfilled') {
       const res = brRes.value;
       if (res.ok) {
-        const body = await res.json().catch(() => ({}));
-        imminentBreaches = body?.imminent_breaches ?? [];
+        const body = await res.json().catch(() => []);
+        imminentBreaches = Array.isArray(body) ? body : (body?.imminent_breaches ?? []);
       } else {
         const body = await res.json().catch(() => ({}));
         brError = body?.error ?? `Forecast unavailable (HTTP ${res.status})`;
@@ -795,13 +879,25 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
   const overallStatus: 'healthy' | 'degraded' | 'critical' | 'unknown' = (() => {
     const ph = data.platformHealth;
     if (!ph) return 'unknown';
+    // Treat an all-null payload as unknown so the header does not report healthy before data arrives.
+    const hasHealthSignals = [
+      ph.detection_pipeline_lag_seconds,
+      ph.auto_remediation_success_rate,
+      ph.noise_reduction_pct,
+      ph.slo_compliance_pct,
+      ph.mttr_p50_minutes,
+      ph.mttr_p95_minutes,
+    ].some((value) => value !== null);
+    if (!hasHealthSignals && ph.error_budget_portfolio.length === 0 && ph.automation_savings_count === 0) {
+      return 'unknown';
+    }
     if (
       (ph.slo_compliance_pct !== null && ph.slo_compliance_pct < 99) ||
       (ph.detection_pipeline_lag_seconds !== null && ph.detection_pipeline_lag_seconds >= 30)
     ) return 'critical';
     if (
       (ph.slo_compliance_pct !== null && ph.slo_compliance_pct < 99.5) ||
-      (ph.auto_remediation_success_rate !== null && ph.auto_remediation_success_rate < 0.6) ||
+      (ph.auto_remediation_success_rate !== null && ph.auto_remediation_success_rate < 60) ||
       (ph.detection_pipeline_lag_seconds !== null && ph.detection_pipeline_lag_seconds >= 5)
     ) return 'degraded';
     return 'healthy';
@@ -898,7 +994,7 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
         />
         <KpiCard
           label="Auto-Remediation"
-          value={formatPct(autoRate, 100)}
+          value={formatPct(autoRate)}
           level={autoRemediationLevel(autoRate)}
           icon={<Zap className="h-3.5 w-3.5" style={{ color: LEVEL_COLORS[autoRemediationLevel(autoRate)].text }} />}
           loading={initialLoading}
@@ -929,7 +1025,10 @@ export function OpsTab({ subscriptions }: OpsTabProps) {
           error={errors.incidents}
           loading={initialLoading}
           onNavigateToAlerts={() => {
-            // Best-effort: dispatch a custom event that DashboardPanel can listen to
+            if (onNavigateToAlerts) {
+              onNavigateToAlerts();
+              return;
+            }
             window.dispatchEvent(new CustomEvent('aap:navigate-tab', { detail: 'alerts' }));
           }}
         />
