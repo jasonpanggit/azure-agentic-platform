@@ -794,6 +794,7 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
       if (res.ok) {
         platformHealth = await res.json().catch(() => null);
         if (
+          platformHealth !== null &&
           platformHealth?.auto_remediation_success_rate !== null &&
           platformHealth.auto_remediation_success_rate <= 1
         ) {
