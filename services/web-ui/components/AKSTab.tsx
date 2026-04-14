@@ -103,11 +103,13 @@ export function AKSTab({ subscriptions, onAKSClick }: AKSTabProps) {
   }, [instance, accounts])
 
   async function fetchClusters() {
-    if (subscriptions.length === 0) return
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ subscriptions: subscriptions.join(',') })
+      const params = new URLSearchParams()
+      if (subscriptions.length > 0) {
+        params.set('subscriptions', subscriptions.join(','))
+      }
       if (search) params.set('search', search)
       const token = await getAccessToken()
       const headers: Record<string, string> = {}
@@ -201,9 +203,7 @@ export function AKSTab({ subscriptions, onAKSClick }: AKSTabProps) {
         <div className="p-12 text-center">
           <Container className="h-8 w-8 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            {subscriptions.length === 0
-              ? 'Select a subscription to view AKS clusters'
-              : 'No AKS clusters found in selected subscriptions'}
+            {'No AKS clusters found in selected subscriptions'}
           </p>
         </div>
       ) : (

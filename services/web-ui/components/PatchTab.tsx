@@ -237,25 +237,18 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
   }, []);
 
   const fetchData = useCallback(async () => {
-    if (subscriptions.length === 0) {
-      setAssessmentData(null);
-      setInstallationsData(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     const subsParam = subscriptions.join(',');
+    const subsQuery = subscriptions.length > 0 ? `?subscriptions=${encodeURIComponent(subsParam)}` : '';
 
     try {
       const [assessmentRes, installationsRes] = await Promise.all([
-        fetch(`/api/proxy/patch/assessment?subscriptions=${encodeURIComponent(subsParam)}`, {
+        fetch(`/api/proxy/patch/assessment${subsQuery}`, {
           signal: AbortSignal.timeout(15000),
         }),
-        fetch(`/api/proxy/patch/installations?subscriptions=${encodeURIComponent(subsParam)}`, {
+        fetch(`/api/proxy/patch/installations${subsQuery}`, {
           signal: AbortSignal.timeout(15000),
         }),
       ]);
@@ -335,23 +328,6 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
   const failedInstallsCount = (installationsData ?? []).filter(
     (i) => i.status !== 'Succeeded'
   ).length;
-
-  // ---------------------------------------------------------------------------
-  // Empty state (no subscriptions)
-  // ---------------------------------------------------------------------------
-
-  if (subscriptions.length === 0 && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <ShieldCheck className="h-8 w-8 text-muted-foreground" />
-        <p className="font-semibold text-base text-foreground">No patch data available</p>
-        <p className="text-sm text-muted-foreground text-center max-w-[360px]">
-          Patch assessment data will appear here once Azure Update Manager runs on your
-          selected subscriptions. Select one or more subscriptions above.
-        </p>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render
