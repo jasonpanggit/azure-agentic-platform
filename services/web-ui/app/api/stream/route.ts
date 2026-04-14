@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
         try {
           const res = await fetch(
             `${apiGatewayUrl}/api/v1/chat/${encodeURIComponent(threadId)}/result${runIdParam}`,
-            { headers: pollHeaders, signal: AbortSignal.timeout(8000) }
+            { headers: pollHeaders, signal: AbortSignal.timeout(25_000) }
           );
 
           if (!res.ok) {
