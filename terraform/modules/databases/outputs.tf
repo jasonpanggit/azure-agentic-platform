@@ -64,3 +64,8 @@ output "cosmos_business_tiers_container_name" {
   description = "Name of the Cosmos DB business_tiers container for FinOps tier configuration (PLATINT-004)"
   value       = azurerm_cosmosdb_sql_container.business_tiers.name
 }
+
+output "cosmos_policy_suggestions_container_name" {
+  description = "Name of the Cosmos DB policy_suggestions container for learning suggestion engine (Phase 51)"
+  value       = azurerm_cosmosdb_sql_container.policy_suggestions.name
+}
