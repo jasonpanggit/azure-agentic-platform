@@ -52,7 +52,14 @@ def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None):
     if credential is None:
         credential = DefaultAzureCredential()
 
-    return AgentsClient(endpoint=endpoint, credential=credential)
+    return AgentsClient(
+        endpoint=endpoint,
+        credential=credential,
+        # Foundry run-status calls can take >5s under load — use a generous
+        # read timeout so the poll doesn't abort prematurely.
+        connection_timeout=10,
+        read_timeout=30,
+    )
 
 
 # ---------------------------------------------------------------------------

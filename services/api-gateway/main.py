@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 from azure.cosmos import CosmosClient
+from azure.core.exceptions import HttpResponseError
 from azure.identity import DefaultAzureCredential
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -1383,6 +1384,17 @@ async def start_chat(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Foundry dispatch unavailable: {exc}",
+        ) from exc
+    except HttpResponseError as exc:
+        # Foundry rejects new messages when a run is still active on the thread
+        if "while a run" in str(exc) or "run is active" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A previous response is still in progress. Please wait for it to complete.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Foundry API error: {exc}",
         ) from exc
 
     return ChatResponse(

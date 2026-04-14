@@ -228,7 +228,23 @@ async def create_chat_thread(
                         logger.warning("Failed to cancel run %s: %s", run.id, cancel_exc)
             # Brief wait for cancellation to propagate
             if runs and any(r.status in active_statuses for r in runs):
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
+                # Verify the run is no longer active before proceeding
+                for attempt in range(3):
+                    try:
+                        updated_runs = await loop.run_in_executor(
+                            None, lambda: list(client.runs.list(thread_id=thread_id))
+                        )
+                        still_active = [r for r in updated_runs if r.status in active_statuses]
+                        if not still_active:
+                            break
+                        logger.info(
+                            "Thread %s still has %d active run(s) after cancellation, waiting... (attempt %d/3)",
+                            thread_id, len(still_active), attempt + 1,
+                        )
+                        await asyncio.sleep(2)
+                    except Exception:
+                        break
         except Exception as list_exc:
             logger.warning("Failed to list/cancel runs for thread %s: %s", thread_id, list_exc)
     else:
