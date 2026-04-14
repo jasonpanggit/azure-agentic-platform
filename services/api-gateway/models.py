@@ -562,3 +562,76 @@ class BusinessTiersResponse(BaseModel):
     """Response wrapper for GET /api/v1/admin/business-tiers (PLATINT-004)."""
 
     tiers: list[BusinessTier]
+
+
+class AutoRemediationPolicy(BaseModel):
+    """An auto-approval policy for known-safe remediation actions (Phase 51)."""
+
+    id: str = Field(..., description="Policy UUID")
+    name: str = Field(..., description="Human-readable policy name")
+    description: Optional[str] = Field(default=None, description="Policy description")
+    action_class: str = Field(..., description="Remediation action class, e.g. 'restart_vm', 'restart_container_app'")
+    resource_tag_filter: dict = Field(default_factory=dict, description="Resource tags that must be present for auto-approval, e.g. {'tier': 'dev'}")
+    max_blast_radius: int = Field(default=10, description="Max blast-radius size; auto-approval blocked if exceeded", ge=1, le=50)
+    max_daily_executions: int = Field(default=20, description="Max auto-executions per day for this policy", ge=1, le=100)
+    require_slo_healthy: bool = Field(default=True, description="Block auto-approval if resource health != Available")
+    maintenance_window_exempt: bool = Field(default=False, description="Allow auto-execution outside maintenance windows")
+    enabled: bool = Field(default=True, description="Whether the policy is active")
+    created_at: Optional[str] = Field(default=None, description="ISO 8601 creation timestamp")
+    updated_at: Optional[str] = Field(default=None, description="ISO 8601 last-updated timestamp")
+    execution_count_today: int = Field(default=0, description="Number of auto-executions today (computed)")
+    success_rate: Optional[float] = Field(default=None, description="Success rate of auto-executions (computed)")
+
+
+class AutoRemediationPolicyCreate(BaseModel):
+    """Request body for POST /api/v1/admin/remediation-policies."""
+
+    name: str = Field(..., min_length=1, max_length=200, description="Policy name (must be unique)")
+    description: Optional[str] = Field(default=None, max_length=1000)
+    action_class: str = Field(..., min_length=1, description="Must match a key in SAFE_ARM_ACTIONS")
+    resource_tag_filter: dict = Field(default_factory=dict)
+    max_blast_radius: int = Field(default=10, ge=1, le=50)
+    max_daily_executions: int = Field(default=20, ge=1, le=100)
+    require_slo_healthy: bool = Field(default=True)
+    maintenance_window_exempt: bool = Field(default=False)
+    enabled: bool = Field(default=True)
+
+
+class AutoRemediationPolicyUpdate(BaseModel):
+    """Request body for PUT /api/v1/admin/remediation-policies/{id}."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    action_class: Optional[str] = Field(default=None, min_length=1)
+    resource_tag_filter: Optional[dict] = None
+    max_blast_radius: Optional[int] = Field(default=None, ge=1, le=50)
+    max_daily_executions: Optional[int] = Field(default=None, ge=1, le=100)
+    require_slo_healthy: Optional[bool] = None
+    maintenance_window_exempt: Optional[bool] = None
+    enabled: Optional[bool] = None
+
+
+class PolicyExecution(BaseModel):
+    """A single auto-execution record for a policy (computed from remediation_audit)."""
+
+    execution_id: str
+    resource_id: str
+    proposed_action: str
+    status: str
+    verification_result: Optional[str] = None
+    executed_at: str
+    duration_ms: Optional[float] = None
+
+
+class PolicySuggestion(BaseModel):
+    """A learning-engine suggestion to create an auto-approval policy (Phase 51)."""
+
+    id: str = Field(..., description="Suggestion UUID")
+    action_class: str = Field(..., description="Remediation action class observed")
+    resource_pattern: dict = Field(default_factory=dict, description="Common resource tag pattern observed")
+    approval_count: int = Field(..., description="Number of HITL approvals observed")
+    rollback_count: int = Field(default=0, description="Number of rollbacks observed (should be 0)")
+    suggested_at: str = Field(..., description="ISO 8601 timestamp of suggestion creation")
+    dismissed: bool = Field(default=False, description="Whether operator dismissed this suggestion")
+    converted_to_policy_id: Optional[str] = Field(default=None, description="Policy ID if operator converted this suggestion")
+    message: str = Field(..., description="Human-readable suggestion message")
