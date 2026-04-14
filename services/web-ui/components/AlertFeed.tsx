@@ -10,8 +10,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell } from 'lucide-react';
+import { Bell, Shield } from 'lucide-react';
 import { useAppState } from '@/lib/app-state-context';
+import { WarRoomPanel } from './WarRoomPanel';
 
 interface Incident {
   incident_id: string;
@@ -64,6 +65,8 @@ export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedPr
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warRoomIncidentId, setWarRoomIncidentId] = useState<string | null>(null);
+  const [warRoomTitle, setWarRoomTitle] = useState<string | undefined>(undefined);
   const { setAlertCount } = useAppState();
 
   const fetchIncidents = useCallback(async () => {
@@ -249,6 +252,25 @@ export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedPr
                 </span>
               </TableCell>
               <TableCell className="py-3 px-2">
+                <div className="flex items-center gap-1.5">
+                {(incident.severity === 'Sev0' || incident.severity === 'Sev1') && (
+                  <button
+                    className="text-xs px-2 py-1 rounded cursor-pointer transition-colors flex items-center gap-1"
+                    style={{
+                      color: 'var(--accent-red)',
+                      border: '1px solid var(--accent-red)',
+                      background: 'transparent',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setWarRoomIncidentId(incident.incident_id);
+                      setWarRoomTitle(incident.title || incident.resource_name || incident.incident_id);
+                    }}
+                  >
+                    <Shield className="w-3 h-3" />
+                    War Room
+                  </button>
+                )}
                 {incident.resource_name && (
                   <button
                     className="text-xs px-2 py-1 rounded cursor-pointer transition-colors"
@@ -268,11 +290,19 @@ export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedPr
                     Investigate
                   </button>
                 )}
+                </div>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      {warRoomIncidentId && (
+        <WarRoomPanel
+          incidentId={warRoomIncidentId}
+          incidentTitle={warRoomTitle}
+          onClose={() => setWarRoomIncidentId(null)}
+        />
+      )}
     </div>
   );
 }
