@@ -120,6 +120,7 @@ from services.api_gateway.eol_endpoints import router as eol_router
 from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
+from services.api_gateway.subscription_registry import SubscriptionRegistry
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -289,10 +290,31 @@ async def lifespan(app: FastAPI):
         app.state.cosmos_client = None
         logger.warning("COSMOS_ENDPOINT not set — CosmosClient singleton not initialized")
 
+    # Initialize SubscriptionRegistry — auto-discovers all accessible subscriptions via ARG
+    app.state.subscription_registry = SubscriptionRegistry(
+        credential=app.state.credential,
+        cosmos_client=app.state.cosmos_client,
+        cosmos_database_name=os.environ.get("COSMOS_DATABASE", "aap"),
+    )
+    try:
+        await app.state.subscription_registry.full_sync()
+    except Exception as _exc:
+        logger.warning("startup: subscription_registry bootstrap failed (non-fatal) | error=%s", _exc)
+    asyncio.create_task(
+        app.state.subscription_registry.run_refresh_loop(interval_seconds=6 * 3600)
+    )
+    logger.info(
+        "startup: subscription_registry initialized | subscriptions=%d",
+        len(app.state.subscription_registry.get_all_ids()),
+    )
+
     # Initialize TopologyClient and run bootstrap if Cosmos is configured (TOPO-001)
     _topology_sync_task = None
-    subscription_ids_raw = os.environ.get("SUBSCRIPTION_IDS", "")
-    _subscription_ids = [s.strip() for s in subscription_ids_raw.split(",") if s.strip()]
+    # Prefer registry-discovered subscription IDs; fall back to SUBSCRIPTION_IDS env var
+    _subscription_ids = app.state.subscription_registry.get_all_ids()
+    if not _subscription_ids:
+        subscription_ids_raw = os.environ.get("SUBSCRIPTION_IDS", "")
+        _subscription_ids = [s.strip() for s in subscription_ids_raw.split(",") if s.strip()]
     if app.state.cosmos_client is not None and _subscription_ids:
         app.state.topology_client = TopologyClient(
             cosmos_client=app.state.cosmos_client,
@@ -494,6 +516,20 @@ app.include_router(topology_tree_router)
 app.include_router(eol_router)
 app.include_router(vmss_router)
 app.include_router(aks_router)
+
+
+@app.get("/api/v1/subscriptions", tags=["subscriptions"])
+async def list_subscriptions(request: Request):
+    """Return all discovered Azure subscriptions from the subscription registry.
+
+    Returns subscriptions discovered at startup and refreshed every 6 hours.
+    Returns empty list gracefully when registry not initialized or no subscriptions found.
+    """
+    registry = getattr(request.app.state, "subscription_registry", None)
+    if registry is None:
+        return {"subscriptions": []}
+    return {"subscriptions": registry.get_all()}
+
 
 # CORS for Web UI (Phase 5) — tightened for prod via CORS_ALLOWED_ORIGINS env var (D-15)
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
