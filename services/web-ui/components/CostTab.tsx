@@ -452,7 +452,7 @@ export function CostTab({ subscriptions }: CostTabProps) {
             <CardContent className="p-3">
               <p className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>Month-to-Date Spend</p>
               <p className="text-[20px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                ${forecast.current_spend_usd.toFixed(0)}
+                ${forecast.current_spend_usd != null ? forecast.current_spend_usd.toFixed(0) : '—'}
               </p>
               <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                 Day {forecast.days_elapsed} of {forecast.days_in_month}
@@ -464,11 +464,11 @@ export function CostTab({ subscriptions }: CostTabProps) {
             <CardContent className="p-3">
               <p className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>Forecast Month-End</p>
               <p className="text-[20px] font-semibold" style={{ color: forecast.over_budget ? 'var(--accent-red)' : 'var(--text-primary)' }}>
-                ${forecast.forecast_month_end_usd.toFixed(0)}
+                ${forecast.forecast_month_end_usd != null ? forecast.forecast_month_end_usd.toFixed(0) : '—'}
               </p>
               {forecast.over_budget && (
                 <span className="text-[11px]" style={{ color: 'var(--accent-red)' }}>
-                  ⚠ {forecast.over_budget_pct.toFixed(0)}% over budget
+                  ⚠ {forecast.over_budget_pct != null ? forecast.over_budget_pct.toFixed(0) : '?'}% over budget
                 </span>
               )}
             </CardContent>
@@ -561,10 +561,10 @@ export function CostTab({ subscriptions }: CostTabProps) {
                   <TableCell className="text-[12px]">{r.vm_name}</TableCell>
                   <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>{r.resource_group}</TableCell>
                   <TableCell className="text-[12px]">
-                    <span style={{ color: 'var(--accent-orange)' }}>{r.avg_cpu_pct.toFixed(1)}%</span>
+                    <span style={{ color: 'var(--accent-orange)' }}>{r.avg_cpu_pct != null ? r.avg_cpu_pct.toFixed(1) : '—'}%</span>
                   </TableCell>
                   <TableCell className="text-[12px] font-medium" style={{ color: 'var(--accent-green)' }}>
-                    ${r.monthly_cost_usd.toFixed(0)}/mo
+                    ${r.monthly_cost_usd != null ? r.monthly_cost_usd.toFixed(0) : '—'}/mo
                   </TableCell>
                   <TableCell>
                     {r.approval_id ? (

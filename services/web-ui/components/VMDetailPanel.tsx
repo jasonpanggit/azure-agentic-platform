@@ -1191,7 +1191,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                         </p>
                         {evidence.evidence_summary.metric_anomalies.slice(0, 3).map((a, i) => (
                           <div key={i} className="text-xs py-0.5" style={{ color: 'var(--text-secondary)' }}>
-                            {a.metric_name}: {a.current_value.toFixed(1)} {a.unit} (threshold: {a.threshold})
+                            {a.metric_name}: {a.current_value != null ? a.current_value.toFixed(1) : '—'} {a.unit} (threshold: {a.threshold})
                           </div>
                         ))}
                       </div>
