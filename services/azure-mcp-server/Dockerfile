@@ -1,4 +1,4 @@
-# Azure MCP Server Container
+# Azure MCP Server Container — v2.0.0 GA (microsoft/mcp)
 #
 # Architecture: azmcp (localhost:5000) + lightweight Node.js reverse proxy (0.0.0.0:8080)
 #
@@ -10,7 +10,7 @@
 
 FROM node:20
 
-ARG AZURE_MCP_VERSION=2.0.0-beta.34
+ARG AZURE_MCP_VERSION=2.0.0
 
 WORKDIR /app
 
