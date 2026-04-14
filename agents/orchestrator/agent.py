@@ -68,7 +68,8 @@ Call the matching connected-agent tool to route the query:
 - patch     → `patch_agent`     (Update Manager, patch compliance, missing patches, Windows/Linux update)
 - eol       → `eol_agent`       (End-of-life software, software lifecycle, unsupported versions, EOL dates, upgrade planning)
 - database  → `database_agent`  (Cosmos DB, PostgreSQL Flexible Server, Azure SQL Database health and performance)
-- app-service → `appservice_agent` (App Service plans, Web Apps, Function Apps health and diagnostics)
+- app-service      → `appservice_agent`    (App Service plans, Web Apps, Function Apps health and diagnostics)
+- container-apps  → `containerapps_agent` (Azure Container Apps, Container Apps Environments, platform agent self-monitoring)
 - sre       → `sre_agent`       (cross-domain, SLA, reliability, incidents with no clear domain)
 
 ### Type A — Structured incident payloads
@@ -99,11 +100,18 @@ For natural-language queries, determine the domain from the **topic** of the mes
     "elastic pool", "flexibleservers" → call `database_agent`
 - Mentions "app service", "web app", "function app", "function apps", "app service plan",
     "site", "webapp", "azure functions", "func app" → call `appservice_agent`
+- Mentions "container app", "container apps", "containerapps", "managed environment",
+    "container apps environment", "ca-" agent, "platform agent" → call `containerapps_agent`
 - Mentions "vm", "virtual machine", "aks", "compute", "cpu", "disk" → call `compute_agent`
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → call `network_agent`
 - Mentions "storage", "blob", "file share", "datalake" → call `storage_agent`
 - Mentions "defender", "key vault", "keyvault", "rbac", "security", "identity" → call `security_agent`
 - Topic is ambiguous or spans multiple domains → call `sre_agent`
+
+Container Apps disambiguation rule:
+- "Container Apps" and "containerapps" are Azure Container Apps resources, NOT generic compute.
+    Route those queries to `containerapps_agent`, even if the message contains words like
+    "container", "replica", or "scale".
 
 Important disambiguation rule:
 - "Arc-enabled servers" and "Arc servers" are Azure Arc resources, not Azure IaaS virtual machines.
@@ -123,7 +131,7 @@ Pass the operator's original question verbatim as the argument to the domain age
 - MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `compute_agent`, `network_agent`, `storage_agent`, `security_agent`,
     `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `database_agent`,
-    `appservice_agent`, `classify_incident_domain`.
+    `appservice_agent`, `containerapps_agent`, `classify_incident_domain`.
 """
 
 # ---------------------------------------------------------------------------
@@ -142,6 +150,7 @@ DOMAIN_AGENT_MAP: dict = {
     "eol": "eol_agent",
     "database": "database_agent",
     "app-service": "appservice_agent",
+    "container-apps": "containerapps_agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -167,6 +176,8 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.documentdb": "database",
     "microsoft.dbforpostgresql": "database",
     "microsoft.sql": "database",
+    "microsoft.app/containerapps": "container-apps",
+    "microsoft.app/managedenvironments": "container-apps",
 }
 
 
@@ -293,7 +304,7 @@ def create_orchestrator() -> ChatAgent:
 # Domain agents registered as A2A connections in Foundry
 _A2A_DOMAINS = [
     "compute", "patch", "network", "security",
-    "arc", "sre", "eol", "storage", "database", "appservice",
+    "arc", "sre", "eol", "storage", "database", "appservice", "containerapps",
 ]
 
 
