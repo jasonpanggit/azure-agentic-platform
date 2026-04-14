@@ -121,6 +121,10 @@ from services.api_gateway.pattern_analyzer import (
     analyze_patterns,
     run_pattern_analysis_loop,
 )
+from services.api_gateway.suggestion_engine import (
+    SUGGESTION_SWEEP_INTERVAL_SECONDS,
+    run_suggestion_sweep_loop,
+)
 from services.api_gateway.eol_endpoints import router as eol_router
 from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
@@ -472,6 +476,22 @@ async def lifespan(app: FastAPI):
             os.environ.get("PATTERN_ANALYSIS_ENABLED", "true"),
         )
 
+    # Start learning suggestion sweep loop (Phase 51)
+    _suggestion_sweep_task: Optional[asyncio.Task] = None
+    if app.state.cosmos_client is not None:
+        _suggestion_sweep_task = asyncio.create_task(
+            run_suggestion_sweep_loop(
+                cosmos_client=app.state.cosmos_client,
+                interval_seconds=SUGGESTION_SWEEP_INTERVAL_SECONDS,
+            )
+        )
+        logger.info(
+            "startup: suggestion sweep loop started | interval=%ds",
+            SUGGESTION_SWEEP_INTERVAL_SECONDS,
+        )
+    else:
+        logger.warning("startup: suggestion sweep loop not started (COSMOS_ENDPOINT not set)")
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -510,6 +530,15 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("shutdown: pattern analysis loop cancelled")
+
+    # Cancel suggestion sweep loop on shutdown
+    if _suggestion_sweep_task is not None and not _suggestion_sweep_task.done():
+        _suggestion_sweep_task.cancel()
+        try:
+            await _suggestion_sweep_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: suggestion sweep loop cancelled")
 
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
