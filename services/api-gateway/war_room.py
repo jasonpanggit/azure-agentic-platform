@@ -41,7 +41,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from azure.cosmos import ContainerProxy, CosmosClient, MatchConditions
+from azure.core import MatchConditions
+from azure.cosmos import ContainerProxy, CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 
