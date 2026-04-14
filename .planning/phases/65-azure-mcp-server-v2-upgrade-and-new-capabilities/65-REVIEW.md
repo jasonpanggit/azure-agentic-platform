@@ -1,282 +1,247 @@
-# Phase 65 Code Review — Azure MCP Server v2 Upgrade and New Capabilities
-
-**Reviewer:** Claude (automated)
-**Date:** 2026-04-14
-**Branch:** `gsd/phase-45-azure-mcp-server-v2-upgrade-and-new-capabilities`
-**Depth:** Standard
-**Files reviewed:** 25
+# Phase 65 — Code Review
+## Azure MCP Server v2 Upgrade and New Capabilities
+**Commits:** `2e40eb3` → `acd96c4`
+**Reviewed:** 2026-04-14
+**Files:** 4 (Dockerfile, agents/sre/tools.py, agents/sre/agent.py, CLAUDE.md)
 
 ---
 
 ## Summary
 
-| Area | Result |
+All four changes are correct, focused, and consistent with project conventions. No security
+vulnerabilities or correctness bugs were introduced. The phase is a clean, minimal upgrade: one
+ARG bump, three allowlist entries, one prompt section, and doc updates. The most significant
+issue found is a **HIGH** test regression — the `TestAllowedMcpTools` class in
+`agents/tests/sre/test_sre_tools.py` hardcodes an expected count of `6` entries and an expected
+list of 6 specific tool names, both of which are now stale after the 3 new `containerapps` tools
+were added.
+
+---
+
+## Findings
+
+### HIGH
+
+#### H-01 — Test suite now fails: `ALLOWED_MCP_TOOLS` count and membership assertions are stale
+
+**File:** `agents/tests/sre/test_sre_tools.py` (not changed in this phase, but broken by it)
+**Lines:** 30–47
+
+```python
+# test_allowed_mcp_tools_has_exactly_six_entries  ← FAILS: list is now 9
+assert len(ALLOWED_MCP_TOOLS) == 6
+
+# test_allowed_mcp_tools_contains_expected_entries  ← PASSES but incomplete
+# Does not assert the 3 new containerapps entries exist
+```
+
+**Impact:** `pytest agents/tests/sre/test_sre_tools.py::TestAllowedMcpTools` fails with
+`AssertionError: assert 9 == 6`. Any CI run exercising the SRE test suite will break.
+
+**Fix required:** Update the count assertion from `6` to `9` and add the three new tool names
+to the `expected` list in `test_allowed_mcp_tools_contains_expected_entries`:
+```python
+"containerapps.list_apps",
+"containerapps.get_app",
+"containerapps.list_revisions",
+```
+
+---
+
+### MEDIUM
+
+#### M-01 — CONTEXT.md planned a `query_container_app_health` Python `@ai_function` tool; it was not implemented
+
+**File:** `.planning/phases/65-.../65-CONTEXT.md` (decision record, not a code file)
+**Context:** The phase context document specifies:
+> Add new `@ai_function` tool: `query_container_app_health(container_app_name, resource_group)`
+> Uses `azure-mgmt-appcontainers` SDK (lazy import pattern)
+
+The implementation instead took a lighter path: only the MCP allowlist entries were added and
+the system prompt was updated to instruct the LLM to call the MCP tools directly. No Python
+`@ai_function` wrapper was added, and `azure-mgmt-appcontainers` was not added to
+`agents/sre/requirements.txt`.
+
+**Impact:** Not a bug — the MCP-only path is fully functional and consistent with how MCP tools
+work in this platform. The SUMMARY.md documents this as no deviation. However, there is a gap:
+when the MCP server is unreachable, the SRE agent has no SDK-based fallback for Container Apps
+health. All other SRE monitoring domains have Python `@ai_function` SDK fallbacks.
+
+**Recommendation:** Track the SDK-backed `query_container_app_health` tool as a Plan 65-2 task
+(already noted in SUMMARY.md as "next phase readiness") to maintain consistency. Not blocking.
+
+#### M-02 — Module docstring in `tools.py` uses informal `containerapps (list_apps, get_app, list_revisions)` notation
+
+**File:** `agents/sre/tools.py`, lines 6–7
+
+```python
+"""...
+    containerapps (list_apps, get_app, list_revisions)
+"""
+```
+
+All other entries in the docstring use the canonical `namespace.operation` dotted format
+(`monitor.query_logs`, `resourcehealth.get_availability_status`, etc.). The new line uses a
+different grouping syntax, making the docstring inconsistent and potentially confusing to
+readers parsing what the allowlist looks like.
+
+**Recommendation:** Expand to three separate lines matching the established format:
+```
+    containerapps.list_apps, containerapps.get_app, containerapps.list_revisions
+```
+
+---
+
+### LOW
+
+#### L-01 — Dockerfile uses `node:20` (floating major tag) — no SHA or minor version pin
+
+**File:** `services/azure-mcp-server/Dockerfile`, line 11
+
+```dockerfile
+FROM node:20
+```
+
+`node:20` resolves to the latest Node 20 patch release at build time. This means two ACR builds
+on different days can produce different base images, potentially introducing unreviewed OS/runtime
+changes. The Node image in this container only runs the reverse proxy (`proxy.js`, 26 lines) and
+`azmcp`; the attack surface is small, but image reproducibility is a best practice for production
+Container Apps.
+
+**Recommendation:** Pin to a specific digest or at minimum a patch version:
+```dockerfile
+FROM node:20.19.0-bookworm-slim
+```
+Using `-slim` also reduces image size by ~400 MB. Not blocking for this phase, but worth
+addressing in a follow-up infra hardening pass.
+
+#### L-02 — `proxy.js` passes all client request headers through to `azmcp` unfiltered
+
+**File:** `services/azure-mcp-server/proxy.js`, line 13
+
+```javascript
+headers: req.headers,
+```
+
+All inbound HTTP headers (including `Host`, `X-Forwarded-For`, `Authorization`, etc.) are
+forwarded verbatim to `azmcp`. Since the Container App uses internal-only ingress
+(`external_enabled = false`), only traffic from within the Container Apps environment reaches
+this proxy, significantly limiting the exposure. The security comment in the Dockerfile CMD
+block (SEC-001) documents this mitigating boundary.
+
+**Recommendation:** As a defence-in-depth measure, strip or override the `Host` header before
+forwarding to `azmcp localhost:5000`:
+```javascript
+headers: { ...req.headers, host: '127.0.0.1' },
+```
+This prevents any host-header injection from influencing `azmcp`'s routing. Low priority given
+the internal-only network boundary.
+
+#### L-03 — `advisor` namespace: `advisor.get_recommendation` allowlist addition was deferred but not explicitly noted
+
+**File:** `agents/sre/tools.py` — `ALLOWED_MCP_TOOLS`
+**Context:** `65-CONTEXT.md` line 41 states:
+> Add `advisor.get_recommendation` to `ALLOWED_MCP_TOOLS` if available in v2 (check namespace)
+
+This was silently skipped — no note in SUMMARY.md about whether it was verified absent or
+explicitly deferred. If `advisor.get_recommendation` does exist in v2, the SRE agent cannot
+call it to drill into a specific recommendation after `advisor.list_recommendations` returns
+a summary.
+
+**Recommendation:** Verify `advisor.get_recommendation` existence in v2 tool list and either
+add it to `ALLOWED_MCP_TOOLS` or add a comment explaining why it was excluded. Not blocking.
+
+#### L-04 — CLAUDE.md "MCP Surfaces" architecture line omits some of the 7 new v2 namespaces
+
+**File:** `CLAUDE.md`, architecture section — MCP Surfaces
+
+```markdown
+- **Azure MCP Server** (v2.0.0 GA) — ... covers ARM, Compute, Storage, Databases, Monitoring,
+  Security, Messaging, `containerapps`, Functions
+```
+
+The Covered Services table correctly lists all 7 new namespaces (`containerapps`, `deviceregistry`,
+`functions`, `azuremigrate`, `policy`, `pricing`, `wellarchitectedframework`), but the
+architecture summary line only calls out `containerapps` and `Functions`. `deviceregistry`,
+`azuremigrate`, `pricing`, and `wellarchitectedframework` are absent from the summary.
+
+**Impact:** Cosmetic only — readers consulting the architecture section get an incomplete picture
+of v2 coverage. The full table above it is accurate.
+
+**Recommendation:** Either extend the summary line to name all new high-value namespaces or
+replace the inline list with a reference to the Covered Services table. Not blocking.
+
+---
+
+## Security Assessment
+
+| Check | Result |
 |---|---|
-| v2 MCP tool name migration | ✅ PASS |
-| `query_container_app_health` implementation | ✅ PASS (with minor gaps) |
-| Test completeness and correctness | ✅ PASS (one missing path) |
-| Security | ⚠️ 2 MEDIUM issues |
-
-**Overall:** Phase is shippable. Two medium issues should be addressed before or shortly after merge. No blockers.
+| Hardcoded secrets | ✅ None |
+| Injection vectors (KQL, shell, HTTP) | ✅ None introduced; MCP proxy passes headers verbatim (L-02, low risk) |
+| Auth bypass | ✅ None; `DefaultAzureCredential` managed identity unchanged |
+| Non-root container user | ✅ `USER mcp` set in Dockerfile (pre-existing, not regressed) |
+| Wildcard MCP tools | ✅ All 3 new entries are explicit dotted names, no wildcards |
+| New network surfaces | ✅ No new ingress; containerapps is an MCP call over existing internal path |
 
 ---
 
-## Focus Area 1 — v2 MCP Tool Name Migration
+## Code Correctness Assessment
 
-### Verdict: PASS
+| Check | Result |
+|---|---|
+| Tool name format (`namespace.operation`) | ✅ All 3 new entries match established format |
+| Tool names match v2 namespace | ✅ `containerapps.list_apps`, `.get_app`, `.list_revisions` match CLAUDE.md Covered Services table |
+| Allowlist consistent between tools.py and agent.py | ✅ All 3 new names appear in both ALLOWED_MCP_TOOLS list and system prompt |
+| System prompt / allowlist sync | ✅ `{allowed_tools}` format string in agent.py correctly includes new entries |
+| No wildcards | ✅ Confirmed |
+| Existing tools unaffected | ✅ No existing ALLOWED_MCP_TOOLS entries modified |
 
-All 8 agents have fully migrated from v1 dotted tool names to v2 namespace-level intent tools. No dotted names (e.g., `monitor.query_logs`, `compute.list_vms`) remain in any `ALLOWED_MCP_TOOLS` list.
+---
 
-### Agent-by-agent allowlist audit
+## Documentation Accuracy Assessment
 
-| Agent | `ALLOWED_MCP_TOOLS` entries | Dotted names | v1 residue |
+| Check | Result |
+|---|---|
+| Dockerfile comment matches ARG version | ✅ Comment says `v2.0.0 GA`, ARG is `2.0.0` |
+| CLAUDE.md version table updated | ✅ `2.0.0` in Summary table |
+| CLAUDE.md repo reference updated | ✅ `microsoft/mcp (formerly Azure/azure-mcp, now archived)` |
+| Covered Services table accurate | ✅ Matches known v2 namespace list |
+| Architecture section updated | ✅ `v2.0.0 GA` annotation and `containerapps` added |
+| Version consistency across files | ⚠️ Minor: architecture summary line (L-04) doesn't list all new namespaces |
+
+---
+
+## Dockerfile Best Practices Assessment
+
+| Check | Result |
+|---|---|
+| Non-root user | ✅ `USER mcp` in place |
+| Layer cache optimization | ✅ `npm install` + `npm cache clean` in single `RUN` layer |
+| COPY before USER switch | ✅ `proxy.js` copied before `USER mcp` so permissions are correct |
+| ARG-driven version (no hardcoded) | ✅ `ARG AZURE_MCP_VERSION=2.0.0` used in `npm install` |
+| Base image pinning | ⚠️ `node:20` floating tag (L-01) |
+| Image size | ⚠️ `node:20` full image; `-slim` variant would reduce size ~400 MB (L-01) |
+| Secrets in image | ✅ None |
+
+---
+
+## Action Items
+
+| Priority | ID | Action | File |
 |---|---|---|---|
-| `arc` | `arc_servers_list`, `arc_k8s_list`, `arc_extensions_list`, `arc_policy_list`, `arc_connectivity_check`, `arc_guest_config_list`, `arc_data_services_list`, `arc_servers_update`, `arc_k8s_apply`, `monitor`, `resourcehealth` (11) | None | None |
-| `compute` | `compute`, `monitor`, `resourcehealth`, `advisor`, `appservice` (5) | None | None |
-| `eol` | `monitor`, `resourcehealth` (2) | None | None |
-| `network` | `monitor`, `resourcehealth`, `advisor`, `compute` (4) | None | None |
-| `patch` | `monitor`, `resourcehealth` (2) | None | None |
-| `security` | `keyvault`, `role`, `monitor`, `resourcehealth`, `advisor` (5) | None | None |
-| `sre` | `monitor`, `applicationinsights`, `advisor`, `resourcehealth`, `containerapps` (5) | None | None |
-| `storage` | `storage`, `fileshares`, `monitor`, `resourcehealth` (4) | None | None |
-
-**Arc note:** The Arc agent retains underscore-named tools (e.g., `arc_servers_list`). These are Custom Arc MCP Server tools, not Azure MCP Server v2 tools, and the naming convention is correct and intentional.
-
-### Infrastructure references
-
-- **`services/azure-mcp-server/Dockerfile`**: `ARG AZURE_MCP_VERSION=2.0.0` — pinned correctly.
-- **`CLAUDE.md`**: References `microsoft/mcp` (new repo location, moved from `Azure/azure-mcp`) — correct.
-- **`agents/tests/test_mcp_v2_migration.py`**: Cross-cutting `test_no_dotted_mcp_tool_names` parametrized across all 8 agents provides regression protection. `test_dockerfile_mcp_version` guards pin version. Both tests are well-structured.
+| **HIGH** | H-01 | Fix `TestAllowedMcpTools`: update count `6→9`, add 3 containerapps entries to expected list | `agents/tests/sre/test_sre_tools.py` |
+| MEDIUM | M-01 | Track `query_container_app_health` Python tool as Plan 65-2 (already noted in SUMMARY) | `agents/sre/tools.py` |
+| MEDIUM | M-02 | Expand docstring to use canonical dotted format for containerapps entries | `agents/sre/tools.py` |
+| LOW | L-01 | Pin base image to specific patch + `-slim` variant in a follow-up infra pass | `services/azure-mcp-server/Dockerfile` |
+| LOW | L-02 | Override `host` header in proxy forward as defence-in-depth | `services/azure-mcp-server/proxy.js` |
+| LOW | L-03 | Verify `advisor.get_recommendation` in v2 and explicitly include or exclude | `agents/sre/tools.py` |
+| LOW | L-04 | Extend architecture MCP Surfaces line to list all new v2 namespaces | `CLAUDE.md` |
 
 ---
 
-## Focus Area 2 — `query_container_app_health` Implementation
-
-**Location:** `agents/sre/tools.py`, lines 1034–1143
-
-### Verdict: PASS (with LOW observability gap)
-
-The implementation follows the platform's tool function pattern correctly for the happy path and error path.
-
-### What's correct
-
-- **Lazy import guard**: `ContainerAppsAPIClient` imported at module level inside `try/except ImportError`; check `if ContainerAppsAPIClient is None` returns structured error immediately. ✅
-- **Never-raise pattern**: All exceptions caught; both outer `except Exception` and inner revision `except Exception` return/log without re-raising. ✅
-- **Structured error dicts**: All error paths return `{"query_status": "error", "error": ..., "duration_ms": ...}`. ✅
-- **`start_time = time.monotonic()`**: Present at entry inside the context manager. ✅
-- **`duration_ms` on all paths**: Both success `try` and outer `except` blocks compute and include `duration_ms`. ✅
-- **Inner revision isolation**: Revision listing wrapped in its own `try/except`; failure logs warning and continues with empty `active_revisions` rather than aborting the tool call. ✅
-- **`subscription_id` guard**: Checks env var before entering the OTel context manager; returns error dict if missing. ✅
-- **`instrument_tool_call` context manager**: Used correctly around the main execution block. ✅
-
-### Finding LOW-001 — Observability gap: early guards emit no OTel spans
-
-**Severity:** LOW
-**File:** `agents/sre/tools.py`
-**Lines:** ~1040–1060 (SDK-missing guard and sub_id guard)
-
-The `if ContainerAppsAPIClient is None` and `if not subscription_id` early-return paths execute *before* entering the `instrument_tool_call` context manager. These failure cases do not produce OpenTelemetry spans.
-
-For SDK-missing errors this is acceptable (infrastructure misconfiguration, not a runtime tool failure). For missing-subscription-id errors this is a minor gap — a debugging session for an unexpected missing-env-var failure would find no span trace.
-
-**Recommendation:** Move the `start_time = time.monotonic()` call and SDK-missing / sub_id guards *inside* the `with instrument_tool_call(...)` block, or wrap the early returns in a span. Low priority.
-
----
-
-## Focus Area 3 — Test Completeness and Correctness
-
-### Verdict: PASS (one missing path)
-
-### What's well-covered
-
-- **`TestAllowedMcpTools` in each agent's test file**: Verifies entry count, no wildcards, no dotted names, expected entries present. The compute and network tests are exemplary templates.
-- **`test_no_dotted_names_across_all_agents`** in `agents/tests/integration/test_mcp_tools.py`: Parametrized cross-agent regression test. Strong protection against v1 name re-introduction.
-- **`TestQueryContainerAppHealth`** in `agents/tests/sre/test_sre_tools.py`: 4 tests covering happy path, API exception, SDK-missing, and missing subscription_id. All assertions are correct.
-- **EOL tool tests**: Comprehensive coverage of `normalize_product_slug`, `classify_eol_status`, `query_endoflife_date`, `query_ms_lifecycle`, `scan_estate_eol`, cache helpers, and `_fetch_with_retry`.
-- **Patch agent tests**: Verify MCPTool mounting when `AZURE_MCP_SERVER_URL` is set; confirm `discover_arc_workspace` is registered.
-- **OTel span tests**: `record_tool_call_span` tests use `"compute.list_vms"` as tool_name — this is testing the span-recording function's parameter handling, not MCP compliance. Acceptable and not a v1 residue concern.
-
-### Finding TEST-001 — Missing test: revision-listing exception path in `query_container_app_health`
-
-**Severity:** LOW
-**File:** `agents/tests/sre/test_sre_tools.py`
-
-`query_container_app_health` contains an inner `try/except` block around revision listing. The intent is: if revision listing fails, the tool should still return success with `active_revisions: []` (or partial data) and log a warning.
-
-This path has no test. A regression that breaks inner error isolation (e.g., by removing the inner try/except) would not be caught.
-
-**Recommended test:**
-```python
-def test_revision_list_error_still_returns_app_data(self):
-    """Inner revision-listing exception should not abort the tool call."""
-    with patch("agents.sre.tools.ContainerAppsAPIClient") as mock_client_class:
-        mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
-        mock_client.container_apps.get.return_value = MagicMock(
-            name="test-app",
-            provisioning_state="Succeeded",
-            latest_revision_name="rev-1",
-        )
-        mock_client.container_apps_revisions.list.side_effect = Exception("revision API error")
-
-        result = query_container_app_health(
-            container_app_name="test-app",
-            resource_group="test-rg",
-            subscription_id="00000000-0000-0000-0000-000000000000",
-        )
-
-    assert result["query_status"] == "success"
-    assert result["active_revisions"] == []
-    assert "duration_ms" in result
-```
-
----
-
-## Focus Area 4 — Security
-
-### Verdict: ⚠️ 2 MEDIUM issues, no CRITICAL
-
-### PASS items
-
-- **No hardcoded secrets**: All credentials via `DefaultAzureCredential` or environment variables. ✅
-- **Dockerfile non-root user**: `mcp` user created and used; container does not run as root. ✅
-- **Internal-only ingress**: `--dangerously-disable-http-incoming-auth` flag removed from Dockerfile. Defense-in-depth via Container Apps internal ingress only. ✅
-- **Input validation**: Tool functions validate required parameters before making SDK calls. ✅
-
----
-
-### Finding SEC-001 — OData filter injection in `query_ms_lifecycle`
-
-**Severity:** MEDIUM
-**File:** `agents/eol/tools.py`
-**Approximate location:** `query_ms_lifecycle` function, OData filter construction
-
-The Microsoft Lifecycle API OData filter is constructed with an unsanitized `product` parameter:
-
-```python
-f"contains(productName,'{product}')"
-```
-
-If `product` contains a single quote (e.g., `"Microsoft's Server"` → `contains(productName,'Microsoft's Server')`), the OData query becomes syntactically malformed and the request will fail.
-
-**Context and risk assessment:**
-- The `product` value originates from the LLM (via `@ai_function` call), not from direct user input to the API.
-- The OData `contains()` filter does not support SQL-style injection into query *logic* in the same way — a malformed value causes query failure, not data leakage.
-- On failure, the tool catches the exception and returns an error dict; `endoflife.date` serves as fallback.
-- **Risk:** Query failure causing unnecessary fallback to `endoflife.date` for products with apostrophes in their names (e.g., `"Microsoft's SQL Server"`). No data exfiltration risk.
-
-**Recommended fix:**
-```python
-# Escape single quotes by doubling them (OData convention)
-safe_product = product.replace("'", "''")
-odata_filter = f"contains(productName,'{safe_product}')"
-```
-
----
-
-### Finding SEC-002 — PostgreSQL password not URL-encoded in DSN
-
-**Severity:** MEDIUM
-**File:** `agents/eol/tools.py`
-**Function:** `resolve_postgres_dsn`
-
-The DSN URL is constructed by substituting raw environment variable values. If `POSTGRES_PASSWORD` contains URL-reserved characters (`@`, `/`, `#`, `?`, `:`), the `asyncpg` DSN parser will misinterpret the password as part of the host, port, or path segments.
-
-```python
-# Current (vulnerable to special chars in password)
-dsn = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-```
-
-**Risk:** Connection failure when password contains special characters. No security vulnerability per se, but a correctness/reliability issue. Passwords with `@` are particularly likely to cause silent DSN misparse.
-
-**Recommended fix:**
-```python
-from urllib.parse import quote_plus
-
-dsn = f"postgresql://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{dbname}"
-```
-
----
-
-## Additional Findings (Out of Scope for Focus Areas)
-
-### Finding BUG-001 — `finding_id` slug scope check always False in `scan_estate_eol`
-
-**Severity:** LOW
-**File:** `agents/eol/tools.py`
-**Function:** `scan_estate_eol` (or `_get_eol_status` inner closure)
-
-```python
-finding_id = f"eol-{slug if 'slug' in dir() else <fallback>}"
-```
-
-`dir()` returns module-level and class-level names, not local variable names. `slug` is a local variable; `'slug' in dir()` is always `False`. The intent was to use `'slug' in locals()` or a conditional based on whether the `normalize_product_slug()` call succeeded.
-
-**Impact:** The `finding_id` always uses the fallback path. Functionally harmless (findings still get IDs), but the slug-based ID path is dead code. Pre-existing bug, not introduced in this phase.
-
-**Recommended fix:**
-```python
-# Option 1: use locals()
-finding_id = f"eol-{slug if 'slug' in locals() else <fallback>}"
-
-# Option 2: initialize slug = None before the call, then check
-slug = None
-slug, _ = normalize_product_slug(product_name)
-finding_id = f"eol-{slug}" if slug else f"eol-{<fallback>}"
-```
-
----
-
-### Finding ARCH-001 — `patch/agent.py` imports MCPTool from wrong package
-
-**Severity:** MEDIUM
-**File:** `agents/patch/agent.py`, line 25
-
-```python
-# patch/agent.py (current — inconsistent)
-from azure.ai.projects.models import MCPTool
-
-# All other agents that mount MCP servers (e.g., eol/agent.py)
-from agent_framework import MCPTool
-```
-
-Every other agent in the codebase that mounts an MCP server imports `MCPTool` from `agent_framework`. The patch agent imports it from `azure.ai.projects.models`.
-
-These are different classes. `agent_framework.MCPTool` is the Microsoft Agent Framework's MCP integration class, designed to work with `ChatAgent`. `azure.ai.projects.models.MCPTool` is the Foundry SDK's model class for MCP tool descriptors.
-
-At runtime, the patch agent's MCP tool mounting may silently fail or behave incorrectly because `ChatAgent` expects the `agent_framework.MCPTool` type for its tools list.
-
-**Recommended fix:**
-```python
-# agents/patch/agent.py
-from agent_framework import MCPTool  # match all other agents
-```
-
-Verify by running the patch agent's existing MCPTool mounting test after the fix.
-
----
-
-## Findings Summary Table
-
-| ID | Severity | File | Description |
-|---|---|---|---|
-| SEC-001 | **MEDIUM** | `agents/eol/tools.py` | OData filter constructed with unescaped `product` — single quotes cause query failure |
-| SEC-002 | **MEDIUM** | `agents/eol/tools.py` | PostgreSQL password not URL-encoded in DSN — special chars break connection |
-| ARCH-001 | **MEDIUM** | `agents/patch/agent.py` | `MCPTool` imported from `azure.ai.projects.models` instead of `agent_framework` |
-| TEST-001 | LOW | `agents/tests/sre/test_sre_tools.py` | Missing test for inner revision-listing exception path in `query_container_app_health` |
-| LOW-001 | LOW | `agents/sre/tools.py` | Early-exit guards in `query_container_app_health` emit no OTel spans |
-| BUG-001 | LOW | `agents/eol/tools.py` | `'slug' in dir()` always False — dead code, pre-existing, harmless |
-
----
-
-## Recommended Actions
-
-### Before merge (or immediately after)
-1. **ARCH-001** — Fix `patch/agent.py` MCPTool import. One-line change; low regression risk.
-2. **SEC-001** — Escape single quotes in OData filter with `product.replace("'", "''")`.
-3. **SEC-002** — URL-encode PostgreSQL password with `urllib.parse.quote_plus`.
-
-### Post-merge (backlog)
-4. **TEST-001** — Add revision-listing exception test to `TestQueryContainerAppHealth`.
-5. **LOW-001** — Move early guards inside `instrument_tool_call` context in `query_container_app_health`.
-6. **BUG-001** — Fix `slug` scope check to use `locals()` in `scan_estate_eol`.
+## Verdict
+
+**Ready to ship with one required fix (H-01).** The phase delivers its intended scope cleanly.
+H-01 is a CI-breaking test regression that must be resolved before the branch merges. All
+other findings are low-risk cosmetic or follow-up items. No security issues.
