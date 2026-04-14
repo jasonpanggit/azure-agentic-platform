@@ -49,6 +49,14 @@
             "Microsoft.Kubernetes/connectedClusters",
             "Microsoft.AzureArcData"
         ), "arc",
+        // Messaging domain (Phase 49) — Service Bus and Event Hub
+        resource_type has_any (
+            "Microsoft.ServiceBus/namespaces",
+            "Microsoft.ServiceBus/namespaces/queues",
+            "Microsoft.ServiceBus/namespaces/topics",
+            "Microsoft.EventHub/namespaces",
+            "Microsoft.EventHub/namespaces/eventhubs"
+        ), "messaging",
         // SRE fallback (D-06) — all unrecognized resource types
         "sre"
     )
