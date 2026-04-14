@@ -113,6 +113,26 @@ QUERY_DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "credential",
         ),
     ),
+    (
+        "finops",
+        (
+            "finops",
+            "cost breakdown",
+            "cloud cost",
+            "spending",
+            "monthly bill",
+            "burn rate",
+            "budget",
+            "reserved instance",
+            "ri utilization",
+            "savings plan",
+            "idle resources",
+            "rightsizing",
+            "cost optimization",
+            "overspend",
+            "cost management",
+        ),
+    ),
 )
 
 
