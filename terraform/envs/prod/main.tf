@@ -483,5 +483,14 @@ module "github_runner" {
   replica_timeout_seconds = 1800
 }
 
+# ---------------------------------------------------------------------------
+# Import blocks — resources created outside Terraform state (e.g. partial
+# apply timeouts) that must be reconciled before the next plan can succeed.
+# These blocks are one-shot: once the resource is in state the import is a
+# no-op on subsequent applies.
+# ---------------------------------------------------------------------------
 
-
+import {
+  to = module.agent_apps.azurerm_container_app.agents["messaging"]
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.App/containerApps/ca-messaging-prod"
+}

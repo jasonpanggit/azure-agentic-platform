@@ -35,12 +35,18 @@ resource "azurerm_container_app" "agents" {
     type = "SystemAssigned"
   }
 
-  # ACR registry configuration — always present so existing ACR-tagged images can pull
-  # even when use_placeholder_image=true. The placeholder image (public) doesn't need it
-  # but existing revisions with ACR SHA tags do.
-  registry {
-    server   = var.acr_login_server
-    identity = "system"
+  # ACR registry configuration — only included when NOT using the placeholder image.
+  # When use_placeholder_image=true the public placeholder needs no registry auth, and
+  # including the ACR registry block causes an "Operation expired" timeout on first
+  # creation because the system-assigned MI hasn't been granted AcrPull yet (the RBAC
+  # module runs AFTER agent-apps). CI/CD always sets use_placeholder_image=false so
+  # the registry block is present for every real image pull.
+  dynamic "registry" {
+    for_each = var.use_placeholder_image ? [] : [1]
+    content {
+      server   = var.acr_login_server
+      identity = "system"
+    }
   }
 
   template {
