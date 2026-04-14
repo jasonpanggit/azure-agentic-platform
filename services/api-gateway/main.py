@@ -1361,17 +1361,18 @@ async def search_runbooks_endpoint(
 @app.post(
     "/api/v1/chat",
     response_model=ChatResponse,
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=status.HTTP_200_OK,
 )
 async def start_chat(
     payload: ChatRequest,
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
 ) -> ChatResponse:
-    """Start an operator-initiated chat conversation.
+    """Start an operator-initiated chat conversation via the Foundry Responses API.
 
-    Creates a Foundry thread and dispatches the operator message
-    to the Orchestrator agent.
+    The Responses API is synchronous — this endpoint blocks until the
+    orchestrator agent produces a reply. The result is cached server-side
+    so GET /api/v1/chat/{id}/result returns immediately on first poll.
 
     Authentication: Entra ID Bearer token required.
     """
@@ -1385,13 +1386,8 @@ async def start_chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Foundry dispatch unavailable: {exc}",
         ) from exc
-    except HttpResponseError as exc:
-        # Foundry rejects new messages when a run is still active on the thread
-        if "while a run" in str(exc) or "run is active" in str(exc):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A previous response is still in progress. Please wait for it to complete.",
-            ) from exc
+    except Exception as exc:
+        logger.error("Chat dispatch failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Foundry API error: {exc}",

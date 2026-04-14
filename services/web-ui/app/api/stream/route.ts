@@ -9,8 +9,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const HEARTBEAT_INTERVAL_MS = 20_000; // 20 seconds (UI-008)
-const POLL_INTERVAL_MS = 2_000;       // Poll Foundry run status every 2 seconds
-const POLL_TIMEOUT_MS = 180_000;      // Give up after 3 minutes (multi-agent chains can exceed 2m)
+const POLL_INTERVAL_MS = 2_000;       // Poll gateway result cache every 2 seconds
+const POLL_TIMEOUT_MS = 30_000;       // Give up after 30s — gateway POST is synchronous,
+                                       // result should be in cache within 2s of SSE connect
 // 'not_found' is intentionally excluded — the run may not be visible in Foundry
 // immediately after creation (propagation delay). Keep polling until timeout.
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired']);

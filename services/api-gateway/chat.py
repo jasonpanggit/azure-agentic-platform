@@ -16,9 +16,18 @@ from typing import Any, Optional
 from agents.shared.routing import classify_query_text
 
 from services.api_gateway.arg_helper import run_arg_query
-from services.api_gateway.foundry import _get_foundry_client
+from services.api_gateway.foundry import _get_foundry_client, dispatch_chat_to_orchestrator
 from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
+
+# ---------------------------------------------------------------------------
+# In-memory result cache
+# Maps response_id → {thread_id, run_status, reply}
+# Populated by create_chat_thread; read by get_chat_result.
+# The Responses API is synchronous so the result is available immediately.
+# Using a simple dict — single process, no persistence required.
+# ---------------------------------------------------------------------------
+_RESPONSE_CACHE: dict[str, dict] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -165,16 +174,11 @@ async def create_chat_thread(
     user_id: str,
     credential: Any = None,
 ) -> dict[str, str]:
-    """Create or continue a Foundry thread for an operator chat session.
+    """Dispatch an operator chat message to the Orchestrator via the Responses API.
 
-    Supports three modes (TEAMS-004):
-    1. thread_id provided: Continue existing thread (skip creation).
-    2. incident_id provided (no thread_id): Look up thread from Cosmos DB.
-    3. Neither provided: Create a new Foundry thread (default).
-
-    All synchronous Foundry SDK calls and ARG queries are offloaded to
-    the default thread pool via run_in_executor to avoid blocking the
-    async event loop (fixes chat timeout — event loop starvation).
+    Replaces the threads/runs pattern (Phase 1-28) with a single synchronous
+    Responses API call. The Responses API blocks until the agent completes,
+    so the reply is available immediately — no polling required.
 
     Args:
         request: Validated chat request.
@@ -182,115 +186,51 @@ async def create_chat_thread(
         credential: Azure credential for ARG VM inventory lookup (best-effort).
 
     Returns:
-        Dict with "thread_id" and "run_id" keys.
+        Dict with "thread_id", "run_id", "status", and "reply" keys.
+        thread_id and run_id both map to the Foundry response ID.
     """
-    loop = asyncio.get_running_loop()
-    client = _get_foundry_client()
-    orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID")
-
-    if not orchestrator_agent_id:
-        raise ValueError("ORCHESTRATOR_AGENT_ID environment variable is required.")
-
-    # Determine user identity -- request.user_id takes precedence (D-07)
     effective_user_id = request.user_id or user_id
 
-    # Resolve thread_id (TEAMS-004)
-    thread_id = request.thread_id
+    # Build the operator query envelope (includes subscription context, VM inventory, domain hint)
+    # Use the response_id as a synthetic thread_id for envelope construction
+    import uuid as _uuid
+    synthetic_thread_id = request.thread_id or str(_uuid.uuid4())
 
-    if not thread_id and request.incident_id:
-        # Look up thread_id from Cosmos DB incident record
-        thread_id = await _lookup_thread_by_incident(request.incident_id)
-
-    if thread_id:
-        # Continue existing thread (TEAMS-004)
-        # Cancel any active runs first — Foundry rejects new messages on a thread
-        # that has an in-progress run (raises HttpResponseError).
-        logger.info("Continuing thread %s for user %s", thread_id, effective_user_id)
-        try:
-            runs = await loop.run_in_executor(
-                None, lambda: list(client.runs.list(thread_id=thread_id))
-            )
-            active_statuses = {"queued", "in_progress", "requires_action", "cancelling"}
-            for run in runs:
-                if run.status in active_statuses:
-                    logger.info(
-                        "Cancelling active run %s (status=%s) on thread %s",
-                        run.id,
-                        run.status,
-                        thread_id,
-                    )
-                    try:
-                        await loop.run_in_executor(
-                            None,
-                            lambda r=run: client.runs.cancel(thread_id=thread_id, run_id=r.id),
-                        )
-                    except Exception as cancel_exc:
-                        logger.warning("Failed to cancel run %s: %s", run.id, cancel_exc)
-            # Brief wait for cancellation to propagate
-            if runs and any(r.status in active_statuses for r in runs):
-                await asyncio.sleep(2)
-                # Verify the run is no longer active before proceeding
-                for attempt in range(3):
-                    try:
-                        updated_runs = await loop.run_in_executor(
-                            None, lambda: list(client.runs.list(thread_id=thread_id))
-                        )
-                        still_active = [r for r in updated_runs if r.status in active_statuses]
-                        if not still_active:
-                            break
-                        logger.info(
-                            "Thread %s still has %d active run(s) after cancellation, waiting... (attempt %d/3)",
-                            thread_id, len(still_active), attempt + 1,
-                        )
-                        await asyncio.sleep(2)
-                    except Exception:
-                        break
-        except Exception as list_exc:
-            logger.warning("Failed to list/cancel runs for thread %s: %s", thread_id, list_exc)
-    else:
-        # Create new thread (sync SDK call — offloaded to thread pool)
-        with foundry_span("create_thread") as span:
-            thread = await loop.run_in_executor(None, client.threads.create)
-            thread_id = thread.id
-            span.set_attribute("foundry.thread_id", thread_id)
-        logger.info(
-            "Created chat thread %s for user %s", thread_id, effective_user_id
-        )
-
-    # Build envelope — _build_operator_query_envelope calls _fetch_vm_inventory
-    # which does a synchronous ARG HTTP query. Offload to thread pool.
+    loop = asyncio.get_running_loop()
     message_content = await loop.run_in_executor(
         None,
         lambda: _build_operator_query_envelope(
-            thread_id=thread_id,
+            thread_id=synthetic_thread_id,
             request=request,
             initiated_by=effective_user_id,
             credential=credential,
         ),
     )
 
-    with foundry_span("post_message", thread_id=thread_id) as span:
-        await loop.run_in_executor(
-            None,
-            lambda: client.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=message_content,
-            ),
+    # Dispatch via Responses API — synchronous, returns final reply
+    with agent_span("orchestrator", correlation_id=request.incident_id or ""):
+        result = await dispatch_chat_to_orchestrator(
+            message=message_content,
+            conversation_id=request.thread_id,  # None for new conversations
         )
 
-    with agent_span("orchestrator", correlation_id=request.incident_id or ""):
-        with foundry_span("create_run", thread_id=thread_id) as span:
-            run = await loop.run_in_executor(
-                None,
-                lambda: client.runs.create(
-                    thread_id=thread_id,
-                    agent_id=orchestrator_agent_id,
-                ),
-            )
-            span.set_attribute("foundry.run_id", run.id)
+    response_id = result["response_id"]
+    reply = result.get("reply")
+    run_status = "completed" if result["status"] == "completed" else result["status"]
 
-    return {"thread_id": thread_id, "run_id": run.id}
+    # Cache the result so get_chat_result() can return it immediately
+    _RESPONSE_CACHE[response_id] = {
+        "thread_id": response_id,
+        "run_status": run_status,
+        "reply": reply,
+    }
+
+    logger.info(
+        "Chat dispatched for user %s, response %s, status %s, reply_len %d",
+        effective_user_id, response_id, run_status, len(reply) if reply else 0,
+    )
+
+    return {"thread_id": response_id, "run_id": response_id}
 
 
 async def _submit_mcp_approval(
@@ -478,156 +418,39 @@ def _approve_pending_subrun_mcp_calls(
 async def get_chat_result(
     thread_id: str, run_id: Optional[str] = None
 ) -> dict[str, str]:
-    """Return the current status of a Foundry run (single-shot, non-blocking).
+    """Return the result of a Responses API chat call (single-shot, non-blocking).
 
-    Called repeatedly by the SSE stream route which owns the polling loop.
-    This function fetches the run once and returns immediately — it does NOT
-    block waiting for completion.
+    Since create_chat_thread() now uses the synchronous Responses API, the
+    result is cached immediately in _RESPONSE_CACHE. This function simply
+    looks up the cache by response_id (passed as thread_id/run_id).
 
-    All synchronous Foundry SDK calls are offloaded to the default thread
-    pool via run_in_executor to avoid blocking the async event loop
-    (fixes chat timeout — event loop starvation).
+    The SSE stream route polls this endpoint every 2s. On the first poll
+    after create_chat_thread returns, the cache hit delivers the completed
+    reply immediately — no polling loop needed.
 
     Args:
-        thread_id: Foundry thread ID.
-        run_id: Specific run ID to poll.
+        thread_id: Foundry response ID (returned as thread_id by create_chat_thread).
+        run_id: Same as thread_id for Responses API (ignored; thread_id is authoritative).
 
     Returns:
         Dict with "thread_id", "run_status", and optionally "reply".
     """
-    loop = asyncio.get_running_loop()
-    client = _get_foundry_client()
-    terminal = {"completed", "failed", "cancelled", "expired"}
+    lookup_id = run_id or thread_id
+    cached = _RESPONSE_CACHE.get(lookup_id) or _RESPONSE_CACHE.get(thread_id)
+    if cached:
+        logger.debug("Cache hit for response %s: status=%s", lookup_id, cached["run_status"])
+        return cached
 
-    # Fetch the target run (sync SDK call — offloaded to thread pool).
-    # Foundry's run-status API can be slow under load; wrap with a 12s asyncio
-    # timeout so this endpoint always returns quickly and the SSE poll never
-    # hits its own AbortSignal.timeout before we respond.
-    # On timeout we return in_progress so the SSE route retries next cycle.
-    if run_id:
-        # Specific run requested — fetch directly
-        try:
-            latest_run = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: client.runs.get(thread_id=thread_id, run_id=run_id),
-                ),
-                timeout=12,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Run %s status poll timed out (Foundry slow) — returning in_progress", run_id)
-            return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
-        except Exception as exc:
-            logger.warning("Run %s not found: %s", run_id, exc)
-            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
-    else:
-        # No run_id — list all runs and pick the most recent (last in list)
-        try:
-            run_list = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: list(client.runs.list(thread_id=thread_id)),
-                ),
-                timeout=12,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Run list for thread %s timed out — returning in_progress", thread_id)
-            return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
-        if not run_list:
-            return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
-        latest_run = run_list[-1]
+    # No cache entry — the response may still be in-flight (create_chat_thread
+    # is awaited by the POST handler before SSE connects, so this should be rare).
+    # Return in_progress so the SSE retries on next cycle.
+    logger.debug("No cache entry for %s — returning in_progress", lookup_id)
+    return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
 
-    # Status may be a string (SDK 1.2.x) or an enum with .value (older SDK)
-    _s = latest_run.status
-    run_status = _s if isinstance(_s, str) else str(getattr(_s, "value", _s))
 
-    logger.debug("Thread %s run %s status: %s", thread_id, latest_run.id, run_status)
+# ---------------------------------------------------------------------------
+# Legacy helpers — kept for backward-compat with approvals and Teams bot
+# These used the old threads/runs pattern. They are no longer called by
+# the main chat flow but may still be referenced by other modules.
+# ---------------------------------------------------------------------------
 
-    # If requires_action, auto-approve MCP tool calls so run can proceed
-    if run_status == "requires_action":
-        required_action = latest_run.required_action
-        if (
-            required_action is not None
-            and hasattr(required_action, "type")
-            and required_action.type == "submit_tool_outputs"
-        ):
-            tool_calls = required_action.submit_tool_outputs.tool_calls  # type: ignore[attr-defined]
-            tool_outputs = []
-            for tc in tool_calls:
-                fn_name = getattr(tc.function, "name", "") if hasattr(tc, "function") else ""
-                fn_args_raw = getattr(tc.function, "arguments", "{}") if hasattr(tc, "function") else "{}"
-                logger.info("Executing function tool call: %s (id=%s)", fn_name, tc.id)
-
-                if fn_name == "azure_tools":
-                    # The orchestrator MUST NOT execute Azure tools directly.
-                    # It is only allowed to classify incidents and route to domain
-                    # agents via HandoffOrchestrator. Returning an error here
-                    # forces the LLM to route to the correct domain agent instead
-                    # of answering from raw Azure data.
-                    fn_args = {}
-                    try:
-                        fn_args = json.loads(fn_args_raw)
-                    except Exception:
-                        pass
-                    tool_name = fn_args.get("tool_name", "unknown")
-                    logger.warning(
-                        "Orchestrator attempted to call azure_tools(%s) directly — blocked. "
-                        "Route to the appropriate domain agent instead.",
-                        tool_name,
-                    )
-                    output = (
-                        "ERROR: The orchestrator is not permitted to call Azure tools directly. "
-                        "You MUST route this request to the appropriate domain agent "
-                        "(compute-agent, network-agent, storage-agent, security-agent, "
-                        "arc-agent, or sre-agent) via HandoffOrchestrator. "
-                        "Do NOT answer from your own knowledge or tool calls."
-                    )
-                else:
-                    output = f"Unknown function: {fn_name}"
-
-                tool_outputs.append({"tool_call_id": tc.id, "output": output})
-
-            logger.info(
-                "Submitting %d tool output(s) for thread %s run %s",
-                len(tool_outputs),
-                thread_id,
-                latest_run.id,
-            )
-            try:
-                with mcp_span("tool_approval", thread_id=thread_id) as mspan:
-                    mspan.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
-                    _run_id = latest_run.id
-                    await loop.run_in_executor(
-                        None,
-                        lambda: client.runs.submit_tool_outputs(
-                            thread_id=thread_id,
-                            run_id=_run_id,
-                            tool_outputs=tool_outputs,
-                        ),
-                    )
-            except Exception as exc:
-                logger.warning("Failed to submit tool outputs: %s", exc)
-
-    # Return non-terminal status immediately — caller polls again.
-    # Sub-run MCP approval is handled by the endpoint in main.py via
-    # FastAPI background_tasks (runs after response, never blocks here).
-    if run_status not in terminal:
-        return {"thread_id": thread_id, "run_status": run_status, "reply": None}
-
-    reply = None
-    if run_status == "completed":
-        with foundry_span("list_messages", thread_id=thread_id):
-            messages = await loop.run_in_executor(
-                None,
-                lambda: client.messages.list(thread_id=thread_id),
-            )
-        for msg in messages:
-            if msg.role == "assistant":
-                for block in msg.content:
-                    if hasattr(block, "text") and hasattr(block.text, "value"):
-                        reply = block.text.value
-                        break
-                if reply:
-                    break
-
-    return {"thread_id": thread_id, "run_status": run_status, "reply": reply}

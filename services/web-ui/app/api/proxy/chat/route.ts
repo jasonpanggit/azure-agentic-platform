@@ -23,11 +23,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const upstreamHeaders = buildUpstreamHeaders(request.headers.get('Authorization'));
 
+    // The gateway POST /api/v1/chat is now synchronous (Responses API) —
+    // it blocks until the orchestrator produces a reply. Allow up to 120s
+    // for complex multi-agent queries before timing out.
     const res = await fetch(`${apiGatewayUrl}/api/v1/chat`, {
       method: 'POST',
       headers: upstreamHeaders,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(120_000),
     });
 
     const data = await res.json();

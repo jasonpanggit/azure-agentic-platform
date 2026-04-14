@@ -170,6 +170,92 @@ async def dispatch_to_orchestrator(
     return {"response_id": response.id, "status": response.status}
 
 
+async def dispatch_chat_to_orchestrator(
+    message: str,
+    credential: Optional[DefaultAzureCredential] = None,
+    conversation_id: Optional[str] = None,
+) -> dict[str, str]:
+    """Dispatch an operator chat message to the Orchestrator via the Responses API.
+
+    Uses the same Responses API path as dispatch_to_orchestrator() but accepts
+    a plain message string rather than a structured IncidentPayload.  The
+    Responses API is synchronous — it blocks until the agent produces a reply,
+    so the caller gets the final answer in one round trip with no polling.
+
+    Args:
+        message: The operator's chat message (plain text or JSON envelope).
+        credential: Optional pre-initialized credential.
+        conversation_id: Optional conversation/thread ID for continuity context.
+
+    Returns:
+        Dict with "response_id", "status", and "reply" keys.
+        reply is the agent's text output, or None if the response was empty.
+    """
+    import asyncio as _asyncio
+
+    orchestrator_agent_name = os.environ.get(
+        "ORCHESTRATOR_AGENT_NAME", "orchestrator-agent"
+    )
+
+    project = _get_foundry_project(credential)
+    openai_client = _get_openai_client(project)
+
+    loop = _asyncio.get_running_loop()
+
+    def _call_responses():
+        kwargs: dict = {
+            "input": message,
+            "extra_body": {
+                "agent_reference": {
+                    "name": orchestrator_agent_name,
+                    "type": "agent_reference",
+                }
+            },
+        }
+        if conversation_id:
+            kwargs["extra_body"]["conversation_id"] = conversation_id
+        return openai_client.responses.create(**kwargs)
+
+    with foundry_span("responses_create_chat") as span:
+        response = await loop.run_in_executor(None, _call_responses)
+        span.set_attribute("foundry.response_id", response.id)
+        span.set_attribute("agent.name", orchestrator_agent_name)
+
+    # Extract text reply from response output
+    reply: Optional[str] = None
+    try:
+        output = response.output
+        if output:
+            # output is a list of content blocks; find the first text value
+            for block in output:
+                if hasattr(block, "content"):
+                    for item in block.content:
+                        if hasattr(item, "text"):
+                            reply = item.text
+                            break
+                elif hasattr(block, "text"):
+                    reply = block.text
+                    break
+                elif isinstance(block, str):
+                    reply = block
+                    break
+    except Exception as exc:
+        logger.warning("Could not extract reply from response output: %s", exc)
+
+    logger.info(
+        "Chat dispatched to Orchestrator (response %s, status %s, reply_len %d)",
+        response.id,
+        response.status,
+        len(reply) if reply else 0,
+    )
+
+    return {
+        "response_id": response.id,
+        "status": response.status,
+        "reply": reply,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Backward-compat alias — callers that import create_foundry_thread
 # can be migrated incrementally
