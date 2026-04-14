@@ -497,3 +497,8 @@ import {
   to = module.agent_apps.azurerm_container_app.agents["messaging"]
   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.App/containerApps/ca-messaging-prod"
 }
+
+import {
+  to = module.rbac.azurerm_role_assignment.acr_pull["messaging"]
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.ContainerRegistry/registries/aapcrprodjgmjti/providers/Microsoft.Authorization/roleAssignments/271fd601-6201-4b46-92bf-9f7c096ff244"
+}
