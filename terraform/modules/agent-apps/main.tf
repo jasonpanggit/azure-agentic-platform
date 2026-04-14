@@ -369,6 +369,11 @@ resource "azurerm_container_app" "agents" {
   lifecycle {
     ignore_changes = [
       template[0].container[0].image,
+      # registry block is set by CI via `az containerapp registry set` after AcrPull
+      # is assigned. Terraform omits it on initial creation (use_placeholder_image=true)
+      # to avoid the chicken-and-egg timeout. Ignoring it here prevents Terraform from
+      # removing the registry config on subsequent applies.
+      registry,
     ]
   }
 }
