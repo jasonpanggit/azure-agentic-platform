@@ -12,12 +12,14 @@ variable "client_id" {
   description = "Service principal client ID (app ID)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "client_secret" {
   description = "Service principal client secret"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "location" {
@@ -77,6 +79,7 @@ variable "gateway_incidents_write_role_id" {
 variable "fabric_admin_email" {
   description = "Email address of the Fabric capacity administrator"
   type        = string
+  default     = ""
 }
 
 variable "cors_allowed_origins" {
