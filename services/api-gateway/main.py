@@ -132,6 +132,14 @@ from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
 from services.api_gateway.admin_endpoints import router as admin_router
+from services.api_gateway.war_room import (
+    get_or_create_war_room,
+    add_annotation,
+    update_presence,
+    generate_handoff_summary,
+    register_sse_queue,
+    deregister_sse_queue,
+)
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -1152,6 +1160,17 @@ async def get_incident_correlations(
         raise HTTPException(status_code=500, detail="Correlations retrieval failed")
 
 
+class WarRoomJoinRequest(BaseModel):
+    display_name: str = ""
+    role: str = "support"  # "lead" or "support"
+
+
+class AnnotationRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4096)
+    trace_event_id: Optional[str] = None
+    display_name: str = ""
+
+
 class ResolveIncidentRequest(BaseModel):
     """Request body for POST /api/v1/incidents/{incident_id}/resolve."""
 
@@ -2103,3 +2122,111 @@ async def azure_tools(
         AzureToolResponse with success, content, is_error fields.
     """
     return await call_azure_tool(request)
+
+
+# ---------------------------------------------------------------------------
+# War Room endpoints (Phase 53)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/incidents/{incident_id}/war-room")
+async def create_or_join_war_room(
+    incident_id: str,
+    body: WarRoomJoinRequest,
+    token_claims: dict = Depends(verify_token),
+    cosmos_client: Optional[CosmosClient] = Depends(get_optional_cosmos_client),
+):
+    operator_id: str = token_claims.get("sub", "anonymous")
+    display_name: str = body.display_name or token_claims.get("name", "")
+    war_room = await get_or_create_war_room(
+        incident_id=incident_id,
+        operator_id=operator_id,
+        display_name=display_name,
+        role=body.role,
+        cosmos_client=cosmos_client,
+    )
+    return {"ok": True, "war_room": war_room}
+
+
+@app.post("/api/v1/incidents/{incident_id}/war-room/annotations")
+async def post_annotation(
+    incident_id: str,
+    body: AnnotationRequest,
+    token_claims: dict = Depends(verify_token),
+    cosmos_client: Optional[CosmosClient] = Depends(get_optional_cosmos_client),
+):
+    operator_id: str = token_claims.get("sub", "anonymous")
+    display_name: str = body.display_name or token_claims.get("name", "")
+    annotation = await add_annotation(
+        incident_id=incident_id,
+        operator_id=operator_id,
+        display_name=display_name,
+        content=body.content,
+        trace_event_id=body.trace_event_id,
+        cosmos_client=cosmos_client,
+    )
+    return {"ok": True, "annotation": annotation}
+
+
+@app.get("/api/v1/incidents/{incident_id}/war-room/stream")
+async def war_room_sse_stream(
+    incident_id: str,
+    token_claims: dict = Depends(verify_token),
+):
+    """SSE endpoint — pushes annotation events to all connected participants."""
+    import json
+    from fastapi.responses import StreamingResponse
+
+    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+    register_sse_queue(incident_id, queue)
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    yield f"event: annotation\ndata: {payload}\n\n"
+                except asyncio.TimeoutError:
+                    # 20-second heartbeat comment to prevent Container Apps 240s timeout
+                    yield ": heartbeat\n\n"
+        finally:
+            deregister_sse_queue(incident_id, queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/v1/incidents/{incident_id}/war-room/heartbeat")
+async def war_room_heartbeat(
+    incident_id: str,
+    token_claims: dict = Depends(verify_token),
+    cosmos_client: Optional[CosmosClient] = Depends(get_optional_cosmos_client),
+):
+    operator_id: str = token_claims.get("sub", "anonymous")
+    await update_presence(
+        incident_id=incident_id,
+        operator_id=operator_id,
+        cosmos_client=cosmos_client,
+    )
+    return {"ok": True}
+
+
+@app.post("/api/v1/incidents/{incident_id}/war-room/handoff")
+async def generate_war_room_handoff(
+    incident_id: str,
+    token_claims: dict = Depends(verify_token),
+    cosmos_client: Optional[CosmosClient] = Depends(get_optional_cosmos_client),
+):
+    try:
+        summary = await generate_handoff_summary(
+            incident_id=incident_id,
+            cosmos_client=cosmos_client,
+        )
+        return {"ok": True, "summary": summary}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
