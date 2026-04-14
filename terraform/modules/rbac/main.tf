@@ -133,6 +133,27 @@ locals {
       }
     ),
 
+    # FinOps Agent: Cost Management Reader on all subscription IDs (Phase 52)
+    # Required for CostManagementClient.query.usage() and CostManagementClient.budgets.get()
+    {
+      for sub_id in var.all_subscription_ids :
+      "finops-costmgmtreader-${replace(sub_id, "-", "")}" => {
+        principal_id         = var.agent_principal_ids["finops"]
+        role_definition_name = "Cost Management Reader"
+        scope                = "/subscriptions/${sub_id}"
+      }
+    },
+
+    # FinOps Agent: Monitoring Reader for idle resource detection (Monitor metrics)
+    {
+      for sub_id in var.all_subscription_ids :
+      "finops-monreader-${replace(sub_id, "-", "")}" => {
+        principal_id         = var.agent_principal_ids["finops"]
+        role_definition_name = "Monitoring Reader"
+        scope                = "/subscriptions/${sub_id}"
+      }
+    },
+
     # API Gateway: Cognitive Services User on platform subscription (Foundry API access)
     {
       "api-gateway-coguser-platform" = {

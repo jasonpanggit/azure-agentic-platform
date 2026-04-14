@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingDown, RefreshCw, DollarSign } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,6 +40,82 @@ interface CostSummaryResponse {
 
 interface CostTabProps {
   subscriptions: string[];
+}
+
+// FinOps-specific types
+interface CostBreakdownItem {
+  name: string;
+  cost: number;
+  currency: string;
+}
+
+interface CostBreakdownResponse {
+  subscription_id: string;
+  total_cost: number;
+  currency: string;
+  breakdown: CostBreakdownItem[];
+  data_lag_note?: string;
+  query_status: string;
+}
+
+interface CostForecastResponse {
+  subscription_id: string;
+  current_spend_usd: number;
+  forecast_month_end_usd: number;
+  budget_amount_usd: number | null;
+  burn_rate_pct: number | null;
+  days_elapsed: number;
+  days_in_month: number;
+  over_budget: boolean;
+  over_budget_pct: number;
+  data_lag_note?: string;
+  query_status: string;
+}
+
+interface IdleResource {
+  resource_id: string;
+  vm_name: string;
+  resource_group: string;
+  avg_cpu_pct: number;
+  avg_network_mbps: number;
+  monthly_cost_usd: number;
+  approval_id?: string | null;
+}
+
+interface IdleResourcesResponse {
+  subscription_id: string;
+  vms_evaluated: number;
+  idle_count: number;
+  idle_resources: IdleResource[];
+  query_status: string;
+}
+
+interface RiUtilisationResponse {
+  subscription_id: string;
+  method: string;
+  actual_cost_usd: number;
+  amortized_cost_usd: number;
+  ri_benefit_estimated_usd: number;
+  utilisation_note: string;
+  data_lag_note?: string;
+  query_status: string;
+}
+
+interface TopCostDriver {
+  service_name: string;
+  cost_usd: number;
+  currency: string;
+  rank: number;
+}
+
+interface TopCostDriversResponse {
+  subscription_id: string;
+  n: number;
+  days: number;
+  drivers: TopCostDriver[];
+  total_cost_usd: number;
+  data_lag_note?: string;
+  query_status: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +189,15 @@ export function CostTab({ subscriptions }: CostTabProps) {
   const [dataLagNote, setDataLagNote] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  // FinOps state
+  const [breakdown, setBreakdown] = useState<CostBreakdownItem[]>([]);
+  const [forecast, setForecast] = useState<CostForecastResponse | null>(null);
+  const [idleResources, setIdleResources] = useState<IdleResource[]>([]);
+  const [riUtilisation, setRiUtilisation] = useState<RiUtilisationResponse | null>(null);
+  const [finopsLoading, setFinopsLoading] = useState(false);
+  const [finopsError, setFinopsError] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
   const fetchCostData = useCallback(async () => {
     if (subscriptions.length === 0) {
       setRecommendations([]);
@@ -151,9 +238,90 @@ export function CostTab({ subscriptions }: CostTabProps) {
     }
   }, [subscriptions]);
 
+  const fetchFinopsData = useCallback(async () => {
+    if (subscriptions.length === 0) return;
+    setFinopsLoading(true);
+    setFinopsError(null);
+    const subscriptionId = subscriptions[0];
+
+    try {
+      // Parallel fetch all 4 FinOps endpoints
+      const [breakdownRes, forecastRes, idleRes, riRes] = await Promise.allSettled([
+        fetch(`/api/proxy/finops/cost-breakdown?subscription_id=${encodeURIComponent(subscriptionId)}&days=30&group_by=ResourceGroup`, { signal: AbortSignal.timeout(15000) }),
+        fetch(`/api/proxy/finops/cost-forecast?subscription_id=${encodeURIComponent(subscriptionId)}`, { signal: AbortSignal.timeout(15000) }),
+        fetch(`/api/proxy/finops/idle-resources?subscription_id=${encodeURIComponent(subscriptionId)}`, { signal: AbortSignal.timeout(15000) }),
+        fetch(`/api/proxy/finops/ri-utilization?subscription_id=${encodeURIComponent(subscriptionId)}`, { signal: AbortSignal.timeout(15000) }),
+      ]);
+
+      if (breakdownRes.status === 'fulfilled' && breakdownRes.value.ok) {
+        const d: CostBreakdownResponse = await breakdownRes.value.json();
+        setBreakdown(d.breakdown?.slice(0, 10) ?? []);
+      }
+      if (forecastRes.status === 'fulfilled' && forecastRes.value.ok) {
+        const d: CostForecastResponse = await forecastRes.value.json();
+        setForecast(d);
+      }
+      if (idleRes.status === 'fulfilled' && idleRes.value.ok) {
+        const d: IdleResourcesResponse = await idleRes.value.json();
+        setIdleResources(d.idle_resources ?? []);
+      }
+      if (riRes.status === 'fulfilled' && riRes.value.ok) {
+        const d: RiUtilisationResponse = await riRes.value.json();
+        setRiUtilisation(d);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setFinopsError(`Failed to load FinOps data: ${message}`);
+    } finally {
+      setFinopsLoading(false);
+    }
+  }, [subscriptions]);
+
   useEffect(() => {
     fetchCostData();
-  }, [fetchCostData]);
+    fetchFinopsData();
+  }, [fetchCostData, fetchFinopsData]);
+
+  // ---------------------------------------------------------------------------
+  // HITL handlers
+  // ---------------------------------------------------------------------------
+
+  const handleApprove = async (approvalId: string) => {
+    setApprovingId(approvalId);
+    try {
+      await fetch(`/api/proxy/approvals/${encodeURIComponent(approvalId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Approved via FinOps tab' }),
+        signal: AbortSignal.timeout(10000),
+      });
+      // Refresh idle resources after approval
+      await fetchFinopsData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setFinopsError(`Approval failed: ${message}`);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleReject = async (approvalId: string) => {
+    setApprovingId(approvalId);
+    try {
+      await fetch(`/api/proxy/approvals/${encodeURIComponent(approvalId)}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Rejected via FinOps tab' }),
+        signal: AbortSignal.timeout(10000),
+      });
+      await fetchFinopsData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setFinopsError(`Rejection failed: ${message}`);
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // Render states
@@ -188,7 +356,7 @@ export function CostTab({ subscriptions }: CostTabProps) {
     );
   }
 
-  if (recommendations.length === 0) {
+  if (recommendations.length === 0 && !finopsLoading && !forecast && breakdown.length === 0 && idleResources.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--text-secondary)' }}>
         <DollarSign className="h-10 w-10 opacity-30" />
@@ -239,8 +407,8 @@ export function CostTab({ subscriptions }: CostTabProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={fetchCostData}
-            disabled={loading}
+            onClick={() => { fetchCostData(); fetchFinopsData(); }}
+            disabled={loading || finopsLoading}
             className="h-7 px-2 gap-1 text-[12px]"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -256,6 +424,213 @@ export function CostTab({ subscriptions }: CostTabProps) {
           style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }}
         >
           {dataLagNote}
+        </div>
+      )}
+
+      {/* FinOps error banner */}
+      {finopsError && (
+        <div className="px-4 pt-3">
+          <Alert variant="destructive">
+            <AlertDescription>{finopsError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+
+      {/* FinOps loading skeletons */}
+      {finopsLoading && (
+        <div className="px-4 pt-4 space-y-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      )}
+
+      {/* ───── FinOps KPIs ───── */}
+      {!finopsLoading && forecast && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          {/* Current month spend */}
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>Month-to-Date Spend</p>
+              <p className="text-[20px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                ${forecast.current_spend_usd.toFixed(0)}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                Day {forecast.days_elapsed} of {forecast.days_in_month}
+              </p>
+            </CardContent>
+          </Card>
+          {/* Forecast */}
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>Forecast Month-End</p>
+              <p className="text-[20px] font-semibold" style={{ color: forecast.over_budget ? 'var(--accent-red)' : 'var(--text-primary)' }}>
+                ${forecast.forecast_month_end_usd.toFixed(0)}
+              </p>
+              {forecast.over_budget && (
+                <span className="text-[11px]" style={{ color: 'var(--accent-red)' }}>
+                  ⚠ {forecast.over_budget_pct.toFixed(0)}% over budget
+                </span>
+              )}
+            </CardContent>
+          </Card>
+          {/* Budget gauge */}
+          {forecast.budget_amount_usd != null && (
+            <Card className="col-span-2">
+              <CardContent className="p-3">
+                <p className="text-[11px] mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Budget: ${forecast.budget_amount_usd.toFixed(0)}
+                </p>
+                {(() => {
+                  const burnPct = Math.min(((forecast.forecast_month_end_usd / forecast.budget_amount_usd!) * 100), 150);
+                  const barColor = burnPct > 110 ? 'var(--accent-red)' : burnPct > 90 ? 'var(--accent-orange)' : 'var(--accent-green)';
+                  return (
+                    <>
+                      <div className="relative h-3 rounded-full" style={{ background: 'color-mix(in srgb, var(--border) 50%, transparent)' }}>
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full transition-all"
+                          style={{ width: `${Math.min(burnPct, 100)}%`, background: barColor }}
+                        />
+                      </div>
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                        Projected {burnPct.toFixed(0)}% of budget
+                        {burnPct > 110 && <span style={{ color: 'var(--accent-red)' }}> — on track to exceed by {(burnPct - 100).toFixed(0)}%</span>}
+                      </p>
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ───── Cost Breakdown Chart ───── */}
+      {!finopsLoading && breakdown.length > 0 && (
+        <div className="px-4 pt-4">
+          <p className="text-[13px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+            Top Resource Groups by Spend (30d)
+          </p>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart
+              data={breakdown.map(b => ({
+                name: b.name.length > 18 ? b.name.slice(0, 18) + '…' : b.name,
+                cost: b.cost,
+              }))}
+              layout="vertical"
+              margin={{ top: 4, right: 50, left: 10, bottom: 0 }}
+            >
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
+              <Tooltip
+                formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'Cost']}
+                contentStyle={{ fontSize: 11 }}
+              />
+              <Bar dataKey="cost" fill="var(--accent-blue)" radius={[0, 2, 2, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ───── Idle Resources (Waste List) ───── */}
+      {!finopsLoading && idleResources.length > 0 && (
+        <div className="px-4 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+              Idle Resources
+            </p>
+            <span
+              className="text-[11px] px-2 py-0.5 rounded"
+              style={{ background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)', color: 'var(--accent-red)' }}
+            >
+              {idleResources.length} VMs idle 72h+
+            </span>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-[11px]">VM Name</TableHead>
+                <TableHead className="text-[11px]">Resource Group</TableHead>
+                <TableHead className="text-[11px]">Avg CPU</TableHead>
+                <TableHead className="text-[11px]">Monthly Cost</TableHead>
+                <TableHead className="text-[11px]">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {idleResources.map((r) => (
+                <TableRow key={r.resource_id}>
+                  <TableCell className="text-[12px]">{r.vm_name}</TableCell>
+                  <TableCell className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>{r.resource_group}</TableCell>
+                  <TableCell className="text-[12px]">
+                    <span style={{ color: 'var(--accent-orange)' }}>{r.avg_cpu_pct.toFixed(1)}%</span>
+                  </TableCell>
+                  <TableCell className="text-[12px] font-medium" style={{ color: 'var(--accent-green)' }}>
+                    ${r.monthly_cost_usd.toFixed(0)}/mo
+                  </TableCell>
+                  <TableCell>
+                    {r.approval_id ? (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          style={{ color: 'var(--accent-green)', borderColor: 'var(--accent-green)' }}
+                          disabled={approvingId === r.approval_id}
+                          onClick={() => r.approval_id && handleApprove(r.approval_id)}
+                        >
+                          {approvingId === r.approval_id ? '…' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[11px]"
+                          style={{ color: 'var(--text-secondary)' }}
+                          disabled={approvingId === r.approval_id}
+                          onClick={() => r.approval_id && handleReject(r.approval_id)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>No proposal</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* ───── RI Utilisation ───── */}
+      {!finopsLoading && riUtilisation && riUtilisation.query_status === 'success' && (
+        <div className="px-4 pt-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-[13px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                Reserved Instance Utilisation (30d)
+              </p>
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>RI Benefit Consumed</p>
+                  <p className="text-[18px] font-semibold" style={{ color: riUtilisation.ri_benefit_estimated_usd > 0 ? 'var(--accent-green)' : 'var(--text-secondary)' }}>
+                    ${Math.abs(riUtilisation.ri_benefit_estimated_usd).toFixed(0)}
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{riUtilisation.utilisation_note}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ───── Divider before existing Advisor recommendations ───── */}
+      {(breakdown.length > 0 || idleResources.length > 0 || forecast) && (
+        <div className="px-4 pt-4 pb-2">
+          <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+            Azure Advisor Cost Recommendations
+          </p>
         </div>
       )}
 

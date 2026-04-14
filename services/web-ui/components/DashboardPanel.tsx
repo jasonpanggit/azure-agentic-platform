@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -38,7 +38,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'vms', label: 'VMs', Icon: Monitor },
   { id: 'vmss', label: 'VMSS', Icon: Scaling },
   { id: 'aks', label: 'AKS', Icon: Container },
-  { id: 'cost', label: 'Cost', Icon: TrendingDown },
+  { id: 'cost', label: 'FinOps', Icon: DollarSign },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
   { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },

@@ -10,6 +10,7 @@ locals {
     patch        = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     eol          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     messaging    = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    finops       = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
   }
 
   # services excludes teams-bot (managed separately for bot-specific env vars)
@@ -216,6 +217,13 @@ resource "azurerm_container_app" "agents" {
         content {
           name  = "MESSAGING_AGENT_ID"
           value = var.messaging_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.finops_agent_id != "" ? [1] : []
+        content {
+          name  = "FINOPS_AGENT_ID"
+          value = var.finops_agent_id
         }
       }
       # EOL agent needs PostgreSQL DSN for eol_cache table
@@ -544,6 +552,7 @@ locals {
     sre       = var.sre_agent_endpoint
     storage   = var.storage_agent_endpoint
     messaging = var.messaging_agent_endpoint
+    finops    = var.finops_agent_endpoint
   }
   a2a_domains = { for k, v in local.a2a_domains_all : k => v if v != "" }
 }

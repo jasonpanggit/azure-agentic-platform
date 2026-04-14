@@ -23,6 +23,10 @@ eol_agent_id          = "asst_hUNs2ASp1WsrMvGvuwA5T495"
 messaging_agent_id       = ""
 messaging_agent_endpoint = ""
 
+# Phase 52: FinOps Agent — set after provisioning Foundry agent
+finops_agent_id       = ""
+finops_agent_endpoint = ""
+
 cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 

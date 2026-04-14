@@ -274,6 +274,8 @@ module "agent_apps" {
   eol_agent_id                   = var.eol_agent_id
   messaging_agent_id             = var.messaging_agent_id
   messaging_agent_endpoint       = var.messaging_agent_endpoint
+  finops_agent_id                = var.finops_agent_id
+  finops_agent_endpoint          = var.finops_agent_endpoint
 
   # Use placeholder image on first deploy — ACR images don't exist yet.
   # CI/CD pipeline deploys real images after initial infra provisioning.

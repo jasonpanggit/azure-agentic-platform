@@ -51,13 +51,18 @@ DOMAIN_MAPPINGS: dict[str, str] = {
     "microsoft.eventhub/namespaces": "messaging",
     "microsoft.eventhub/namespaces/eventhubs": "messaging",
     "microsoft.eventhub": "messaging",
+    # FinOps domain (Phase 52) — Cost Management and Budget alerts
+    "microsoft.costmanagement": "finops",
+    "microsoft.costmanagement/budgets": "finops",
+    "microsoft.costmanagement/alerts": "finops",
+    "microsoft.billing": "finops",
 }
 
 # SRE fallback domain (D-06)
 FALLBACK_DOMAIN = "sre"
 
-# Valid domain values (matches IncidentPayload.domain regex: ^(compute|network|storage|security|arc|sre|messaging)$)
-VALID_DOMAINS = frozenset({"compute", "network", "storage", "security", "arc", "sre", "messaging"})
+# Valid domain values (matches IncidentPayload.domain regex: ^(compute|network|storage|security|arc|sre|patch|eol|messaging|finops)$)
+VALID_DOMAINS = frozenset({"compute", "network", "storage", "security", "arc", "sre", "patch", "eol", "messaging", "finops"})
 
 
 def classify_domain(resource_type: str) -> str:
