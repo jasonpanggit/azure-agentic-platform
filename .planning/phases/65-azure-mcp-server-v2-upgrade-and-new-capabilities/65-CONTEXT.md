@@ -1,4 +1,4 @@
-# Phase 45: Azure MCP Server v2 Upgrade and New Capabilities - Context
+# Phase 65: Azure MCP Server v2 Upgrade and New Capabilities - Context
 
 **Gathered:** 2026-04-14
 **Status:** Ready for planning
