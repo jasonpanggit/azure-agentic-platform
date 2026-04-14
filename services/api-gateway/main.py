@@ -260,9 +260,30 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS slo_definitions_domain_status_idx "
                 "ON slo_definitions (domain, status);"
             )
+            # remediation_policies table (Phase 51 — Autonomous Remediation)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS remediation_policies (
+                    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name                    TEXT NOT NULL UNIQUE,
+                    description             TEXT,
+                    action_class            TEXT NOT NULL,
+                    resource_tag_filter     JSONB DEFAULT '{}',
+                    max_blast_radius        INT DEFAULT 10,
+                    max_daily_executions    INT DEFAULT 20,
+                    require_slo_healthy     BOOLEAN DEFAULT true,
+                    maintenance_window_exempt BOOLEAN DEFAULT false,
+                    enabled                 BOOLEAN DEFAULT true,
+                    created_at              TIMESTAMPTZ DEFAULT now(),
+                    updated_at              TIMESTAMPTZ DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_remediation_policies_action_class "
+                "ON remediation_policies (action_class, enabled);"
+            )
             logger.info(
                 "Startup migrations complete "
-                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions)"
+                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies)"
             )
         finally:
             await conn.close()
