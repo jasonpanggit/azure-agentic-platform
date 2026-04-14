@@ -1,0 +1,6 @@
+azure-mgmt-servicebus>=9.0.0
+azure-mgmt-eventhub>=11.2.0
+azure-monitor-query>=1.4.0
+azure-mgmt-monitor>=6.0.0
+azure-ai-agentserver-agentframework
+agent-framework>=1.0.0rc5
