@@ -1,0 +1,6 @@
+azure-mgmt-costmanagement>=4.0.0
+azure-mgmt-monitor>=6.0.0
+azure-mgmt-resourcegraph>=8.0.0
+azure-monitor-query>=1.4.0
+azure-ai-agentserver-agentframework
+agent-framework>=1.0.0rc5
