@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Roadmap — World-Class AIOps v3.0
-status: in_progress
-last_updated: "2026-04-14T12:00:00.000Z"
+milestone: v2.0
+milestone_name: Roadmap — World-Class AIOps
+status: unknown
+last_updated: "2026-04-14T10:47:33.459Z"
 progress:
-  total_phases: 16
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 6
+  total_phases: 35
+  completed_phases: 34
+  total_plans: 103
+  completed_plans: 104
+  percent: 100
 ---
 
 # Azure Agentic Platform (AAP) — Project State
