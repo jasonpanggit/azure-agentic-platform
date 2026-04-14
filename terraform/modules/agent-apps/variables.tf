@@ -328,3 +328,19 @@ variable "messaging_agent_endpoint" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# Phase 52: FinOps Agent — Foundry agent ID and A2A endpoint
+# ---------------------------------------------------------------------------
+
+variable "finops_agent_id" {
+  description = "Foundry Agent ID for the FinOps domain agent (Cost Management)"
+  type        = string
+  default     = ""
+}
+
+variable "finops_agent_endpoint" {
+  description = "FinOps agent A2A endpoint URL (set after provisioning Foundry agent)"
+  type        = string
+  default     = ""
+}
