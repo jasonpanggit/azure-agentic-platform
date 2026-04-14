@@ -28,10 +28,11 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.federation import resolve_subscription_ids
 from services.api_gateway.os_normalizer import normalize_os
 
 logger = logging.getLogger(__name__)
@@ -327,7 +328,10 @@ def _normalize_power_state(raw: str) -> str:
 
 @router.get("/vms")
 async def list_vms(
-    subscriptions: str = Query(..., description="Comma-separated subscription IDs"),
+    subscriptions: Optional[str] = Query(
+        None,
+        description="Comma-separated subscription IDs. Omit to query all registered subscriptions.",
+    ),
     status: str = Query(
         "all",
         description="Power state filter: all|running|stopped|deallocated",
@@ -338,6 +342,7 @@ async def list_vms(
     credential: Any = Depends(get_credential),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
     _user: Any = Depends(verify_token),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """Return VM fleet inventory with power state, health, and active alert count.
 
@@ -351,8 +356,9 @@ async def list_vms(
     """
     start = time.monotonic()
 
-    sub_list = [s.strip() for s in subscriptions.split(",") if s.strip()]
+    sub_list = resolve_subscription_ids(subscriptions, request)
     if not sub_list:
+        logger.info("vm_inventory: no subscriptions resolved — returning empty")
         return {"vms": [], "total": 0, "has_more": False}
 
     logger.info(

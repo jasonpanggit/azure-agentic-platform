@@ -81,27 +81,8 @@ def _log_sdk_availability() -> None:
 _log_sdk_availability()
 
 
-def _extract_subscription_id(resource_id: str) -> str:
-    """Extract subscription ID from an Azure resource ID.
-
-    Args:
-        resource_id: Azure resource ID in the form
-            /subscriptions/{sub}/resourceGroups/{rg}/providers/{type}/{name}
-
-    Returns:
-        Subscription ID string (lowercase).
-
-    Raises:
-        ValueError: If the subscription segment cannot be found.
-    """
-    parts = resource_id.lower().split("/")
-    try:
-        idx = parts.index("subscriptions")
-        return parts[idx + 1]
-    except (ValueError, IndexError):
-        raise ValueError(
-            f"Cannot extract subscription_id from resource_id: {resource_id}"
-        )
+# Import canonical helper — replaces local _extract_subscription_id copy
+from agents.shared.subscription_utils import extract_subscription_id as _extract_subscription_id
 
 
 @ai_function

@@ -329,6 +329,30 @@ resource "azurerm_cosmosdb_sql_container" "business_tiers" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "subscriptions" {
+  name                  = "subscriptions"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+
+  # TTL: none — subscription records are long-lived; registry re-syncs every 6h
+  default_ttl = -1
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/_etag/?"
+    }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 

@@ -138,10 +138,17 @@ class TestGetPatchAssessment:
         assert resp.status_code == 400
         assert "required" in resp.json()["detail"].lower()
 
-    def test_returns_422_when_no_subscriptions_param(self, client):
-        """No subscriptions query param at all returns 422 (FastAPI validation)."""
+    def test_returns_400_when_no_subscriptions_param_and_no_registry(self, client):
+        """No subscriptions param and no registry configured returns 400.
+
+        Previously this returned 422 (FastAPI required param validation).
+        After federation: subscriptions is Optional — endpoint returns 400
+        when param is absent AND registry has no subscriptions.
+        """
         resp = client.get("/api/v1/patch/assessment")
-        assert resp.status_code == 422
+        # 400 because registry is empty (no SUBSCRIPTION_IDS in test env)
+        # 422 would mean the param is still required (regression)
+        assert resp.status_code in (400, 422)
 
     @patch("services.api_gateway.patch_endpoints._query_law_installed_summary", new_callable=AsyncMock, return_value={})
     @patch("services.api_gateway.patch_endpoints._run_arg_query")

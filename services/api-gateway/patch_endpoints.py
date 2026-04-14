@@ -18,10 +18,11 @@ import urllib.request
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential
+from services.api_gateway.federation import resolve_subscription_ids
 from services.api_gateway.os_normalizer import normalize_os
 
 try:
@@ -418,9 +419,13 @@ async def _query_law_installed_detail(
 
 @router.get("/assessment")
 async def get_patch_assessment(
-    subscriptions: str,
+    subscriptions: Optional[str] = Query(
+        None,
+        description="Comma-separated subscription IDs. Omit to query all registered subscriptions.",
+    ),
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """Return per-machine patch compliance data from ARG.
 
@@ -430,16 +435,16 @@ async def get_patch_assessment(
     even if LAW is unavailable.
 
     Query param:
-        subscriptions: Comma-separated subscription IDs.
+        subscriptions: Comma-separated subscription IDs. Omit for all registered.
 
     Returns:
         { machines: [...], total_count: int, query_status: str }
     """
-    subscription_ids = [s.strip() for s in subscriptions.split(",") if s.strip()]
+    subscription_ids = resolve_subscription_ids(subscriptions, request)
     if not subscription_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="subscriptions query parameter is required",
+            detail="subscriptions query parameter is required (or configure subscription registry)",
         )
 
     # KQL: Start from `resources` (the authoritative VM list) and left-join
@@ -576,25 +581,29 @@ async def get_patch_assessment(
 
 @router.get("/installations")
 async def get_patch_installations(
-    subscriptions: str,
+    subscriptions: Optional[str] = Query(
+        None,
+        description="Comma-separated subscription IDs. Omit to query all registered subscriptions.",
+    ),
     days: int = 7,
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """Return patch installation run history from ARG.
 
     Query params:
-        subscriptions: Comma-separated subscription IDs.
+        subscriptions: Comma-separated subscription IDs. Omit for all registered.
         days: Look-back window in days (default: 7).
 
     Returns:
         { installations: [...], total_count: int, days: int, query_status: str }
     """
-    subscription_ids = [s.strip() for s in subscriptions.split(",") if s.strip()]
+    subscription_ids = resolve_subscription_ids(subscriptions, request)
     if not subscription_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="subscriptions query parameter is required",
+            detail="subscriptions query parameter is required (or configure subscription registry)",
         )
 
     # KQL ported from agents/patch/tools.py::query_patch_installations (lines 246-267)

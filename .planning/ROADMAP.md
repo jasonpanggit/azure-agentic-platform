@@ -1061,6 +1061,14 @@ When all phases 34–40 complete:
 **Depends on:** Phase 49
 **Success metric:** With 3 test subscriptions registered: `GET /api/v1/vms` returns VMs from all 3; topology blast-radius for cross-subscription peered VNet shows resources from both sides
 
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] 50-01-PLAN.md — Subscription registry (SubscriptionRegistry + Cosmos container + GET /api/v1/subscriptions + startup wiring)
+- [x] 50-02-PLAN.md — Inventory endpoint federation (subscriptions param Optional, default=all from registry)
+- [x] 50-03-PLAN.md — Cross-subscription topology edges (VNet peering, Private Endpoint, ExpressRoute)
+- [x] 50-04-PLAN.md — UI "All subscriptions" default + agents/shared/subscription_utils.py
+
 ---
 
 ### Phase 51: Autonomous Remediation Policies

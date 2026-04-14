@@ -18,12 +18,17 @@ locals {
 #
 # This role assignment is narrow (Foundry account scope only) and is required only for
 # terraform apply. It does NOT grant broad data access.
+#
+# When using OIDC (client_id = null), the SP lookup is skipped — OIDC identity already
+# has the required role granted out-of-band.
 data "azuread_service_principal" "terraform_sp" {
+  count     = var.client_id != null ? 1 : 0
   client_id = var.client_id
 }
 
 resource "azurerm_role_assignment" "terraform_sp_foundry_aidev" {
-  principal_id         = data.azuread_service_principal.terraform_sp.object_id
+  count                = var.client_id != null ? 1 : 0
+  principal_id         = data.azuread_service_principal.terraform_sp[0].object_id
   role_definition_name = "Azure AI Developer"
   scope                = module.foundry.foundry_account_id
 }
