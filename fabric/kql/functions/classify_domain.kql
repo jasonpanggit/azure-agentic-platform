@@ -57,6 +57,12 @@
             "Microsoft.EventHub/namespaces",
             "Microsoft.EventHub/namespaces/eventhubs"
         ), "messaging",
+        // FinOps domain (Phase 52) — Cost Management and Budget alerts
+        resource_type has_any (
+            "Microsoft.CostManagement/budgets",
+            "Microsoft.CostManagement/alerts",
+            "Microsoft.Billing/billingAccounts"
+        ), "finops",
         // SRE fallback (D-06) — all unrecognized resource types
         "sre"
     )
