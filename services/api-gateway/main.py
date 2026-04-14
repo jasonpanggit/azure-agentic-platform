@@ -127,6 +127,7 @@ from services.api_gateway.suggestion_engine import (
 )
 from services.api_gateway.eol_endpoints import router as eol_router
 from services.api_gateway.vm_cost import router as vm_cost_router
+from services.api_gateway.finops_endpoints import router as finops_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
@@ -563,6 +564,7 @@ app.include_router(vm_inventory_router)
 # vm_detail_router defines a wildcard path /{resource_id_base64} that would
 # otherwise swallow the fixed /cost-summary path.
 app.include_router(vm_cost_router)
+app.include_router(finops_router)
 app.include_router(vm_detail_router)
 app.include_router(vm_chat_router)
 app.include_router(topology_router)
