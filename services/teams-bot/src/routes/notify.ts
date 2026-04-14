@@ -12,6 +12,8 @@ import {
   sendProactiveCard,
   hasConversationReference,
 } from "../services/proactive";
+import { createTeamsWarRoomThread, postAnnotationToTeams } from "../services/war-room";
+import type { WarRoomCreatedPayload, WarRoomAnnotationPayload } from "../types";
 
 const VALID_CARD_TYPES = [
   "alert",
@@ -21,6 +23,8 @@ const VALID_CARD_TYPES = [
   "sop_notification",
   "sop_escalation",
   "sop_summary",
+  "war_room_created",      // Phase 53: war room creation notification
+  "war_room_annotation",   // Phase 53: sync annotation to Teams thread
 ] as const;
 
 export function createNotifyRouter(config: AppConfig): Router {
@@ -61,6 +65,25 @@ export function createNotifyRouter(config: AppConfig): Router {
           error: "Missing or invalid payload",
         };
         res.status(400).json(response);
+        return;
+      }
+
+      // War room card types use their own dispatch functions (Phase 53)
+      if (body.card_type === "war_room_created") {
+        const result = await createTeamsWarRoomThread(body.payload as WarRoomCreatedPayload);
+        const response: NotifyResponse = result.ok
+          ? { ok: true, message_id: result.messageId }
+          : { ok: false, error: result.error };
+        res.status(result.ok ? 200 : 503).json(response);
+        return;
+      }
+
+      if (body.card_type === "war_room_annotation") {
+        const result = await postAnnotationToTeams(body.payload as WarRoomAnnotationPayload);
+        const response: NotifyResponse = result.ok
+          ? { ok: true, message_id: result.messageId }
+          : { ok: false, error: "Failed to post annotation card" };
+        res.status(result.ok ? 200 : 503).json(response);
         return;
       }
 
