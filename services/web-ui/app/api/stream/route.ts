@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
   const threadId = searchParams.get('thread_id');
   const streamType = searchParams.get('type') || 'token';
   const runId = searchParams.get('run_id');
+  const authToken = searchParams.get('auth_token');
 
   if (!threadId) {
     log.warn('missing thread_id parameter');
@@ -120,9 +121,13 @@ export async function GET(request: NextRequest) {
       let notFoundCount = 0;
 
       // Call the API gateway directly (server-to-server) to avoid the self-referencing
-      // proxy pattern. Auth is currently disabled on the gateway for internal polling.
+      // proxy pattern. Forward the auth token if provided so the poll succeeds
+      // when API gateway Entra auth is enabled.
       const apiGatewayUrl = getApiGatewayUrl();
       const pollHeaders: Record<string, string> = {};
+      if (authToken) {
+        pollHeaders['Authorization'] = `Bearer ${authToken}`;
+      }
 
       while (!aborted && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));

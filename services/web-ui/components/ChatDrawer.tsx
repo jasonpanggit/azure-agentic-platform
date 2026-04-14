@@ -80,6 +80,21 @@ export function ChatDrawer() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ── SSE auth token ──
+  // Acquire a fresh token for the SSE polling route to forward to the API gateway.
+  // Stored in state so it can be passed to useSSE as a stable value.
+  const [sseAuthToken, setSseAuthToken] = useState<string | null>(null)
+
+  // Refresh the SSE auth token whenever a new run starts (runId changes)
+  useEffect(() => {
+    if (!runId) return
+    let cancelled = false
+    getAccessToken().then((token) => {
+      if (!cancelled) setSseAuthToken(token)
+    })
+    return () => { cancelled = true }
+  }, [runId, getAccessToken])
+
   // ── SSE: token stream ──
   const handleTokenEvent = useCallback((event: SSEEvent) => {
     const data = event.data as Record<string, unknown>
@@ -143,8 +158,8 @@ export function ChatDrawer() {
     }
   }, [setMessages, setIsStreaming, currentAgentRef])
 
-  useSSE({ threadId, runId, streamType: 'token', onEvent: handleTokenEvent, runKey })
-  useSSE({ threadId, runId, streamType: 'trace', onEvent: handleTraceEvent, runKey })
+  useSSE({ threadId, runId, streamType: 'token', onEvent: handleTokenEvent, runKey, authToken: sseAuthToken })
+  useSSE({ threadId, runId, streamType: 'trace', onEvent: handleTraceEvent, runKey, authToken: sseAuthToken })
 
   // ── Send message ──
   const handleSend = useCallback(async (messageOverride?: string) => {

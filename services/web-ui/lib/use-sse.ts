@@ -18,6 +18,8 @@ interface UseSSEOptions {
   onReconnect?: () => void;
   /** Increment to force a new SSE connection for the same threadId (e.g. each new message). */
   runKey?: number;
+  /** Auth token to forward to the API gateway for authenticated polling. */
+  authToken?: string | null;
 }
 
 interface UseSSEResult {
@@ -34,6 +36,7 @@ export function useSSE({
   onError,
   onReconnect,
   runKey = 0,
+  authToken,
 }: UseSSEOptions): UseSSEResult {
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -51,7 +54,8 @@ export function useSSE({
     lastSeqRef.current = 0;
 
     const runIdParam = runId ? `&run_id=${encodeURIComponent(runId)}` : '';
-    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}&last_seq=${lastSeqRef.current}${runIdParam}`;
+    const authParam = authToken ? `&auth_token=${encodeURIComponent(authToken)}` : '';
+    const url = `/api/stream?thread_id=${encodeURIComponent(threadId)}&type=${streamType}&last_seq=${lastSeqRef.current}${runIdParam}${authParam}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
@@ -96,7 +100,7 @@ export function useSSE({
       onError?.(err);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, runId, streamType, runKey, onEvent, onError, onReconnect]);
+  }, [threadId, runId, streamType, runKey, authToken, onEvent, onError, onReconnect]);
 
   useEffect(() => {
     connect();
