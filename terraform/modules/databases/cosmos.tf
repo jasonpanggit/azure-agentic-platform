@@ -375,6 +375,24 @@ resource "azurerm_cosmosdb_sql_container" "subscriptions" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "war_rooms" {
+  name                  = "war_rooms"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/incident_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — war rooms are operational artefacts
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path { path = "/*" }
+    excluded_path { path = "/annotations/*/content/?" } # large text field — exclude from index
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 

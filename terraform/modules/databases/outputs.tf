@@ -69,3 +69,8 @@ output "cosmos_policy_suggestions_container_name" {
   description = "Name of the Cosmos DB policy_suggestions container for learning suggestion engine (Phase 51)"
   value       = azurerm_cosmosdb_sql_container.policy_suggestions.name
 }
+
+output "cosmos_war_rooms_container_name" {
+  value       = azurerm_cosmosdb_sql_container.war_rooms.name
+  description = "War rooms Cosmos container name"
+}
