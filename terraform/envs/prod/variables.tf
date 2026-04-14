@@ -9,17 +9,17 @@ variable "tenant_id" {
 }
 
 variable "client_id" {
-  description = "Service principal client ID (app ID)"
+  description = "Service principal client ID (app ID). Leave null when using OIDC (ARM_USE_OIDC=true)."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = null
 }
 
 variable "client_secret" {
-  description = "Service principal client secret"
+  description = "Service principal client secret. Leave null when using OIDC (ARM_USE_OIDC=true)."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = null
 }
 
 variable "location" {
