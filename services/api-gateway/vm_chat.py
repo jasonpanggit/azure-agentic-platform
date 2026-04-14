@@ -182,6 +182,10 @@ async def _create_or_continue_vm_thread(
 
     New threads: inject evidence context as a system message before the user message.
     Continuing threads: just append the user message.
+
+    All synchronous Foundry SDK calls are offloaded to the default thread
+    pool via run_in_executor to avoid blocking the async event loop
+    (fixes chat timeout — event loop starvation).
     """
     # Use orchestrator so connected_agent tools (compute, network, etc.) are available.
     # Direct compute agent runs have no tools — orchestrator routes to compute via connected_agent.
@@ -194,6 +198,7 @@ async def _create_or_continue_vm_thread(
             "ORCHESTRATOR_AGENT_ID environment variable is required for resource-scoped chat."
         )
 
+    loop = asyncio.get_running_loop()
     client = _get_foundry_client()
     start = time.monotonic()
 
@@ -204,13 +209,18 @@ async def _create_or_continue_vm_thread(
         # Continue existing thread — cancel any active runs first
         logger.info("vm_chat: continuing thread %s | resource=%s", thread_id, resource_id[-60:])
         try:
-            runs = list(client.runs.list(thread_id=thread_id))
+            runs = await loop.run_in_executor(
+                None, lambda: list(client.runs.list(thread_id=thread_id))
+            )
             active = {"queued", "in_progress", "requires_action", "cancelling"}
             for run in runs:
                 if run.status in active:
                     logger.info("vm_chat: cancelling run %s (status=%s)", run.id, run.status)
                     try:
-                        client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                        await loop.run_in_executor(
+                            None,
+                            lambda r=run: client.runs.cancel(thread_id=thread_id, run_id=r.id),
+                        )
                     except Exception as cancel_exc:
                         logger.warning("vm_chat: cancel run failed | %s", cancel_exc)
             if any(r.status in active for r in runs):
@@ -218,8 +228,8 @@ async def _create_or_continue_vm_thread(
         except Exception as exc:
             logger.warning("vm_chat: list/cancel runs failed | thread=%s error=%s", thread_id, exc)
     else:
-        # Create new thread
-        thread = client.threads.create()
+        # Create new thread (sync SDK call — offloaded to thread pool)
+        thread = await loop.run_in_executor(None, client.threads.create)
         thread_id = thread.id
         logger.info("vm_chat: created thread %s | resource=%s user=%s", thread_id, resource_id[-60:], user_id)
 
@@ -227,19 +237,22 @@ async def _create_or_continue_vm_thread(
         if cosmos_client:
             evidence = None
             if request.incident_id:
-                evidence = await asyncio.get_event_loop().run_in_executor(
+                evidence = await loop.run_in_executor(
                     None, _load_evidence, cosmos_client, request.incident_id
                 )
             if not evidence:
-                evidence = await asyncio.get_event_loop().run_in_executor(
+                evidence = await loop.run_in_executor(
                     None, _load_latest_evidence_for_resource, cosmos_client, resource_id
                 )
 
             context = _build_evidence_context(resource_id, evidence)
-            client.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=context,
+            await loop.run_in_executor(
+                None,
+                lambda: client.messages.create(
+                    thread_id=thread_id,
+                    role="user",
+                    content=context,
+                ),
             )
             logger.info(
                 "vm_chat: evidence context injected | thread=%s evidence=%s",
@@ -247,17 +260,23 @@ async def _create_or_continue_vm_thread(
                 "found" if evidence else "none",
             )
 
-    # Append the operator's actual message
-    client.messages.create(
-        thread_id=thread_id,
-        role="user",
-        content=request.message,
+    # Append the operator's actual message (sync SDK — offloaded)
+    await loop.run_in_executor(
+        None,
+        lambda: client.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=request.message,
+        ),
     )
 
-    # Create run on compute agent directly (not orchestrator)
-    run = client.runs.create(
-        thread_id=thread_id,
-        agent_id=compute_agent_id,
+    # Create run on compute agent directly (not orchestrator) (sync SDK — offloaded)
+    run = await loop.run_in_executor(
+        None,
+        lambda: client.runs.create(
+            thread_id=thread_id,
+            agent_id=compute_agent_id,
+        ),
     )
 
     duration_ms = (time.monotonic() - start) * 1000

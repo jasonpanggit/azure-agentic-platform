@@ -172,6 +172,10 @@ async def create_chat_thread(
     2. incident_id provided (no thread_id): Look up thread from Cosmos DB.
     3. Neither provided: Create a new Foundry thread (default).
 
+    All synchronous Foundry SDK calls and ARG queries are offloaded to
+    the default thread pool via run_in_executor to avoid blocking the
+    async event loop (fixes chat timeout — event loop starvation).
+
     Args:
         request: Validated chat request.
         user_id: Authenticated operator's user ID from Entra token.
@@ -180,6 +184,7 @@ async def create_chat_thread(
     Returns:
         Dict with "thread_id" and "run_id" keys.
     """
+    loop = asyncio.get_running_loop()
     client = _get_foundry_client()
     orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID")
 
@@ -202,7 +207,9 @@ async def create_chat_thread(
         # that has an in-progress run (raises HttpResponseError).
         logger.info("Continuing thread %s for user %s", thread_id, effective_user_id)
         try:
-            runs = list(client.runs.list(thread_id=thread_id))
+            runs = await loop.run_in_executor(
+                None, lambda: list(client.runs.list(thread_id=thread_id))
+            )
             active_statuses = {"queued", "in_progress", "requires_action", "cancelling"}
             for run in runs:
                 if run.status in active_statuses:
@@ -213,7 +220,10 @@ async def create_chat_thread(
                         thread_id,
                     )
                     try:
-                        client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                        await loop.run_in_executor(
+                            None,
+                            lambda r=run: client.runs.cancel(thread_id=thread_id, run_id=r.id),
+                        )
                     except Exception as cancel_exc:
                         logger.warning("Failed to cancel run %s: %s", run.id, cancel_exc)
             # Brief wait for cancellation to propagate
@@ -222,34 +232,45 @@ async def create_chat_thread(
         except Exception as list_exc:
             logger.warning("Failed to list/cancel runs for thread %s: %s", thread_id, list_exc)
     else:
-        # Create new thread
+        # Create new thread (sync SDK call — offloaded to thread pool)
         with foundry_span("create_thread") as span:
-            thread = client.threads.create()
+            thread = await loop.run_in_executor(None, client.threads.create)
             thread_id = thread.id
             span.set_attribute("foundry.thread_id", thread_id)
         logger.info(
             "Created chat thread %s for user %s", thread_id, effective_user_id
         )
 
-    message_content = _build_operator_query_envelope(
-        thread_id=thread_id,
-        request=request,
-        initiated_by=effective_user_id,
-        credential=credential,
+    # Build envelope — _build_operator_query_envelope calls _fetch_vm_inventory
+    # which does a synchronous ARG HTTP query. Offload to thread pool.
+    message_content = await loop.run_in_executor(
+        None,
+        lambda: _build_operator_query_envelope(
+            thread_id=thread_id,
+            request=request,
+            initiated_by=effective_user_id,
+            credential=credential,
+        ),
     )
 
     with foundry_span("post_message", thread_id=thread_id) as span:
-        client.messages.create(
-            thread_id=thread_id,
-            role="user",
-            content=message_content,
+        await loop.run_in_executor(
+            None,
+            lambda: client.messages.create(
+                thread_id=thread_id,
+                role="user",
+                content=message_content,
+            ),
         )
 
     with agent_span("orchestrator", correlation_id=request.incident_id or ""):
         with foundry_span("create_run", thread_id=thread_id) as span:
-            run = client.runs.create(
-                thread_id=thread_id,
-                agent_id=orchestrator_agent_id,
+            run = await loop.run_in_executor(
+                None,
+                lambda: client.runs.create(
+                    thread_id=thread_id,
+                    agent_id=orchestrator_agent_id,
+                ),
             )
             span.set_attribute("foundry.run_id", run.id)
 
@@ -447,6 +468,10 @@ async def get_chat_result(
     This function fetches the run once and returns immediately — it does NOT
     block waiting for completion.
 
+    All synchronous Foundry SDK calls are offloaded to the default thread
+    pool via run_in_executor to avoid blocking the async event loop
+    (fixes chat timeout — event loop starvation).
+
     Args:
         thread_id: Foundry thread ID.
         run_id: Specific run ID to poll.
@@ -454,20 +479,27 @@ async def get_chat_result(
     Returns:
         Dict with "thread_id", "run_status", and optionally "reply".
     """
+    loop = asyncio.get_running_loop()
     client = _get_foundry_client()
     terminal = {"completed", "failed", "cancelled", "expired"}
 
-    # Fetch the target run
+    # Fetch the target run (sync SDK call — offloaded to thread pool)
     if run_id:
         # Specific run requested — fetch directly
         try:
-            latest_run = client.runs.get(thread_id=thread_id, run_id=run_id)
+            latest_run = await loop.run_in_executor(
+                None,
+                lambda: client.runs.get(thread_id=thread_id, run_id=run_id),
+            )
         except Exception as exc:
             logger.warning("Run %s not found: %s", run_id, exc)
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
     else:
         # No run_id — list all runs and pick the most recent (last in list)
-        run_list = list(client.runs.list(thread_id=thread_id))
+        run_list = await loop.run_in_executor(
+            None,
+            lambda: list(client.runs.list(thread_id=thread_id)),
+        )
         if not run_list:
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
         latest_run = run_list[-1]
@@ -531,10 +563,14 @@ async def get_chat_result(
             try:
                 with mcp_span("tool_approval", thread_id=thread_id) as mspan:
                     mspan.set_attribute("mcp.tool_calls_count", str(len(tool_outputs)))
-                    client.runs.submit_tool_outputs(
-                        thread_id=thread_id,
-                        run_id=latest_run.id,
-                        tool_outputs=tool_outputs,
+                    _run_id = latest_run.id
+                    await loop.run_in_executor(
+                        None,
+                        lambda: client.runs.submit_tool_outputs(
+                            thread_id=thread_id,
+                            run_id=_run_id,
+                            tool_outputs=tool_outputs,
+                        ),
                     )
             except Exception as exc:
                 logger.warning("Failed to submit tool outputs: %s", exc)
@@ -548,7 +584,10 @@ async def get_chat_result(
     reply = None
     if run_status == "completed":
         with foundry_span("list_messages", thread_id=thread_id):
-            messages = client.messages.list(thread_id=thread_id)
+            messages = await loop.run_in_executor(
+                None,
+                lambda: client.messages.list(thread_id=thread_id),
+            )
         for msg in messages:
             if msg.role == "assistant":
                 for block in msg.content:
