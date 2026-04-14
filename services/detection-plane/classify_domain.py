@@ -44,13 +44,20 @@ DOMAIN_MAPPINGS: dict[str, str] = {
     "microsoft.hybridcompute/machines": "arc",
     "microsoft.kubernetes/connectedclusters": "arc",
     "microsoft.azurearcdata": "arc",
+    # Messaging domain (Phase 49) — Service Bus and Event Hub
+    "microsoft.servicebus/namespaces": "messaging",
+    "microsoft.servicebus/namespaces/queues": "messaging",
+    "microsoft.servicebus": "messaging",
+    "microsoft.eventhub/namespaces": "messaging",
+    "microsoft.eventhub/namespaces/eventhubs": "messaging",
+    "microsoft.eventhub": "messaging",
 }
 
 # SRE fallback domain (D-06)
 FALLBACK_DOMAIN = "sre"
 
-# Valid domain values (matches IncidentPayload.domain regex: ^(compute|network|storage|security|arc|sre)$)
-VALID_DOMAINS = frozenset({"compute", "network", "storage", "security", "arc", "sre"})
+# Valid domain values (matches IncidentPayload.domain regex: ^(compute|network|storage|security|arc|sre|messaging)$)
+VALID_DOMAINS = frozenset({"compute", "network", "storage", "security", "arc", "sre", "messaging"})
 
 
 def classify_domain(resource_type: str) -> str:
