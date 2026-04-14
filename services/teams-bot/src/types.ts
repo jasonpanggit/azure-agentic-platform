@@ -5,7 +5,9 @@ export type CardType =
   | "reminder"
   | "sop_notification"
   | "sop_escalation"
-  | "sop_summary";
+  | "sop_summary"
+  | "war_room_created"
+  | "war_room_annotation";
 
 export interface NotifyRequest {
   card_type: CardType;
@@ -17,7 +19,9 @@ export interface NotifyRequest {
     | ReminderPayload
     | SopNotificationPayload
     | SopEscalationPayload
-    | SopSummaryPayload;
+    | SopSummaryPayload
+    | WarRoomCreatedPayload
+    | WarRoomAnnotationPayload;
 }
 
 export interface NotifyResponse {
@@ -93,4 +97,33 @@ export interface SopSummaryPayload {
   steps_run: number;
   steps_skipped: number;
   outcome: "resolved" | "escalated" | "pending_approval" | "failed";
+}
+
+/** Payload for war_room_created card — sent when an operator joins a P0 incident war room */
+export interface WarRoomCreatedPayload {
+  incident_id: string;
+  incident_title?: string;
+  severity: string;
+  resource_name?: string;
+  participants: Array<{
+    operator_id: string;
+    display_name: string;
+    role: string;
+  }>;
+  /** Deep link to the incident in the Web UI */
+  incident_url?: string;
+}
+
+/** Payload for war_room_annotation card — syncs a new annotation to the Teams thread */
+export interface WarRoomAnnotationPayload {
+  incident_id: string;
+  incident_title?: string;
+  annotation: {
+    id: string;
+    operator_id: string;
+    display_name: string;
+    content: string;
+    created_at: string;
+    trace_event_id: string | null;
+  };
 }
