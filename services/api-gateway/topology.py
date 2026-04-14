@@ -54,6 +54,9 @@ _TOPOLOGY_RESOURCE_TYPES = (
     "microsoft.cache/redis",
     "microsoft.eventhub/namespaces",
     "microsoft.servicebus/namespaces",
+    "microsoft.network/virtualnetworkpeerings",
+    "microsoft.network/privateendpoints",
+    "microsoft.network/expressroutecircuits",
 )
 
 # ---------------------------------------------------------------------------
@@ -69,7 +72,8 @@ class TopologyRelationship(BaseModel):
         ...,
         description=(
             "Relationship type: subnet_of | nic_of | disk_of | vnet_of | "
-            "resource_group_member | connected_to | hosted_on | protected_by"
+            "resource_group_member | connected_to | hosted_on | protected_by | "
+            "vnet_peering | private_endpoint_target"
         ),
     )
     direction: str = Field(
@@ -187,6 +191,54 @@ def _extract_relationships(row: Dict[str, Any]) -> List[Dict[str, Any]]:
             )
         except ValueError:
             pass
+
+    # VNet Peering: cross-subscription edge to remote VNet
+    if resource_type == "microsoft.network/virtualnetworkpeerings":
+        # Parent VNet ID: strip /virtualNetworkPeerings/{name} suffix from resource ID
+        # /subscriptions/{sub}/resourceGroups/{rg}/providers/
+        #   Microsoft.Network/virtualNetworks/{vnet}/virtualNetworkPeerings/{name}
+        rid = (row.get("id") or "").lower()
+        if "/virtualnetworkpeerings/" in rid:
+            parent_vnet_id = rid.split("/virtualnetworkpeerings/")[0]
+            relationships.append(
+                {"target_id": parent_vnet_id, "rel_type": "vnet_of", "direction": "outbound"}
+            )
+
+        # Cross-subscription edge: peering → remote VNet (only when Connected)
+        peering_state = (props.get("peeringState") or "").lower()
+        remote_vnet_ref = props.get("remoteVirtualNetwork") or {}
+        remote_vnet_id = (remote_vnet_ref.get("id") or "").lower()
+        if remote_vnet_id and peering_state == "connected":
+            relationships.append(
+                {
+                    "target_id": remote_vnet_id,
+                    "rel_type": "vnet_peering",
+                    "direction": "outbound",
+                }
+            )
+
+    # Private Endpoint: cross-subscription edge to the private link service target
+    if resource_type == "microsoft.network/privateendpoints":
+        # Subnet the PE lives in
+        subnet_ref = props.get("subnet") or {}
+        subnet_id = (subnet_ref.get("id") or "").lower()
+        if subnet_id:
+            relationships.append(
+                {"target_id": subnet_id, "rel_type": "subnet_of", "direction": "outbound"}
+            )
+
+        # Private Link Service connection targets (may be cross-subscription)
+        for conn in props.get("privateLinkServiceConnections") or []:
+            conn_props = conn.get("properties") or {}
+            target_id = (conn_props.get("privateLinkServiceId") or "").lower()
+            if target_id:
+                relationships.append(
+                    {
+                        "target_id": target_id,
+                        "rel_type": "private_endpoint_target",
+                        "direction": "outbound",
+                    }
+                )
 
     # All resources: resource_group_member (lightweight containment edge)
     rg = (row.get("resourceGroup") or "").lower()
