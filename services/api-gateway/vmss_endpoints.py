@@ -16,10 +16,11 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from services.api_gateway.auth import verify_token
+from services.api_gateway.federation import resolve_subscription_ids
 
 logger = logging.getLogger(__name__)
 
@@ -375,17 +376,21 @@ class VMSSChatResponse(BaseModel):
 
 @router.get("")
 async def list_vmss(
-    subscriptions: str = Query(..., description="Comma-separated subscription IDs"),
+    subscriptions: Optional[str] = Query(
+        None,
+        description="Comma-separated subscription IDs. Omit to query all registered subscriptions.",
+    ),
     search: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     _token: str = Depends(verify_token),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """List VMSS across subscriptions via Azure Resource Graph.
 
     Returns structured empty response when ARG SDK unavailable.
     """
     start_time = time.monotonic()
-    subscription_ids = [s.strip() for s in subscriptions.split(",") if s.strip()]
+    subscription_ids = resolve_subscription_ids(subscriptions, request)
 
     if not _ARG_AVAILABLE or not subscription_ids:
         duration_ms = (time.monotonic() - start_time) * 1000

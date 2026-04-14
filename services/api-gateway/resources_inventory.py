@@ -17,11 +17,12 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from services.api_gateway.arg_helper import run_arg_query
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential
+from services.api_gateway.federation import resolve_subscription_ids
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ async def list_resources(
     ),
     credential: Any = Depends(get_credential),
     _token: dict = Depends(verify_token),
+    request: Request = None,
 ) -> Dict[str, Any]:
     """Return all Azure resources across the specified subscriptions.
 
@@ -55,11 +57,7 @@ async def list_resources(
     Counts here will always match GET /api/v1/topology/tree.
     """
     start = time.monotonic()
-    subscription_ids: List[str] = (
-        [s.strip() for s in subscriptions.split(",") if s.strip()]
-        if subscriptions
-        else []
-    )
+    subscription_ids: List[str] = resolve_subscription_ids(subscriptions or None, request)
 
     logger.info(
         "resources_inventory: request | subscriptions=%d",

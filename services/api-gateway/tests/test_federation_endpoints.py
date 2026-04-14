@@ -66,11 +66,18 @@ def mock_app_state(request):
 
 class TestVMsFederation:
     def test_no_subscriptions_param_uses_registry(self):
-        """GET /api/v1/vms without subscriptions param defaults to all from registry."""
+        """GET /api/v1/vms without subscriptions param defaults to all from registry.
+
+        The mock registry must be injected *after* TestClient lifespan startup
+        because the startup handler overwrites app.state.subscription_registry
+        with a real (empty) registry.
+        """
         from fastapi.testclient import TestClient
 
         with patch("services.api_gateway.vm_inventory._run_arg_query", return_value=[]) as mock_arg:
             with TestClient(app) as client:
+                # Inject mock registry AFTER lifespan startup (which clobbers it)
+                app.state.subscription_registry = _make_registry(["sub-abc", "sub-xyz"])
                 response = client.get("/api/v1/vms")
 
         assert response.status_code == 200
