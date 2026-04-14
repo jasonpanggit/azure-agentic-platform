@@ -95,7 +95,8 @@ class TestClassifyDomainConstants:
         assert FALLBACK_DOMAIN == "sre"
 
     def test_valid_domains_complete(self) -> None:
-        assert VALID_DOMAINS == {"compute", "network", "storage", "security", "arc", "sre"}
+        # Phase 49 added messaging domain
+        assert VALID_DOMAINS == {"compute", "network", "storage", "security", "arc", "sre", "messaging"}
 
     def test_all_mappings_produce_valid_domains(self) -> None:
         for resource_type, domain in DOMAIN_MAPPINGS.items():

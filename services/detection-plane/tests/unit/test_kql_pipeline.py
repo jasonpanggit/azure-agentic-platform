@@ -112,7 +112,8 @@ class TestKQLPythonConsistency:
     def test_python_domains_match_kql_domains(self) -> None:
         """All domains produced by Python should be valid."""
         domains = set(DOMAIN_MAPPINGS.values())
-        expected = {"compute", "network", "storage", "security", "arc"}
+        # Phase 49 added messaging domain
+        expected = {"compute", "network", "storage", "security", "arc", "messaging"}
         assert domains == expected, f"Python domains {domains} != expected {expected}"
 
     def test_sre_fallback_for_unknown_type(self) -> None:
