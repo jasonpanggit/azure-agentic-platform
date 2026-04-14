@@ -100,6 +100,34 @@ If this returns `[]`, the issue is data availability, not code. Don't spend time
 
 ---
 
+### 2026-04-14: Adding a new Container App agent always requires these 3 steps or Terraform Apply will timeout
+
+**What happened:** Every time a new domain agent is added (Phase 45, 46, 47, 48, 49...), the Terraform Apply fails with `ContainerAppOperationError: Operation expired`. The Container App gets created in Azure but never recorded in Terraform state. The next apply then fails with "resource already exists — needs to be imported".
+
+**Root cause:** The `registry { server = acr_login_server; identity = "system" }` block was unconditionally present on all Container Apps, even when `use_placeholder_image=true`. Azure attempts to validate the system-assigned MI's ACR access during the initial revision creation — but the RBAC module (which grants AcrPull) runs *after* `module.agent_apps`. This chicken-and-egg causes a 20-minute polling timeout and a failed Terraform state write.
+
+**Permanent fix applied (2026-04-14):**  
+`terraform/modules/agent-apps/main.tf` — the `registry` block is now `dynamic` and only included when `var.use_placeholder_image == false`. Initial creation uses the public placeholder with no ACR auth; CI/CD re-deploys with the real image after AcrPull is assigned.
+
+**Recovery procedure when this happens anyway (state drift):**
+1. Get the existing resource ID:  
+   `az containerapp show --name ca-<agent>-prod --resource-group rg-aap-prod --query id -o tsv`
+2. Add an import block to `terraform/envs/prod/main.tf`:
+   ```hcl
+   import {
+     to = module.agent_apps.azurerm_container_app.agents["<agent>"]
+     id = "<resource-id>"
+   }
+   ```
+3. Manually assign AcrPull if missing:  
+   `az role assignment create --assignee <principal-id> --role AcrPull --scope <acr-resource-id>`
+4. Push → Terraform Apply will import + converge cleanly.
+5. After the apply succeeds, remove the import block (it's a no-op but keep the codebase clean).
+
+**Also:** Update `locals.agent_cosmos_principal_ids` in `terraform/envs/prod/main.tf` with the new agent's principal ID for Cosmos RBAC — this is a static map that must be updated manually for each new agent.
+
+---
+
 ## Lesson: Always merge to main before starting a new phase
 
 **Pattern:** Before starting research/planning for a new phase, always:

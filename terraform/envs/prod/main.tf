@@ -82,6 +82,9 @@ locals {
     "patch"        = "705c97ae-c77b-4f6f-ac28-05d432b09547"
     "eol"          = "76e4e593-861c-4c6c-b3f8-511269b4e893"
     "api-gateway"  = "69e05934-1feb-44d4-8fd2-30373f83ccec"
+    # Phase 49 — sourced 2026-04-14 via: az containerapp show --name ca-messaging-prod \
+    #   --resource-group rg-aap-prod --query identity.principalId -o tsv
+    "messaging"    = "1a98aee0-2f5a-4650-a67d-eda08bff5487"
   }
 }
 
