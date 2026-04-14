@@ -472,6 +472,10 @@ class RemediationAuditRecord(BaseModel):
     rollback_execution_id: Optional[str] = None
     preflight_blast_radius_size: int
     wal_written_at: str                           # ISO 8601 UTC — written BEFORE ARM call
+    auto_approved_by_policy: Optional[str] = Field(
+        default=None,
+        description="Policy ID when auto-approved by policy engine; None when HITL-approved",
+    )
 
 
 class RemediationResult(BaseModel):
