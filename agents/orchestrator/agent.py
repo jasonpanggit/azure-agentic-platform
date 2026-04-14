@@ -68,6 +68,7 @@ Call the matching connected-agent tool to route the query:
 - patch     → `patch_agent`     (Update Manager, patch compliance, missing patches, Windows/Linux update)
 - eol       → `eol_agent`       (End-of-life software, software lifecycle, unsupported versions, EOL dates, upgrade planning)
 - database  → `database_agent`  (Cosmos DB, PostgreSQL Flexible Server, Azure SQL Database health and performance)
+- app-service → `appservice_agent` (App Service plans, Web Apps, Function Apps health and diagnostics)
 - sre       → `sre_agent`       (cross-domain, SLA, reliability, incidents with no clear domain)
 
 ### Type A — Structured incident payloads
@@ -96,7 +97,9 @@ For natural-language queries, determine the domain from the **topic** of the mes
 - Mentions "cosmos", "cosmosdb", "cosmos db", "postgresql", "postgres", "azure sql",
     "sql database", "rdbms", "throughput", "request units", "ru/s", "dtu",
     "elastic pool", "flexibleservers" → call `database_agent`
-- Mentions "vm", "virtual machine", "aks", "app service", "compute", "cpu", "disk" → call `compute_agent`
+- Mentions "app service", "web app", "function app", "function apps", "app service plan",
+    "site", "webapp", "azure functions", "func app" → call `appservice_agent`
+- Mentions "vm", "virtual machine", "aks", "compute", "cpu", "disk" → call `compute_agent`
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → call `network_agent`
 - Mentions "storage", "blob", "file share", "datalake" → call `storage_agent`
 - Mentions "defender", "key vault", "keyvault", "rbac", "security", "identity" → call `security_agent`
@@ -120,7 +123,7 @@ Pass the operator's original question verbatim as the argument to the domain age
 - MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `compute_agent`, `network_agent`, `storage_agent`, `security_agent`,
     `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `database_agent`,
-    `classify_incident_domain`.
+    `appservice_agent`, `classify_incident_domain`.
 """
 
 # ---------------------------------------------------------------------------
@@ -138,6 +141,7 @@ DOMAIN_AGENT_MAP: dict = {
     "patch": "patch_agent",
     "eol": "eol_agent",
     "database": "database_agent",
+    "app-service": "appservice_agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -147,6 +151,8 @@ DOMAIN_AGENT_MAP: dict = {
 RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.compute": "compute",
     "microsoft.containerservice": "compute",
+    "microsoft.web/sites": "app-service",
+    "microsoft.web/serverfarms": "app-service",
     "microsoft.web": "compute",
     "microsoft.network": "network",
     "microsoft.cdn": "network",
@@ -287,7 +293,7 @@ def create_orchestrator() -> ChatAgent:
 # Domain agents registered as A2A connections in Foundry
 _A2A_DOMAINS = [
     "compute", "patch", "network", "security",
-    "arc", "sre", "eol", "storage", "database",
+    "arc", "sre", "eol", "storage", "database", "appservice",
 ]
 
 
