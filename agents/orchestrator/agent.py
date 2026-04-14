@@ -60,14 +60,15 @@ In BOTH cases you MUST route to a domain agent — you NEVER answer from your ow
 
 ### Domain → agent tool mapping
 Call the matching connected-agent tool to route the query:
-- compute   → `compute_agent`  (VMs, VMSS, AKS, App Service, disks)
-- network   → `network_agent`  (VNets, NSGs, load balancers, DNS, ExpressRoute)
-- storage   → `storage_agent`  (Blob, Files, ADLS Gen2, managed disks)
-- security  → `security_agent` (Defender, Key Vault, RBAC drift, identity)
-- arc       → `arc_agent`      (Arc-enabled servers, Arc Kubernetes, Arc data services)
-- patch     → `patch_agent`    (Update Manager, patch compliance, missing patches, Windows/Linux update)
-- eol       → `eol_agent`      (End-of-life software, software lifecycle, unsupported versions, EOL dates, upgrade planning)
-- sre       → `sre_agent`      (cross-domain, SLA, reliability, incidents with no clear domain)
+- compute   → `compute_agent`   (VMs, VMSS, AKS, App Service, disks)
+- network   → `network_agent`   (VNets, NSGs, load balancers, DNS, ExpressRoute)
+- storage   → `storage_agent`   (Blob, Files, ADLS Gen2, managed disks)
+- security  → `security_agent`  (Defender, Key Vault, RBAC drift, identity)
+- arc       → `arc_agent`       (Arc-enabled servers, Arc Kubernetes, Arc data services)
+- patch     → `patch_agent`     (Update Manager, patch compliance, missing patches, Windows/Linux update)
+- eol       → `eol_agent`       (End-of-life software, software lifecycle, unsupported versions, EOL dates, upgrade planning)
+- database  → `database_agent`  (Cosmos DB, PostgreSQL Flexible Server, Azure SQL Database health and performance)
+- sre       → `sre_agent`       (cross-domain, SLA, reliability, incidents with no clear domain)
 
 ### Type A — Structured incident payloads
 1. Use the `domain` field when present and unambiguous.
@@ -92,6 +93,9 @@ For natural-language queries, determine the domain from the **topic** of the mes
     "windows update", "security patch" → call `patch_agent`
 - Mentions "end of life", "eol", "end-of-life", "outdated software", "software lifecycle",
     "unsupported version", "lifecycle status", "deprecated version" → call `eol_agent`
+- Mentions "cosmos", "cosmosdb", "cosmos db", "postgresql", "postgres", "azure sql",
+    "sql database", "rdbms", "throughput", "request units", "ru/s", "dtu",
+    "elastic pool", "flexibleservers" → call `database_agent`
 - Mentions "vm", "virtual machine", "aks", "app service", "compute", "cpu", "disk" → call `compute_agent`
 - Mentions "network", "vnet", "nsg", "load balancer", "dns", "expressroute" → call `network_agent`
 - Mentions "storage", "blob", "file share", "datalake" → call `storage_agent`
@@ -115,7 +119,8 @@ Pass the operator's original question verbatim as the argument to the domain age
 - MUST NOT propose or execute remediation actions of any kind.
 - MUST preserve `correlation_id` through all messages (AUDIT-001).
 - Tool allowlist: `compute_agent`, `network_agent`, `storage_agent`, `security_agent`,
-    `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `classify_incident_domain`.
+    `arc_agent`, `sre_agent`, `patch_agent`, `eol_agent`, `database_agent`,
+    `classify_incident_domain`.
 """
 
 # ---------------------------------------------------------------------------
@@ -132,6 +137,7 @@ DOMAIN_AGENT_MAP: dict = {
     "arc": "arc_agent",
     "patch": "patch_agent",
     "eol": "eol_agent",
+    "database": "database_agent",
 }
 
 # ---------------------------------------------------------------------------
@@ -152,6 +158,9 @@ RESOURCE_TYPE_TO_DOMAIN: dict = {
     "microsoft.kubernetes": "arc",
     "microsoft.maintenance": "patch",
     "microsoft.lifecycle": "eol",
+    "microsoft.documentdb": "database",
+    "microsoft.dbforpostgresql": "database",
+    "microsoft.sql": "database",
 }
 
 
@@ -278,7 +287,7 @@ def create_orchestrator() -> ChatAgent:
 # Domain agents registered as A2A connections in Foundry
 _A2A_DOMAINS = [
     "compute", "patch", "network", "security",
-    "arc", "sre", "eol", "storage",
+    "arc", "sre", "eol", "storage", "database",
 ]
 
 

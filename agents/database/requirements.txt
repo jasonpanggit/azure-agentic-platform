@@ -1,0 +1,7 @@
+# Database agent — pinned SDK versions for Cosmos DB, PostgreSQL, Azure SQL diagnostics.
+# All shared dependencies are installed in agents/Dockerfile.base.
+azure-mgmt-cosmosdb>=9.5.0
+azure-mgmt-rdbms>=10.1.0
+azure-mgmt-sql>=4.0.0
+azure-mgmt-monitor>=6.0.2
+azure-monitor-query>=1.3.0
