@@ -19,6 +19,10 @@ arc_agent_id          = "asst_YFobGKxsDGo9j1oIrimzWyfL"
 patch_agent_id        = "asst_AEFTnaxXKMpOUCmjiLWhzlsW"
 eol_agent_id          = "asst_hUNs2ASp1WsrMvGvuwA5T495"
 
+# Phase 49: Messaging Agent — set after provisioning Foundry agent
+messaging_agent_id       = ""
+messaging_agent_endpoint = ""
+
 cors_allowed_origins = "https://ca-web-ui-prod.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
 all_subscription_ids = ["4c727b88-12f4-4c91-9c2b-372aab3bbae9"]
 

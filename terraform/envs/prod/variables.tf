@@ -164,6 +164,18 @@ variable "eol_agent_id" {
   default     = ""
 }
 
+variable "messaging_agent_id" {
+  description = "Foundry Agent ID for the Messaging domain agent (Service Bus + Event Hub)"
+  type        = string
+  default     = ""
+}
+
+variable "messaging_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Messaging agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
+
 variable "enable_entra_apps" {
   description = "Enable Entra ID app registration management. Requires the Terraform SP to have Microsoft Graph Application.ReadWrite.All permission. Set false to skip Entra resources when the SP lacks Graph API permissions."
   type        = bool

@@ -312,3 +312,19 @@ variable "log_analytics_workspace_resource_id" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# Phase 49: Messaging Agent — Foundry agent ID and A2A endpoint
+# ---------------------------------------------------------------------------
+
+variable "messaging_agent_id" {
+  description = "Foundry Agent ID for the Messaging domain agent (Service Bus + Event Hub)"
+  type        = string
+  default     = ""
+}
+
+variable "messaging_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Messaging agent Container App (A2A)"
+  type        = string
+  default     = ""
+}
