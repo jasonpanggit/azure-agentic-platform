@@ -9,6 +9,7 @@ locals {
     sre          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     patch        = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
     eol          = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
+    messaging    = { cpu = 0.5, memory = "1Gi", ingress_external = false, min_replicas = 1, max_replicas = 3, target_port = 8000 }
   }
 
   # services excludes teams-bot (managed separately for bot-specific env vars)
@@ -202,6 +203,13 @@ resource "azurerm_container_app" "agents" {
         content {
           name  = "EOL_AGENT_ID"
           value = var.eol_agent_id
+        }
+      }
+      dynamic "env" {
+        for_each = contains(["orchestrator", "api-gateway"], each.key) && var.messaging_agent_id != "" ? [1] : []
+        content {
+          name  = "MESSAGING_AGENT_ID"
+          value = var.messaging_agent_id
         }
       }
       # EOL agent needs PostgreSQL DSN for eol_cache table
@@ -516,14 +524,15 @@ locals {
   # Filter out empty values so Terraform doesn't attempt to create a connection
   # with a blank target (Foundry API rejects: "Target Property can't be empty").
   a2a_domains_all = {
-    compute  = var.compute_agent_endpoint
-    arc      = var.arc_agent_endpoint
-    eol      = var.eol_agent_endpoint
-    network  = var.network_agent_endpoint
-    patch    = var.patch_agent_endpoint
-    security = var.security_agent_endpoint
-    sre      = var.sre_agent_endpoint
-    storage  = var.storage_agent_endpoint
+    compute   = var.compute_agent_endpoint
+    arc       = var.arc_agent_endpoint
+    eol       = var.eol_agent_endpoint
+    network   = var.network_agent_endpoint
+    patch     = var.patch_agent_endpoint
+    security  = var.security_agent_endpoint
+    sre       = var.sre_agent_endpoint
+    storage   = var.storage_agent_endpoint
+    messaging = var.messaging_agent_endpoint
   }
   a2a_domains = { for k, v in local.a2a_domains_all : k => v if v != "" }
 }
@@ -541,8 +550,8 @@ resource "azapi_resource" "a2a_connection" {
 
   body = {
     properties = {
-      category    = "RemoteA2A"
-      target      = each.value
+      category = "RemoteA2A"
+      target   = each.value
       # "ManagedIdentity" was removed in 2025-04-01-preview; use ProjectManagedIdentity.
       # Valid authTypes for RemoteA2A: None, CustomKeys, ProjectManagedIdentity,
       # OAuth2, UserEntraToken, AgenticIdentityToken, AgenticUser, AgentUserImpersonation

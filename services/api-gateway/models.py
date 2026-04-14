@@ -44,7 +44,7 @@ class IncidentPayload(BaseModel):
     domain: str = Field(
         ...,
         description="Target domain for routing",
-        pattern=r"^(compute|network|storage|security|arc|sre|patch|eol)$",
+        pattern=r"^(compute|network|storage|security|arc|sre|patch|eol|messaging)$",
     )
     affected_resources: list[AffectedResource] = Field(
         ...,

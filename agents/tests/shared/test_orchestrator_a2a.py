@@ -32,8 +32,8 @@ class TestOrchestratorAgentVersion:
 
         create_orchestrator_agent_version(mock_project)
 
-        # Should attempt to get connection for 8 domains
-        assert mock_project.connections.get.call_count == 8
+        # Phase 49: 12 A2A domains (added database, appservice, containerapps, messaging)
+        assert mock_project.connections.get.call_count == 12
 
     def test_connection_get_failure_raises(self):
         mock_project = MagicMock()

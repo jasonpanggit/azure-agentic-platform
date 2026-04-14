@@ -26,8 +26,11 @@ class TestHandoffOrchestrator:
     """Verify Orchestrator classifies and routes incidents correctly."""
 
     def test_domain_agent_map_has_all_eight_domains(self):
-        """DOMAIN_AGENT_MAP must contain all 8 domains (including eol)."""
-        expected_domains = {"compute", "network", "storage", "security", "sre", "arc", "patch", "eol"}
+        """DOMAIN_AGENT_MAP must contain all 12 domains (including messaging added in Phase 49)."""
+        expected_domains = {
+            "compute", "network", "storage", "security", "sre", "arc", "patch", "eol",
+            "database", "app-service", "container-apps", "messaging",
+        }
         assert set(DOMAIN_AGENT_MAP.keys()) == expected_domains
 
     def test_classify_compute_resource(self):
