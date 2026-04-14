@@ -29,9 +29,25 @@ class TestAllowedMcpTools:
     def test_allowed_tools_contains_expected_entries(self):
         from agents.compute.tools import ALLOWED_MCP_TOOLS
 
-        assert "compute.list_vms" in ALLOWED_MCP_TOOLS
-        assert "monitor.query_logs" in ALLOWED_MCP_TOOLS
-        assert "resourcehealth.get_availability_status" in ALLOWED_MCP_TOOLS
+        assert "compute" in ALLOWED_MCP_TOOLS
+        assert "monitor" in ALLOWED_MCP_TOOLS
+        assert "resourcehealth" in ALLOWED_MCP_TOOLS
+        assert "advisor" in ALLOWED_MCP_TOOLS
+        assert "appservice" in ALLOWED_MCP_TOOLS
+
+    def test_allowed_mcp_tools_has_exactly_five_entries(self):
+        from agents.compute.tools import ALLOWED_MCP_TOOLS
+
+        assert len(ALLOWED_MCP_TOOLS) == 5
+
+    def test_allowed_mcp_tools_no_dotted_names(self):
+        """v2 uses namespace names, not dotted names."""
+        from agents.compute.tools import ALLOWED_MCP_TOOLS
+
+        for tool in ALLOWED_MCP_TOOLS:
+            assert "." not in tool, (
+                f"Dotted tool name '{tool}' found — must use v2 namespace name"
+            )
 
 
 # ---------------------------------------------------------------------------

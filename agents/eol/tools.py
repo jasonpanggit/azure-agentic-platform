@@ -7,9 +7,8 @@ Provides @ai_function functions for querying EOL status from two external source
 in PostgreSQL (24h TTL), and discovering software inventory via ARG and
 Log Analytics ConfigurationData.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    monitor, resourcehealth
 """
 from __future__ import annotations
 
@@ -67,11 +66,10 @@ except ImportError:
 tracer = setup_telemetry("aiops-eol-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted (AGENT-001).
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
+    "monitor",
+    "resourcehealth",
 ]
 
 # EOL cache TTL in hours

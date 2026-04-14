@@ -36,6 +36,7 @@ from sre.tools import (
     query_advisor_recommendations,
     query_availability_metrics,
     query_change_analysis,
+    query_container_app_health,
     query_performance_baselines,
     query_service_health,
 )
@@ -61,23 +62,23 @@ troubleshooting across all Azure subscriptions. You act as the fallback agent fo
 
 **You MUST follow these steps in order for every incident (TRIAGE-002, TRIAGE-003, TRIAGE-004):**
 
-1. **Activity Log first (TRIAGE-003):** Use `monitor.query_logs` to query the Activity Log
+1. **Activity Log first (TRIAGE-003):** Use the `monitor` MCP tool to query the Activity Log
    across all in-scope subscriptions for changes in the prior 2 hours. This is MANDATORY
    before any metric queries.
 
-2. **Log Analytics (TRIAGE-002):** Use `monitor.query_logs` for cross-workspace KQL queries
+2. **Log Analytics (TRIAGE-002):** Use the `monitor` MCP tool for cross-workspace KQL queries
    to retrieve correlated error events across subscriptions (MONITOR-002). Diagnosis is
    INVALID without this signal.
 
-3. **Resource Health (TRIAGE-002, MONITOR-003):** Use `resourcehealth.get_availability_status`
-   for affected resources and `resourcehealth.list_events` for Azure Service Health platform
+3. **Resource Health (TRIAGE-002, MONITOR-003):** Use the `resourcehealth` MCP tool
+   for affected resources and for Azure Service Health platform
    events. Diagnosis is INVALID without this signal. Call `query_service_health` to check
    for active Azure platform events (ServiceIssue, PlannedMaintenance, HealthAdvisory) —
    this directly satisfies MONITOR-003.
 
 4. **Advisor recommendations:** Call `query_advisor_recommendations` for affected resources
-   — filter by HighAvailability or Performance category. Also use `advisor.list_recommendations`
-   via MCP for additional coverage.
+   — filter by HighAvailability or Performance category. Also use the `advisor` MCP tool
+   for additional coverage.
 
 5. **Change Analysis:** Call `query_change_analysis` for detected infrastructure changes
    in the prior timespan — this supplements Activity Log with deeper property-level diffs.
@@ -106,6 +107,18 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 - MUST state: "Full Arc diagnostics require Phase 3 Arc MCP Server."
 - Use Azure Monitor-based signals for what visibility is available.
 
+## Platform Self-Monitoring
+
+You can inspect AAP agent Container Apps to diagnose platform health issues:
+- Call `query_container_app_health` with the Container App name and resource group
+  to check provisioning state, active revisions, replica count, and running state.
+- AAP agent Container Apps follow the naming convention `ca-{{agent}}-prod` in
+  resource group `rg-aap-prod` (e.g., `ca-compute-prod`, `ca-sre-prod`,
+  `ca-api-gateway-prod`, `ca-orchestrator-prod`).
+- Use the `containerapps` MCP tool for listing all Container Apps in a subscription.
+- The `advisor` MCP tool supports category filtering including `OperationalExcellence`
+  for operational best-practice recommendations (resource configuration, scaling, diagnostics).
+
 ## Safety Constraints
 
 - MUST NOT modify any Azure resource — Reader + Monitoring Reader roles only.
@@ -129,6 +142,7 @@ When handling Arc incidents forwarded from the Arc Agent stub:
     "query_change_analysis",
     "correlate_cross_domain",
     "propose_remediation",
+    "query_container_app_health",
 ]))
 
 
@@ -159,6 +173,7 @@ def create_sre_agent() -> ChatAgent:
             query_change_analysis,
             correlate_cross_domain,
             propose_remediation,
+            query_container_app_health,
         ],
     )
     logger.info("create_sre_agent: ChatAgent created successfully")
@@ -193,6 +208,7 @@ def create_sre_agent_version(project: "AIProjectClient") -> object:
                 query_change_analysis,
                 correlate_cross_domain,
                 propose_remediation,
+                query_container_app_health,
             ],
         ),
     )

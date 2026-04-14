@@ -167,8 +167,7 @@ def create_patch_agent() -> ChatAgent:
 
     Mounts the Azure MCP Server as a MCPTool if AZURE_MCP_SERVER_URL is set.
     The Azure MCP Server provides correlated monitoring signals via
-    monitor.query_logs, monitor.query_metrics, and
-    resourcehealth.get_availability_status.
+    the monitor and resourcehealth MCP tools (v2 namespace names).
 
     Returns:
         ChatAgent configured with patch-domain tools and system prompt.

@@ -174,8 +174,7 @@ def create_eol_agent() -> ChatAgent:
 
     Mounts the Azure MCP Server as an MCPTool if AZURE_MCP_SERVER_URL is set.
     The Azure MCP Server provides correlated monitoring signals via
-    monitor.query_logs, monitor.query_metrics, and
-    resourcehealth.get_availability_status.
+    the monitor and resourcehealth MCP tools (v2 namespace names).
 
     Returns:
         ChatAgent configured with EOL-domain tools and system prompt.

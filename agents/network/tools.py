@@ -4,10 +4,8 @@ The Azure MCP Server has limited dedicated networking tools (no direct VNet/NSG/
 tools confirmed GA). The Network Agent supplements MCP tools with @ai_function
 wrappers around the azure-mgmt-network SDK.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status, advisor.list_recommendations,
-    compute.list_vms
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    monitor, resourcehealth, advisor, compute
 
 NOTE: Direct VNet/NSG/LB operations use azure-mgmt-network SDK wrappers
 (not Azure MCP Server tools) due to the Azure MCP networking coverage gap.
@@ -44,15 +42,14 @@ except ImportError:
 tracer = setup_telemetry("aiops-network-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted.
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 # NOTE: azure-mgmt-network SDK (not available in Azure MCP Server).
 # Direct VNet/NSG/LB operations are provided as @ai_function wrappers below.
 ALLOWED_MCP_TOOLS: List[str] = [
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
-    "advisor.list_recommendations",
-    "compute.list_vms",
+    "monitor",
+    "resourcehealth",
+    "advisor",
+    "compute",
 ]
 
 
