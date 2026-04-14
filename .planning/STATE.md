@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-11T14:57:51.285Z"
+milestone: v3.0
+milestone_name: Roadmap — World-Class AIOps v3.0
+status: in_progress
+last_updated: "2026-04-14T12:00:00.000Z"
 progress:
-  total_phases: 35
-  completed_phases: 34
-  total_plans: 103
-  completed_plans: 104
-  percent: 100
+  total_phases: 16
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 6
 ---
 
 # Azure Agentic Platform (AAP) — Project State
 
-> Last activity: 2026-04-12 - Merged fix/vmss-aks-metrics-and-health: VMSS/AKS real metrics via Azure Monitor, Resource Health API for VMSS list health, AKS ready_node_count from agent_pools.list(), Container Insights enablement endpoint, error response guards, healthy_instance_count from instance power states, autoscale warning logging
+> Last activity: 2026-04-14 - Completed Phase 49: Messaging Agent (Service Bus + Event Hub). 7 @ai_function tools, 37 unit tests, Terraform ca-messaging-prod, CI/CD build-messaging + deploy-messaging. PR #79 merged.
 
 > Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
 
