@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -18,9 +18,10 @@ import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
 import { RunbookTab } from './RunbookTab'
 import { OpsTab } from './OpsTab'
+import { SettingsTab } from './SettingsTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -41,6 +42,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
   { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },
+  { id: 'settings', label: 'Settings', Icon: Settings },
 ]
 
 interface DashboardPanelProps {
@@ -248,6 +250,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <RunbookTab />
           </div>
+        </div>
+
+        <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
+          <SettingsTab />
         </div>
       </div>
 

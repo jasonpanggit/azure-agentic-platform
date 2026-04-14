@@ -29,10 +29,11 @@ COSMOS_REMEDIATION_AUDIT_CONTAINER = os.environ.get(
 COSMOS_DATABASE_NAME = os.environ.get("COSMOS_DATABASE_NAME", "aap")
 
 SAFE_ARM_ACTIONS: dict[str, dict[str, Optional[str]]] = {
-    "restart_vm":    {"arm_op": "restart",           "rollback_op": None},
-    "deallocate_vm": {"arm_op": "deallocate",         "rollback_op": "start"},
-    "start_vm":      {"arm_op": "start",              "rollback_op": "deallocate"},
-    "resize_vm":     {"arm_op": "resize",             "rollback_op": "resize_to_original"},
+    "restart_vm":          {"arm_op": "restart",              "rollback_op": None},
+    "deallocate_vm":       {"arm_op": "deallocate",           "rollback_op": "start"},
+    "start_vm":            {"arm_op": "start",                "rollback_op": "deallocate"},
+    "resize_vm":           {"arm_op": "resize",               "rollback_op": "resize_to_original"},
+    "restart_container_app": {"arm_op": "restart_container_app", "rollback_op": None},
 }
 
 
@@ -244,6 +245,14 @@ async def _execute_arm_action(
                     resource_group, vm_name, vm
                 )
                 poller.result(timeout=300)
+            elif arm_op == "restart_container_app":
+                from azure.mgmt.appcontainers import ContainerAppsAPIClient
+                ca_client = ContainerAppsAPIClient(credential, subscription_id)
+                # Container Apps has no direct restart API; stop + start pattern
+                poller = ca_client.container_apps.begin_stop(resource_group, vm_name)
+                poller.result(timeout=120)
+                poller = ca_client.container_apps.begin_start(resource_group, vm_name)
+                poller.result(timeout=120)
             else:
                 return {
                     "success": False,
@@ -823,6 +832,7 @@ async def execute_remediation(
         "verified_at": None,
         "rolled_back": False,
         "rollback_execution_id": None,
+        "auto_approved_by_policy": approval_record.get("auto_approved_by_policy"),
     }
     await _write_wal(execution_id, cosmos_client, status="pending", base_record=wal_base)
 

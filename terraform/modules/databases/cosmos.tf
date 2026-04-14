@@ -329,6 +329,28 @@ resource "azurerm_cosmosdb_sql_container" "business_tiers" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "policy_suggestions" {
+  name                  = "policy_suggestions"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/action_class"]
+  partition_key_version = 2
+  default_ttl           = 2592000 # 30 days in seconds
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/\"_etag\"/?"
+    }
+  }
+}
+
 resource "azurerm_cosmosdb_sql_container" "subscriptions" {
   name                  = "subscriptions"
   resource_group_name   = var.resource_group_name

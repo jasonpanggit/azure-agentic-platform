@@ -55,6 +55,9 @@ from services.api_gateway.models import (
     ApprovalResponse,
     AuditEntry,
     AuditExportResponse,
+    AutoRemediationPolicy,
+    AutoRemediationPolicyCreate,
+    AutoRemediationPolicyUpdate,
     BusinessTier,
     BusinessTiersResponse,
     ChangeCorrelation,
@@ -69,6 +72,8 @@ from services.api_gateway.models import (
     IncidentSummary,
     PatternAnalysisResult,
     PlatformHealth,
+    PolicyExecution,
+    PolicySuggestion,
     RemediationAuditRecord,
     RemediationResult,
     RunbookResult,
@@ -116,11 +121,16 @@ from services.api_gateway.pattern_analyzer import (
     analyze_patterns,
     run_pattern_analysis_loop,
 )
+from services.api_gateway.suggestion_engine import (
+    SUGGESTION_SWEEP_INTERVAL_SECONDS,
+    run_suggestion_sweep_loop,
+)
 from services.api_gateway.eol_endpoints import router as eol_router
 from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
+from services.api_gateway.admin_endpoints import router as admin_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -260,9 +270,30 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS slo_definitions_domain_status_idx "
                 "ON slo_definitions (domain, status);"
             )
+            # remediation_policies table (Phase 51 — Autonomous Remediation)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS remediation_policies (
+                    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name                    TEXT NOT NULL UNIQUE,
+                    description             TEXT,
+                    action_class            TEXT NOT NULL,
+                    resource_tag_filter     JSONB DEFAULT '{}',
+                    max_blast_radius        INT DEFAULT 10,
+                    max_daily_executions    INT DEFAULT 20,
+                    require_slo_healthy     BOOLEAN DEFAULT true,
+                    maintenance_window_exempt BOOLEAN DEFAULT false,
+                    enabled                 BOOLEAN DEFAULT true,
+                    created_at              TIMESTAMPTZ DEFAULT now(),
+                    updated_at              TIMESTAMPTZ DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_remediation_policies_action_class "
+                "ON remediation_policies (action_class, enabled);"
+            )
             logger.info(
                 "Startup migrations complete "
-                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions)"
+                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies)"
             )
         finally:
             await conn.close()
@@ -445,6 +476,22 @@ async def lifespan(app: FastAPI):
             os.environ.get("PATTERN_ANALYSIS_ENABLED", "true"),
         )
 
+    # Start learning suggestion sweep loop (Phase 51)
+    _suggestion_sweep_task: Optional[asyncio.Task] = None
+    if app.state.cosmos_client is not None:
+        _suggestion_sweep_task = asyncio.create_task(
+            run_suggestion_sweep_loop(
+                cosmos_client=app.state.cosmos_client,
+                interval_seconds=SUGGESTION_SWEEP_INTERVAL_SECONDS,
+            )
+        )
+        logger.info(
+            "startup: suggestion sweep loop started | interval=%ds",
+            SUGGESTION_SWEEP_INTERVAL_SECONDS,
+        )
+    else:
+        logger.warning("startup: suggestion sweep loop not started (COSMOS_ENDPOINT not set)")
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -484,6 +531,15 @@ async def lifespan(app: FastAPI):
             pass
         logger.info("shutdown: pattern analysis loop cancelled")
 
+    # Cancel suggestion sweep loop on shutdown
+    if _suggestion_sweep_task is not None and not _suggestion_sweep_task.done():
+        _suggestion_sweep_task.cancel()
+        try:
+            await _suggestion_sweep_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("shutdown: suggestion sweep loop cancelled")
+
 # OpenTelemetry auto-instrumentation (D-05)
 _appinsights_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
 if _appinsights_conn:
@@ -516,6 +572,7 @@ app.include_router(topology_tree_router)
 app.include_router(eol_router)
 app.include_router(vmss_router)
 app.include_router(aks_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
