@@ -388,7 +388,7 @@ resource "azurerm_cosmosdb_sql_container" "war_rooms" {
     indexing_mode = "consistent"
 
     included_path { path = "/*" }
-    excluded_path { path = "/annotations/*/content/?" } # large text field — exclude from index
+    excluded_path { path = "/annotations/[]/*" }        # large text fields in annotations array — exclude from index
     excluded_path { path = "/_etag/?" }
   }
 }
