@@ -27,10 +27,10 @@ def _mock_with_name(mock_name: str, **kwargs) -> MagicMock:
 class TestAllowedMcpTools:
     """Verify ALLOWED_MCP_TOOLS list is correct and has no wildcards."""
 
-    def test_allowed_mcp_tools_has_exactly_six_entries(self):
+    def test_allowed_mcp_tools_has_exactly_nine_entries(self):
         from agents.sre.tools import ALLOWED_MCP_TOOLS
 
-        assert len(ALLOWED_MCP_TOOLS) == 6
+        assert len(ALLOWED_MCP_TOOLS) == 9
 
     def test_allowed_mcp_tools_contains_expected_entries(self):
         from agents.sre.tools import ALLOWED_MCP_TOOLS
@@ -42,6 +42,9 @@ class TestAllowedMcpTools:
             "advisor.list_recommendations",
             "resourcehealth.get_availability_status",
             "resourcehealth.list_events",
+            "containerapps.list_apps",
+            "containerapps.get_app",
+            "containerapps.list_revisions",
         ]
         for tool in expected:
             assert tool in ALLOWED_MCP_TOOLS, f"Missing: {tool}"

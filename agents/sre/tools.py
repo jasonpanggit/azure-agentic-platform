@@ -3,8 +3,8 @@
 Allowed MCP tools (explicit allowlist — no wildcards):
     monitor.query_logs, monitor.query_metrics, applicationinsights.query,
     advisor.list_recommendations, resourcehealth.get_availability_status,
-    resourcehealth.list_events,
-    containerapps (list_apps, get_app, list_revisions)
+    resourcehealth.list_events, containerapps.list_apps, containerapps.get_app,
+    containerapps.list_revisions
 """
 from __future__ import annotations
 
