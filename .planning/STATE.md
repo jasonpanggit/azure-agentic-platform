@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-14 - Completed Phase 50: Cross-Subscription Federated View. SubscriptionRegistry (ARG discovery + Cosmos persistence), federation-aware inventory endpoints (?subscription_ids fan-out), cross-subscription topology edges (VNet peering, Private Endpoints, ExpressRoute), subscription_utils DRY refactor across all 8 domain agents, UI early-return guard fix. 909 tests pass. PR #81.
+
 > Last activity: 2026-04-14 - Completed Phase 49: Messaging Agent (Service Bus + Event Hub). 7 @ai_function tools, 37 unit tests, Terraform ca-messaging-prod, CI/CD build-messaging + deploy-messaging. PR #79 merged.
 
 > Last activity: 2026-04-12 - Fixed VM tab EOL date always blank: wrong endoflife.date product slug (windows-server-YYYY → windows-server with year as cycle param). 25/25 tests pass. Commit b19eaab.
