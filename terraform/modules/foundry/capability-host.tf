@@ -45,6 +45,11 @@ resource "azapi_resource" "capability_host" {
   name      = "accountcaphost"
   parent_id = azurerm_cognitive_account.foundry.id
 
+  # schema_validation_enabled = false: preview API schema is fluid and rejects
+  # valid properties (capabilityHostKind, enablePublicHostingEnvironment) that
+  # the API accepts at runtime. Disable to avoid spurious validation failures.
+  schema_validation_enabled = false
+
   body = {
     properties = {
       capabilityHostKind             = "Agents"
@@ -76,6 +81,9 @@ resource "azapi_resource" "project_capability_host" {
   type      = "Microsoft.CognitiveServices/accounts/projects/capabilityHosts@2025-10-01-preview"
   name      = "projectcaphost"
   parent_id = azurerm_cognitive_account_project.main.id
+
+  # schema_validation_enabled = false: same preview schema issue as account-level host.
+  schema_validation_enabled = false
 
   body = {
     properties = {

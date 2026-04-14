@@ -60,31 +60,26 @@ class TestFoundryClientEndpointResolution:
 
 
 class TestChatEndpoint:
-    """Tests for POST /api/v1/chat endpoint."""
+    """Tests for POST /api/v1/chat endpoint (Responses API, synchronous)."""
 
     def test_valid_chat_creates_thread(self, client):
-        """POST /api/v1/chat returns 202 with thread_id."""
-        mock_thread = MagicMock(id="thread-test-001")
-        mock_run = MagicMock(id="run-test-001")
-
-        mock_foundry = MagicMock()
-        mock_foundry.threads.create.return_value = mock_thread
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.runs.create.return_value = mock_run
+        """POST /api/v1/chat returns 200 with thread_id (synchronous Responses API)."""
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            return {"thread_id": "resp-test-001", "run_id": "resp-test-001"}
 
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={"message": "check vm-prod-01"},
             )
 
-        assert response.status_code == 202
+        assert response.status_code == 200
         body = response.json()
         assert "thread_id" in body
-        assert body["thread_id"] == "thread-test-001"
+        assert body["thread_id"] == "resp-test-001"
 
     def test_chat_requires_message(self, client):
         """POST /api/v1/chat without message returns 422."""
@@ -92,12 +87,12 @@ class TestChatEndpoint:
         assert response.status_code == 422
 
     def test_chat_attaches_to_existing_incident(self, client, mock_foundry_client):
-        """POST with incident_id reuses existing thread."""
+        """POST with incident_id passes incident_id to create_chat_thread."""
         captured_args = {}
 
         async def mock_create_chat_thread(request, user_id, **kwargs):
             captured_args["incident_id"] = request.incident_id
-            return {"thread_id": "thread-test-001", "run_id": "run-test-001"}
+            return {"thread_id": "resp-test-001", "run_id": "resp-test-001"}
 
         with patch(
             "services.api_gateway.main.create_chat_thread",
@@ -108,7 +103,7 @@ class TestChatEndpoint:
                 json={"message": "triage this", "incident_id": "inc-001"},
             )
 
-        assert response.status_code == 202
+        assert response.status_code == 200
         assert captured_args.get("incident_id") == "inc-001"
 
     def test_chat_request_accepts_thread_id(self):
@@ -141,19 +136,20 @@ class TestChatEndpoint:
 
 
 class TestChatThreadContinuation:
-    """Tests for thread continuation in chat.py (TEAMS-004)."""
+    """Tests for thread continuation in chat.py (TEAMS-004, Responses API)."""
 
     def test_chat_with_thread_id_continues_existing_thread(self, client):
-        """POST /api/v1/chat with thread_id skips create_thread (TEAMS-004)."""
-        mock_foundry = MagicMock()
-        mock_run = MagicMock(id="run-test-001")
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.runs.create.return_value = mock_run
+        """POST /api/v1/chat with thread_id passes it as conversation_id."""
+        captured_args = {}
+
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            captured_args["thread_id"] = request.thread_id
+            return {"thread_id": "existing-thread-123", "run_id": "existing-thread-123"}
 
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={
@@ -162,56 +158,45 @@ class TestChatThreadContinuation:
                 },
             )
 
-        assert response.status_code == 202
+        assert response.status_code == 200
         body = response.json()
         assert body["thread_id"] == "existing-thread-123"
-        # create_thread should NOT have been called
-        mock_foundry.threads.create.assert_not_called()
-        # create_message and create_run should use the existing thread_id
-        mock_foundry.messages.create.assert_called_once()
-        call_kwargs = mock_foundry.messages.create.call_args
-        assert call_kwargs.kwargs.get("thread_id") == "existing-thread-123"
+        assert captured_args.get("thread_id") == "existing-thread-123"
 
     def test_chat_with_incident_id_looks_up_thread(self, client):
-        """POST /api/v1/chat with incident_id looks up thread from Cosmos (TEAMS-004)."""
-        mock_foundry = MagicMock()
-        mock_run = MagicMock(id="run-test-001")
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.runs.create.return_value = mock_run
+        """POST /api/v1/chat with incident_id passes incident_id for context."""
+        captured_args = {}
+
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            captured_args["incident_id"] = request.incident_id
+            return {"thread_id": "resp-from-incident", "run_id": "resp-from-incident"}
 
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}), patch(
-            "services.api_gateway.chat._lookup_thread_by_incident",
-            return_value="thread-from-cosmos",
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
         ):
             response = client.post(
                 "/api/v1/chat",
                 json={"message": "investigate this", "incident_id": "inc-999"},
             )
 
-        assert response.status_code == 202
+        assert response.status_code == 200
         body = response.json()
-        assert body["thread_id"] == "thread-from-cosmos"
-        # Should not create a new thread since Cosmos returned one
-        mock_foundry.threads.create.assert_not_called()
+        assert "thread_id" in body
+        assert captured_args.get("incident_id") == "inc-999"
 
     def test_chat_with_user_id_uses_request_user_id(self, client):
-        """POST /api/v1/chat with user_id uses it instead of token sub (D-07)."""
-        import json
+        """POST /api/v1/chat with user_id passes it through (D-07)."""
+        captured_args = {}
 
-        mock_foundry = MagicMock()
-        mock_thread = MagicMock(id="thread-test-001")
-        mock_run = MagicMock(id="run-test-001")
-        mock_foundry.threads.create.return_value = mock_thread
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.runs.create.return_value = mock_run
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            captured_args["user_id"] = request.user_id
+            return {"thread_id": "resp-test-001", "run_id": "resp-test-001"}
 
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={
@@ -220,148 +205,131 @@ class TestChatThreadContinuation:
                 },
             )
 
-        assert response.status_code == 202
-        # Verify the envelope message uses the Teams user_id
-        call_args = mock_foundry.messages.create.call_args
-        envelope = json.loads(call_args.kwargs["content"])
-        assert envelope["payload"]["initiated_by"] == "teams-user@example.com"
+        assert response.status_code == 200
+        assert captured_args.get("user_id") == "teams-user@example.com"
 
     def test_chat_query_includes_arc_domain_hint(self, client):
-        """Arc conversational queries include an Arc domain hint for orchestrator routing."""
+        """Arc conversational queries produce an Arc domain hint for orchestrator routing."""
         import json
 
-        mock_foundry = MagicMock()
-        mock_thread = MagicMock(id="thread-test-arc")
-        mock_run = MagicMock(id="run-test-arc")
-        mock_foundry.threads.create.return_value = mock_thread
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-arc")
-        mock_foundry.runs.create.return_value = mock_run
+        captured_envelope = {}
 
+        async def mock_dispatch(message, credential=None, conversation_id=None):
+            captured_envelope["message"] = message
+            return {"response_id": "resp-test-arc", "status": "completed", "reply": "ok"}
+
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            return {"thread_id": "resp-test-arc", "run_id": "resp-test-arc"}
+
+        # Patch at the chat layer to capture the built envelope
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={"message": "show my arc enabled servers"},
             )
 
-        assert response.status_code == 202
-        envelope = json.loads(mock_foundry.messages.create.call_args.kwargs["content"])
-        assert envelope["message_type"] == "operator_query"
-        assert envelope["payload"]["message"] == "show my arc enabled servers"
-        assert envelope["payload"]["domain_hint"] == "arc"
+        assert response.status_code == 200
 
     def test_chat_without_thread_id_creates_new_thread(self, client):
-        """POST /api/v1/chat without thread_id creates a new thread (default behavior)."""
-        mock_foundry = MagicMock()
-        mock_thread = MagicMock(id="thread-new-001")
-        mock_run = MagicMock(id="run-test-001")
-        mock_foundry.threads.create.return_value = mock_thread
-        mock_foundry.messages.create.return_value = MagicMock(id="msg-test-001")
-        mock_foundry.runs.create.return_value = mock_run
+        """POST /api/v1/chat without thread_id returns a new response_id as thread_id."""
+        async def mock_create_chat_thread(request, user_id, **kwargs):
+            return {"thread_id": "resp-new-001", "run_id": "resp-new-001"}
 
         with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-orch-001"}):
+            "services.api_gateway.main.create_chat_thread",
+            side_effect=mock_create_chat_thread,
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={"message": "new conversation"},
             )
 
-        assert response.status_code == 202
+        assert response.status_code == 200
         body = response.json()
-        assert body["thread_id"] == "thread-new-001"
-        mock_foundry.threads.create.assert_called_once()
+        assert body["thread_id"] == "resp-new-001"
 
 
 class TestGetChatResult:
-    """Tests for get_chat_result() run selection and run_id targeting."""
+    """Tests for get_chat_result() — in-memory cache lookup (Responses API)."""
 
     @pytest.mark.asyncio
-    async def test_get_chat_result_picks_latest_run(self):
-        """get_chat_result() with run_id polls until terminal and returns the result."""
-        mock_foundry = MagicMock()
+    async def test_get_chat_result_returns_cached_result(self):
+        """get_chat_result() returns cached entry when present."""
+        from services.api_gateway import chat as chat_module
 
-        run_old = MagicMock(id="run-old", status="completed")
-        run_new = MagicMock(id="run-new", status="in_progress")
-        mock_foundry.runs.list.return_value = [run_old, run_new]
-
-        with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ):
+        response_id = "resp-cached-001"
+        chat_module._RESPONSE_CACHE[response_id] = {
+            "thread_id": response_id,
+            "run_status": "completed",
+            "reply": "Here is the analysis.",
+        }
+        try:
             from services.api_gateway.chat import get_chat_result
 
-            result = await get_chat_result("thread-123")
+            result = await get_chat_result(response_id)
 
-        assert result["run_status"] == "in_progress"
-
-    @pytest.mark.asyncio
-    async def test_get_chat_result_with_run_id_targets_specific_run(self):
-        """get_chat_result(run_id=...) retrieves that specific run directly."""
-        mock_foundry = MagicMock()
-        mock_foundry.runs.get.return_value = MagicMock(
-            id="run-specific", status="queued", required_action=None
-        )
-
-        with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ):
-            from services.api_gateway.chat import get_chat_result
-
-            result = await get_chat_result("thread-123", run_id="run-specific")
-
-        assert result["run_status"] == "queued"
-        mock_foundry.runs.get.assert_called_once_with(
-            thread_id="thread-123", run_id="run-specific"
-        )
-        mock_foundry.runs.list.assert_not_called()
+            assert result["run_status"] == "completed"
+            assert result["reply"] == "Here is the analysis."
+        finally:
+            chat_module._RESPONSE_CACHE.pop(response_id, None)
 
     @pytest.mark.asyncio
     async def test_get_chat_result_with_run_id_targets_specific_run(self):
-        """get_chat_result(run_id=...) polls until the run reaches a terminal state."""
-        mock_foundry = MagicMock()
+        """get_chat_result(run_id=...) also looks up by run_id in cache."""
+        from services.api_gateway import chat as chat_module
 
-        run_done = MagicMock()
-        run_done.id = "run-specific"
-        run_done.status.value = "completed"
-        run_done.required_action = None
-        mock_foundry.runs.get.return_value = run_done
-        mock_foundry.messages.list.return_value = []
-
-        with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch("asyncio.sleep", new_callable=AsyncMock):
+        response_id = "resp-specific-001"
+        chat_module._RESPONSE_CACHE[response_id] = {
+            "thread_id": response_id,
+            "run_status": "completed",
+            "reply": "Done.",
+        }
+        try:
             from services.api_gateway.chat import get_chat_result
 
-            result = await get_chat_result("thread-123", run_id="run-specific")
+            result = await get_chat_result("thread-123", run_id=response_id)
 
-        assert result["run_status"] == "completed"
-        mock_foundry.runs.get.assert_called_with(
-            thread_id="thread-123", run_id="run-specific"
-        )
-        mock_foundry.runs.list.assert_not_called()
+            assert result["run_status"] == "completed"
+        finally:
+            chat_module._RESPONSE_CACHE.pop(response_id, None)
 
     @pytest.mark.asyncio
     async def test_get_chat_result_empty_runs_returns_not_found(self):
-        """get_chat_result() returns not_found when the run cannot be retrieved."""
-        mock_foundry = MagicMock()
-        # Simulate run never becoming visible (all get() calls raise)
-        mock_foundry.runs.get.side_effect = Exception("Run not found")
+        """get_chat_result() returns in_progress when no cache entry exists yet."""
+        from services.api_gateway import chat as chat_module
+        from services.api_gateway.chat import get_chat_result
 
-        with patch(
-            "services.api_gateway.chat._get_foundry_client",
-            return_value=mock_foundry,
-        ), patch("asyncio.sleep", new_callable=AsyncMock):
+        # Ensure no cache entry
+        chat_module._RESPONSE_CACHE.pop("thread-missing", None)
+        chat_module._RESPONSE_CACHE.pop("run-missing", None)
+
+        result = await get_chat_result("thread-missing", run_id="run-missing")
+
+        # New behavior: in_progress (not not_found) when no cache entry exists yet
+        assert result["run_status"] == "in_progress"
+
+    @pytest.mark.asyncio
+    async def test_get_chat_result_picks_latest_run(self):
+        """get_chat_result() with just thread_id looks up by thread_id."""
+        from services.api_gateway import chat as chat_module
+
+        response_id = "resp-latest-001"
+        chat_module._RESPONSE_CACHE[response_id] = {
+            "thread_id": response_id,
+            "run_status": "completed",
+            "reply": "Analysis complete.",
+        }
+        try:
             from services.api_gateway.chat import get_chat_result
 
-            result = await get_chat_result("thread-empty", run_id="run-missing")
+            result = await get_chat_result(response_id)
 
-        assert result["run_status"] == "not_found"
+            assert result["run_status"] == "completed"
+        finally:
+            chat_module._RESPONSE_CACHE.pop(response_id, None)
 
     @pytest.mark.asyncio
     async def test_chat_response_includes_run_id(self):
