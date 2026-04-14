@@ -87,10 +87,12 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Attribute | Value |
 |---|---|
 | **Package** | `@azure/mcp` (npm, run as sidecar) OR invoke via `npx @azure/mcp@latest start` |
-| **Distribution** | npm package `@azure/mcp`; also `azmcp` binary |
+| **Distribution** | npm package `@azure/mcp`; also `azmcp` binary. Repository: `microsoft/mcp` (formerly `Azure/azure-mcp`, now archived) |
+| **Version** | `2.0.0` |
 | **Status** | ✅ **GA** |
+| **Startup time** | ~1–2 seconds (down from ~20s in v1 beta) |
 | **Authentication** | Entra ID via `DefaultAzureCredential` / managed identity |
-#### Covered Services (confirmed in docs, March 2026)
+#### Covered Services (confirmed in v2.0.0, April 2026)
 | Domain | Tools Available |
 |---|---|
 | ARM / Resource management | `group`, `subscription`, `role`, `quota`, `policy`, `advisor`, `resourcehealth` |
@@ -104,7 +106,13 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Messaging/Events | `eventhubs`, `servicebus`, `eventgrid` |
 | DevOps | `deploy`, `bicepschema`, `grafana`, `loadtesting` |
 | Identity | `role` (RBAC assignments) |
-| Containers | `acr` (list) |
+| Containers | `acr` (list), `containerapps` (list apps, get app, list revisions) |
+| IoT / Device Registry | `deviceregistry` |
+| Serverless Functions | `functions` |
+| Migration | `azuremigrate` |
+| Governance | `policy` (extended) |
+| Cost / Pricing | `pricing` |
+| Architecture Review | `wellarchitectedframework` |
 #### Arc Coverage Gap (CONFIRMED)
 - Arc-enabled servers (`Microsoft.HybridCompute/machines`)
 - Arc-enabled Kubernetes (`Microsoft.Kubernetes/connectedClusters`)
@@ -305,7 +313,7 @@ An enterprise-grade AI operations platform that uses a domain-specialist multi-a
 | Agent Framework | `agent-framework` | `1.0.0rc5` | ⚠️ Pre-release RC |
 | Hosting Adapter | `azure-ai-agentserver-agentframework` | latest | ⚠️ Preview |
 | Foundry SDK | `azure-ai-projects` | `2.0.1` | ✅ GA |
-| Azure MCP Server | `@azure/mcp` (npm) | GA | ✅ GA |
+| Azure MCP Server | `@azure/mcp` (npm) | `2.0.0` | ✅ GA |
 | Arc MCP Framework | `mcp[cli]` | `1.26.0` | ✅ Stable |
 | Fabric Eventhouse | (Fabric SaaS) | GA | ✅ GA |
 | Fabric Activator | (Fabric SaaS) | GA | ✅ GA |
@@ -383,7 +391,7 @@ FastAPI thin router (`services/api-gateway/`) — routes requests to domain agen
 
 ### MCP Surfaces
 
-- **Azure MCP Server** (GA) — `ca-azure-mcp-prod`, internal-only Container App; covers ARM, Compute, Storage, Databases, Monitoring, Security, Messaging
+- **Azure MCP Server** (v2.0.0 GA) — `ca-azure-mcp-prod`, internal-only Container App; covers ARM, Compute, Storage, Databases, Monitoring, Security, Messaging, `containerapps`, Functions
 - **Custom Arc MCP Server** — `ca-arc-mcp-prod`, internal-only Container App; covers Arc-enabled servers, Kubernetes, data services (Azure MCP Server gap)
 - Both registered as Foundry MCP connections (`category = "CustomKeys"`)
 
