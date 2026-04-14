@@ -4,6 +4,8 @@ import {
   lookupWarRoomThread,
   _resetRegistry,
   syncTeamsMessageToWarRoom,
+  createTeamsWarRoomThread,
+  postAnnotationToTeams,
 } from '../services/war-room';
 import { buildWarRoomCreatedCard, buildWarRoomAnnotationCard } from '../cards/war-room-card';
 import type { WarRoomCreatedPayload, WarRoomAnnotationPayload } from '../types';
@@ -310,5 +312,76 @@ describe('syncTeamsMessageToWarRoom', () => {
     expect(capturedUrl).toContain('/api/v1/incidents/inc-123/war-room/annotations');
 
     vi.unstubAllGlobals();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTeamsWarRoomThread
+// ---------------------------------------------------------------------------
+
+vi.mock('../services/proactive', () => ({
+  sendProactiveCard: vi.fn(),
+  hasConversationReference: vi.fn().mockReturnValue(true),
+}));
+
+describe('createTeamsWarRoomThread', () => {
+  beforeEach(() => {
+    _resetRegistry();
+    vi.clearAllMocks();
+  });
+
+  it('returns ok:false when sendProactiveCard fails', async () => {
+    const { sendProactiveCard } = await import('../services/proactive');
+    vi.mocked(sendProactiveCard).mockResolvedValue({ ok: false });
+
+    const result = await createTeamsWarRoomThread(baseCreatedPayload);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Failed to send war room card');
+  });
+
+  it('returns ok:false when sendProactiveCard returns no messageId', async () => {
+    const { sendProactiveCard } = await import('../services/proactive');
+    vi.mocked(sendProactiveCard).mockResolvedValue({ ok: true });
+
+    const result = await createTeamsWarRoomThread(baseCreatedPayload);
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns ok:true and registers thread on success', async () => {
+    const { sendProactiveCard } = await import('../services/proactive');
+    vi.mocked(sendProactiveCard).mockResolvedValue({ ok: true, messageId: 'msg-xyz' });
+
+    const result = await createTeamsWarRoomThread(baseCreatedPayload);
+    expect(result.ok).toBe(true);
+    expect(result.messageId).toBe('msg-xyz');
+    expect(lookupWarRoomThread('msg-xyz')).toBe(baseCreatedPayload.incident_id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// postAnnotationToTeams
+// ---------------------------------------------------------------------------
+
+describe('postAnnotationToTeams', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('delegates to sendProactiveCard and returns its result', async () => {
+    const { sendProactiveCard } = await import('../services/proactive');
+    vi.mocked(sendProactiveCard).mockResolvedValue({ ok: true, messageId: 'msg-ann-001' });
+
+    const result = await postAnnotationToTeams(baseAnnotationPayload);
+    expect(result.ok).toBe(true);
+    expect(result.messageId).toBe('msg-ann-001');
+    expect(sendProactiveCard).toHaveBeenCalledOnce();
+  });
+
+  it('returns ok:false when sendProactiveCard fails', async () => {
+    const { sendProactiveCard } = await import('../services/proactive');
+    vi.mocked(sendProactiveCard).mockResolvedValue({ ok: false });
+
+    const result = await postAnnotationToTeams(baseAnnotationPayload);
+    expect(result.ok).toBe(false);
   });
 });
