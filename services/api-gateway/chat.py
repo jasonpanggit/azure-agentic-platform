@@ -499,23 +499,40 @@ async def get_chat_result(
     client = _get_foundry_client()
     terminal = {"completed", "failed", "cancelled", "expired"}
 
-    # Fetch the target run (sync SDK call — offloaded to thread pool)
+    # Fetch the target run (sync SDK call — offloaded to thread pool).
+    # Foundry's run-status API can be slow under load; wrap with a 12s asyncio
+    # timeout so this endpoint always returns quickly and the SSE poll never
+    # hits its own AbortSignal.timeout before we respond.
+    # On timeout we return in_progress so the SSE route retries next cycle.
     if run_id:
         # Specific run requested — fetch directly
         try:
-            latest_run = await loop.run_in_executor(
-                None,
-                lambda: client.runs.get(thread_id=thread_id, run_id=run_id),
+            latest_run = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: client.runs.get(thread_id=thread_id, run_id=run_id),
+                ),
+                timeout=12,
             )
+        except asyncio.TimeoutError:
+            logger.warning("Run %s status poll timed out (Foundry slow) — returning in_progress", run_id)
+            return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
         except Exception as exc:
             logger.warning("Run %s not found: %s", run_id, exc)
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
     else:
         # No run_id — list all runs and pick the most recent (last in list)
-        run_list = await loop.run_in_executor(
-            None,
-            lambda: list(client.runs.list(thread_id=thread_id)),
-        )
+        try:
+            run_list = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: list(client.runs.list(thread_id=thread_id)),
+                ),
+                timeout=12,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Run list for thread %s timed out — returning in_progress", thread_id)
+            return {"thread_id": thread_id, "run_status": "in_progress", "reply": None}
         if not run_list:
             return {"thread_id": thread_id, "run_status": "not_found", "reply": None}
         latest_run = run_list[-1]
