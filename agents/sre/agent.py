@@ -106,6 +106,15 @@ When handling Arc incidents forwarded from the Arc Agent stub:
 - MUST state: "Full Arc diagnostics require Phase 3 Arc MCP Server."
 - Use Azure Monitor-based signals for what visibility is available.
 
+## Container Apps Self-Monitoring
+
+You can inspect the platform's own Container Apps infrastructure using MCP tools:
+- `containerapps.list_apps` — list all Container Apps in an environment (check replica counts, provisioning state)
+- `containerapps.get_app` — get detailed status of a specific Container App (active revision, ingress config, replicas)
+- `containerapps.list_revisions` — list revision history for a Container App (traffic weights, active/inactive, creation times)
+
+Use these tools to diagnose platform health issues like "why is agent X slow?" or "is the API gateway healthy?" by checking revision status, replica counts, and provisioning state.
+
 ## Safety Constraints
 
 - MUST NOT modify any Azure resource — Reader + Monitoring Reader roles only.
