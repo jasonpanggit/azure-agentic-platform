@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-14 - Completed quick task 260414-o65: fix CI failures — 4 missing agent spec files (appservice, containerapps, database, messaging) + Terraform default empty strings for client_id, client_secret, fabric_admin_email.
+
 > Last activity: 2026-04-14 - Completed Phase 50: Cross-Subscription Federated View. SubscriptionRegistry (ARG discovery + Cosmos persistence), federation-aware inventory endpoints (?subscription_ids fan-out), cross-subscription topology edges (VNet peering, Private Endpoints, ExpressRoute), subscription_utils DRY refactor across all 8 domain agents, UI early-return guard fix. 909 tests pass. PR #81.
 
 > Last activity: 2026-04-14 - Completed Phase 49: Messaging Agent (Service Bus + Event Hub). 7 @ai_function tools, 37 unit tests, Terraform ca-messaging-prod, CI/CD build-messaging + deploy-messaging. PR #79 merged.
@@ -420,6 +422,8 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260413-kx9 | validate all git branches and delete those fully merged to main | 2026-04-13 | 165c9c9 | [260413-kx9-validate-all-git-branches-and-delete-tho](./quick/260413-kx9-validate-all-git-branches-and-delete-tho/) |
 | 260413-ubf | Fix Container Insights metrics not loading in AKS detail panel | 2026-04-13 | 0f64c6f | [260413-ubf-fix-container-insights-metrics-not-loadi](./quick/260413-ubf-fix-container-insights-metrics-not-loadi/) |
 | 260413-v9x | Remove VM filter from Cost tab — show all Azure Advisor Cost recommendations | 2026-04-13 | 8c2fccf | [260413-v9x-remove-vm-filter-from-cost-tab-show-all-](./quick/260413-v9x-remove-vm-filter-from-cost-tab-show-all-/) |
+| 260414-nw4 | resolve merge conflicts in PR 81 | 2026-04-14 | 1f5b782 | [260414-nw4-resolve-merge-conflicts-in-pr-81](./quick/260414-nw4-resolve-merge-conflicts-in-pr-81/) |
+| 260414-o65 | fix CI failures - missing agent spec files and terraform required variables | 2026-04-14 | 8e782d5 | [260414-o65-fix-ci-failures-missing-agent-spec-files](./quick/260414-o65-fix-ci-failures-missing-agent-spec-files/) |
 
 ---
 
