@@ -55,6 +55,9 @@ from services.api_gateway.models import (
     ApprovalResponse,
     AuditEntry,
     AuditExportResponse,
+    AutoRemediationPolicy,
+    AutoRemediationPolicyCreate,
+    AutoRemediationPolicyUpdate,
     BusinessTier,
     BusinessTiersResponse,
     ChangeCorrelation,
@@ -69,6 +72,8 @@ from services.api_gateway.models import (
     IncidentSummary,
     PatternAnalysisResult,
     PlatformHealth,
+    PolicyExecution,
+    PolicySuggestion,
     RemediationAuditRecord,
     RemediationResult,
     RunbookResult,
@@ -121,6 +126,7 @@ from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
+from services.api_gateway.admin_endpoints import router as admin_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -537,6 +543,7 @@ app.include_router(topology_tree_router)
 app.include_router(eol_router)
 app.include_router(vmss_router)
 app.include_router(aks_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
