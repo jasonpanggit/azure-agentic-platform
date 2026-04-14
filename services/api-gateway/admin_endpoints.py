@@ -29,11 +29,17 @@ from services.api_gateway.models import (
     AutoRemediationPolicyCreate,
     AutoRemediationPolicyUpdate,
     PolicyExecution,
+    PolicySuggestion,
 )
 from services.api_gateway.remediation_executor import SAFE_ARM_ACTIONS
 from services.api_gateway.runbook_rag import (
     RunbookSearchUnavailableError,
     resolve_postgres_dsn,
+)
+from services.api_gateway.suggestion_engine import (
+    convert_suggestion_to_policy,
+    dismiss_suggestion,
+    get_pending_suggestions,
 )
 
 logger = logging.getLogger(__name__)
@@ -413,3 +419,123 @@ async def get_policy_executions(
             "Failed to query executions for policy %s", policy_id, exc_info=True
         )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Policy suggestion endpoints (Phase 51-3: Learning Suggestion Engine)
+# ---------------------------------------------------------------------------
+
+
+def _get_cosmos_client(request: Request) -> Optional[Any]:
+    """Return the Cosmos client from app state, or None if unavailable."""
+    return getattr(request.app.state, "cosmos_client", None)
+
+
+@router.get("/policy-suggestions", response_model=list[PolicySuggestion])
+async def list_policy_suggestions(
+    request: Request,
+    _token: dict = Depends(verify_token),
+) -> list[PolicySuggestion]:
+    """Return all pending (non-dismissed, not-yet-converted) policy suggestions."""
+    cosmos_client = _get_cosmos_client(request)
+    items = await get_pending_suggestions(cosmos_client)
+    return [PolicySuggestion(**item) for item in items]
+
+
+@router.post("/policy-suggestions/{suggestion_id}/dismiss")
+async def dismiss_policy_suggestion(
+    suggestion_id: str,
+    action_class: str,
+    request: Request,
+    _token: dict = Depends(verify_token),
+) -> dict:
+    """Dismiss a policy suggestion so it no longer appears in the list."""
+    cosmos_client = _get_cosmos_client(request)
+    success = await dismiss_suggestion(cosmos_client, suggestion_id, action_class)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Suggestion {suggestion_id} not found or could not be dismissed",
+        )
+    return {"status": "dismissed"}
+
+
+@router.post(
+    "/policy-suggestions/{suggestion_id}/convert",
+    response_model=AutoRemediationPolicy,
+    status_code=status.HTTP_201_CREATED,
+)
+async def convert_policy_suggestion(
+    suggestion_id: str,
+    action_class: str,
+    body: AutoRemediationPolicyCreate,
+    request: Request,
+    _token: dict = Depends(verify_token),
+) -> AutoRemediationPolicy:
+    """Convert a suggestion into a real auto-remediation policy.
+
+    Creates the policy in PostgreSQL using the same logic as POST /remediation-policies,
+    then links the suggestion to the created policy_id in Cosmos.
+    """
+    # Validate action_class
+    if body.action_class not in SAFE_ARM_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid action_class '{body.action_class}'. "
+                f"Must be one of: {', '.join(sorted(SAFE_ARM_ACTIONS.keys()))}"
+            ),
+        )
+
+    try:
+        conn = await _get_pg_connection()
+    except (RunbookSearchUnavailableError, Exception) as exc:
+        logger.error("PostgreSQL unavailable for suggestion convert: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Policy database unavailable",
+        ) from exc
+
+    try:
+        tag_filter_json = json.dumps(body.resource_tag_filter)
+        row = await conn.fetchrow(
+            """
+            INSERT INTO remediation_policies
+                (name, description, action_class, resource_tag_filter,
+                 max_blast_radius, max_daily_executions, require_slo_healthy,
+                 maintenance_window_exempt, enabled)
+            VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
+            RETURNING *
+            """,
+            body.name,
+            body.description,
+            body.action_class,
+            tag_filter_json,
+            body.max_blast_radius,
+            body.max_daily_executions,
+            body.require_slo_healthy,
+            body.maintenance_window_exempt,
+            body.enabled,
+        )
+        policy = _row_to_policy(row)
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Policy with name '{body.name}' already exists",
+        ) from exc
+    finally:
+        await conn.close()
+
+    # Link suggestion → policy in Cosmos (best-effort; non-fatal)
+    cosmos_client = _get_cosmos_client(request)
+    linked = await convert_suggestion_to_policy(
+        cosmos_client, suggestion_id, action_class, policy.id
+    )
+    if not linked:
+        logger.warning(
+            "suggestion_engine: failed to link suggestion %s to policy %s — suggestion may still show",
+            suggestion_id,
+            policy.id,
+        )
+
+    return policy
