@@ -11,8 +11,7 @@ Explicit MCP tool allowlist — no wildcards permitted (AGENT-001):
   Arc MCP Server tools: arc_servers_list, arc_servers_get, arc_k8s_list,
     arc_k8s_get, arc_extensions_list, arc_k8s_gitops_status,
     arc_data_sql_mi_list, arc_data_postgresql_list
-  Azure MCP Server tools: monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status
+  Azure MCP Server tools (v2 namespace names): monitor, resourcehealth
 """
 from __future__ import annotations
 
@@ -65,7 +64,7 @@ logger = logging.getLogger(__name__)
 # Explicit MCP tool allowlist — replaces the Phase 2 empty list (AGENT-005)
 # ---------------------------------------------------------------------------
 ALLOWED_MCP_TOOLS: List[str] = [
-    # Arc MCP Server tools (Phase 3 — custom FastMCP server)
+    # Arc MCP Server tools (Phase 3 — custom FastMCP server, names unchanged)
     "arc_servers_list",
     "arc_servers_get",
     "arc_extensions_list",
@@ -75,10 +74,9 @@ ALLOWED_MCP_TOOLS: List[str] = [
     "arc_data_sql_mi_list",
     "arc_data_sql_mi_get",
     "arc_data_postgresql_list",
-    # Azure MCP Server tools (general monitoring signals)
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
+    # Azure MCP Server tools — v2 namespace names
+    "monitor",
+    "resourcehealth",
 ]
 
 

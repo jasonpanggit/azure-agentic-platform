@@ -1333,10 +1333,10 @@ When all phases 34–40 complete:
 **Goal:** Upgrade from Azure MCP Server v1 (`@azure/mcp`, archived `Azure/azure-mcp` repo) to v2 (`Azure.Mcp.Server 2.0.0`, `microsoft/mcp` repo). Wire two new high-value namespaces: `advisor` into the SRE agent and `containerapps` for platform self-monitoring. Update CLAUDE.md package references.
 **Requirements**: Update package reference and Docker image; smoke-test existing tools; wire `advisor` tools into SRE agent; wire `containerapps` tools into Orchestrator or SRE agent for self-monitoring
 **Depends on:** Phase 44
-**Plans:** 1/1 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
-- [x] TBD (run /gsd-plan-phase 65 to break down) (completed 2026-04-14)
+- [x] TBD (run /gsd-plan-phase 65 to break down) (completed 2026-04-13)
 
 ---
 

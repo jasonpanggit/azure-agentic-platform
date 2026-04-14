@@ -1,9 +1,7 @@
 """Storage Agent tool functions — Azure Monitor and storage diagnostic wrappers.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    storage.list_accounts, storage.get_account, fileshares.list,
-    monitor.query_logs, monitor.query_metrics,
-    resourcehealth.get_availability_status
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    storage, fileshares, monitor, resourcehealth
 """
 from __future__ import annotations
 
@@ -16,14 +14,12 @@ from shared.otel import instrument_tool_call, setup_telemetry
 
 tracer = setup_telemetry("aiops-storage-agent")
 
-# Explicit MCP tool allowlist — no wildcards permitted.
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "storage.list_accounts",
-    "storage.get_account",
-    "fileshares.list",
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "resourcehealth.get_availability_status",
+    "storage",
+    "fileshares",
+    "monitor",
+    "resourcehealth",
 ]
 
 

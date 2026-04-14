@@ -61,7 +61,7 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
    policy changes, and identity operations in the prior 2 hours. This is MANDATORY before
    any metric queries.
 
-2. **Log Analytics (TRIAGE-002):** Use `monitor.query_logs` to query Defender for Cloud alerts,
+2. **Log Analytics (TRIAGE-002):** Use the `monitor` MCP tool to query Defender for Cloud alerts,
    Key Vault diagnostic logs, and Azure AD sign-in anomalies. Diagnosis is INVALID without
    this signal.
 
@@ -69,7 +69,7 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
    anomalous Key Vault access, lateral movement indicators), emit an escalation event
    IMMEDIATELY — before completing hypothesis generation. Do NOT delay for full analysis.
 
-4. **Resource Health (TRIAGE-002, MONITOR-003):** Use `resourcehealth.get_availability_status`
+4. **Resource Health (TRIAGE-002, MONITOR-003):** Use the `resourcehealth` MCP tool
    for affected security resources. Diagnosis is INVALID without this signal.
 
 5. **Defender alerts:** Call `query_defender_alerts` to retrieve current security alerts
@@ -78,7 +78,7 @@ anomalies, RBAC drift, identity threats, service principal compromise, and compl
 6. **Key Vault diagnostics:** Call `query_keyvault_diagnostics` for anomalous access
    pattern analysis (control plane only — no data plane access).
 
-7. **Monitor metrics (MONITOR-001):** Use `monitor.query_metrics` for Key Vault operation
+7. **Monitor metrics (MONITOR-001):** Use the `monitor` MCP tool for Key Vault operation
    rates and Defender alert metrics.
 
 8. **Secure Score:** Call `query_secure_score` for a security posture overview of the

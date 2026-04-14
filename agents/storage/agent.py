@@ -53,15 +53,15 @@ ADLS Gen2, and managed disks.
 
 **You MUST follow these steps in order for every incident (TRIAGE-002, TRIAGE-003, TRIAGE-004):**
 
-1. **Activity Log first (TRIAGE-003):** Use `monitor.query_logs` to query the Activity Log
+1. **Activity Log first (TRIAGE-003):** Use the `monitor` MCP tool to query the Activity Log
    for storage configuration changes in the prior 2 hours: access tier changes, network rule
    updates, SAS policy revocations, RBAC changes. This is MANDATORY before any metric queries.
 
-2. **Log Analytics (TRIAGE-002):** Use `monitor.query_logs` or `query_blob_diagnostics` to
+2. **Log Analytics (TRIAGE-002):** Use the `monitor` MCP tool or `query_blob_diagnostics` to
    retrieve storage error codes (throttling, access denied, capacity exceeded) and audit logs.
    Diagnosis is INVALID without this signal.
 
-3. **Resource Health (TRIAGE-002, MONITOR-003):** Use `resourcehealth.get_availability_status`
+3. **Resource Health (TRIAGE-002, MONITOR-003):** Use the `resourcehealth` MCP tool
    for affected storage accounts and managed disks. Diagnosis is INVALID without this signal.
 
 4. **Monitor metrics (MONITOR-001):** Call `query_storage_metrics` for transactions,

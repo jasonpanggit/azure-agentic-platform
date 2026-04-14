@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
+import os
+
 import pytest
 
 
@@ -27,24 +29,20 @@ def _mock_with_name(mock_name: str, **kwargs) -> MagicMock:
 class TestAllowedMcpTools:
     """Verify ALLOWED_MCP_TOOLS list is correct and has no wildcards."""
 
-    def test_allowed_mcp_tools_has_exactly_nine_entries(self):
+    def test_allowed_mcp_tools_has_exactly_five_entries(self):
         from agents.sre.tools import ALLOWED_MCP_TOOLS
 
-        assert len(ALLOWED_MCP_TOOLS) == 9
+        assert len(ALLOWED_MCP_TOOLS) == 5
 
     def test_allowed_mcp_tools_contains_expected_entries(self):
         from agents.sre.tools import ALLOWED_MCP_TOOLS
 
         expected = [
-            "monitor.query_logs",
-            "monitor.query_metrics",
-            "applicationinsights.query",
-            "advisor.list_recommendations",
-            "resourcehealth.get_availability_status",
-            "resourcehealth.list_events",
-            "containerapps.list_apps",
-            "containerapps.get_app",
-            "containerapps.list_revisions",
+            "monitor",
+            "applicationinsights",
+            "advisor",
+            "resourcehealth",
+            "containerapps",
         ]
         for tool in expected:
             assert tool in ALLOWED_MCP_TOOLS, f"Missing: {tool}"
@@ -54,6 +52,15 @@ class TestAllowedMcpTools:
 
         for tool in ALLOWED_MCP_TOOLS:
             assert "*" not in tool, f"Wildcard found in tool: {tool}"
+
+    def test_allowed_mcp_tools_no_dotted_names(self):
+        """v2 uses namespace names, not dotted names."""
+        from agents.sre.tools import ALLOWED_MCP_TOOLS
+
+        for tool in ALLOWED_MCP_TOOLS:
+            assert "." not in tool, (
+                f"Dotted tool name '{tool}' found — must use v2 namespace name"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -832,3 +839,112 @@ class TestPercentile:
         data = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
         # idx = int(0.99 * 9) = 8 → value 90.0
         assert _percentile(data, 0.99) == 90.0
+
+
+# ---------------------------------------------------------------------------
+# query_container_app_health
+# ---------------------------------------------------------------------------
+
+
+class TestQueryContainerAppHealth:
+    """Verify query_container_app_health returns expected structure."""
+
+    @patch.dict("os.environ", {"AZURE_SUBSCRIPTION_ID": "sub-123"})
+    @patch("agents.sre.tools.instrument_tool_call")
+    @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
+    @patch("agents.sre.tools.get_credential")
+    @patch("agents.sre.tools.ContainerAppsAPIClient")
+    def test_success_returns_app_details(self, mock_client_cls, mock_cred, mock_identity, mock_instrument):
+        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+
+        from agents.sre.tools import query_container_app_health
+
+        # Mock app response
+        mock_app = MagicMock()
+        mock_app.name = "ca-compute-prod"
+        mock_app.provisioning_state = "Succeeded"
+        mock_app.latest_revision_name = "ca-compute-prod--rev1"
+        mock_app.latest_ready_revision_name = "ca-compute-prod--rev1"
+        mock_app.managed_environment_id = "/subscriptions/sub-123/resourceGroups/rg-aap-prod/providers/Microsoft.App/managedEnvironments/cae-aap-prod"
+        mock_app.outbound_ip_addresses = ["10.0.1.5"]
+
+        # Mock revision response
+        mock_rev = MagicMock()
+        mock_rev.name = "ca-compute-prod--rev1"
+        mock_rev.active = True
+        mock_rev.traffic_weight = 100
+        mock_rev.replicas = 2
+        mock_rev.running_state = "Running"
+        mock_rev.provisioning_state = "Provisioned"
+        mock_rev.created_time = datetime(2026, 4, 14, 0, 0, tzinfo=timezone.utc)
+        mock_rev.last_active_time = datetime(2026, 4, 14, 1, 0, tzinfo=timezone.utc)
+
+        mock_client = mock_client_cls.return_value
+        mock_client.container_apps.get.return_value = mock_app
+        mock_client.container_apps_revisions.list_revisions.return_value = [mock_rev]
+
+        result = query_container_app_health(
+            container_app_name="ca-compute-prod",
+            resource_group="rg-aap-prod",
+        )
+
+        assert result["query_status"] == "success"
+        assert result["app_name"] == "ca-compute-prod"
+        assert result["provisioning_state"] == "Succeeded"
+        assert result["latest_revision_name"] == "ca-compute-prod--rev1"
+        assert result["revision_count"] == 1
+        assert len(result["active_revisions"]) == 1
+        assert result["active_revisions"][0]["name"] == "ca-compute-prod--rev1"
+        assert result["active_revisions"][0]["active"] is True
+        assert result["active_revisions"][0]["traffic_weight"] == 100
+        assert "duration_ms" in result
+
+    @patch.dict("os.environ", {"AZURE_SUBSCRIPTION_ID": "sub-123"})
+    @patch("agents.sre.tools.instrument_tool_call")
+    @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
+    @patch("agents.sre.tools.get_credential")
+    @patch("agents.sre.tools.ContainerAppsAPIClient")
+    def test_error_returns_error_dict(self, mock_client_cls, mock_cred, mock_identity, mock_instrument):
+        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
+
+        from agents.sre.tools import query_container_app_health
+
+        mock_client = mock_client_cls.return_value
+        mock_client.container_apps.get.side_effect = Exception("not found")
+
+        result = query_container_app_health(
+            container_app_name="ca-missing-prod",
+            resource_group="rg-aap-prod",
+        )
+
+        assert result["query_status"] == "error"
+        assert "not found" in result["error"]
+        assert "duration_ms" in result
+
+    @patch("agents.sre.tools.ContainerAppsAPIClient", None)
+    def test_sdk_missing_returns_error_dict(self):
+        from agents.sre.tools import query_container_app_health
+
+        result = query_container_app_health(
+            container_app_name="ca-compute-prod",
+            resource_group="rg-aap-prod",
+        )
+
+        assert result["query_status"] == "error"
+        assert "SDK not installed" in result["error"]
+        assert "duration_ms" in result
+
+    @patch("agents.sre.tools.ContainerAppsAPIClient", MagicMock())
+    def test_missing_subscription_id_returns_error(self):
+        from agents.sre.tools import query_container_app_health
+
+        with patch.dict("os.environ", {}, clear=True):
+            result = query_container_app_health(
+                container_app_name="ca-compute-prod",
+                resource_group="rg-aap-prod",
+            )
+
+        assert result["query_status"] == "error"
+        assert "subscription_id" in result["error"]

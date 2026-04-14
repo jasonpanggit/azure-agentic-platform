@@ -23,14 +23,14 @@ class TestMcpToolAllowlists:
         assert isinstance(ALLOWED_MCP_TOOLS, list)
         assert len(ALLOWED_MCP_TOOLS) > 0
 
-    def test_compute_allowlist_contains_list_vms(self):
-        assert "compute.list_vms" in ALLOWED_MCP_TOOLS
+    def test_compute_allowlist_contains_compute(self):
+        assert "compute" in ALLOWED_MCP_TOOLS
 
-    def test_compute_allowlist_contains_monitor_query_logs(self):
-        assert "monitor.query_logs" in ALLOWED_MCP_TOOLS
+    def test_compute_allowlist_contains_monitor(self):
+        assert "monitor" in ALLOWED_MCP_TOOLS
 
     def test_compute_allowlist_contains_resource_health(self):
-        assert "resourcehealth.get_availability_status" in ALLOWED_MCP_TOOLS
+        assert "resourcehealth" in ALLOWED_MCP_TOOLS
 
     def test_compute_allowlist_has_no_wildcard(self):
         """AGENT-009: No wildcard tool access."""
@@ -49,19 +49,19 @@ class TestMcpToolAllowlists:
     def test_storage_has_explicit_allowlist(self):
         from agents.storage.tools import ALLOWED_MCP_TOOLS as store_tools
         assert isinstance(store_tools, list)
-        assert "storage.list_accounts" in store_tools
+        assert "storage" in store_tools
         assert "*" not in store_tools
 
     def test_security_has_explicit_allowlist(self):
         from agents.security.tools import ALLOWED_MCP_TOOLS as sec_tools
         assert isinstance(sec_tools, list)
-        assert "keyvault.list_vaults" in sec_tools
+        assert "keyvault" in sec_tools
         assert "*" not in sec_tools
 
     def test_sre_has_explicit_allowlist(self):
         from agents.sre.tools import ALLOWED_MCP_TOOLS as sre_tools
         assert isinstance(sre_tools, list)
-        assert "monitor.query_logs" in sre_tools
+        assert "monitor" in sre_tools
         assert "*" not in sre_tools
 
     def test_arc_has_explicit_allowlist(self):
@@ -70,6 +70,35 @@ class TestMcpToolAllowlists:
         assert isinstance(arc_tools, list)
         assert len(arc_tools) > 0
         assert "*" not in arc_tools
+
+    def test_no_dotted_names_across_all_agents(self):
+        """v2 MCP uses namespace names, not dotted names."""
+        from agents.compute.tools import ALLOWED_MCP_TOOLS as compute_tools
+        from agents.network.tools import ALLOWED_MCP_TOOLS as net_tools
+        from agents.storage.tools import ALLOWED_MCP_TOOLS as store_tools
+        from agents.security.tools import ALLOWED_MCP_TOOLS as sec_tools
+        from agents.sre.tools import ALLOWED_MCP_TOOLS as sre_tools
+        from agents.eol.tools import ALLOWED_MCP_TOOLS as eol_tools
+        from agents.patch.tools import ALLOWED_MCP_TOOLS as patch_tools
+        from agents.arc.tools import ALLOWED_MCP_TOOLS as arc_tools
+
+        all_lists = {
+            "compute": compute_tools,
+            "network": net_tools,
+            "storage": store_tools,
+            "security": sec_tools,
+            "sre": sre_tools,
+            "eol": eol_tools,
+            "patch": patch_tools,
+            "arc": arc_tools,
+        }
+        for agent_name, tools in all_lists.items():
+            for tool in tools:
+                # Arc MCP tools use underscores (arc_servers_list) — not dotted
+                assert "." not in tool, (
+                    f"{agent_name}: dotted tool name '{tool}' — "
+                    f"must use v2 namespace name"
+                )
 
 
 @pytest.mark.integration

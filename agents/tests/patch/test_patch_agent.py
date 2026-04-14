@@ -101,14 +101,11 @@ class TestPatchAgentSystemPromptAllowedTools:
     def test_prompt_lists_search_runbooks(self):
         assert "search_runbooks" in self._get_prompt()
 
-    def test_prompt_lists_monitor_query_logs(self):
-        assert "monitor.query_logs" in self._get_prompt()
+    def test_prompt_lists_monitor(self):
+        assert "monitor" in self._get_prompt()
 
-    def test_prompt_lists_monitor_query_metrics(self):
-        assert "monitor.query_metrics" in self._get_prompt()
-
-    def test_prompt_lists_resourcehealth_availability(self):
-        assert "resourcehealth.get_availability_status" in self._get_prompt()
+    def test_prompt_lists_resourcehealth(self):
+        assert "resourcehealth" in self._get_prompt()
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +147,7 @@ class TestCreatePatchAgent:
     @patch.dict("os.environ", {"AZURE_MCP_SERVER_URL": ""}, clear=False)
     @patch("agents.patch.agent.ChatAgent")
     @patch("agents.patch.agent.get_foundry_client", return_value=MagicMock())
-    def test_create_patch_agent_registers_all_seven_tools(
+    def test_create_patch_agent_registers_all_eight_tools(
         self, mock_client, mock_chat_agent
     ):
         from agents.patch.agent import create_patch_agent
@@ -158,7 +155,7 @@ class TestCreatePatchAgent:
         create_patch_agent()
 
         call_kwargs = mock_chat_agent.call_args[1]
-        assert len(call_kwargs["tools"]) == 7
+        assert len(call_kwargs["tools"]) == 8
 
     @patch.dict(
         "os.environ",

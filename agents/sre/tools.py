@@ -1,10 +1,7 @@
 """SRE Agent tool functions — cross-domain monitoring and remediation proposal wrappers.
 
-Allowed MCP tools (explicit allowlist — no wildcards):
-    monitor.query_logs, monitor.query_metrics, applicationinsights.query,
-    advisor.list_recommendations, resourcehealth.get_availability_status,
-    resourcehealth.list_events, containerapps.list_apps, containerapps.get_app,
-    containerapps.list_revisions
+Allowed MCP tools (explicit allowlist — v2 namespace names, no wildcards):
+    monitor, applicationinsights, advisor, resourcehealth, containerapps
 """
 from __future__ import annotations
 
@@ -43,20 +40,22 @@ try:
 except ImportError:
     AzureChangeAnalysisManagementClient = None  # type: ignore[assignment,misc]
 
+# Lazy import — azure-mgmt-appcontainers may not be installed in all envs
+try:
+    from azure.mgmt.containerapp import ContainerAppsAPIClient
+except ImportError:
+    ContainerAppsAPIClient = None  # type: ignore[assignment,misc]
+
 tracer = setup_telemetry("aiops-sre-agent")
 logger = logging.getLogger(__name__)
 
-# Explicit MCP tool allowlist — no wildcards permitted.
+# Explicit MCP tool allowlist — v2 namespace names (no dotted names, no wildcards).
 ALLOWED_MCP_TOOLS: List[str] = [
-    "monitor.query_logs",
-    "monitor.query_metrics",
-    "applicationinsights.query",
-    "advisor.list_recommendations",
-    "resourcehealth.get_availability_status",
-    "resourcehealth.list_events",
-    "containerapps.list_apps",
-    "containerapps.get_app",
-    "containerapps.list_revisions",
+    "monitor",
+    "applicationinsights",
+    "advisor",
+    "resourcehealth",
+    "containerapps",
 ]
 
 
@@ -67,6 +66,7 @@ def _log_sdk_availability() -> None:
         "azure-mgmt-resourcehealth": "azure.mgmt.resourcehealth",
         "azure-mgmt-advisor": "azure.mgmt.advisor",
         "azure-mgmt-changeanalysis": "azure.mgmt.changeanalysis",
+        "azure-mgmt-appcontainers": "azure.mgmt.containerapp",
     }
     for pkg, module in packages.items():
         try:
@@ -1028,4 +1028,116 @@ def correlate_cross_domain(
                 "correlation_summary": f"Correlation failed: {e}",
                 "query_status": "error",
                 "error": str(e),
+            }
+
+
+@ai_function
+def query_container_app_health(
+    container_app_name: str,
+    resource_group: str,
+    subscription_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Query the health and status of an Azure Container App.
+
+    Returns provisioning state, active revision details (name, traffic weight,
+    replica count, running state), and last modified time. Use this to check
+    the health of AAP agent Container Apps (e.g., ca-compute-prod, ca-sre-prod)
+    or any Container App in monitored subscriptions.
+
+    Args:
+        container_app_name: Name of the Container App (e.g., "ca-compute-prod").
+        resource_group: Resource group containing the Container App (e.g., "rg-aap-prod").
+        subscription_id: Azure subscription ID. Defaults to AZURE_SUBSCRIPTION_ID env var.
+
+    Returns:
+        Dict with query_status, app_name, provisioning_state, active_revisions list,
+        and duration_ms. Returns error dict (never raises) if SDK unavailable or API fails.
+    """
+    if ContainerAppsAPIClient is None:
+        return {
+            "query_status": "error",
+            "error": "azure-mgmt-appcontainers SDK not installed",
+            "duration_ms": 0.0,
+        }
+
+    sub_id = subscription_id or os.environ.get("AZURE_SUBSCRIPTION_ID", "")
+    if not sub_id:
+        return {
+            "query_status": "error",
+            "error": "subscription_id not provided and AZURE_SUBSCRIPTION_ID not set",
+            "duration_ms": 0.0,
+        }
+
+    agent_id = get_agent_identity()
+    tool_params = {
+        "container_app_name": container_app_name,
+        "resource_group": resource_group,
+    }
+
+    with instrument_tool_call(
+        tracer=tracer,
+        agent_name="sre-agent",
+        agent_id=agent_id,
+        tool_name="query_container_app_health",
+        tool_parameters=tool_params,
+        correlation_id="",
+        thread_id="",
+    ):
+        start_time = time.monotonic()
+        try:
+            credential = get_credential()
+            client = ContainerAppsAPIClient(credential, sub_id)
+
+            # Get Container App details
+            app = client.container_apps.get(resource_group, container_app_name)
+
+            # Get revision details
+            revisions = []
+            try:
+                for rev in client.container_apps_revisions.list_revisions(
+                    resource_group, container_app_name
+                ):
+                    revisions.append({
+                        "name": rev.name,
+                        "active": getattr(rev, "active", None),
+                        "traffic_weight": getattr(rev, "traffic_weight", None),
+                        "replicas": getattr(rev, "replicas", None),
+                        "running_state": getattr(rev, "running_state", None),
+                        "provisioning_state": getattr(rev, "provisioning_state", None),
+                        "created_time": str(getattr(rev, "created_time", "")) if getattr(rev, "created_time", None) else None,
+                        "last_active_time": str(getattr(rev, "last_active_time", "")) if getattr(rev, "last_active_time", None) else None,
+                    })
+            except Exception as rev_err:
+                logger.warning(
+                    "query_container_app_health: revision_list_error | app=%s error=%s",
+                    container_app_name,
+                    str(rev_err),
+                )
+
+            duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+
+            return {
+                "query_status": "success",
+                "app_name": app.name,
+                "provisioning_state": getattr(app, "provisioning_state", None),
+                "latest_revision_name": getattr(app, "latest_revision_name", None),
+                "latest_ready_revision_name": getattr(app, "latest_ready_revision_name", None),
+                "managed_environment_id": getattr(app, "managed_environment_id", None),
+                "outbound_ip_addresses": getattr(app, "outbound_ip_addresses", None),
+                "active_revisions": revisions,
+                "revision_count": len(revisions),
+                "duration_ms": duration_ms,
+            }
+
+        except Exception as exc:
+            duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+            logger.error(
+                "query_container_app_health: error | app=%s error=%s",
+                container_app_name,
+                str(exc),
+            )
+            return {
+                "query_status": "error",
+                "error": str(exc),
+                "duration_ms": duration_ms,
             }

@@ -65,15 +65,15 @@ azure-mgmt-network SDK directly.
 
 **You MUST follow these steps in order for every incident (TRIAGE-002, TRIAGE-003, TRIAGE-004):**
 
-1. **Activity Log first (TRIAGE-003):** Use `monitor.query_logs` to query Activity Log for
+1. **Activity Log first (TRIAGE-003):** Use the `monitor` MCP tool to query Activity Log for
    network-related changes in the prior 2 hours: NSG rule changes, route table updates,
    VPN gateway events, ExpressRoute BGP state changes. This is MANDATORY before any
    metric queries.
 
-2. **Log Analytics (TRIAGE-002):** Use `monitor.query_logs` to query NSG flow logs, DNS
+2. **Log Analytics (TRIAGE-002):** Use the `monitor` MCP tool to query NSG flow logs, DNS
    query failures, and load balancer health probe events. Diagnosis is INVALID without this signal.
 
-3. **Resource Health (TRIAGE-002, MONITOR-003):** Use `resourcehealth.get_availability_status`
+3. **Resource Health (TRIAGE-002, MONITOR-003):** Use the `resourcehealth` MCP tool
    for affected network resources. Diagnosis is INVALID without this signal.
 
 4. **NSG rule evaluation:** If an NSG rule change was detected in Step 1, call `query_nsg_rules`
@@ -88,7 +88,7 @@ azure-mgmt-network SDK directly.
 7. **Flow log configuration:** Call `query_flow_logs` to check NSG flow log configuration for
    affected Network Watcher — verify logging is enabled for forensics.
 
-8. **Monitor metrics (MONITOR-001):** Use `monitor.query_metrics` for connection failures,
+8. **Monitor metrics (MONITOR-001):** Use the `monitor` MCP tool for connection failures,
    dropped packets, bandwidth utilization, and gateway BGP routes over the incident window.
 
 9. **Correlate and hypothesise (TRIAGE-004):** Combine all findings into a root-cause

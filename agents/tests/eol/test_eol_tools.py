@@ -21,10 +21,24 @@ class TestAllowedMcpTools:
 
         assert isinstance(ALLOWED_MCP_TOOLS, list)
 
-    def test_allowed_tools_contains_monitor_query_logs(self):
+    def test_allowed_tools_contains_monitor(self):
         from agents.eol.tools import ALLOWED_MCP_TOOLS
 
-        assert "monitor.query_logs" in ALLOWED_MCP_TOOLS
+        assert "monitor" in ALLOWED_MCP_TOOLS
+
+    def test_allowed_mcp_tools_has_exactly_two_entries(self):
+        from agents.eol.tools import ALLOWED_MCP_TOOLS
+
+        assert len(ALLOWED_MCP_TOOLS) == 2
+
+    def test_allowed_mcp_tools_no_dotted_names(self):
+        """v2 uses namespace names, not dotted names."""
+        from agents.eol.tools import ALLOWED_MCP_TOOLS
+
+        for tool in ALLOWED_MCP_TOOLS:
+            assert "." not in tool, (
+                f"Dotted tool name '{tool}' found — must use v2 namespace name"
+            )
 
     def test_no_wildcard_in_allowed_tools(self):
         from agents.eol.tools import ALLOWED_MCP_TOOLS
