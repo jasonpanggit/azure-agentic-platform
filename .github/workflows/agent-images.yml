@@ -19,6 +19,7 @@ on:
           - patch
           - eol
           - messaging
+          - finops
   push:
     branches: [main]
     paths:
@@ -36,6 +37,7 @@ on:
       - 'agents/patch/**'
       - 'agents/eol/**'
       - 'agents/messaging/**'
+      - 'agents/finops/**'
 
 permissions:
   id-token: write
@@ -57,6 +59,7 @@ jobs:
       patch: ${{ steps.resolve.outputs.patch }}
       eol: ${{ steps.resolve.outputs.eol }}
       messaging: ${{ steps.resolve.outputs.messaging }}
+      finops: ${{ steps.resolve.outputs.finops }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -90,6 +93,8 @@ jobs:
               - 'agents/eol/**'
             messaging:
               - 'agents/messaging/**'
+            finops:
+              - 'agents/finops/**'
 
       # When triggered via workflow_dispatch with a specific agent, override the
       # paths-filter output so only that agent builds regardless of file changes.
@@ -97,7 +102,7 @@ jobs:
         id: resolve
         run: |
           MANUAL="${{ inputs.agent }}"
-          agents=(orchestrator compute network storage security sre arc patch eol messaging)
+          agents=(orchestrator compute network storage security sre arc patch eol messaging finops)
           for a in "${agents[@]}"; do
             if [ -n "$MANUAL" ]; then
               # Manual dispatch: force only the selected agent to true
@@ -117,6 +122,7 @@ jobs:
                 patch)        val="${{ steps.changes.outputs.patch }}" ;;
                 eol)          val="${{ steps.changes.outputs.eol }}" ;;
                 messaging)    val="${{ steps.changes.outputs.messaging }}" ;;
+                finops)       val="${{ steps.changes.outputs.finops }}" ;;
               esac
             fi
             printf '%s=%s\n' "$a" "$val" >> "$GITHUB_OUTPUT"
@@ -143,7 +149,8 @@ jobs:
       needs.detect-changes.outputs.arc == 'true' ||
       needs.detect-changes.outputs.patch == 'true' ||
       needs.detect-changes.outputs.eol == 'true' ||
-      needs.detect-changes.outputs.messaging == 'true')
+      needs.detect-changes.outputs.messaging == 'true' ||
+      needs.detect-changes.outputs.finops == 'true')
     runs-on: [self-hosted, azure, linux]
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
@@ -549,6 +556,40 @@ jobs:
       image_name: agents/messaging
       image_tag: ${{ github.sha }}
       container_app_name: ca-messaging-prod
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      github_environment: production
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  build-finops:
+    name: Build FinOps Agent
+    needs: [detect-changes, resolve-base-image]
+    if: needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.finops == 'true'
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image_name: agents/finops
+      dockerfile_path: agents/finops/Dockerfile
+      build_context: agents/finops/
+      push_image: true
+      build_args: |
+        BASE_IMAGE=${{ vars.ACR_LOGIN_SERVER }}/agents/base:${{ needs.resolve-base-image.outputs.tag }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy-finops:
+    needs: [detect-changes, build-finops]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.base_related != 'true' && needs.detect-changes.outputs.finops == 'true'
+    uses: ./.github/workflows/container-app-deploy.yml
+    with:
+      image_name: agents/finops
+      image_tag: ${{ github.sha }}
+      container_app_name: ca-finops-prod
       resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
       github_environment: production
     secrets:
