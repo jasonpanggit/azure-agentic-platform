@@ -59,13 +59,85 @@ async def create_approval(
     risk_level: str,
     timeout_minutes: Optional[int] = None,
     cosmos_client: Optional[CosmosClient] = None,
+    topology_client: Optional[Any] = None,
+    credential: Optional[Any] = None,
 ) -> dict:
     """Create a pending approval record in Cosmos DB.
 
     Used by POST /api/v1/approvals for synthetic approval injection (ops/demos).
     Matches the schema produced by agents/shared/approval_manager.py so the
     UI ProposalCard renders identically.
+
+    Phase 51: Checks for policy auto-approval BEFORE creating the HITL pending record.
+    If a policy matches all guards, executes immediately and returns auto_approved status.
+    Falls through to HITL on any policy evaluation error (conservative).
     """
+    # --- Phase 51: Policy auto-approval check ---
+    try:
+        from services.api_gateway.policy_engine import evaluate_auto_approval
+        from services.api_gateway.remediation_executor import execute_remediation
+
+        # Extract resource tags from the resource_snapshot
+        resource_tags = {}
+        if resource_snapshot:
+            resource_tags = resource_snapshot.get("tags", {}) or {}
+
+        # Extract resource_id and action_class from proposal
+        target_resources = proposal.get("target_resources", [])
+        resource_id = target_resources[0] if target_resources else ""
+        action_class = proposal.get("action", "")
+
+        if resource_id and action_class:
+            auto_approved, policy_id, reason = await evaluate_auto_approval(
+                action_class=action_class,
+                resource_id=resource_id,
+                resource_tags=resource_tags,
+                topology_client=topology_client,
+                cosmos_client=cosmos_client,
+                credential=credential,
+            )
+            if auto_approved and policy_id:
+                logger.info(
+                    "create_approval: auto-approved by policy | "
+                    "policy_id=%s action_class=%s resource_id=%s",
+                    policy_id, action_class, resource_id,
+                )
+                now = datetime.now(timezone.utc)
+                # Synthesize approval record for execute_remediation
+                synthesized_record = {
+                    "thread_id": thread_id,
+                    "incident_id": incident_id,
+                    "agent_name": agent_name,
+                    "status": "approved",
+                    "risk_level": risk_level,
+                    "proposed_at": now.isoformat(),
+                    "decided_at": now.isoformat(),
+                    "decided_by": f"policy:{policy_id}",
+                    "resource_snapshot": resource_snapshot,
+                    "proposal": proposal,
+                    "auto_approved_by_policy": policy_id,
+                }
+                # Execute directly, bypassing HITL
+                result = await execute_remediation(
+                    approval_id=f"auto-policy-{policy_id}",
+                    credential=credential,
+                    cosmos_client=cosmos_client,
+                    topology_client=topology_client,
+                    approval_record=synthesized_record,
+                )
+                return {
+                    "approval_id": f"auto-policy-{policy_id}",
+                    "status": "auto_approved",
+                    "policy_id": policy_id,
+                    "execution_result": result,
+                }
+    except Exception as exc:
+        logger.warning(
+            "create_approval: policy evaluation failed (falling through to HITL) | error=%s",
+            exc,
+        )
+    # --- End Phase 51 ---
+
     now = datetime.now(timezone.utc)
     effective_timeout = timeout_minutes if timeout_minutes is not None else APPROVAL_TIMEOUT_MINUTES
     expires_at = now + timedelta(minutes=effective_timeout)

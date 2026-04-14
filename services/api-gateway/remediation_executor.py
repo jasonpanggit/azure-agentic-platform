@@ -832,6 +832,7 @@ async def execute_remediation(
         "verified_at": None,
         "rolled_back": False,
         "rollback_execution_id": None,
+        "auto_approved_by_policy": approval_record.get("auto_approved_by_policy"),
     }
     await _write_wal(execution_id, cosmos_client, status="pending", base_record=wal_base)
 
