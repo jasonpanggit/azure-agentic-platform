@@ -26,7 +26,9 @@ class TestEolDomainAgentMap:
     def test_domain_agent_map_has_8_entries(self):
         from agents.orchestrator.agent import DOMAIN_AGENT_MAP
 
-        assert len(DOMAIN_AGENT_MAP) == 8
+        # Phase 49: 12 domain agents (compute, network, storage, security, sre, arc, patch,
+        # eol, database, app-service, container-apps, messaging)
+        assert len(DOMAIN_AGENT_MAP) == 12
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +47,8 @@ class TestEolResourceTypeToDomain:
     def test_resource_type_map_has_13_entries(self):
         from agents.orchestrator.agent import RESOURCE_TYPE_TO_DOMAIN
 
-        assert len(RESOURCE_TYPE_TO_DOMAIN) == 13
+        # Phase 49: 22 resource type mappings (added servicebus + eventhub)
+        assert len(RESOURCE_TYPE_TO_DOMAIN) == 22
 
 
 # ---------------------------------------------------------------------------

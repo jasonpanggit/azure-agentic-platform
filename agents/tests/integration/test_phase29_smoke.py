@@ -108,7 +108,7 @@ class TestPhase29Smoke:
             )
 
     def test_orchestrator_registers_8_a2a_connections(self):
-        """Orchestrator create_version must fetch 8 A2A connections."""
+        """Orchestrator create_version must fetch 12 A2A connections (Phase 49: messaging added)."""
         from agents.orchestrator.agent import create_orchestrator_agent_version
 
         mock_project = MagicMock()
@@ -117,11 +117,12 @@ class TestPhase29Smoke:
 
         create_orchestrator_agent_version(mock_project)
 
-        assert mock_project.connections.get.call_count == 8
+        assert mock_project.connections.get.call_count == 12
 
         # Verify all expected connection names
         connection_names = [
             call.args[0] for call in mock_project.connections.get.call_args_list
         ]
-        for domain in ["compute", "patch", "network", "security", "arc", "sre", "eol", "storage"]:
+        for domain in ["compute", "patch", "network", "security", "arc", "sre", "eol", "storage",
+                        "database", "appservice", "containerapps", "messaging"]:
             assert f"aap-{domain}-agent-connection" in connection_names
