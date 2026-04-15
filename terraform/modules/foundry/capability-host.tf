@@ -60,6 +60,7 @@ resource "azapi_resource" "capability_host" {
 
   timeouts {
     create = "30m"
+    update = "30m"
     delete = "30m"
   }
 
@@ -94,7 +95,14 @@ resource "azapi_resource" "project_capability_host" {
 
   timeouts {
     create = "30m"
+    update = "30m"
     delete = "30m"
+  }
+
+  lifecycle {
+    # Ignore body changes — this resource was manually provisioned and is working.
+    # Any body drift would trigger a 30-minute re-provisioning operation.
+    ignore_changes = [body]
   }
 
   depends_on = [azapi_resource.capability_host]
