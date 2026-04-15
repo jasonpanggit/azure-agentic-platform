@@ -120,19 +120,18 @@ def test_create_sla_definition_success():
 
 def test_create_sla_duplicate_name_422():
     """POST with duplicate name returns 409 Conflict."""
-    import asyncpg as real_asyncpg
+    import asyncpg
 
     mock_conn = AsyncMock()
-    mock_conn.fetchrow = AsyncMock(side_effect=real_asyncpg.UniqueViolationError(
-        "duplicate key value violates unique constraint"
-    ))
+    mock_conn.fetchrow = AsyncMock(
+        side_effect=asyncpg.exceptions.UniqueViolationError(
+            "duplicate key value violates unique constraint"
+        )
+    )
     mock_conn.close = AsyncMock()
 
     with _mock_verify(), _mock_dsn():
-        with patch(ASYNCPG_PATCH) as mock_asyncpg:
-            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            mock_asyncpg.UniqueViolationError = real_asyncpg.UniqueViolationError
-
+        with patch("asyncpg.connect", AsyncMock(return_value=mock_conn)):
             client = _client()
             resp = client.post(
                 "/api/v1/admin/sla-definitions",
