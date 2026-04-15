@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2 } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -20,9 +20,10 @@ import { RunbookTab } from './RunbookTab'
 import { ComplianceTab } from './ComplianceTab'
 import { OpsTab } from './OpsTab'
 import { SettingsTab } from './SettingsTab'
+import { SLATab } from './SLATab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -44,6 +45,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
   { id: 'compliance', label: 'Compliance', Icon: FileCheck },
   { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },
+  { id: 'sla', label: 'SLA', Icon: BarChart2 },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ]
 
@@ -257,6 +259,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         <div id="tabpanel-runbooks" role="tabpanel" aria-labelledby="tab-runbooks" hidden={activeTab !== 'runbooks'}>
           <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <RunbookTab />
+          </div>
+        </div>
+
+        <div id="tabpanel-sla" role="tabpanel" aria-labelledby="tab-sla" hidden={activeTab !== 'sla'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <SLATab subscriptions={selectedSubscriptions} />
           </div>
         </div>
 
