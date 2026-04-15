@@ -237,11 +237,14 @@ export function PatchTab({ subscriptions }: PatchTabProps) {
   }, []);
 
   const fetchData = useCallback(async () => {
+    // Don't fetch until subscriptions are loaded — avoids 400 from API gateway
+    if (subscriptions.length === 0) return;
+
     setLoading(true);
     setError(null);
 
     const subsParam = subscriptions.join(',');
-    const subsQuery = subscriptions.length > 0 ? `?subscriptions=${encodeURIComponent(subsParam)}` : '';
+    const subsQuery = `?subscriptions=${encodeURIComponent(subsParam)}`;
 
     try {
       const [assessmentRes, installationsRes] = await Promise.all([
