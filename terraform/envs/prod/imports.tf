@@ -1,3 +1,22 @@
+# --- AI Services connection import (created manually during Phase 29 debugging) ---
+# The aap-aiservices-connection was created manually on 2026-04-14 to link the Foundry
+# model deployment to the capability host. Import to bring it under Terraform management.
+# Remove after first successful apply.
+
+import {
+  to = module.foundry.azapi_resource.aiservices_connection
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/aap-foundry-prod/connections/aap-aiservices-connection"
+}
+
+# --- Project-level capability host import (created manually during Phase 29 debugging) ---
+# projectcaphost was created manually on 2026-04-14. Import to bring under Terraform management.
+# Remove after first successful apply.
+
+import {
+  to = module.foundry.azapi_resource.project_capability_host
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/aap-foundry-prod/projects/aap-project-prod/capabilityHosts/projectcaphost"
+}
+
 # --- Azure MCP Server Container App import (DEBT-013 / SEC-001) ---
 # APPLIED 2026-04-02. Import blocks are one-shot — removed after successful apply.
 # ca-azure-mcp-prod, its role assignments, and azure-mcp-connection are now in Terraform state.
