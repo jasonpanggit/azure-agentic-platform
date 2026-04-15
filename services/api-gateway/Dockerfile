@@ -24,6 +24,9 @@ COPY services/__init__.py ./services/__init__.py
 COPY services/api-gateway/ ./services/api_gateway/
 COPY agents/ ./agents/
 
+# Copy scripts so startup migrations can load seed data (e.g. compliance mappings)
+COPY scripts/ ./scripts/
+
 # Copy detection-plane shared modules needed by dedup_integration.py.
 # dedup_integration adds /app/services/detection-plane to sys.path and then
 # does bare `from dedup import ...` — so the files must land at that exact path.

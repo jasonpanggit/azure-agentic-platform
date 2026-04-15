@@ -322,9 +322,86 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_sla_definitions_active "
                 "ON sla_definitions (is_active);"
             )
+            # compliance_mappings table (Phase 54 — Compliance Framework Mapping)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS compliance_mappings (
+                    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    finding_type        TEXT NOT NULL,
+                    defender_rule_id    TEXT,
+                    display_name        TEXT NOT NULL,
+                    description         TEXT,
+                    cis_control_id      TEXT,
+                    cis_title           TEXT,
+                    nist_control_id     TEXT,
+                    nist_title          TEXT,
+                    asb_control_id      TEXT,
+                    asb_title           TEXT,
+                    severity            TEXT NOT NULL DEFAULT 'Medium',
+                    remediation_sop_id  UUID,
+                    created_at          TIMESTAMPTZ DEFAULT now(),
+                    updated_at          TIMESTAMPTZ DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_defender_rule_id "
+                "ON compliance_mappings (defender_rule_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_asb "
+                "ON compliance_mappings (asb_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_nist "
+                "ON compliance_mappings (nist_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_cis "
+                "ON compliance_mappings (cis_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_finding_type "
+                "ON compliance_mappings (finding_type);"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_mappings_unique_finding "
+                "ON compliance_mappings (finding_type, COALESCE(defender_rule_id, display_name));"
+            )
+            # Seed compliance mappings (idempotent — ON CONFLICT DO NOTHING)
+            # Load seed data from the canonical seed script via importlib (hyphenated filename).
+            try:
+                import importlib.util as _ilu  # noqa: PLC0415
+                import os as _os  # noqa: PLC0415
+                _repo_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))
+                _seed_path = _os.path.join(_repo_root, "scripts", "seed-compliance-mappings.py")
+                _spec = _ilu.spec_from_file_location("seed_compliance_mappings", _seed_path)
+                _seed_mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+                _spec.loader.exec_module(_seed_mod)  # type: ignore[union-attr]
+                _CM = _seed_mod.COMPLIANCE_MAPPINGS
+                _INSERT_SQL = _seed_mod.INSERT_SQL
+                seeded = 0
+                for _row in _CM:
+                    await conn.execute(
+                        _INSERT_SQL,
+                        _row["finding_type"],
+                        _row.get("defender_rule_id"),
+                        _row["display_name"],
+                        _row.get("description"),
+                        _row.get("cis_control_id"),
+                        _row.get("cis_title"),
+                        _row.get("nist_control_id"),
+                        _row.get("nist_title"),
+                        _row.get("asb_control_id"),
+                        _row.get("asb_title"),
+                        _row.get("severity", "Medium"),
+                    )
+                    seeded += 1
+                logger.info("Compliance mappings seeded: %d rows (idempotent)", seeded)
+            except Exception as _seed_exc:  # noqa: BLE001
+                logger.warning("Compliance mappings seed skipped: %s", _seed_exc)
             logger.info(
                 "Startup migrations complete "
-                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies + sla_definitions)"
+                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions "
+                "+ remediation_policies + sla_definitions + compliance_mappings)"
             )
         finally:
             await conn.close()
