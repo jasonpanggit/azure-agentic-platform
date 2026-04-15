@@ -133,6 +133,7 @@ from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
 from services.api_gateway.admin_endpoints import router as admin_router
+from services.api_gateway.compliance_endpoints import router as compliance_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
     add_annotation,
@@ -584,6 +585,7 @@ app.include_router(eol_router)
 app.include_router(vmss_router)
 app.include_router(aks_router)
 app.include_router(admin_router)
+app.include_router(compliance_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
