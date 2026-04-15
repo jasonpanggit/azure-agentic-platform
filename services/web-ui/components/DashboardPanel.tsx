@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -17,11 +17,12 @@ import { AKSTab } from './AKSTab'
 import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
 import { RunbookTab } from './RunbookTab'
+import { ComplianceTab } from './ComplianceTab'
 import { OpsTab } from './OpsTab'
 import { SettingsTab } from './SettingsTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'runbooks' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -41,6 +42,7 @@ const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }
   { id: 'cost', label: 'FinOps', Icon: DollarSign },
   { id: 'observability', label: 'Observability', Icon: Activity },
   { id: 'patch', label: 'Patch', Icon: ShieldCheck },
+  { id: 'compliance', label: 'Compliance', Icon: FileCheck },
   { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ]
@@ -243,6 +245,12 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         <div id="tabpanel-patch" role="tabpanel" aria-labelledby="tab-patch" hidden={activeTab !== 'patch'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <PatchTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
+
+        <div id="tabpanel-compliance" role="tabpanel" aria-labelledby="tab-compliance" hidden={activeTab !== 'compliance'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <ComplianceTab subscriptions={selectedSubscriptions} />
           </div>
         </div>
 
