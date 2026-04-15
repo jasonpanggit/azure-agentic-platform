@@ -89,8 +89,6 @@ def _mock_dsn():
 
 def test_create_sla_definition_success():
     """POST /api/v1/admin/sla-definitions returns 200 with id field."""
-    import asyncpg as real_asyncpg  # noqa: PLC0415
-
     row = _fake_row(name="Prod SLA")
     mock_conn = AsyncMock()
     mock_conn.fetchrow = AsyncMock(return_value=row)
@@ -99,7 +97,6 @@ def test_create_sla_definition_success():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
             resp = client.post(
@@ -126,7 +123,7 @@ def test_create_sla_duplicate_name_422():
     import asyncpg as real_asyncpg
 
     mock_conn = AsyncMock()
-    mock_conn.fetchrow = AsyncMock(side_effect=real_asyncpg.exceptions.UniqueViolationError(
+    mock_conn.fetchrow = AsyncMock(side_effect=real_asyncpg.UniqueViolationError(
         "duplicate key value violates unique constraint"
     ))
     mock_conn.close = AsyncMock()
@@ -134,7 +131,7 @@ def test_create_sla_duplicate_name_422():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            mock_asyncpg.exceptions = real_asyncpg.exceptions
+            mock_asyncpg.UniqueViolationError = real_asyncpg.UniqueViolationError
 
             client = _client()
             resp = client.post(
@@ -681,8 +678,6 @@ def test_create_then_list_roundtrip():
     mock_conn_list.fetch = AsyncMock(return_value=[row])
     mock_conn_list.close = AsyncMock()
 
-    import asyncpg as real_asyncpg
-
     conn_sequence = [mock_conn_create, mock_conn_list]
     call_count = {"n": 0}
 
@@ -694,7 +689,6 @@ def test_create_then_list_roundtrip():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = mock_connect
-            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
 
@@ -720,7 +714,6 @@ def test_create_then_delete_then_list():
     deleted_id_row = MagicMock()
     deleted_id_row.__getitem__ = lambda self, k: uuid.UUID(sla_id) if k == "id" else None
 
-    import asyncpg as real_asyncpg
     conn_create = AsyncMock()
     conn_create.fetchrow = AsyncMock(return_value=active_row)
     conn_create.close = AsyncMock()
@@ -744,7 +737,6 @@ def test_create_then_delete_then_list():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = mock_connect
-            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
 

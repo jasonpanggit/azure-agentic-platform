@@ -336,7 +336,7 @@ async def create_sla_definition(
             body.report_recipients,
         )
         return SLADefinitionResponse(**_row_to_response(row))
-    except asyncpg.exceptions.UniqueViolationError as exc:
+    except asyncpg.UniqueViolationError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"SLA definition with name '{body.name}' already exists",
