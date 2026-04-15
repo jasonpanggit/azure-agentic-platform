@@ -134,6 +134,7 @@ from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
 from services.api_gateway.admin_endpoints import router as admin_router
 from services.api_gateway.compliance_endpoints import router as compliance_router
+from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
     add_annotation,
@@ -302,9 +303,28 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_remediation_policies_action_class "
                 "ON remediation_policies (action_class, enabled);"
             )
+            # sla_definitions table (Phase 55 — SLA Dashboard)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS sla_definitions (
+                    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name                    TEXT NOT NULL UNIQUE,
+                    target_availability_pct NUMERIC(6,3) NOT NULL,
+                    covered_resource_ids    TEXT[]          NOT NULL DEFAULT '{}',
+                    measurement_period      TEXT            NOT NULL DEFAULT 'monthly',
+                    customer_name           TEXT,
+                    report_recipients       TEXT[]          NOT NULL DEFAULT '{}',
+                    is_active               BOOLEAN         NOT NULL DEFAULT TRUE,
+                    created_at              TIMESTAMPTZ     NOT NULL DEFAULT now(),
+                    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sla_definitions_active "
+                "ON sla_definitions (is_active);"
+            )
             logger.info(
                 "Startup migrations complete "
-                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies)"
+                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies + sla_definitions)"
             )
         finally:
             await conn.close()
@@ -586,6 +606,8 @@ app.include_router(vmss_router)
 app.include_router(aks_router)
 app.include_router(admin_router)
 app.include_router(compliance_router)
+app.include_router(sla_router)
+app.include_router(admin_sla_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
