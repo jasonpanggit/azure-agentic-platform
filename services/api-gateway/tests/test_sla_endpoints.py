@@ -131,7 +131,9 @@ def test_create_sla_duplicate_name_422():
     mock_conn.close = AsyncMock()
 
     with _mock_verify(), _mock_dsn():
-        with patch("asyncpg.connect", AsyncMock(return_value=mock_conn)):
+        with patch(ASYNCPG_PATCH) as mock_asyncpg:
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+            mock_asyncpg.exceptions = asyncpg_exc
             client = _client()
             resp = client.post(
                 "/api/v1/admin/sla-definitions",
