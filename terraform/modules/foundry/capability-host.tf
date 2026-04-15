@@ -65,9 +65,10 @@ resource "azapi_resource" "capability_host" {
   }
 
   lifecycle {
-    ignore_changes = [
-      body.properties.enablePublicHostingEnvironment,
-    ]
+    # Ignore body changes — capability host was manually provisioned and is working.
+    # Any body drift (aiServicesConnections, enablePublicHostingEnvironment) would
+    # trigger a 30-minute ARM re-provisioning operation. Ignore to prevent CI timeouts.
+    ignore_changes = [body]
   }
 }
 
