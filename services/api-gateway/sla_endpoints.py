@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 import asyncpg
+import asyncpg.exceptions as asyncpg_exc
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, validator
 
@@ -336,7 +337,7 @@ async def create_sla_definition(
             body.report_recipients,
         )
         return SLADefinitionResponse(**_row_to_response(row))
-    except asyncpg.exceptions.UniqueViolationError as exc:
+    except asyncpg_exc.UniqueViolationError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"SLA definition with name '{body.name}' already exists",
