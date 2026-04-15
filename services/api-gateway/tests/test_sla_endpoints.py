@@ -89,6 +89,8 @@ def _mock_dsn():
 
 def test_create_sla_definition_success():
     """POST /api/v1/admin/sla-definitions returns 200 with id field."""
+    import asyncpg as real_asyncpg  # noqa: PLC0415
+
     row = _fake_row(name="Prod SLA")
     mock_conn = AsyncMock()
     mock_conn.fetchrow = AsyncMock(return_value=row)
@@ -97,7 +99,7 @@ def test_create_sla_definition_success():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            mock_asyncpg.UniqueViolationError = Exception.__class__
+            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
             resp = client.post(
@@ -124,7 +126,7 @@ def test_create_sla_duplicate_name_422():
     import asyncpg as real_asyncpg
 
     mock_conn = AsyncMock()
-    mock_conn.fetchrow = AsyncMock(side_effect=real_asyncpg.UniqueViolationError(
+    mock_conn.fetchrow = AsyncMock(side_effect=real_asyncpg.exceptions.UniqueViolationError(
         "duplicate key value violates unique constraint"
     ))
     mock_conn.close = AsyncMock()
@@ -132,7 +134,7 @@ def test_create_sla_duplicate_name_422():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            mock_asyncpg.UniqueViolationError = real_asyncpg.UniqueViolationError
+            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
             resp = client.post(
@@ -692,7 +694,7 @@ def test_create_then_list_roundtrip():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = mock_connect
-            mock_asyncpg.UniqueViolationError = real_asyncpg.UniqueViolationError
+            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
 
@@ -742,7 +744,7 @@ def test_create_then_delete_then_list():
     with _mock_verify(), _mock_dsn():
         with patch(ASYNCPG_PATCH) as mock_asyncpg:
             mock_asyncpg.connect = mock_connect
-            mock_asyncpg.UniqueViolationError = real_asyncpg.UniqueViolationError
+            mock_asyncpg.exceptions = real_asyncpg.exceptions
 
             client = _client()
 
