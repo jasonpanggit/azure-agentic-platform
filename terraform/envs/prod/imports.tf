@@ -1,3 +1,18 @@
+# --- NAT Gateway Public IP + Association imports ---
+# pip-nat-acr-agent-pool-prod and its NAT gateway association already exist in Azure
+# but are not in Terraform state. Import to avoid "resource already exists" error.
+# Remove after first successful apply.
+
+import {
+  to = module.networking.azurerm_public_ip.acr_agent_pool_nat
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.Network/publicIPAddresses/pip-nat-acr-agent-pool-prod"
+}
+
+import {
+  to = module.networking.azurerm_nat_gateway_public_ip_association.acr_agent_pool
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.Network/natGateways/nat-acr-agent-pool-prod|/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.Network/publicIPAddresses/pip-nat-acr-agent-pool-prod"
+}
+
 # --- AI Services connection import (created manually during Phase 29 debugging) ---
 # The aap-aiservices-connection was created manually on 2026-04-14 to link the Foundry
 # model deployment to the capability host. Import to bring it under Terraform management.
