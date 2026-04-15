@@ -65,10 +65,10 @@ resource "azapi_resource" "capability_host" {
   }
 
   lifecycle {
-    # Ignore body changes — capability host was manually provisioned and is working.
-    # Any body drift (aiServicesConnections, enablePublicHostingEnvironment) would
-    # trigger a 30-minute ARM re-provisioning operation. Ignore to prevent CI timeouts.
-    ignore_changes = [body]
+    # Ignore ALL changes — capability host was manually provisioned and is working.
+    # schema_validation_enabled, timeouts, and body drift all trigger a 30-minute
+    # ARM re-provisioning operation. Ignore everything to prevent CI timeouts.
+    ignore_changes = all
   }
 }
 
@@ -101,9 +101,10 @@ resource "azapi_resource" "project_capability_host" {
   }
 
   lifecycle {
-    # Ignore body changes — this resource was manually provisioned and is working.
-    # Any body drift would trigger a 30-minute re-provisioning operation.
-    ignore_changes = [body]
+    # Ignore ALL changes — this resource was manually provisioned and is working.
+    # schema_validation_enabled, timeouts, and body drift all trigger a 30-minute
+    # ARM re-provisioning operation. Ignore everything to prevent CI timeouts.
+    ignore_changes = all
   }
 
   depends_on = [azapi_resource.capability_host]
