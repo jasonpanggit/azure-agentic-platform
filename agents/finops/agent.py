@@ -175,14 +175,6 @@ def create_finops_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=FINOPS_AGENT_SYSTEM_PROMPT,
-            tools=[
-                get_subscription_cost_breakdown,
-                get_resource_cost,
-                identify_idle_resources,
-                get_reserved_instance_utilisation,
-                get_cost_forecast,
-                get_top_cost_drivers,
-            ],
         ),
     )
 

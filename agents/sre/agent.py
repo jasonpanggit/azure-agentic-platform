@@ -200,16 +200,6 @@ def create_sre_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=SRE_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_availability_metrics,
-                query_performance_baselines,
-                query_service_health,
-                query_advisor_recommendations,
-                query_change_analysis,
-                correlate_cross_domain,
-                propose_remediation,
-                query_container_app_health,
-            ],
         ),
     )
 

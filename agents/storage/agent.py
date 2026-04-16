@@ -150,11 +150,6 @@ def create_storage_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=STORAGE_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_storage_metrics,
-                query_blob_diagnostics,
-                query_file_sync_health,
-            ],
         ),
     )
 

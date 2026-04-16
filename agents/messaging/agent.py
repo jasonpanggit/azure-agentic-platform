@@ -194,15 +194,6 @@ def create_messaging_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=MESSAGING_AGENT_SYSTEM_PROMPT,
-            tools=[
-                get_servicebus_namespace_health,
-                list_servicebus_queues,
-                get_servicebus_metrics,
-                propose_servicebus_dlq_purge,
-                get_eventhub_namespace_health,
-                list_eventhub_consumer_groups,
-                get_eventhub_metrics,
-            ],
         ),
     )
 

@@ -231,16 +231,6 @@ def create_arc_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=ARC_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_activity_log,
-                query_log_analytics,
-                query_resource_health,
-                query_arc_extension_health,
-                query_arc_connectivity,
-                query_arc_guest_config,
-                propose_arc_assessment,
-                propose_arc_extension_install,
-            ],
         ),
     )
 

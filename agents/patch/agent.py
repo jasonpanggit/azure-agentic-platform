@@ -231,16 +231,6 @@ def create_patch_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=PATCH_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_activity_log,
-                query_patch_assessment,
-                query_patch_installations,
-                discover_arc_workspace,
-                query_configuration_data,
-                lookup_kb_cves,
-                query_resource_health,
-                search_runbooks,
-            ],
         ),
     )
 

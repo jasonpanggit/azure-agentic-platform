@@ -177,14 +177,6 @@ def create_appservice_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=APPSERVICE_AGENT_SYSTEM_PROMPT,
-            tools=[
-                get_app_service_health,
-                get_app_service_metrics,
-                get_function_app_health,
-                query_app_insights_failures,
-                propose_app_service_restart,
-                propose_function_app_scale_out,
-            ],
         ),
     )
 

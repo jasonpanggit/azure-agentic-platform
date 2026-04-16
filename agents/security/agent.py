@@ -184,15 +184,6 @@ def create_security_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=SECURITY_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_defender_alerts,
-                query_keyvault_diagnostics,
-                query_iam_changes,
-                query_secure_score,
-                query_rbac_assignments,
-                query_policy_compliance,
-                scan_public_endpoints,
-            ],
         ),
     )
 

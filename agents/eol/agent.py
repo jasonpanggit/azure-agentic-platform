@@ -240,17 +240,6 @@ def create_eol_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=EOL_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_activity_log,
-                query_os_inventory,
-                query_software_inventory,
-                query_k8s_versions,
-                query_endoflife_date,
-                query_ms_lifecycle,
-                query_resource_health,
-                search_runbooks,
-                scan_estate_eol,
-            ],
         ),
     )
 

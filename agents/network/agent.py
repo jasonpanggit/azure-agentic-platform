@@ -179,15 +179,6 @@ def create_network_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=NETWORK_AGENT_SYSTEM_PROMPT,
-            tools=[
-                query_nsg_rules,
-                query_load_balancer_health,
-                query_vnet_topology,
-                query_peering_status,
-                query_flow_logs,
-                query_expressroute_health,
-                check_connectivity,
-            ],
         ),
     )
 

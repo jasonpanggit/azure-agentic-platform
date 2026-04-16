@@ -175,14 +175,6 @@ def create_containerapps_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=CONTAINERAPPS_AGENT_SYSTEM_PROMPT,
-            tools=[
-                list_container_apps,
-                get_container_app_health,
-                get_container_app_metrics,
-                get_container_app_logs,
-                propose_container_app_scale,
-                propose_container_app_revision_activate,
-            ],
         ),
     )
 

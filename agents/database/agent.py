@@ -210,20 +210,6 @@ def create_database_agent_version(project: "AIProjectClient") -> object:
         definition=PromptAgentDefinition(
             model=os.environ.get("AGENT_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=DATABASE_AGENT_SYSTEM_PROMPT,
-            tools=[
-                get_cosmos_account_health,
-                get_cosmos_throughput_metrics,
-                query_cosmos_diagnostic_logs,
-                propose_cosmos_throughput_scale,
-                get_postgres_server_health,
-                get_postgres_metrics,
-                query_postgres_slow_queries,
-                propose_postgres_sku_scale,
-                get_sql_database_health,
-                get_sql_dtu_metrics,
-                query_sql_query_store,
-                propose_sql_elastic_pool_move,
-            ],
         ),
     )
 
