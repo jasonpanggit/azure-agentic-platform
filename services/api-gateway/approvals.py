@@ -351,7 +351,7 @@ async def _resume_foundry_thread(
 
     with foundry_span("post_message", thread_id=thread_id) as span:
         span.set_attribute("foundry.message_type", "approval_response")
-        client.agents.create_message(
+        client.messages.create(
             thread_id=thread_id,
             role="user",
             content=json.dumps(approval_message),
@@ -360,9 +360,9 @@ async def _resume_foundry_thread(
     # Create a new run to resume processing
     with agent_span("orchestrator", correlation_id=approval_id) as span:
         with foundry_span("create_run", thread_id=thread_id) as fspan:
-            client.agents.create_run(
+            client.runs.create(
                 thread_id=thread_id,
-                assistant_id=orchestrator_agent_id,
+                agent_id=orchestrator_agent_id,
             )
 
     logger.info("Resumed Foundry thread %s after approval %s", thread_id, approval_id)

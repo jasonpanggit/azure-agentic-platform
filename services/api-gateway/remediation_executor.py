@@ -432,21 +432,21 @@ async def _inject_verification_result(
             },
         }
 
-        # Post message to thread (uses client.agents.create_message)
+        # Post message to thread (uses client.messages.create)
         with foundry_span("post_message", thread_id=thread_id) as span:
             span.set_attribute("foundry.message_type", "verification_result")
-            client.agents.create_message(
+            client.messages.create(
                 thread_id=thread_id,
                 role="user",
                 content=json.dumps(message),
             )
 
-        # Create new orchestrator run (uses client.agents.create_run)
+        # Create new orchestrator run (uses client.runs.create)
         with agent_span("orchestrator", correlation_id=execution_id) as span:
             with foundry_span("create_run", thread_id=thread_id):
-                client.agents.create_run(
+                client.runs.create(
                     thread_id=thread_id,
-                    assistant_id=orchestrator_agent_id,
+                    agent_id=orchestrator_agent_id,
                 )
 
         # Increment re_diagnosis_count

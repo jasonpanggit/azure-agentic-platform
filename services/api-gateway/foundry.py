@@ -29,6 +29,11 @@ try:
 except ImportError:
     AIProjectClient = None  # type: ignore[assignment,misc]
 
+try:
+    from azure.ai.agents import AgentsClient as AzureAgentsClient
+except ImportError:
+    AzureAgentsClient = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,28 +67,41 @@ def _get_foundry_project(credential: Optional[DefaultAzureCredential] = None):
     return AIProjectClient(endpoint=endpoint, credential=credential)
 
 
-def _get_agents_client(project=None):
-    """Return the agents sub-client from AIProjectClient."""
-    if project is None:
-        project = _get_foundry_project()
-    return project.agents
+def _get_agents_client(credential: Optional[DefaultAzureCredential] = None):
+    """Return an azure.ai.agents.AgentsClient for thread/message/run operations.
 
+    azure-ai-projects 2.0.1 changed AIProjectClient.agents to only handle
+    agent CRUD (list/create/delete agents). Thread, message, and run operations
+    now live in the separate azure-ai-agents package's AgentsClient, which
+    exposes .threads, .messages, .runs sub-clients.
+    """
+    if AzureAgentsClient is None:
+        raise ImportError(
+            "azure-ai-agents>=1.1.0 required. "
+            "Install with: pip install 'azure-ai-agents>=1.1.0'"
+        )
 
-# ---------------------------------------------------------------------------
-# Backward-compat: _get_foundry_client now returns the agents sub-client
-# from AIProjectClient so existing callers (approvals.py, etc.) continue
-# to work without changes.
-# ---------------------------------------------------------------------------
+    endpoint = os.environ.get("AZURE_PROJECT_ENDPOINT") or os.environ.get(
+        "FOUNDRY_ACCOUNT_ENDPOINT"
+    )
+    if not endpoint:
+        raise ValueError(
+            "AZURE_PROJECT_ENDPOINT (or FOUNDRY_ACCOUNT_ENDPOINT) env var required."
+        )
+
+    if credential is None:
+        credential = DefaultAzureCredential()
+
+    return AzureAgentsClient(endpoint=endpoint, credential=credential)
 
 
 def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None):
-    """Return AIProjectClient.agents — the Foundry Agent Service client.
+    """Return an azure.ai.agents.AgentsClient for thread/message/run operations.
 
-    Backward-compatible shim: callers that previously used AgentsClient
-    (client.threads, client.messages, client.runs) now get the equivalent
-    AIProjectClient.agents namespace which exposes the same operations.
+    Callers use client.threads.create(), client.messages.create(),
+    client.runs.create_and_process(), client.messages.list(), etc.
     """
-    return _get_agents_client(_get_foundry_project(credential))
+    return _get_agents_client(credential)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +142,7 @@ async def dispatch_to_orchestrator(
         raise ValueError("ORCHESTRATOR_AGENT_ID environment variable is required.")
 
     loop = asyncio.get_running_loop()
-    agents = _get_agents_client(_get_foundry_project(credential))
+    agents = _get_agents_client(credential)
     message = build_incident_message(payload)
 
     with agent_span(
@@ -185,7 +203,7 @@ async def dispatch_chat_to_orchestrator(
         raise ValueError("ORCHESTRATOR_AGENT_ID environment variable is required.")
 
     loop = asyncio.get_running_loop()
-    agents = _get_agents_client(_get_foundry_project(credential))
+    agents = _get_agents_client(credential)
 
     with foundry_span("agents_chat_dispatch") as span:
         # Get or create thread
@@ -193,14 +211,14 @@ async def dispatch_chat_to_orchestrator(
             thread_id = conversation_id
             logger.debug("dispatch_chat: continuing thread %s", thread_id)
         else:
-            thread = await loop.run_in_executor(None, agents.create_thread)
+            thread = await loop.run_in_executor(None, agents.threads.create)
             thread_id = thread.id
             logger.debug("dispatch_chat: created new thread %s", thread_id)
 
         # Post the user message
         await loop.run_in_executor(
             None,
-            lambda: agents.create_message(
+            lambda: agents.messages.create(
                 thread_id=thread_id,
                 role="user",
                 content=message,
@@ -210,7 +228,7 @@ async def dispatch_chat_to_orchestrator(
         # Run to completion (blocking)
         run = await loop.run_in_executor(
             None,
-            lambda: agents.create_and_process_run(
+            lambda: agents.runs.create_and_process(
                 thread_id=thread_id,
                 agent_id=orchestrator_agent_id,
             ),
@@ -225,7 +243,7 @@ async def dispatch_chat_to_orchestrator(
     try:
         messages = await loop.run_in_executor(
             None,
-            lambda: list(agents.list_messages(thread_id=thread_id)),
+            lambda: list(agents.messages.list(thread_id=thread_id)),
         )
         # Messages are newest-first; find the first assistant message
         for msg in messages:
