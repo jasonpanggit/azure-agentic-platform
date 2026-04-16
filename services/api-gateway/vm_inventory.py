@@ -84,7 +84,7 @@ def _run_arg_query(
     return all_rows
 
 
-def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
+def _build_vm_kql(status_filter: str, search: Optional[str], limit: int = 100, offset: int = 0) -> str:
     """Build ARG KQL query for VM inventory.
 
     Includes both Azure VMs (microsoft.compute/virtualmachines) and
@@ -176,6 +176,7 @@ def _build_vm_kql(status_filter: str, search: Optional[str]) -> str:
         kql += f"| where name contains '{safe}'\n"
 
     kql += "| order by name asc"
+    kql += f"\n| limit {limit + offset}"
     return kql.strip()
 
 
@@ -201,23 +202,20 @@ def _get_health_states_sync(
         Dict mapping resource_id → availability_state string.
         Unknown on any failure.
     """
-    # Class renamed MicrosoftResourceHealth → ResourceHealthMgmtClient in v1.0.0b6
+    results: Dict[str, str] = {}
+
     try:
         from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as _RHClient
     except ImportError:
         from azure.mgmt.resourcehealth import MicrosoftResourceHealth as _RHClient  # type: ignore[no-redef]
 
-    results: Dict[str, str] = {}
-    for rid in resource_ids:
-        # Extract subscription ID from the resource ID path
+    def _fetch_one(rid: str) -> tuple:
         parts = rid.split("/")
         try:
             idx = [p.lower() for p in parts].index("subscriptions")
             sub_id = parts[idx + 1]
         except (ValueError, IndexError):
-            results[rid] = "Unknown"
-            continue
-
+            return rid, "Unknown"
         try:
             client = _RHClient(credential, sub_id)
             status = client.availability_statuses.get_by_resource(
@@ -229,19 +227,29 @@ def _get_health_states_sync(
                 if status.properties and status.properties.availability_state
                 else None
             )
-            # SDK returns a plain str in v1.0.0b6+; older versions returned an enum
             if raw_state is None:
                 state = "Unknown"
             elif hasattr(raw_state, "value"):
                 state = raw_state.value
             else:
                 state = str(raw_state)
-            results[rid] = state
+            return rid, state
         except Exception as exc:
-            logger.debug(
-                "health_state: failed | resource=%s error=%s", rid[:80], exc
-            )
-            results[rid] = "Unknown"
+            logger.debug("health_state: failed | resource=%s error=%s", rid[:80], exc)
+            return rid, "Unknown"
+
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = {executor.submit(_fetch_one, rid): rid for rid in resource_ids}
+        done, _ = concurrent.futures.wait(futures.keys(), timeout=8)
+        for f in done:
+            rid, state = f.result()
+            results[rid] = state
+        # VMs not resolved within 8s get "Unknown" default
+        for f in futures:
+            if f not in done:
+                results[futures[f]] = "Unknown"
 
     return results
 
@@ -373,7 +381,7 @@ async def list_vms(
     # Step 1: ARG query for VM list
     arg_start = time.monotonic()
     try:
-        kql = _build_vm_kql(status, search)
+        kql = _build_vm_kql(status, search, limit=limit, offset=offset)
         loop = asyncio.get_running_loop()
         rows: List[Dict[str, Any]] = await loop.run_in_executor(
             None, _run_arg_query, credential, sub_list, kql
