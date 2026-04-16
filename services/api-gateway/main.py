@@ -145,6 +145,11 @@ from services.api_gateway.war_room import (
 )
 from services.api_gateway.push_notifications import router as push_router
 from services.api_gateway.push_notifications import send_push_to_all
+from services.api_gateway.capacity_planner import (
+    CAPACITY_SWEEP_ENABLED,
+    CAPACITY_SWEEP_INTERVAL_SECONDS,
+    run_capacity_sweep_loop,
+)
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -516,6 +521,26 @@ async def lifespan(app: FastAPI):
             "(COSMOS_ENDPOINT=%s, FORECAST_ENABLED=%s)",
             "set" if app.state.cosmos_client else "not_set",
             os.environ.get("FORECAST_ENABLED", "true"),
+        )
+
+    # Start capacity planning daily sweep (Phase 57)
+    if CAPACITY_SWEEP_ENABLED and app.state.cosmos_client is not None and _subscription_ids:
+        asyncio.create_task(
+            run_capacity_sweep_loop(
+                cosmos_client=app.state.cosmos_client,
+                credential=app.state.credential,
+                subscription_ids=_subscription_ids,
+                interval_seconds=CAPACITY_SWEEP_INTERVAL_SECONDS,
+            )
+        )
+        logger.info("Capacity sweep task started (interval=%ds)", CAPACITY_SWEEP_INTERVAL_SECONDS)
+    else:
+        logger.info(
+            "startup: capacity sweep not started "
+            "(CAPACITY_SWEEP_ENABLED=%s, cosmos=%s, subscriptions=%d)",
+            CAPACITY_SWEEP_ENABLED,
+            "set" if app.state.cosmos_client else "not_set",
+            len(_subscription_ids),
         )
 
     # Start WAL stale-monitor background task (REMEDI-011)
