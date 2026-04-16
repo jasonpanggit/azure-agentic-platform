@@ -58,62 +58,80 @@ def _os_to_msrc_product(os_version: str) -> str:
     return ""
 
 
+def _parse_msrc_items(items: list[dict], product: str, seen: set[str]) -> list[dict]:
+    """Parse MSRC SUG API items into CVE records, skipping duplicates."""
+    records: list[dict] = []
+    for item in items:
+        cve_id = item.get("cveNumber", "")
+        if not cve_id or cve_id in seen:
+            continue
+        seen.add(cve_id)
+        kb_ids = [
+            str(kb.get("articleName", ""))
+            for kb in (item.get("kbArticles") or [])
+            if kb.get("articleName")
+        ]
+        cvss = item.get("baseScore")
+        try:
+            cvss_f = float(cvss) if cvss is not None else None
+        except (TypeError, ValueError):
+            cvss_f = None
+        impact = item.get("impact", "")
+        cwe = (item.get("cweList") or [""])[0].split(":")[0] if item.get("cweList") else ""
+        description = f"{impact} — {cwe}".strip(" —") if impact else f"Affects {product}"
+        records.append({
+            "cve_id": cve_id,
+            "cvss_score": cvss_f,
+            "severity": item.get("severity", ""),
+            "description": description,
+            "kb_ids": kb_ids,
+            "published_date": (item.get("initialReleaseDate") or "")[:10] or None,
+            "affected_product": product,
+            "affected_versions": item.get("product", product),
+            "vector_string": item.get("vectorString", ""),
+            "impact": impact,
+        })
+    return records
+
+
 def _fetch_cves_for_product_sync(product: str, months_back: int = 12) -> list[dict]:
-    """Fetch all CVEs for a specific product from MSRC SUG API.
+    """Fetch ALL CVEs for a specific product from MSRC SUG API using OData pagination.
+
+    MSRC caps each response at 500 rows and returns @odata.nextLink when more pages
+    exist. This function follows nextLink until exhausted, so all CVEs are returned
+    regardless of how many there are.
 
     Uses `product eq '<product>'` filter — MSRC exact product names like
     "Windows Server 2016", "Windows Server 2019", etc.
-    Returns list of dicts with cve_id, cvss_score, severity, description,
-    kb_ids, published_date, affected_product, affected_versions.
     """
     from datetime import datetime, timezone, timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=months_back * 30)).strftime("%Y-%m-%dT00:00:00Z")
     odata_filter = f"product eq '{product}' and initialReleaseDate gt {cutoff}"
-    url = f"{_MSRC_SUG_BASE}?{urllib.parse.urlencode({'$filter': odata_filter, '$top': 500})}"
-    req = urllib.request.Request(
-        url,
-        headers={"Accept": "application/json", "User-Agent": "AAP-CVELookup/1.0"},
-    )
+    next_url: str | None = f"{_MSRC_SUG_BASE}?{urllib.parse.urlencode({'$filter': odata_filter, '$top': 500})}"
+
+    records: list[dict] = []
+    seen: set[str] = set()
+    page = 0
+
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
-            records: list[dict] = []
-            seen: set[str] = set()
-            for item in data.get("value", []):
-                cve_id = item.get("cveNumber", "")
-                if not cve_id or cve_id in seen:
-                    continue
-                seen.add(cve_id)
-                kb_ids = [
-                    str(kb.get("articleName", ""))
-                    for kb in (item.get("kbArticles") or [])
-                    if kb.get("articleName")
-                ]
-                cvss = item.get("baseScore")
-                try:
-                    cvss_f = float(cvss) if cvss is not None else None
-                except (TypeError, ValueError):
-                    cvss_f = None
-                # Build human-readable description from impact + CWE
-                impact = item.get("impact", "")
-                cwe = (item.get("cweList") or [""])[0].split(":")[0] if item.get("cweList") else ""
-                description = f"{impact} — {cwe}".strip(" —") if impact else f"Affects {product}"
-                records.append({
-                    "cve_id": cve_id,
-                    "cvss_score": cvss_f,
-                    "severity": item.get("severity", ""),
-                    "description": description,
-                    "kb_ids": kb_ids,
-                    "published_date": (item.get("initialReleaseDate") or "")[:10] or None,
-                    "affected_product": product,
-                    "affected_versions": item.get("product", product),
-                    "vector_string": item.get("vectorString", ""),
-                    "impact": impact,
-                })
-            return records
+        while next_url:
+            page += 1
+            req = urllib.request.Request(
+                next_url,
+                headers={"Accept": "application/json", "User-Agent": "AAP-CVELookup/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+
+            records.extend(_parse_msrc_items(data.get("value", []), product, seen))
+            next_url = data.get("@odata.nextLink")
+            logger.debug("MSRC %s page %d: %d records (total so far: %d)", product, page, len(data.get("value", [])), len(records))
+
+        logger.info("MSRC %s: %d CVEs fetched across %d page(s)", product, len(records), page)
+        return records
     except Exception as exc:
-        logger.warning("MSRC product lookup failed for %s: %s", product, exc)
-        return []
+        logger.warning("MSRC product lookup failed for %s (page %d): %s", product, page, exc)
+        return records  # Return whatever we collected before the error
 
 
 _product_cve_cache: dict[str, tuple[list[dict], float]] = {}
