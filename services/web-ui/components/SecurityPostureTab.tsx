@@ -430,7 +430,13 @@ export function SecurityPostureTab({ subscriptionId, onOpenChat }: SecurityPostu
       {warnings.length > 0 && (
         <Alert style={{ borderColor: 'var(--accent-yellow)', background: 'color-mix(in srgb, var(--accent-yellow) 8%, transparent)' }}>
           <AlertDescription style={{ color: 'var(--text-primary)' }}>
-            {warnings.join(' · ')}
+            <p className="font-medium mb-2">Prerequisites needed to enable Security Score</p>
+            <ol className="list-decimal list-inside space-y-1 text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+              <li>Enable <strong>Microsoft Defender for Cloud</strong> on the subscription — free tier only provides limited recommendations; Defender for Servers P1/P2 unlocks the full secure score.</li>
+              <li>Grant the API gateway managed identity <strong>Security Reader</strong> on the subscription (Azure Portal → Subscriptions → IAM).</li>
+              <li>Assign Azure Policy initiatives (e.g. <em>Azure Security Benchmark</em>) to the subscription to populate the Policy Compliance sub-score.</li>
+            </ol>
+            <p className="text-xs opacity-70">{warnings.join(' · ')}</p>
           </AlertDescription>
         </Alert>
       )}

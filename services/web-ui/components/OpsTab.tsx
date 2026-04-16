@@ -927,8 +927,20 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
   return (
     <div className="flex flex-col gap-5">
       {/* ------------------------------------------------------------------ */}
-      {/* Header bar                                                          */}
+      {/* Prerequisites banner (shown when detection plane has no data yet)   */}
       {/* ------------------------------------------------------------------ */}
+      {overallStatus === 'unknown' && (
+        <Alert style={{ borderColor: 'var(--accent-blue)', background: 'color-mix(in srgb, var(--accent-blue) 8%, transparent)' }}>
+          <AlertDescription style={{ color: 'var(--text-primary)' }}>
+            <p className="font-medium mb-2">Prerequisites needed to populate Platform Health metrics</p>
+            <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <li>Configure the <strong>detection plane</strong>: connect Azure Monitor → Event Hub → Fabric Eventhouse → Fabric Activator → <code className="text-xs">POST /api/v1/incidents</code>. See <em>docs/ops/detection-plane-activation.md</em>.</li>
+              <li>Once incidents flow in, MTTR, noise reduction, SLO compliance and auto-remediation rate will populate automatically.</li>
+              <li>Create <strong>SLA definitions</strong> via the Admin tab to populate the error budget portfolio section below.</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+      )}
       <div
         className="flex items-center justify-between px-4 py-2.5 rounded-lg"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}

@@ -358,10 +358,21 @@ export function CostTab({ subscriptions }: CostTabProps) {
 
   if (recommendations.length === 0 && !finopsLoading && !forecast && breakdown.length === 0 && idleResources.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--text-secondary)' }}>
-        <DollarSign className="h-10 w-10 opacity-30" />
-        <p className="text-sm">No cost recommendations found.</p>
-        <p className="text-xs opacity-60">Azure Advisor refreshes recommendations every 24 hours.</p>
+      <div className="flex flex-col gap-4 p-6">
+        <Alert style={{ borderColor: 'var(--accent-yellow)', background: 'color-mix(in srgb, var(--accent-yellow) 8%, transparent)' }}>
+          <AlertDescription style={{ color: 'var(--text-primary)' }}>
+            <p className="font-medium mb-2">Prerequisites needed to enable FinOps data</p>
+            <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <li>Grant the API gateway managed identity <strong>Cost Management Reader</strong> on the subscription (Azure Portal → Subscriptions → IAM → Add role assignment).</li>
+              <li>Azure Cost Management data has a <strong>24–48 hour reporting lag</strong> — cost breakdown will appear the following day after permissions are set.</li>
+              <li>Azure Advisor rightsizing recommendations refresh every <strong>24 hours</strong> — ensure <strong>Advisor</strong> is enabled on the subscription.</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+        <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: 'var(--text-secondary)' }}>
+          <DollarSign className="h-10 w-10 opacity-30" />
+          <p className="text-sm">No cost data available yet.</p>
+        </div>
       </div>
     );
   }

@@ -292,12 +292,21 @@ export function RunbookTab() {
       {!error && loading && <LoadingSkeletons />}
 
       {!error && !loading && !hasSearched && results.length === 0 && (
-        <div
-          className="flex flex-col items-center justify-center py-16 gap-3"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          <BookOpen className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Search for runbooks by typing above.</p>
+        <div className="flex flex-col gap-4 px-1">
+          <Alert style={{ borderColor: 'var(--accent-blue)', background: 'color-mix(in srgb, var(--accent-blue) 8%, transparent)' }}>
+            <AlertDescription style={{ color: 'var(--text-primary)' }}>
+              <p className="font-medium mb-2">Prerequisites needed to populate the runbook library</p>
+              <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <li>The runbook library uses <strong>pgvector semantic search</strong> on PostgreSQL. Ensure the PostgreSQL database is reachable and the <code className="text-xs">runbooks</code> table exists (run migrations: <code className="text-xs">alembic upgrade head</code>).</li>
+                <li>Seed runbooks by calling <code className="text-xs">POST /api/v1/runbooks</code> with runbook documents, or run the bulk import script at <em>scripts/seed_runbooks.py</em>.</li>
+                <li>Once seeded, search results appear here instantly — no restart needed.</li>
+              </ol>
+            </AlertDescription>
+          </Alert>
+          <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: 'var(--text-secondary)' }}>
+            <BookOpen className="h-10 w-10 opacity-30" />
+            <p className="text-sm">No runbooks in the library yet.</p>
+          </div>
         </div>
       )}
 

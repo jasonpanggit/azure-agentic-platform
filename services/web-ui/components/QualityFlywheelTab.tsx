@@ -320,12 +320,21 @@ export function QualityFlywheelTab() {
             ))}
           </div>
         ) : sopItems.length === 0 ? (
-          <div className="p-8 text-center" style={{ color: 'var(--text-secondary)' }}>
-            <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No SOP effectiveness data yet.</p>
-            <p className="text-xs mt-1">
-              Scores are computed once incidents reference SOPs and outcomes are recorded.
-            </p>
+          <div className="p-6 space-y-4">
+            <Alert style={{ borderColor: 'var(--accent-blue)', background: 'color-mix(in srgb, var(--accent-blue) 8%, transparent)' }}>
+              <AlertDescription style={{ color: 'var(--text-primary)' }}>
+                <p className="font-medium mb-2">Prerequisites needed to populate SOP effectiveness</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <li>Incidents must flow through the detection plane and reference runbooks/SOPs in their resolution notes.</li>
+                  <li>Outcomes (resolved / escalated) must be recorded via the HITL approval flow in Teams or the Admin tab.</li>
+                  <li>Scores are recomputed nightly once outcome data exists.</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+            <div className="p-4 text-center" style={{ color: 'var(--text-secondary)' }}>
+              <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No SOP effectiveness data yet.</p>
+            </div>
           </div>
         ) : (
           <Table>
@@ -408,9 +417,21 @@ export function QualityFlywheelTab() {
             ))}
           </div>
         ) : feedback.length === 0 ? (
-          <div className="p-8 text-center" style={{ color: 'var(--text-secondary)' }}>
-            <Clock className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No feedback events recorded yet.</p>
+          <div className="p-6 space-y-4">
+            <Alert style={{ borderColor: 'var(--accent-blue)', background: 'color-mix(in srgb, var(--accent-blue) 8%, transparent)' }}>
+              <AlertDescription style={{ color: 'var(--text-primary)' }}>
+                <p className="font-medium mb-2">Prerequisites needed to populate the feedback flywheel</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <li>Incidents must be routed through the platform and trigger <strong>HITL approval requests</strong> in Microsoft Teams.</li>
+                  <li>Operators approve or reject remediation actions via the Teams Adaptive Card — each decision is recorded as a feedback event.</li>
+                  <li>Feedback events drive the auto-remediation success rate and noise reduction metrics above.</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+            <div className="p-4 text-center" style={{ color: 'var(--text-secondary)' }}>
+              <Clock className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No feedback events recorded yet.</p>
+            </div>
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
