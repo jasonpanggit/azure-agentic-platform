@@ -5,13 +5,14 @@ Manages tenant records in PostgreSQL and provides fast in-memory caching
 """
 from __future__ import annotations
 
+import json as _json
 import logging
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 try:
     import asyncpg
@@ -37,6 +38,22 @@ class Tenant(BaseModel):
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+
+    @field_validator("sla_definitions", mode="before")
+    @classmethod
+    def _parse_sla_definitions(cls, v: object) -> object:
+        """Accept a JSON string in place of a list (defensive coercion)."""
+        if isinstance(v, str):
+            return _json.loads(v)
+        return v
+
+    @field_validator("subscriptions", "compliance_frameworks", mode="before")
+    @classmethod
+    def _parse_string_lists(cls, v: object) -> object:
+        """Accept a JSON string in place of a list (defensive coercion)."""
+        if isinstance(v, str):
+            return _json.loads(v)
+        return v
 
 
 # ---------------------------------------------------------------------------
