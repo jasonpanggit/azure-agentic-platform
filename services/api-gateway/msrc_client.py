@@ -27,6 +27,116 @@ _KB_DIGITS_PATTERN = re.compile(r"\d+")
 _MSRC_SUG_BASE = "https://api.msrc.microsoft.com/sug/v2.0/en-US/affectedProduct"
 _REQUEST_TIMEOUT_SECONDS = 5
 
+# Product name normalisation: ARG osVersion strings → MSRC product family strings
+# MSRC uses display names like "Windows Server 2016" not "Windows Server 2016 Standard"
+_OS_PRODUCT_MAP = [
+    ("Windows Server 2025", "Windows Server 2025"),
+    ("Windows Server 2022", "Windows Server 2022"),
+    ("Windows Server 2019", "Windows Server 2019"),
+    ("Windows Server 2016", "Windows Server 2016"),
+    ("Windows Server 2012 R2", "Windows Server 2012 R2"),
+    ("Windows Server 2012", "Windows Server 2012"),
+    ("Windows 11", "Windows 11"),
+    ("Windows 10", "Windows 10"),
+    ("Ubuntu 24", "Ubuntu Linux"),
+    ("Ubuntu 22", "Ubuntu Linux"),
+    ("Ubuntu 20", "Ubuntu Linux"),
+    ("Ubuntu 18", "Ubuntu Linux"),
+    ("RHEL", "Red Hat Enterprise Linux"),
+    ("Red Hat", "Red Hat Enterprise Linux"),
+    ("CentOS", "CBL-Mariner"),
+    ("Debian", "Debian Linux"),
+    ("SUSE", "SUSE Linux"),
+]
+
+
+def _os_to_msrc_product(os_version: str) -> str:
+    """Map an ARG osVersion string to the closest MSRC product family name."""
+    for prefix, product in _OS_PRODUCT_MAP:
+        if prefix.lower() in os_version.lower():
+            return product
+    return ""
+
+
+def _fetch_cves_for_product_sync(product: str, months_back: int = 12) -> list[dict]:
+    """Fetch all CVEs for a product family from MSRC SUG API.
+
+    Returns list of dicts with cve_id, cvss_score, severity, description, kb_ids.
+    Uses $top=500 and filters to recent months to keep response size manageable.
+    """
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=months_back * 30)).strftime("%Y-%m-%dT00:00:00Z")
+    odata_filter = f"familyName eq '{product}' and initialReleaseDate gt {cutoff}"
+    url = f"{_MSRC_SUG_BASE}?{urllib.parse.urlencode({'$filter': odata_filter, '$top': 500})}"
+    req = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "AAP-CVELookup/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+            records: list[dict] = []
+            for item in data.get("value", []):
+                cve_id = item.get("cveNumber", "")
+                if not cve_id:
+                    continue
+                kb_ids = [
+                    str(kb.get("articleName", ""))
+                    for kb in item.get("kbArticles", [])
+                    if kb.get("articleName")
+                ]
+                cvss = item.get("baseScore")
+                try:
+                    cvss_f = float(cvss) if cvss is not None else None
+                except (TypeError, ValueError):
+                    cvss_f = None
+                records.append({
+                    "cve_id": cve_id,
+                    "cvss_score": cvss_f,
+                    "description": item.get("tag", "") or f"Affects {product}",
+                    "kb_ids": kb_ids,
+                    "published_date": item.get("initialReleaseDate", "")[:10] if item.get("initialReleaseDate") else None,
+                    "affected_product": product,
+                    "affected_versions": item.get("productName", ""),
+                })
+            return records
+    except Exception as exc:
+        logger.warning("MSRC product lookup failed for %s: %s", product, exc)
+        return []
+
+
+_product_cve_cache: dict[str, tuple[list[dict], float]] = {}
+
+
+async def get_cves_for_product(os_version: str, months_back: int = 12) -> list[dict]:
+    """Fetch all CVEs for an OS version's product family from MSRC.
+
+    Args:
+        os_version: ARG osVersion string (e.g. "Windows Server 2016 Standard").
+        months_back: How many months of CVE history to fetch (default 12).
+
+    Returns:
+        List of CVE dicts with cve_id, cvss_score, severity, description, kb_ids,
+        published_date, affected_product, affected_versions.
+        Empty list if product not mapped or on error.
+    """
+    product = _os_to_msrc_product(os_version)
+    if not product:
+        logger.debug("No MSRC product mapping for os_version=%r", os_version)
+        return []
+
+    now = time.monotonic()
+    cached = _product_cve_cache.get(product)
+    if cached is not None:
+        cve_list, cached_at = cached
+        if now - cached_at < _CACHE_TTL_SECONDS:
+            return list(cve_list)
+
+    loop = asyncio.get_running_loop()
+    records = await loop.run_in_executor(None, _fetch_cves_for_product_sync, product, months_back)
+    _product_cve_cache[product] = (records, now)
+    return records
+
 
 def _normalise_kb_id(kb_id: str) -> str:
     """Extract digits from a KB identifier.

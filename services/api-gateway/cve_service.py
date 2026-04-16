@@ -272,19 +272,42 @@ class CVEService:
         resource_group: str,
         vm_resource_id: str,
     ) -> List[CVERecord]:
-        """Internal: fetch patches + CVEs, correlate, build CVERecord list."""
+        """Fetch CVEs by OS version from MSRC, then cross-reference patch status.
+
+        Step 1: Get OS version from ARG (static — works whether VM is online or not).
+        Step 2: Query MSRC by product family → full CVE list for that OS.
+        Step 3: Get installed/pending KBs (best-effort, affects status only).
+        Step 4: Mark each CVE PATCHED / PENDING_PATCH / UNPATCHED based on KBs.
+        """
         loop = asyncio.get_running_loop()
+        from services.api_gateway.msrc_client import get_cves_for_product
 
-        # Fetch pending patches from ARG (sync in executor)
-        pending_patches = await loop.run_in_executor(
-            None, _fetch_pending_patches_arg, self._credential, vm_name, subscription_id, resource_group
+        # Step 1: OS version from ARG — never requires VM to be online
+        os_version = await loop.run_in_executor(
+            None, _fetch_vm_os_version, self._credential, vm_name, subscription_id
         )
+        if not os_version:
+            logger.debug("cve_service: no OS version in ARG for %s — skipping", vm_name)
+            return []
 
-        pending_kb_digits = set(_extract_kbs_from_patches(pending_patches))
+        # Step 2: All CVEs for this OS from MSRC (product-based, not KB-based)
+        cve_records_raw = await get_cves_for_product(os_version)
+        if not cve_records_raw:
+            logger.debug("cve_service: no MSRC CVEs for os_version=%r", os_version)
+            return []
 
-        # Fetch installed patches from LAW (best-effort)
-        # Use both provider paths — Arc machines use hybridcompute, Azure VMs use compute
+        # Step 3: Installed + pending KBs — best-effort; only affects status
+        pending_kb_digits: set[str] = set()
         installed_kb_digits: set[str] = set()
+
+        try:
+            pending_patches = await loop.run_in_executor(
+                None, _fetch_pending_patches_arg, self._credential, vm_name, subscription_id, resource_group
+            )
+            pending_kb_digits = set(_extract_kbs_from_patches(pending_patches))
+        except Exception as exc:
+            logger.debug("Pending patch fetch failed (degraded): %s", exc)
+
         for provider_path in [
             f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.HybridCompute/machines/{vm_name}",
             f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Compute/virtualMachines/{vm_name}",
@@ -297,36 +320,14 @@ class CVEService:
             except Exception as exc:
                 logger.debug("Installed patch fetch failed for %s (degraded): %s", provider_path, exc)
 
-        # Build full KB set to look up CVEs
-        all_kb_digits = pending_kb_digits | installed_kb_digits
-        if not all_kb_digits:
-            return []
-
-        # Map KB digits -> CVEs via msrc_client
-        kb_cve_map: Dict[str, List[str]] = {}
-        try:
-            from services.api_gateway.msrc_client import get_cves_for_kbs
-            kb_ids = [f"KB{d}" for d in all_kb_digits]
-            result = await get_cves_for_kbs(kb_ids)
-            # Remap: result keys are "KB12345", we want "12345"
-            for kb_id, cves in result.items():
-                digits = _normalise_kb(kb_id)
-                if digits:
-                    kb_cve_map[digits] = cves
-        except Exception as exc:
-            logger.warning("MSRC CVE lookup failed (degraded): %s", exc)
-            return []
-
-        # Invert: CVE -> list of KB digits that patch it
-        cve_to_kbs: Dict[str, List[str]] = {}
-        for digits, cves in kb_cve_map.items():
-            for cve in cves:
-                cve_to_kbs.setdefault(cve, []).append(digits)
-
+        # Step 4: Build CVERecord list — status driven by KB cross-reference
         records: List[CVERecord] = []
-        for cve_id, kb_digits_list in cve_to_kbs.items():
-            patched_by_installed = any(d in installed_kb_digits for d in kb_digits_list)
-            patched_by_pending = any(d in pending_kb_digits for d in kb_digits_list)
+        for raw in cve_records_raw:
+            cve_id = raw["cve_id"]
+            kb_digits_list = [_normalise_kb(k) for k in raw.get("kb_ids", []) if k]
+
+            patched_by_installed = bool(kb_digits_list) and any(d in installed_kb_digits for d in kb_digits_list)
+            patched_by_pending = bool(kb_digits_list) and any(d in pending_kb_digits for d in kb_digits_list)
 
             if patched_by_installed:
                 status = "PATCHED"
@@ -335,20 +336,20 @@ class CVEService:
             else:
                 status = "UNPATCHED"
 
-            record = CVERecord(
+            records.append(CVERecord(
                 cve_id=cve_id,
-                description=f"Vulnerability addressed by KB: {', '.join(f'KB{d}' for d in kb_digits_list)}",
-                severity=_severity_from_cvss(None),
-                cvss_score=None,
-                affected_product="Windows",
-                affected_versions="See MSRC for details",
-                published_date=None,
+                description=raw.get("description") or f"Affects {raw.get('affected_product', 'Windows')}",
+                severity=_severity_from_cvss(raw.get("cvss_score")),
+                cvss_score=raw.get("cvss_score"),
+                affected_product=raw.get("affected_product", ""),
+                affected_versions=raw.get("affected_versions", ""),
+                published_date=raw.get("published_date"),
                 patched_kb_ids=[f"KB{d}" for d in kb_digits_list],
                 patched_by_installed=patched_by_installed,
                 patched_by_pending=patched_by_pending,
                 status=status,
-            )
-            records.append(record)
+            ))
+
 
         # Sort: UNPATCHED first, then PENDING_PATCH, then PATCHED
         status_order = {"UNPATCHED": 0, "PENDING_PATCH": 1, "PATCHED": 2}
