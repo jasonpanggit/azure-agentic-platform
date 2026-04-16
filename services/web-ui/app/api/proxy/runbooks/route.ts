@@ -25,7 +25,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   try {
     const url = new URL(`${getApiGatewayUrl()}/api/v1/runbooks/search`);
-    if (query) url.searchParams.set('query', query);
+    url.searchParams.set('query', query); // always send — backend requires this param
     if (domain) url.searchParams.set('domain', domain);
     url.searchParams.set('limit', limit);
 

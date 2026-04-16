@@ -55,6 +55,9 @@ azure-mgmt-containerservice>=21.0.0
 six>=1.16.0
 azure-mgmt-advisor>=9.0.0
 
+# FinOps cost breakdown — Azure Cost Management (Phase 35)
+azure-mgmt-costmanagement>=4.0.0
+
 # AKS cluster detail — ContainerServiceClient (managed_clusters.get, node pools)
 azure-mgmt-containerservice>=41.0.0
 
