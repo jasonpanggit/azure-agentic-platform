@@ -194,3 +194,21 @@ def pre_seeded_embeddings():
         v = [x / magnitude for x in v]
         vectors.append(v)
     return vectors
+
+
+@pytest.fixture(autouse=True)
+def ensure_event_loop():
+    """Ensure an event loop exists for sync tests that create asyncio primitives.
+
+    Python 3.10+ creates a loop on demand; Python 3.9 requires an explicit loop
+    to be set before asyncio.Queue() can be instantiated in sync context.
+    """
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("loop closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    yield

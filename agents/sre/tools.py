@@ -1122,3 +1122,102 @@ def query_container_app_health(
                 "error": str(exc),
                 "duration_ms": duration_ms,
             }
+
+
+# ---------------------------------------------------------------------------
+# GitOps: deployment intelligence (Phase 60)
+# ---------------------------------------------------------------------------
+
+_API_GATEWAY_URL: str = os.environ.get("API_GATEWAY_URL", "http://localhost:8000")
+
+try:
+    import httpx as _httpx
+    _HTTPX_AVAILABLE = True
+except ImportError:
+    _httpx = None  # type: ignore[assignment]
+    _HTTPX_AVAILABLE = False
+
+
+@ai_function
+def get_recent_deployments(
+    resource_group: str = "",
+    hours_back: int = 24,
+) -> Dict[str, Any]:
+    """Retrieve recent deployment events for a resource group (GitOps — Phase 60).
+
+    Queries the deployment tracker for CI/CD deployments within the specified
+    time window. Used to correlate infrastructure incidents with the causative
+    deployment.
+
+    Args:
+        resource_group: Azure resource group to filter deployments (empty = all).
+        hours_back: Look-back window in hours (default 24).
+
+    Returns:
+        Dict with keys:
+            deployments (list): List of recent deployment events.
+            total (int): Total deployments found.
+            hours_back (int): Window applied.
+            resource_group (str | None): Filter applied.
+            query_status (str): "success" or "error".
+            duration_ms (float): Execution duration.
+    """
+    start_time = time.monotonic()
+
+    if not _HTTPX_AVAILABLE:
+        return {
+            "query_status": "error",
+            "error": "httpx not installed — cannot query deployment tracker",
+            "deployments": [],
+            "total": 0,
+            "duration_ms": round((time.monotonic() - start_time) * 1000, 2),
+        }
+
+    try:
+        params: Dict[str, Any] = {"hours_back": hours_back, "limit": 50}
+        if resource_group:
+            params["resource_group"] = resource_group
+
+        with _httpx.Client(timeout=15.0) as client:
+            resp = client.get(
+                f"{_API_GATEWAY_URL}/api/v1/deployments",
+                params=params,
+            )
+
+        if resp.status_code != 200:
+            return {
+                "query_status": "error",
+                "error": f"Deployment API returned HTTP {resp.status_code}",
+                "deployments": [],
+                "total": 0,
+                "duration_ms": round((time.monotonic() - start_time) * 1000, 2),
+            }
+
+        data = resp.json()
+        duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+        logger.info(
+            "get_recent_deployments: rg=%s hours_back=%d count=%d duration_ms=%s",
+            resource_group,
+            hours_back,
+            data.get("total", 0),
+            duration_ms,
+        )
+        return {
+            "query_status": "success",
+            "deployments": data.get("deployments", []),
+            "total": data.get("total", 0),
+            "hours_back": hours_back,
+            "resource_group": resource_group or None,
+            "duration_ms": duration_ms,
+        }
+
+    except Exception as exc:
+        duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+        logger.warning("get_recent_deployments: error | error=%s", exc)
+        return {
+            "query_status": "error",
+            "error": str(exc),
+            "deployments": [],
+            "total": 0,
+            "duration_ms": duration_ms,
+        }
