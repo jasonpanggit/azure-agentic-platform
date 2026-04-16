@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ShieldAlert, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react'
+import { ShieldAlert, CheckCircle, AlertTriangle, RefreshCw, X, ExternalLink } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CVERecord {
   readonly cve_id: string
   readonly description: string
-  readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'Important' | 'Critical' | 'Moderate' | 'Low' | string
   readonly cvss_score: number | null
   readonly affected_product: string
   readonly affected_versions: string
@@ -17,6 +17,8 @@ interface CVERecord {
   readonly patched_by_installed: boolean
   readonly patched_by_pending: boolean
   readonly status: 'PATCHED' | 'PENDING_PATCH' | 'UNPATCHED'
+  readonly vector_string?: string
+  readonly impact?: string
 }
 
 type SeverityFilter = 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
@@ -99,6 +101,7 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, 
   const [error, setError] = useState<string | null>(null)
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('ALL')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [selectedCve, setSelectedCve] = useState<CVERecord | null>(null)
 
   const fetchCves = useCallback(async () => {
     if (!vmName || !subscriptionId || !resourceGroup) return
@@ -291,11 +294,15 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, 
             {filtered.map(cve => (
               <div
                 key={cve.cve_id}
-                className="grid items-center px-3 py-2 gap-2 text-xs"
+                className="grid items-center px-3 py-2 gap-2 text-xs cursor-pointer hover:brightness-95 transition-all"
                 style={{
                   gridTemplateColumns: '1.5fr 0.6fr 0.5fr 2fr 1fr 1fr',
                   background: 'var(--bg-surface)',
                 }}
+                onClick={() => setSelectedCve(cve)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && setSelectedCve(cve)}
               >
                 {/* CVE ID — link to NVD */}
                 <a
@@ -347,6 +354,141 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, 
             Source: MSRC Security Update Guide
           </span>
         </p>
+      )}
+
+      {/* ── CVE Detail Modal ──────────────────────────────────────────────── */}
+      {selectedCve && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setSelectedCve(null)}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-xl shadow-2xl overflow-auto max-h-[80vh]"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between p-4 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldAlert className="h-4 w-4 shrink-0" style={{ color: severityColor(selectedCve.severity) }} />
+                <span className="font-mono font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                  {selectedCve.cve_id}
+                </span>
+                <SeverityBadge severity={selectedCve.severity} />
+              </div>
+              <button
+                onClick={() => setSelectedCve(null)}
+                className="ml-2 shrink-0 p-1 rounded hover:bg-[var(--bg-subtle)]"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 space-y-4 text-sm">
+              {/* Status + CVSS row */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <StatusBadge status={selectedCve.status} />
+                {selectedCve.cvss_score != null && (
+                  <span className="font-mono text-xs px-2 py-0.5 rounded" style={{
+                    background: `color-mix(in srgb, ${severityColor(selectedCve.severity)} 15%, transparent)`,
+                    color: severityColor(selectedCve.severity),
+                  }}>
+                    CVSS {selectedCve.cvss_score.toFixed(1)}
+                  </span>
+                )}
+                {selectedCve.impact && (
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{selectedCve.impact}</span>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Description</p>
+                <p className="text-xs" style={{ color: 'var(--text-primary)' }}>{selectedCve.description}</p>
+              </div>
+
+              {/* Affected product */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Affected Product</p>
+                  <p className="text-xs" style={{ color: 'var(--text-primary)' }}>{selectedCve.affected_versions || selectedCve.affected_product || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Published</p>
+                  <p className="text-xs" style={{ color: 'var(--text-primary)' }}>{selectedCve.published_date ?? '—'}</p>
+                </div>
+              </div>
+
+              {/* CVSS vector */}
+              {selectedCve.vector_string && (
+                <div>
+                  <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>CVSS Vector</p>
+                  <code className="text-[10px] break-all" style={{ color: 'var(--text-secondary)' }}>{selectedCve.vector_string}</code>
+                </div>
+              )}
+
+              {/* Patching KBs */}
+              <div>
+                <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                  Patching KBs
+                  {selectedCve.patched_by_installed && (
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--accent-green) 15%, transparent)', color: 'var(--accent-green)' }}>
+                      Installed ✓
+                    </span>
+                  )}
+                  {selectedCve.patched_by_pending && !selectedCve.patched_by_installed && (
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--accent-yellow) 15%, transparent)', color: 'var(--accent-yellow)' }}>
+                      Pending
+                    </span>
+                  )}
+                </p>
+                {selectedCve.patched_kb_ids.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedCve.patched_kb_ids.map(kb => (
+                      <a
+                        key={kb}
+                        href={`https://support.microsoft.com/help/${kb.replace(/^KB/i, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-[10px] px-1.5 py-0.5 rounded hover:underline"
+                        style={{ background: 'var(--bg-subtle)', color: 'var(--accent-blue)' }}
+                      >
+                        {kb.startsWith('KB') ? kb : `KB${kb}`}
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No KB patch data available</p>
+                )}
+              </div>
+
+              {/* External links */}
+              <div className="flex gap-3 pt-1">
+                <a
+                  href={`https://nvd.nist.gov/vuln/detail/${selectedCve.cve_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs hover:underline"
+                  style={{ color: 'var(--accent-blue)' }}
+                >
+                  <ExternalLink className="h-3 w-3" /> NVD
+                </a>
+                <a
+                  href={`https://msrc.microsoft.com/update-guide/vulnerability/${selectedCve.cve_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs hover:underline"
+                  style={{ color: 'var(--accent-blue)' }}
+                >
+                  <ExternalLink className="h-3 w-3" /> MSRC
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
