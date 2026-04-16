@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,13 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { FileCheck, RefreshCw, Download } from 'lucide-react';
+import { useResizable } from '@/lib/use-resizable';
+import { FileCheck, RefreshCw, Download, X } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -229,8 +224,47 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  // Compliance detail panel — resize + drag-to-reposition
+  const { width: detailPanelWidth, onMouseDown: resizeOnMouseDown } = useResizable({
+    minWidth: 380,
+    maxWidth: 800,
+    defaultWidth: 520,
+    storageKey: 'compliance-detail-panel-width',
+  })
+  const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null)
+  const detailDragState = useRef({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 })
+
+  const handleDetailHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    detailDragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: detailPosition?.x ?? 0,
+      originY: detailPosition?.y ?? 0,
+    }
+  }, [detailPosition])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!detailDragState.current.isDragging) return
+      const dx = e.clientX - detailDragState.current.startX
+      const dy = e.clientY - detailDragState.current.startY
+      setDetailPosition({ x: detailDragState.current.originX + dx, y: detailDragState.current.originY + dy })
+    }
+    const onMouseUp = () => { detailDragState.current.isDragging = false }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
   return (
-    <div className="flex flex-col h-full">
+    <>
+      <div className="flex flex-col h-full">
       {/* ---- Header ---- */}
       <div
         className="flex items-center gap-2 px-4 py-3 flex-wrap"
@@ -369,52 +403,60 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
         </div>
       </div>
 
-      {/* ---- Findings Sheet ---- */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="w-[460px] sm:w-[520px] overflow-y-auto">
-          {selectedControl && (
-            <>
-              <SheetHeader className="mb-4">
-                <SheetTitle className="text-[14px]">
+      </div>{/* end outer flex */}
+
+      {/* ---- Findings Panel (draggable + resizable) ---- */}
+      {sheetOpen && selectedControl && (
+        <>
+          <div className="fixed inset-0 z-30" style={{ background: 'rgba(0,0,0,0.2)' }} onClick={() => setSheetOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden"
+            style={{
+              width: `${detailPanelWidth}px`,
+              background: 'var(--bg-surface)',
+              borderLeft: '1px solid var(--border)',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+              transform: detailPosition ? `translate(${detailPosition.x}px, ${detailPosition.y}px)` : undefined,
+            }}
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-col-resize hover:bg-primary/20 transition-colors" onMouseDown={resizeOnMouseDown} />
+            <div
+              className="flex items-start justify-between px-5 py-4 flex-shrink-0 select-none"
+              style={{ borderBottom: '1px solid var(--border)', cursor: 'grab' }}
+              onMouseDown={handleDetailHeaderMouseDown}
+            >
+              <div>
+                <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {selectedControl.control_id} — {selectedControl.framework.toUpperCase()}
-                </SheetTitle>
-                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                  {selectedControl.control_title}
                 </p>
-                <div className="flex gap-2 mt-1">
-                  <Badge
-                    style={{
-                      background:
-                        selectedControl.status === 'passing'
-                          ? 'color-mix(in srgb, var(--accent-green) 15%, transparent)'
-                          : selectedControl.status === 'failing'
-                          ? 'color-mix(in srgb, var(--accent-red) 15%, transparent)'
-                          : 'color-mix(in srgb, var(--border) 40%, transparent)',
-                      color:
-                        selectedControl.status === 'passing'
-                          ? 'var(--accent-green)'
-                          : selectedControl.status === 'failing'
-                          ? 'var(--accent-red)'
-                          : 'var(--text-muted)',
-                      border: 'none',
-                    }}
-                  >
+                <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{selectedControl.control_title}</p>
+                <div className="flex gap-2 mt-2">
+                  <Badge style={{
+                    background: selectedControl.status === 'passing' ? 'color-mix(in srgb, var(--accent-green) 15%, transparent)' : selectedControl.status === 'failing' ? 'color-mix(in srgb, var(--accent-red) 15%, transparent)' : 'color-mix(in srgb, var(--border) 40%, transparent)',
+                    color: selectedControl.status === 'passing' ? 'var(--accent-green)' : selectedControl.status === 'failing' ? 'var(--accent-red)' : 'var(--text-muted)',
+                    border: 'none',
+                  }}>
                     {selectedControl.status.replace('_', ' ')}
                   </Badge>
-                  <Badge variant="outline" className="text-[10px]">
-                    {FRAMEWORK_LABELS[selectedControl.framework] ?? selectedControl.framework}
-                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">{FRAMEWORK_LABELS[selectedControl.framework] ?? selectedControl.framework}</Badge>
                 </div>
-              </SheetHeader>
-
-              <p className="text-[12px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                Findings ({selectedControl.findings.length})
-              </p>
-
+              </div>
+              <button
+                onClick={() => setSheetOpen(false)}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="p-1 rounded opacity-70 hover:opacity-100 transition-opacity flex-shrink-0"
+                style={{ color: 'var(--text-secondary)', cursor: 'default' }}
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <p className="text-[12px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Findings ({selectedControl.findings.length})</p>
               {selectedControl.findings.length === 0 ? (
-                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                  No findings mapped to this control.
-                </p>
+                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No findings mapped to this control.</p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -427,29 +469,20 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
                   <TableBody>
                     {selectedControl.findings.map((finding, i) => (
                       <TableRow key={i}>
-                        <TableCell className="text-[11px] py-2">
-                          {finding.display_name}
-                        </TableCell>
-                        <TableCell className="text-[10px] py-2" style={{ color: 'var(--text-muted)' }}>
-                          {finding.finding_type.replace('_', ' ')}
-                        </TableCell>
+                        <TableCell className="text-[11px] py-2">{finding.display_name}</TableCell>
+                        <TableCell className="text-[10px] py-2" style={{ color: 'var(--text-muted)' }}>{finding.finding_type.replace('_', ' ')}</TableCell>
                         <TableCell className="py-2">
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded"
-                            style={severityBadgeStyle(finding.severity)}
-                          >
-                            {finding.severity}
-                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={severityBadgeStyle(finding.severity)}>{finding.severity}</span>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               )}
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
-    </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }
