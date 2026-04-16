@@ -89,7 +89,7 @@
 }
 
 /* Chat prose — used by ChatBubble for agent markdown */
-.chat-prose { font-size: 0.875rem; line-height: 1.6; color: var(--text-primary); }
+.chat-prose { font-size: 0.875rem; line-height: 1.6; color: var(--text-primary); overflow-wrap: break-word; word-break: break-word; min-width: 0; }
 .chat-prose p { margin-top: 0; margin-bottom: 0.5rem; }
 .chat-prose p:last-child { margin-bottom: 0; }
 .chat-prose ul, .chat-prose ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }

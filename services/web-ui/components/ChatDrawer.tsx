@@ -301,7 +301,7 @@ export function ChatDrawer() {
             className="text-[11px] px-2 py-0.5 rounded font-mono"
             style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
           >
-            GPT-4o
+            GPT-4.1
           </span>
           <button
             onClick={() => setDrawerOpen(false)}

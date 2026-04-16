@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MIN_WIDTH = 360;
-const DEFAULT_MAX_WIDTH = 800;
+const DEFAULT_MAX_WIDTH = 1200;
 const DEFAULT_DEFAULT_WIDTH = 420;
 const DEFAULT_STORAGE_KEY = 'chat-drawer-width';
 
