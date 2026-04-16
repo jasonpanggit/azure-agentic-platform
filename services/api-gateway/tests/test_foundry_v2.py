@@ -32,7 +32,7 @@ def _make_incident_payload():
 
 
 def _make_mock_agents():
-    """Build a mock agents sub-client with create_thread_and_run."""
+    """Build a mock AgentsClient with create_thread_and_run."""
     agents = MagicMock()
     run = MagicMock()
     run.id = "run_123"
@@ -43,13 +43,13 @@ def _make_mock_agents():
 
 
 class TestDispatchToOrchestrator:
-    """Verify dispatch_to_orchestrator uses AIProjectClient.agents (not Responses API)."""
+    """Verify dispatch_to_orchestrator uses azure-ai-agents AgentsClient (not Responses API)."""
 
-    @patch("services.api_gateway.foundry._get_foundry_project")
+    @patch("services.api_gateway.foundry._get_agents_client")
     @pytest.mark.asyncio
-    async def test_calls_create_thread_and_run(self, mock_get_project):
+    async def test_calls_create_thread_and_run(self, mock_get_agents):
         agents, run = _make_mock_agents()
-        mock_get_project.return_value.agents = agents
+        mock_get_agents.return_value = agents
 
         from services.api_gateway.foundry import dispatch_to_orchestrator
 
@@ -60,11 +60,11 @@ class TestDispatchToOrchestrator:
         call_kwargs = agents.create_thread_and_run.call_args
         assert call_kwargs.kwargs["agent_id"] == "asst_test123"
 
-    @patch("services.api_gateway.foundry._get_foundry_project")
+    @patch("services.api_gateway.foundry._get_agents_client")
     @pytest.mark.asyncio
-    async def test_returns_thread_and_run_ids(self, mock_get_project):
+    async def test_returns_thread_and_run_ids(self, mock_get_agents):
         agents, run = _make_mock_agents()
-        mock_get_project.return_value.agents = agents
+        mock_get_agents.return_value = agents
 
         from services.api_gateway.foundry import dispatch_to_orchestrator
 
@@ -75,11 +75,11 @@ class TestDispatchToOrchestrator:
         assert result["run_id"] == "run_123"
         assert result["status"] == "completed"
 
-    @patch("services.api_gateway.foundry._get_foundry_project")
+    @patch("services.api_gateway.foundry._get_agents_client")
     @pytest.mark.asyncio
-    async def test_agent_id_uses_env_var(self, mock_get_project):
+    async def test_agent_id_uses_env_var(self, mock_get_agents):
         agents, run = _make_mock_agents()
-        mock_get_project.return_value.agents = agents
+        mock_get_agents.return_value = agents
 
         with patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "asst_custom999"}):
             from services.api_gateway.foundry import dispatch_to_orchestrator
@@ -112,13 +112,13 @@ class TestBuildIncidentMessage:
 class TestBackwardCompatAlias:
     """Verify create_foundry_thread backward-compat alias."""
 
-    @patch("services.api_gateway.foundry._get_foundry_project")
+    @patch("services.api_gateway.foundry._get_agents_client")
     @pytest.mark.asyncio
-    async def test_create_foundry_thread_returns_thread_and_run(self, mock_get_project):
+    async def test_create_foundry_thread_returns_thread_and_run(self, mock_get_agents):
         agents, run = _make_mock_agents()
         run.id = "run_compat"
         run.thread_id = "thread_compat"
-        mock_get_project.return_value.agents = agents
+        mock_get_agents.return_value = agents
 
         from services.api_gateway.foundry import create_foundry_thread
 

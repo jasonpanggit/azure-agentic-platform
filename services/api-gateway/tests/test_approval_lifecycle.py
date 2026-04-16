@@ -155,7 +155,7 @@ class TestApprovalLifecycle:
         mock_resume.assert_not_called()
 
     def test_thread_not_polled_after_park(self, mock_foundry_client):
-        """create_run not called after proposal is parked awaiting approval."""
+        """runs.create not called after proposal is parked awaiting approval."""
         import asyncio
         from agents.shared.approval_manager import create_approval_record
 
@@ -193,14 +193,14 @@ class TestApprovalLifecycle:
             )
         )
 
-        # write-then-return: create_run must NOT have been called during parking
-        mock_foundry_client.agents.create_run.assert_not_called()
+        # write-then-return: runs.create must NOT have been called during parking
+        mock_foundry_client.runs.create.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_thread_resume_on_webhook(
         self, client, mock_foundry_client, mock_cosmos_approvals
     ):
-        """Approval webhook resumes the Foundry thread (create_message + create_run)."""
+        """Approval webhook resumes the Foundry thread (messages.create + runs.create)."""
         record = mock_cosmos_approvals.read_item.return_value
         record["expires_at"] = _future_timestamp(30)
         record["status"] = "pending"
@@ -230,8 +230,8 @@ class TestApprovalLifecycle:
                 decided_by="operator@contoso.com",
             )
 
-        mock_foundry_client.agents.create_message.assert_called_once()
-        mock_foundry_client.agents.create_run.assert_called_once()
+        mock_foundry_client.messages.create.assert_called_once()
+        mock_foundry_client.runs.create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_etag_concurrency_on_write(self, mock_cosmos_approvals):

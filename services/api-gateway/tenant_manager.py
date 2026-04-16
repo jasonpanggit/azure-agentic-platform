@@ -94,12 +94,25 @@ class TenantManager:
         return asyncpg is not None and bool(self._dsn)
 
     def _row_to_tenant(self, row: dict) -> Tenant:
+        def _as_list(v: object) -> list:
+            """Coerce asyncpg JSONB field to a Python list.
+
+            asyncpg returns JSON/JSONB columns as raw strings by default.
+            Calling list() on a string iterates its characters, producing
+            ['[', ']'] for "[]" — which fails list[dict] Pydantic validation.
+            """
+            if v is None:
+                return []
+            if isinstance(v, str):
+                return _json.loads(v)
+            return list(v)
+
         return Tenant(
             tenant_id=str(row["tenant_id"]),
             name=row["name"],
-            subscriptions=list(row["subscriptions"] or []),
-            sla_definitions=list(row["sla_definitions"] or []),
-            compliance_frameworks=list(row["compliance_frameworks"] or []),
+            subscriptions=_as_list(row["subscriptions"]),
+            sla_definitions=_as_list(row["sla_definitions"]),
+            compliance_frameworks=_as_list(row["compliance_frameworks"]),
             operator_group_id=row["operator_group_id"],
             created_at=(
                 row["created_at"].isoformat()

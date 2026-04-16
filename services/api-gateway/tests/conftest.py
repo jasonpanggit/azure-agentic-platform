@@ -2,7 +2,7 @@
 
 Fixtures:
 - client: FastAPI TestClient for the api-gateway
-- mock_foundry_client: Mocked AIProjectClient (agents.create_thread, create_message, create_run)
+- mock_foundry_client: Mocked AzureAgentsClient (threads.create, messages.create, runs.create)
 - mock_cosmos_approvals: Mocked Cosmos DB approvals container (read_item, replace_item, create_item, query_items)
 - mock_cosmos_incidents: Mocked Cosmos DB incidents container
 - mock_teams_notifier: Mocked Teams card poster (post_card, update_card)
@@ -36,11 +36,20 @@ def client():
 
 @pytest.fixture()
 def mock_foundry_client():
-    """Mocked AIProjectClient with agents sub-client."""
+    """Mocked AzureAgentsClient with sub-client namespaces.
+
+    Mirrors the azure-ai-agents>=1.1.0 AgentsClient layout:
+      client.threads.create()   → returns thread with .id
+      client.messages.create()  → returns message with .id
+      client.runs.create()      → returns run with .id
+      client.runs.create_and_process() → returns run with .id and .status
+    """
     client = MagicMock()
-    client.agents.create_thread.return_value = MagicMock(id="thread-test-001")
-    client.agents.create_message.return_value = MagicMock(id="msg-test-001")
-    client.agents.create_run.return_value = MagicMock(id="run-test-001")
+    client.threads.create.return_value = MagicMock(id="thread-test-001")
+    client.messages.create.return_value = MagicMock(id="msg-test-001")
+    client.runs.create.return_value = MagicMock(id="run-test-001", status="completed")
+    client.runs.create_and_process.return_value = MagicMock(id="run-test-001", status="completed")
+    client.messages.list.return_value = iter([])
     return client
 
 
