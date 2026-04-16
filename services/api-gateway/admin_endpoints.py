@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 async def _get_pg_connection() -> asyncpg.Connection:
     """Create a PostgreSQL connection using the resolved DSN."""
     dsn = resolve_postgres_dsn()
-    return await asyncpg.connect(dsn)
+    return await asyncpg.connect(dsn, timeout=10.0)
 
 
 def _row_to_policy(row: asyncpg.Record, execution_count_today: int = 0) -> AutoRemediationPolicy:

@@ -506,7 +506,7 @@ function ImminentBreachesSection({ breaches, error, loading }: ImminentBreachesS
                     </span>
                   </div>
                   <span className="text-[11px] shrink-0 ml-2" style={{ color: 'var(--text-secondary)' }}>
-                    {Math.round(b.confidence * 100)}% conf.
+                    {typeof b.confidence === 'number' ? `${Math.round(b.confidence * 100)}% conf.` : b.confidence}
                   </span>
                 </div>
                 {/* Time-to-breach bar: full bar = 0 min remaining (imminent), empty = 60 min */}
@@ -693,7 +693,7 @@ function ErrorBudgetSection({ portfolio, loading }: ErrorBudgetSectionProps) {
       ) : (
         <div className="flex flex-col gap-3 p-4">
           {portfolio.map((entry) => {
-            const remaining = Math.max(0, Math.min(100, entry.error_budget_pct));
+            const remaining = Math.max(0, Math.min(100, entry.error_budget_pct ?? 0));
             const consumed = 100 - remaining;
             const budgetColor =
               remaining > 50

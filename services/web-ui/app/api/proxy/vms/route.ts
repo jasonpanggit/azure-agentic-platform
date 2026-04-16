@@ -38,18 +38,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     if (!res.ok) {
-      // VM endpoint doesn't exist yet in Phase 1 — return empty gracefully
-      log.debug('vm endpoint not ready, returning empty list', { status: res.status });
-      return NextResponse.json({ vms: [], total: 0, has_more: false });
+      const body = await res.text().catch(() => '');
+      log.error('vm upstream error', { status: res.status, body });
+      return NextResponse.json(
+        { error: `upstream error ${res.status}`, vms: [], total: 0, has_more: false },
+        { status: res.status >= 500 ? 502 : res.status },
+      );
     }
 
     const data = await res.json();
     log.debug('vm list response', { total: data?.total });
     return NextResponse.json(data);
   } catch (err) {
-    // Backend not available — return empty so UI shows empty state, not error
     const message = err instanceof Error ? err.message : 'Unknown error';
-    log.debug('gateway unreachable, returning empty vm list', { error: message });
-    return NextResponse.json({ vms: [], total: 0, has_more: false });
+    const isTimeout = message.includes('timeout') || message.includes('abort');
+    log.error('gateway unreachable', { error: message });
+    return NextResponse.json(
+      { error: `Failed to reach API gateway: ${message}`, vms: [], total: 0, has_more: false },
+      { status: isTimeout ? 504 : 502 },
+    );
   }
 }

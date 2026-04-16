@@ -439,8 +439,8 @@ async def list_aks_clusters(
 
         kql += f"\n| limit {limit}"
 
-        request = QueryRequest(subscriptions=subscription_ids, query=kql)
-        response = client.resources(request)
+        arg_request = QueryRequest(subscriptions=subscription_ids, query=kql)
+        response = client.resources(arg_request)
         rows = response.data or []
 
         fallback_workspace = os.environ.get("LOG_ANALYTICS_WORKSPACE_RESOURCE_ID", "")
@@ -497,9 +497,11 @@ async def list_aks_clusters(
                         )
                         futures_map[f] = ws_clusters
 
-                    for future, ws_clusters in futures_map.items():
+                    done, _ = concurrent.futures.wait(futures_map.keys(), timeout=10)
+                    for future in done:
+                        ws_clusters = futures_map[future]
                         try:
-                            health_map = future.result(timeout=10)
+                            health_map = future.result()
                         except Exception as health_exc:
                             logger.warning("aks_list: system_pod_health enrichment failed error=%s", health_exc)
                             health_map = {}

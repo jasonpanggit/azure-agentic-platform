@@ -57,7 +57,7 @@ interface RemediationPolicy {
   require_slo_healthy: boolean
   maintenance_window_exempt: boolean
   enabled: boolean
-  executions_today: number
+  execution_count_today: number
   created_at: string
   updated_at: string
 }
@@ -565,14 +565,14 @@ function PolicyListPanel() {
                       variant="outline"
                       className="text-xs"
                       style={{
-                        background: policy.executions_today > 0
+                        background: policy.execution_count_today > 0
                           ? 'color-mix(in srgb, var(--accent-blue) 15%, transparent)'
                           : 'color-mix(in srgb, var(--accent-green) 15%, transparent)',
                         borderColor: 'transparent',
                         color: 'var(--text-primary)',
                       }}
                     >
-                      {policy.executions_today ?? 0}
+                      {policy.execution_count_today ?? 0}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
