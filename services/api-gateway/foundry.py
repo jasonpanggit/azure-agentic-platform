@@ -323,18 +323,27 @@ async def dispatch_chat_to_orchestrator(
     import re as _re
 
     loop = asyncio.get_running_loop()
-    project = _get_foundry_project(credential)
-    openai_client = project.get_openai_client()
 
     # Fast keyword routing — no LLM call needed
     domain_agent_tool = _classify_domain(message)
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
     logger.info("Keyword-routed to: %s", domain_agent_name)
 
-    # Load domain agent instructions (cached after first call)
-    domain_model, domain_instructions = await loop.run_in_executor(
-        None, _get_cached_agent_instructions, project, domain_agent_name
-    )
+    # Load domain agent instructions (cached after first call).
+    # Only build the project client if the instructions are not already cached —
+    # AIProjectClient init + list_versions adds ~2-4s on cold start.
+    if domain_agent_name not in _AGENT_INSTRUCTION_CACHE:
+        project = _get_foundry_project(credential)
+        domain_model, domain_instructions = await loop.run_in_executor(
+            None, _get_cached_agent_instructions, project, domain_agent_name
+        )
+    else:
+        domain_model, domain_instructions = _AGENT_INSTRUCTION_CACHE[domain_agent_name]
+
+    # Use the account-level endpoint (cognitiveservices.azure.com) for chat.completions.
+    # The project-scoped endpoint (services.ai.azure.com/api/projects/...) returns HTTP 500
+    # on every responses.create() call — this is a known Foundry Preview issue.
+    openai_client = _get_openai_client()
     if not domain_instructions:
         domain_instructions = (
             f"You are an Azure AIOps specialist for {domain_agent_tool.replace('_', ' ')} domain. "
