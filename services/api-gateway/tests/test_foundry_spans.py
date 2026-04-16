@@ -9,6 +9,7 @@ import pytest
 os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 os.environ.setdefault("AZURE_PROJECT_ENDPOINT", "https://test.services.ai.azure.com/api/projects/test")
 os.environ.setdefault("ORCHESTRATOR_AGENT_NAME", "aap-orchestrator")
+os.environ.setdefault("ORCHESTRATOR_AGENT_ID", "agent-test-id")
 
 
 def _make_incident_payload():
@@ -38,16 +39,20 @@ class TestIncidentRunSpanAttributes:
     set_tracer_provider() once per process.
     """
 
-    @patch("services.api_gateway.foundry._get_openai_client")
+    @patch("services.api_gateway.foundry._get_agents_client")
+    @patch("services.api_gateway.foundry._get_foundry_project")
     @pytest.mark.asyncio
-    async def test_dispatch_records_incident_and_agent_spans(self, mock_get_client):
-        """Verify both foundry.responses_create and agent.orchestrator spans
+    async def test_dispatch_records_incident_and_agent_spans(self, mock_get_project, mock_get_agents):
+        """Verify both foundry.agents_create_thread_and_run and agent.orchestrator spans
         carry the correct incident and agent attributes."""
-        mock_openai = MagicMock()
-        mock_openai.responses.create.return_value = MagicMock(
-            id="resp_span_test", status="completed"
-        )
-        mock_get_client.return_value = mock_openai
+        mock_agents = MagicMock()
+        mock_run = MagicMock()
+        mock_run.thread_id = "thread-span-test"
+        mock_run.id = "run-span-test"
+        mock_run.status = "completed"
+        mock_agents.create_thread_and_run.return_value = mock_run
+        mock_get_agents.return_value = mock_agents
+        mock_get_project.return_value = MagicMock()
 
         from opentelemetry import trace as otel_trace
         from opentelemetry.sdk.trace import TracerProvider
@@ -74,17 +79,16 @@ class TestIncidentRunSpanAttributes:
             spans = exporter.get_finished_spans()
             span_names = [s.name for s in spans]
 
-            # --- foundry.responses_create span ---
-            assert any("responses_create" in name for name in span_names), (
-                f"Expected 'responses_create' span, got: {span_names}"
+            # --- foundry.agents_create_thread_and_run span ---
+            assert any("agents_create_thread_and_run" in name for name in span_names), (
+                f"Expected 'agents_create_thread_and_run' span, got: {span_names}"
             )
 
             for span in spans:
-                if "responses_create" in span.name:
+                if "agents_create_thread_and_run" in span.name:
                     attrs = dict(span.attributes or {})
                     assert attrs.get("incident.id") == "inc-span-001"
                     assert attrs.get("incident.domain") == "compute"
-                    assert attrs.get("agent.name") == "aap-orchestrator"
                     break
 
             # --- agent.orchestrator span ---
@@ -94,6 +98,7 @@ class TestIncidentRunSpanAttributes:
             )
 
             agent_attrs = dict(agent_spans[0].attributes or {})
+            assert agent_attrs.get("agent.name") == "orchestrator"
             assert agent_attrs.get("agent.domain") == "compute"
             assert agent_attrs.get("agent.correlation_id") == "inc-span-001"
         finally:
