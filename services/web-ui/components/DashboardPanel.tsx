@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -22,9 +22,12 @@ import { OpsTab } from './OpsTab'
 import { SettingsTab } from './SettingsTab'
 import { SLATab } from './SLATab'
 import { CapacityTab } from './CapacityTab'
+import { SecurityPostureTab } from './SecurityPostureTab'
+import { DriftTab } from './DriftTab'
+import { DeploymentTab } from './DeploymentTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -66,11 +69,14 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
     { id: 'capacity',      label: 'Capacity',      Icon: Gauge },
   ],
-  // Governance
+  // Security & compliance
   [
-    { id: 'patch',       label: 'Patch',       Icon: ShieldCheck },
-    { id: 'compliance',  label: 'Compliance',  Icon: FileCheck },
-    { id: 'runbooks',    label: 'Runbooks',    Icon: BookOpen },
+    { id: 'patch',            label: 'Patch',           Icon: ShieldCheck },
+    { id: 'compliance',       label: 'Compliance',      Icon: FileCheck },
+    { id: 'security-posture', label: 'Security Score',  Icon: ShieldCheck },
+    { id: 'runbooks',         label: 'Runbooks',        Icon: BookOpen },
+    { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
+    { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
   ],
   // Config
   [
@@ -324,6 +330,18 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-capacity" role="tabpanel" aria-labelledby="tab-capacity" hidden={activeTab !== 'capacity'}>
           {activeTab === 'capacity' && <CapacityTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-security-posture" role="tabpanel" aria-labelledby="tab-security-posture" hidden={activeTab !== 'security-posture'}>
+          {activeTab === 'security-posture' && <SecurityPostureTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-drift" role="tabpanel" aria-labelledby="tab-drift" hidden={activeTab !== 'drift'}>
+          {activeTab === 'drift' && <DriftTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-deployments" role="tabpanel" aria-labelledby="tab-deployments" hidden={activeTab !== 'deployments'}>
+          {activeTab === 'deployments' && <DeploymentTab resourceGroup={undefined} />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
