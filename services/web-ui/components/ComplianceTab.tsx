@@ -157,6 +157,46 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
     fetchPosture();
   }, [fetchPosture]);
 
+  // ---------------------------------------------------------------------------
+  // Drag-to-reposition + resize hooks — MUST be before any early returns
+  // ---------------------------------------------------------------------------
+  const { width: detailPanelWidth, onMouseDown: resizeOnMouseDown } = useResizable({
+    minWidth: 380,
+    maxWidth: 800,
+    defaultWidth: 520,
+    storageKey: 'compliance-detail-panel-width',
+  })
+  const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null)
+  const detailDragState = useRef({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 })
+
+  const handleDetailHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    detailDragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: detailPosition?.x ?? 0,
+      originY: detailPosition?.y ?? 0,
+    }
+  }, [detailPosition])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!detailDragState.current.isDragging) return
+      const dx = e.clientX - detailDragState.current.startX
+      const dy = e.clientY - detailDragState.current.startY
+      setDetailPosition({ x: detailDragState.current.originX + dx, y: detailDragState.current.originY + dy })
+    }
+    const onMouseUp = () => { detailDragState.current.isDragging = false }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
   function handleExport(format: 'csv' | 'pdf') {
     if (subscriptions.length === 0) return;
     const subId = encodeURIComponent(subscriptions[0]);
@@ -173,7 +213,7 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // Empty state
+  // Early returns (after all hooks)
   // ---------------------------------------------------------------------------
   if (subscriptions.length === 0) {
     return (
@@ -220,47 +260,6 @@ export function ComplianceTab({ subscriptions }: ComplianceTabProps) {
     selectedFramework === 'all'
       ? allControls
       : allControls.filter((c) => c.framework === selectedFramework);
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-  // Compliance detail panel — resize + drag-to-reposition
-  const { width: detailPanelWidth, onMouseDown: resizeOnMouseDown } = useResizable({
-    minWidth: 380,
-    maxWidth: 800,
-    defaultWidth: 520,
-    storageKey: 'compliance-detail-panel-width',
-  })
-  const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null)
-  const detailDragState = useRef({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 })
-
-  const handleDetailHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    detailDragState.current = {
-      isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      originX: detailPosition?.x ?? 0,
-      originY: detailPosition?.y ?? 0,
-    }
-  }, [detailPosition])
-
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!detailDragState.current.isDragging) return
-      const dx = e.clientX - detailDragState.current.startX
-      const dy = e.clientY - detailDragState.current.startY
-      setDetailPosition({ x: detailDragState.current.originX + dx, y: detailDragState.current.originY + dy })
-    }
-    const onMouseUp = () => { detailDragState.current.isDragging = false }
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [])
 
   return (
     <>
