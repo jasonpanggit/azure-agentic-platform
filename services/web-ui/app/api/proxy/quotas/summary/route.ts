@@ -2,33 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiGatewayUrl, buildUpstreamHeaders } from '@/lib/api-gateway';
 import { logger } from '@/lib/logger';
 
-const log = logger.child({ route: '/api/proxy/vms/[vmName]/cves' });
+const log = logger.child({ route: '/api/proxy/quotas/summary' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/proxy/vms/[vmName]/cves
+ * GET /api/proxy/quotas/summary
  *
- * Proxies per-VM CVE requests to the API gateway.
- * Query params forwarded as-is (subscription_id, resource_group).
+ * Proxies quota summary requests to the API gateway.
+ * Query params forwarded as-is (subscription_id, location).
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ vmName: string }> }
-): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const apiGatewayUrl = getApiGatewayUrl();
     const { searchParams } = new URL(request.url);
     const query = searchParams.toString();
-    const { vmName } = await params;
-
-    log.info('proxy request', { method: 'GET', vmName, query });
+    log.info('proxy request', { method: 'GET', query });
 
     const upstreamHeaders = buildUpstreamHeaders(request.headers.get('Authorization'), false);
 
     const res = await fetch(
-      `${apiGatewayUrl}/api/v1/vms/${encodeURIComponent(vmName)}/cves${query ? `?${query}` : ''}`,
+      `${apiGatewayUrl}/api/v1/quotas/summary${query ? `?${query}` : ''}`,
       {
         headers: upstreamHeaders,
         signal: AbortSignal.timeout(15000),
@@ -45,7 +40,7 @@ export async function GET(
       );
     }
 
-    log.debug('proxy response', { status: res.status });
+    log.debug('proxy response', { total: data?.total });
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

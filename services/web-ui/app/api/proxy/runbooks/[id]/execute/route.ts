@@ -15,9 +15,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { id } = params;
+  const { id } = await params;
   const dryRun = req.nextUrl.searchParams.get('dry_run') ?? 'false';
 
   log.info('proxy request', { method: 'POST', runbook_id: id, dry_run: dryRun });

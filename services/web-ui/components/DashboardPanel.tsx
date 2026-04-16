@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -27,9 +27,10 @@ import { DriftTab } from './DriftTab'
 import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
+import { QuotaTab } from './QuotaTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
 
 interface FilterState {
   severity?: string
@@ -70,6 +71,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'observability', label: 'Observability', Icon: Activity },
     { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
     { id: 'capacity',      label: 'Capacity',      Icon: Gauge },
+    { id: 'quotas',        label: 'Quotas',        Icon: BarChart3 },
   ],
   // Security & compliance
   [
@@ -334,6 +336,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-capacity" role="tabpanel" aria-labelledby="tab-capacity" hidden={activeTab !== 'capacity'}>
           {activeTab === 'capacity' && <CapacityTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-quotas" role="tabpanel" aria-labelledby="tab-quotas" hidden={activeTab !== 'quotas'}>
+          {activeTab === 'quotas' && <QuotaTab subscriptionId={selectedSubscriptions[0]} />}
         </div>
 
         <div id="tabpanel-security-posture" role="tabpanel" aria-labelledby="tab-security-posture" hidden={activeTab !== 'security-posture'}>
