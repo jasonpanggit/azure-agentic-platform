@@ -54,6 +54,13 @@ except Exception as _e:
     StorageManagementClient = None  # type: ignore[assignment,misc]
     _STORAGE_IMPORT_ERROR = str(_e)
 
+try:
+    from azure.mgmt.containerservice import ContainerServiceClient
+    _AKS_IMPORT_ERROR: str = ""
+except Exception as _e:
+    ContainerServiceClient = None  # type: ignore[assignment,misc]
+    _AKS_IMPORT_ERROR = str(_e)
+
 # ---------------------------------------------------------------------------
 # Environment config
 # ---------------------------------------------------------------------------
@@ -85,6 +92,10 @@ def _log_sdk_availability() -> None:
         logger.warning("capacity_planner: azure-mgmt-storage unavailable: %s", _STORAGE_IMPORT_ERROR)
     else:
         logger.debug("capacity_planner: azure-mgmt-storage available")
+    if _AKS_IMPORT_ERROR:
+        logger.warning("capacity_planner: azure-mgmt-containerservice unavailable: %s", _AKS_IMPORT_ERROR)
+    else:
+        logger.debug("capacity_planner: azure-mgmt-containerservice available")
 
 
 _log_sdk_availability()
@@ -103,6 +114,55 @@ Resources
     ipConfigCount=toint(array_length(subnets.properties.ipConfigurations))
 | order by vnetName asc, subnetName asc
 """
+
+ARG_AKS_QUERY = """
+Resources
+| where type == "microsoft.containerservice/managedclusters"
+| mv-expand agentPoolProfiles = properties.agentPoolProfiles
+| project
+    clusterName=name,
+    resourceGroup=resourceGroup,
+    location=location,
+    poolName=tostring(agentPoolProfiles.name),
+    vmSize=tostring(agentPoolProfiles.vmSize),
+    currentNodes=toint(agentPoolProfiles.count),
+    maxNodes=toint(agentPoolProfiles.maxCount),
+    minNodes=toint(agentPoolProfiles.minCount),
+    mode=tostring(agentPoolProfiles.mode)
+"""
+
+# VM SKU to quota family lookup table (covers 20+ common SKUs)
+_VM_SKU_TO_QUOTA_FAMILY: Dict[str, str] = {
+    # D-series v3
+    "Standard_D2s_v3": "standardDSv3Family",
+    "Standard_D4s_v3": "standardDSv3Family",
+    "Standard_D8s_v3": "standardDSv3Family",
+    "Standard_D16s_v3": "standardDSv3Family",
+    "Standard_D32s_v3": "standardDSv3Family",
+    # D-series v4
+    "Standard_D2s_v4": "standardDSv4Family",
+    "Standard_D4s_v4": "standardDSv4Family",
+    "Standard_D8s_v4": "standardDSv4Family",
+    # D-series v5
+    "Standard_D2s_v5": "standardDSv5Family",
+    "Standard_D4s_v5": "standardDSv5Family",
+    "Standard_D8s_v5": "standardDSv5Family",
+    # E-series v3
+    "Standard_E2s_v3": "standardESv3Family",
+    "Standard_E4s_v3": "standardESv3Family",
+    "Standard_E8s_v3": "standardESv3Family",
+    "Standard_E16s_v3": "standardESv3Family",
+    # E-series v5
+    "Standard_E4s_v5": "standardESv5Family",
+    "Standard_E8s_v5": "standardESv5Family",
+    # F-series
+    "Standard_F4s_v2": "standardFSv2Family",
+    "Standard_F8s_v2": "standardFSv2Family",
+    "Standard_F16s_v2": "standardFSv2Family",
+    # B-series
+    "Standard_B2s": "standardBSFamily",
+    "Standard_B4ms": "standardBSFamily",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -535,9 +595,71 @@ class CapacityPlannerClient:
             }
 
 
-# ---------------------------------------------------------------------------
-# Standalone functions (for agent tool wiring)
-# ---------------------------------------------------------------------------
+    def get_aks_node_quota_headroom(self) -> Dict[str, Any]:
+        """Fetch AKS node pool headroom via ARG bulk query.
+
+        Returns:
+            Dict with clusters list, subscription_id, generated_at, duration_ms.
+            Never raises — returns error dict on failure.
+        """
+        start_time = time.monotonic()
+
+        try:
+            if ResourceGraphClient is None or QueryRequest is None:
+                return {
+                    "error": f"resourcegraph SDK unavailable: {_ARG_IMPORT_ERROR}",
+                    "clusters": [],
+                    "subscription_id": self.subscription_id,
+                    "duration_ms": round((time.monotonic() - start_time) * 1000, 1),
+                }
+
+            arg_client = ResourceGraphClient(self.credential)
+            request = QueryRequest(subscriptions=[self.subscription_id], query=ARG_AKS_QUERY)
+            result = arg_client.resources(request)
+            rows = result.data if result.data else []
+
+            clusters: List[Dict[str, Any]] = []
+            for row in rows:
+                vm_size = row.get("vmSize", "")
+                quota_family = _VM_SKU_TO_QUOTA_FAMILY.get(vm_size, "unknown")
+                current_nodes = row.get("currentNodes") or 0
+                max_nodes_raw = row.get("maxNodes")
+                max_autoscale = max_nodes_raw if max_nodes_raw and max_nodes_raw > 0 else 1000
+                nodes_available = max_autoscale - current_nodes
+                usage_pct = round(current_nodes / max(1, max_autoscale) * 100, 2)
+                traffic_light = _traffic_light(usage_pct, None)
+
+                clusters.append({
+                    "cluster_name": row.get("clusterName", ""),
+                    "resource_group": row.get("resourceGroup", ""),
+                    "location": row.get("location", ""),
+                    "pool_name": row.get("poolName", ""),
+                    "vm_size": vm_size,
+                    "quota_family": quota_family,
+                    "current_nodes": current_nodes,
+                    "max_nodes": max_autoscale,
+                    "available_nodes": max(0, nodes_available),
+                    "usage_pct": usage_pct,
+                    "traffic_light": traffic_light,
+                })
+
+            return {
+                "clusters": clusters,
+                "subscription_id": self.subscription_id,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": round((time.monotonic() - start_time) * 1000, 1),
+            }
+
+        except Exception as exc:
+            logger.warning("capacity_planner: get_aks_node_quota_headroom error | error=%s", exc)
+            return {
+                "error": str(exc),
+                "clusters": [],
+                "subscription_id": self.subscription_id,
+                "duration_ms": round((time.monotonic() - start_time) * 1000, 1),
+            }
+
+
 
 def get_subscription_quota_headroom(
     subscription_id: str,
@@ -572,6 +694,22 @@ def get_ip_address_space_headroom(
         subscription_id=subscription_id,
     )
     return client.get_ip_address_space_headroom()
+
+
+def get_aks_node_quota_headroom(
+    subscription_id: str,
+    credential: Any,
+) -> Dict[str, Any]:
+    """Standalone wrapper for CapacityPlannerClient.get_aks_node_quota_headroom.
+
+    Used by AKS agent tools.
+    """
+    client = CapacityPlannerClient(
+        cosmos_client=None,
+        credential=credential,
+        subscription_id=subscription_id,
+    )
+    return client.get_aks_node_quota_headroom()
 
 
 # ---------------------------------------------------------------------------
