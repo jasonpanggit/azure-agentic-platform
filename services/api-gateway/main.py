@@ -134,6 +134,7 @@ from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
 from services.api_gateway.admin_endpoints import router as admin_router
 from services.api_gateway.compliance_endpoints import router as compliance_router
+from services.api_gateway.capacity_endpoints import router as capacity_router
 from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
@@ -710,6 +711,7 @@ app.include_router(vmss_router)
 app.include_router(aks_router)
 app.include_router(admin_router)
 app.include_router(compliance_router)
+app.include_router(capacity_router)
 app.include_router(sla_router)
 app.include_router(admin_sla_router)
 app.include_router(push_router)
