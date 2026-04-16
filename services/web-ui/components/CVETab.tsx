@@ -27,6 +27,8 @@ interface CVETabProps {
   subscriptionId: string
   resourceGroup: string
   getAccessToken: () => Promise<string | null>
+  vmType?: string        // 'Arc VM' | 'Azure VM'
+  powerState?: string    // 'running' | 'deallocated' | 'disconnected' | ...
 }
 
 // ── Badge helpers ─────────────────────────────────────────────────────────────
@@ -91,7 +93,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── CVETab ────────────────────────────────────────────────────────────────────
 
-export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken }: CVETabProps) {
+export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, vmType, powerState }: CVETabProps) {
   const [cves, setCves] = useState<readonly CVERecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -242,11 +244,26 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken }
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-8 text-center">
+        <div className="py-8 text-center space-y-2 px-4">
           <CheckCircle className="h-6 w-6 mx-auto mb-2" style={{ color: 'var(--accent-green)' }} />
           <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
             {cves.length === 0 ? 'No CVEs found for this VM' : 'No CVEs match the current filters'}
           </p>
+          {cves.length === 0 && vmType === 'Arc VM' && (powerState === 'disconnected' || powerState === 'Disconnected') && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              This Arc VM is <strong>disconnected</strong> — Azure Update Manager cannot run a patch assessment while the machine is offline. Reconnect the Arc agent (<code className="font-mono">azcmagent connect</code>) and trigger an assessment to populate CVE data.
+            </p>
+          )}
+          {cves.length === 0 && vmType === 'Arc VM' && powerState !== 'disconnected' && powerState !== 'Disconnected' && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              No patch assessment data found for this Arc VM. Trigger an assessment via Azure Update Manager or run <code className="font-mono">azcmagent check</code> on the machine.
+            </p>
+          )}
+          {cves.length === 0 && vmType !== 'Arc VM' && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              No pending or installed patches found. Ensure Azure Update Manager has run a patch assessment on this VM.
+            </p>
+          )}
         </div>
       ) : (
         /* CVE table */

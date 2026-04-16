@@ -1579,6 +1579,8 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                 subscriptionId={vm.subscription_id ?? ''}
                 resourceGroup={vm.resource_group ?? ''}
                 getAccessToken={getAccessToken}
+                vmType={vm.vm_type}
+                powerState={vm.power_state}
               />
             )}
             {activeTab === 'cves' && !vm && (
