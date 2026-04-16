@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestFoundryClientEndpointResolution:
-    """Tests for _get_foundry_project / _get_foundry_client env var resolution."""
+    """Tests for _get_agents_client / _get_foundry_client env var resolution."""
 
     def test_azure_project_endpoint_takes_precedence(self):
         """AZURE_PROJECT_ENDPOINT is preferred over FOUNDRY_ACCOUNT_ENDPOINT."""
@@ -15,11 +15,10 @@ class TestFoundryClientEndpointResolution:
                 "FOUNDRY_ACCOUNT_ENDPOINT": "https://fallback.cognitiveservices.azure.com/",
             },
         ), patch(
-            "services.api_gateway.foundry.AIProjectClient"
+            "services.api_gateway.foundry.AzureAgentsClient"
         ) as mock_client_cls, patch(
             "services.api_gateway.foundry.DefaultAzureCredential"
         ):
-            mock_client_cls.return_value.agents = MagicMock()
             from services.api_gateway.foundry import _get_foundry_client
 
             _get_foundry_client()
@@ -34,12 +33,11 @@ class TestFoundryClientEndpointResolution:
             {"FOUNDRY_ACCOUNT_ENDPOINT": "https://fallback.cognitiveservices.azure.com/"},
             clear=False,
         ), patch(
-            "services.api_gateway.foundry.AIProjectClient"
+            "services.api_gateway.foundry.AzureAgentsClient"
         ) as mock_client_cls, patch(
             "services.api_gateway.foundry.DefaultAzureCredential"
         ):
             os.environ.pop("AZURE_PROJECT_ENDPOINT", None)
-            mock_client_cls.return_value.agents = MagicMock()
 
             from services.api_gateway.foundry import _get_foundry_client
 
