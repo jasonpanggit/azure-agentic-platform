@@ -1,6 +1,9 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
+import { useMsal } from '@azure/msal-react'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { gatewayTokenRequest } from '@/lib/msal-config'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -80,12 +83,27 @@ interface CreateTenantModalProps {
 }
 
 function CreateTenantModal({ open, onClose, onCreated }: CreateTenantModalProps) {
+  const { instance, accounts } = useMsal()
   const [name, setName] = useState('')
   const [operatorGroupId, setOperatorGroupId] = useState('')
   const [subscriptionsRaw, setSubscriptionsRaw] = useState('')
   const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const account = accounts[0]
+    if (!account) return null
+    try {
+      const result = await instance.acquireTokenSilent({ ...gatewayTokenRequest, account })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({ ...gatewayTokenRequest, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
 
   function reset() {
     setName('')
@@ -119,9 +137,13 @@ function CreateTenantModal({ open, onClose, onCreated }: CreateTenantModalProps)
         sla_definitions: [],
       }
 
+      const token = await getAccessToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/proxy/admin/tenants', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       })
 
@@ -334,16 +356,34 @@ function EditSubscriptionsInline({ tenant, onSaved }: EditSubscriptionsProps) {
 // ---------------------------------------------------------------------------
 
 export function TenantAdminTab() {
+  const { instance, accounts } = useMsal()
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const account = accounts[0]
+    if (!account) return null
+    try {
+      const result = await instance.acquireTokenSilent({ ...gatewayTokenRequest, account })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({ ...gatewayTokenRequest, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/proxy/admin/tenants')
+      const token = await getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch('/api/proxy/admin/tenants', { headers })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data?.error ?? `HTTP ${res.status}`)
@@ -355,7 +395,7 @@ export function TenantAdminTab() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [getAccessToken])
 
   useEffect(() => {
     void load()

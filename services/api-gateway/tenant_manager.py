@@ -163,8 +163,8 @@ class TenantManager:
             )
             return tenants
         except Exception as exc:
-            logger.warning("tenant_manager: list_tenants failed (non-fatal) | error=%s", exc)
-            return []
+            logger.error("tenant_manager: list_tenants failed | error=%s", exc)
+            raise
 
     async def create_tenant(self, tenant: Tenant) -> Tenant:
         """Insert a new tenant record into PostgreSQL.
@@ -212,11 +212,11 @@ class TenantManager:
             )
             return created
         except Exception as exc:
-            logger.warning(
-                "tenant_manager: create_tenant failed (non-fatal) | name=%s error=%s",
+            logger.error(
+                "tenant_manager: create_tenant failed | name=%s error=%s",
                 tenant.name, exc,
             )
-            return tenant
+            raise
 
     async def update_subscriptions(self, tenant_id: str, subscriptions: list[str]) -> Optional[Tenant]:
         """Update the subscription list for a tenant.
