@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -25,9 +25,10 @@ import { CapacityTab } from './CapacityTab'
 import { SecurityPostureTab } from './SecurityPostureTab'
 import { DriftTab } from './DriftTab'
 import { DeploymentTab } from './DeploymentTab'
+import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -77,6 +78,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'runbooks',         label: 'Runbooks',        Icon: BookOpen },
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
+    { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
   ],
   // Config
   [
@@ -342,6 +344,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-deployments" role="tabpanel" aria-labelledby="tab-deployments" hidden={activeTab !== 'deployments'}>
           {activeTab === 'deployments' && <DeploymentTab resourceGroup={undefined} />}
+        </div>
+
+        <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
+          {activeTab === 'quality' && <QualityFlywheelTab />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>

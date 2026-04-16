@@ -449,6 +449,88 @@ async def get_chat_result(
 
 
 # ---------------------------------------------------------------------------
+# Parallel investigation SSE helpers (Phase 61)
+# ---------------------------------------------------------------------------
+
+
+def build_fan_out_sse_event(domains: list[str], investigation_id: str) -> str:
+    """Build an SSE ``fan_out`` event payload.
+
+    Emitted as soon as the orchestrator detects a multi-domain incident and
+    begins parallel fan-out. Clients should render per-agent progress spinners.
+
+    Args:
+        domains: Domain names being dispatched (e.g. ["compute", "network"]).
+        investigation_id: Unique ID for this parallel investigation run.
+
+    Returns:
+        SSE-formatted string ready to write to a streaming response.
+    """
+    payload = json.dumps({
+        "type": "fan_out",
+        "domains": domains,
+        "investigation_id": investigation_id,
+    })
+    return f"event: fan_out\ndata: {payload}\n\n"
+
+
+def build_domain_result_sse_event(
+    domain: str,
+    status: str,
+    duration_ms: int,
+    investigation_id: str,
+) -> str:
+    """Build an SSE ``domain_result`` event payload.
+
+    Emitted when a single domain agent completes its investigation leg.
+
+    Args:
+        domain: Domain name (e.g. "compute").
+        status: "completed" | "error" | "timeout".
+        duration_ms: Time taken by this domain leg in milliseconds.
+        investigation_id: Parent investigation run ID.
+
+    Returns:
+        SSE-formatted string.
+    """
+    payload = json.dumps({
+        "type": "domain_result",
+        "domain": domain,
+        "status": status,
+        "duration_ms": duration_ms,
+        "investigation_id": investigation_id,
+    })
+    return f"event: domain_result\ndata: {payload}\n\n"
+
+
+def build_synthesis_sse_event(
+    finding: str,
+    hypotheses: list[dict],
+    investigation_id: str,
+) -> str:
+    """Build an SSE ``synthesis`` event payload.
+
+    Emitted when all domain agents complete and the orchestrator has produced
+    a unified root-cause narrative.
+
+    Args:
+        finding: Plain-text synthesis / root-cause narrative.
+        hypotheses: Ranked hypothesis list from correlate_multi_domain.
+        investigation_id: Parent investigation run ID.
+
+    Returns:
+        SSE-formatted string.
+    """
+    payload = json.dumps({
+        "type": "synthesis",
+        "finding": finding,
+        "hypotheses": hypotheses,
+        "investigation_id": investigation_id,
+    })
+    return f"event: synthesis\ndata: {payload}\n\n"
+
+
+# ---------------------------------------------------------------------------
 # Legacy helpers — kept for backward-compat with approvals and Teams bot
 # These used the old threads/runs pattern. They are no longer called by
 # the main chat flow but may still be referenced by other modules.
