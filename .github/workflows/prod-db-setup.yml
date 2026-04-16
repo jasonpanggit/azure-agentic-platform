@@ -70,11 +70,6 @@ jobs:
             fi
           done
 
-      - name: Install PostgreSQL Client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
-
       - name: Run Migrations
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
