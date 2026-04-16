@@ -352,6 +352,16 @@ def _classify_domain(message: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Conversation history — keyed by thread/response ID so multi-turn chat
+# replays prior messages and maintains context across requests.
+# Limited to 20 turns (user+assistant pairs) to cap token usage.
+# ---------------------------------------------------------------------------
+
+_CONVERSATION_HISTORY: dict[str, list[dict[str, str]]] = {}
+_CONVERSATION_HISTORY_LIMIT = 20  # max turns (user+assistant pairs)
+
+
+# ---------------------------------------------------------------------------
 # Chat dispatch (operator → orchestrator, with thread continuity)
 # ---------------------------------------------------------------------------
 
@@ -369,10 +379,9 @@ async def dispatch_chat_to_orchestrator(
 
     Fast path (single LLM call):
     1. Keyword classify the message → domain agent (no LLM routing call)
-    2. Domain agent chat.completions → reply
-
-    Agent instructions are cached after first fetch — subsequent requests skip
-    the list_versions() API calls entirely.
+    2. Replay prior turns from _CONVERSATION_HISTORY (keyed by conversation_id)
+    3. Domain agent chat.completions → reply
+    4. Append new turn to history for next request
 
     Returns:
         Dict with "response_id", "thread_id", "run_id", "status", and "reply" keys.
@@ -386,27 +395,24 @@ async def dispatch_chat_to_orchestrator(
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
     logger.info("Keyword-routed to: %s", domain_agent_name)
 
-    # Load domain-specific system prompt from local map — no Foundry API call needed.
-    # list_versions() does not reliably filter by agent name and causes cross-domain
-    # instruction contamination (e.g. storage prompt returned for compute queries).
     domain_model, domain_instructions = _get_domain_instructions(domain_agent_tool)
-
-    # Use the account-level endpoint (cognitiveservices.azure.com) for chat.completions.
-    # The project-scoped endpoint (services.ai.azure.com/api/projects/...) returns HTTP 500
-    # on every responses.create() call — this is a known Foundry Preview issue.
     openai_client = _get_openai_client()
+
+    # Build messages list: system prompt + prior history + current user message
+    prior_history = _CONVERSATION_HISTORY.get(conversation_id, []) if conversation_id else []
+    messages: list[dict[str, str]] = [{"role": "system", "content": domain_instructions}]
+    messages.extend(prior_history)
+    messages.append({"role": "user", "content": message})
 
     with foundry_span("chat_completions_domain") as span:
         span.set_attribute("agent.name", domain_agent_name)
         span.set_attribute("foundry.routed_to", domain_agent_name)
+        span.set_attribute("chat.history_turns", len(prior_history) // 2)
         domain_resp = await loop.run_in_executor(
             None,
             lambda: openai_client.chat.completions.create(
                 model=domain_model,
-                messages=[
-                    {"role": "system", "content": domain_instructions},
-                    {"role": "user", "content": message},
-                ],
+                messages=messages,
                 max_tokens=1024,
             ),
         )
@@ -414,15 +420,29 @@ async def dispatch_chat_to_orchestrator(
     reply = domain_resp.choices[0].message.content
     response_id = f"chat-{uuid.uuid4().hex[:16]}"
 
+    # Persist this turn into conversation history so the next request has context.
+    # Use conversation_id for continuation, response_id for new threads.
+    history_key = conversation_id or response_id
+    history = list(_CONVERSATION_HISTORY.get(history_key, []))
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": reply or ""})
+    # Trim to limit: keep newest N pairs (2 messages per pair)
+    max_messages = _CONVERSATION_HISTORY_LIMIT * 2
+    if len(history) > max_messages:
+        history = history[-max_messages:]
+    _CONVERSATION_HISTORY[history_key] = history
+
     logger.info(
-        "Chat complete (agent=%s, reply_len=%d)",
+        "Chat complete (agent=%s, reply_len=%d, history_turns=%d, key=%s)",
         domain_agent_name,
         len(reply) if reply else 0,
+        len(history) // 2,
+        history_key,
     )
 
     return {
         "response_id": response_id,
-        "thread_id": response_id,
+        "thread_id": history_key,
         "run_id": response_id,
         "status": "completed",
         "reply": reply,
