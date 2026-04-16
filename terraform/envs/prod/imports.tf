@@ -1,3 +1,12 @@
+# --- gpt-4.1 deployment import (deployed manually 2026-04-17) ---
+# gpt-4.1 GlobalStandard deployment was created manually to support agent definitions
+# that reference gpt-4.1. Import to bring under Terraform management.
+
+import {
+  to = module.foundry.azurerm_cognitive_deployment.gpt41
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/aap-foundry-prod/deployments/gpt-4.1"
+}
+
 # --- NAT Gateway Public IP + Association imports ---
 # pip-nat-acr-agent-pool-prod and its NAT gateway association already exist in Azure
 # but are not in Terraform state. Import to avoid "resource already exists" error.

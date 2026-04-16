@@ -44,6 +44,29 @@ resource "azurerm_cognitive_deployment" "gpt4o" {
   }
 }
 
+# gpt-4.1 deployment — required by all agent definitions (orchestrator, domain agents)
+# Deployed manually 2026-04-17; managed here to prevent drift.
+resource "azurerm_cognitive_deployment" "gpt41" {
+  name                 = "gpt-4.1"
+  cognitive_account_id = azurerm_cognitive_account.foundry.id
+
+  model {
+    format  = "OpenAI"
+    name    = "gpt-4.1"
+    version = "2025-04-14"
+  }
+
+  sku {
+    name     = "GlobalStandard"
+    capacity = 100
+  }
+
+  lifecycle {
+    # Prevent re-provisioning on capacity drift — capacity is set via Azure Portal quota
+    ignore_changes = [sku]
+  }
+}
+
 # Diagnostic settings for Foundry account
 resource "azurerm_monitor_diagnostic_setting" "foundry" {
   name                       = "diag-foundry-${var.environment}"
