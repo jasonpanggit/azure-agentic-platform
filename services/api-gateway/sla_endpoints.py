@@ -28,9 +28,12 @@ from services.api_gateway.runbook_rag import resolve_postgres_dsn
 
 # Azure Resource Health SDK — guarded import for environments without azure-mgmt-resourcehealth
 try:
-    from azure.mgmt.resourcehealth import ResourceHealthClient  # type: ignore[import]
+    from azure.mgmt.resourcehealth import ResourceHealthMgmtClient as ResourceHealthClient  # type: ignore[import]
 except ImportError:
-    ResourceHealthClient = None  # type: ignore[assignment,misc]
+    try:
+        from azure.mgmt.resourcehealth import MicrosoftResourceHealth as ResourceHealthClient  # type: ignore[import,no-redef]
+    except ImportError:
+        ResourceHealthClient = None  # type: ignore[assignment,misc]
 
 try:
     from azure.identity import DefaultAzureCredential  # type: ignore[import]
