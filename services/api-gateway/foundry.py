@@ -136,7 +136,7 @@ async def dispatch_to_orchestrator(
         Dict with "response_id" and "status" keys.
     """
     orchestrator_agent_name = os.environ.get(
-        "ORCHESTRATOR_AGENT_NAME", "aap-orchestrator"
+        "ORCHESTRATOR_AGENT_NAME", "orchestrator-agent"
     )
 
     openai_client = _get_openai_client(_get_foundry_project(credential))
