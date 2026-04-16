@@ -291,6 +291,38 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
     window.addEventListener('mouseup', onMouseUp)
   }, [panelWidth])
 
+  // ── Drag-to-reposition state ─────────────────────────────────────────────
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const reposDragState = useRef({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 })
+
+  const handleHeaderMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    reposDragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: position?.x ?? 0,
+      originY: position?.y ?? 0,
+    }
+  }, [position])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!reposDragState.current.isDragging) return
+      const dx = e.clientX - reposDragState.current.startX
+      const dy = e.clientY - reposDragState.current.startY
+      setPosition({ x: reposDragState.current.originX + dx, y: reposDragState.current.originY + dy })
+    }
+    const onMouseUp = () => { reposDragState.current.isDragging = false }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
   // ── Diagnostic settings state ────────────────────────────────────────────
   const [diagConfigured, setDiagConfigured] = useState<boolean | null>(null)
   const [diagAmaInstalled, setDiagAmaInstalled] = useState<boolean | null>(null)
@@ -720,6 +752,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         background: 'var(--bg-surface)',
         borderLeft: '1px solid var(--border)',
         boxShadow: '-4px 0 24px rgba(0,0,0,0.2)',
+        transform: position ? `translate(${position.x}px, ${position.y}px)` : undefined,
       }}
     >
       {/* Drag-to-resize handle */}
@@ -735,10 +768,11 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         />
       </div>
 
-      {/* Header */}
+      {/* Header — drag handle */}
       <div
-        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        className="flex items-center justify-between px-4 py-3 flex-shrink-0 select-none"
+        style={{ borderBottom: '1px solid var(--border)', cursor: 'grab' }}
+        onMouseDown={handleHeaderMouseDown}
       >
         <div className="flex items-center gap-2 min-w-0">
           <Activity className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--accent-blue)' }} />
@@ -750,6 +784,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
         <div className="flex items-center gap-2">
           <button
             onClick={() => { fetchVM(); fetchEvidence() }}
+            onMouseDown={(e) => e.stopPropagation()}
             className="p-1.5 rounded cursor-pointer transition-colors"
             style={{ color: 'var(--text-secondary)' }}
             title="Refresh"
@@ -758,6 +793,7 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
           </button>
           <button
             onClick={onClose}
+            onMouseDown={(e) => e.stopPropagation()}
             className="p-1.5 rounded cursor-pointer transition-colors"
             style={{ color: 'var(--text-secondary)' }}
             title="Close"

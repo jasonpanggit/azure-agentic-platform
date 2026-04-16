@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useResizable } from '@/lib/use-resizable';
 import { X, Users, Zap, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
  *
  * On unmount: closes SSE connection, clears heartbeat interval.
  */
-export function WarRoomPanel({ incidentId, incidentTitle, onClose }: WarRoomPanelProps) {
+export function WarRoomDetailPanel({ incidentId, incidentTitle, onClose }: WarRoomPanelProps) {
   const [state, setState] = useState<WarRoomState>({
     participants: [],
     annotations: [],
@@ -190,17 +191,60 @@ export function WarRoomPanel({ incidentId, incidentTitle, onClose }: WarRoomPane
     }
   }
 
+    // Panel resize
+  const { width: panelWidth, onMouseDown: resizeOnMouseDown } = useResizable({
+    minWidth: 380,
+    maxWidth: 900,
+    defaultWidth: 480,
+    storageKey: 'war-room-panel-width',
+  })
+
+  // Drag-to-reposition
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const reposDragState = useRef({ isDragging: false, startX: 0, startY: 0, originX: 0, originY: 0 })
+
+  const handleHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    reposDragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: position?.x ?? 0,
+      originY: position?.y ?? 0,
+    }
+  }, [position])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!reposDragState.current.isDragging) return
+      const dx = e.clientX - reposDragState.current.startX
+      const dy = e.clientY - reposDragState.current.startY
+      setPosition({ x: reposDragState.current.originX + dx, y: reposDragState.current.originY + dy })
+    }
+    const onMouseUp = () => { reposDragState.current.isDragging = false }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
   return (
     <div
-      className="fixed inset-y-0 right-0 z-50 flex flex-col w-[480px] max-w-full shadow-2xl"
-      style={{ background: 'var(--bg-canvas)', borderLeft: '1px solid var(--border)' }}
+      className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden shadow-2xl"
+      style={{ width: `${panelWidth}px`, background: 'var(--bg-canvas)', borderLeft: '1px solid var(--border)', transform: position ? `translate(${position.x}px, ${position.y}px)` : undefined }}
       role="dialog"
       aria-label={`War Room — ${incidentTitle ?? incidentId}`}
     >
-      {/* Header */}
+      {/* Resize handle */}
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 z-10 cursor-col-resize hover:bg-primary/20 transition-colors" onMouseDown={resizeOnMouseDown} />
+      {/* Header — drag handle */}
       <div
-        className="flex items-center gap-3 px-4 py-3 shrink-0"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        className="flex items-center gap-3 px-4 py-3 shrink-0 select-none"
+        style={{ borderBottom: '1px solid var(--border)', cursor: 'grab' }}
+        onMouseDown={handleHeaderMouseDown}
       >
         <Zap className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-red)' }} />
         <div className="flex-1 min-w-0">
@@ -217,7 +261,7 @@ export function WarRoomPanel({ incidentId, incidentTitle, onClose }: WarRoomPane
             className="shrink-0"
           />
         )}
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close war room">
+        <Button variant="ghost" size="icon" onClick={onClose} onMouseDown={(e) => e.stopPropagation()} aria-label="Close war room">
           <X className="w-4 h-4" />
         </Button>
       </div>
