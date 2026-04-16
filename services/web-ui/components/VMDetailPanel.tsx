@@ -6,6 +6,7 @@ import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
 import { CveBadges } from './CveDetailDialog'
+import { CVETab } from './CVETab'
 import type {
   VMDetail,
   ActiveIncident,
@@ -20,7 +21,7 @@ const PANEL_MIN_WIDTH = 380
 const PANEL_MAX_WIDTH = 1200
 const PANEL_DEFAULT_WIDTH = 480
 
-type DetailTab = 'overview' | 'metrics' | 'evidence' | 'patches' | 'chat'
+type DetailTab = 'overview' | 'metrics' | 'evidence' | 'patches' | 'cves' | 'chat'
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,7 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
   { id: 'metrics',  label: 'Metrics' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'patches',  label: 'Patches' },
+  { id: 'cves',     label: 'CVEs' },
   { id: 'chat',     label: 'AI Chat' },
 ]
 
@@ -1531,6 +1533,21 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
                     </div>
                   )
                 )}
+              </div>
+            )}
+
+            {/* ── CVEs tab ──────────────────────────────────────────── */}
+            {activeTab === 'cves' && vm && (
+              <CVETab
+                vmName={vm.name ?? resourceName ?? ''}
+                subscriptionId={vm.subscription_id ?? ''}
+                resourceGroup={vm.resource_group ?? ''}
+                getAccessToken={getAccessToken}
+              />
+            )}
+            {activeTab === 'cves' && !vm && (
+              <div className="p-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                VM details unavailable — cannot load CVE data.
               </div>
             )}
 

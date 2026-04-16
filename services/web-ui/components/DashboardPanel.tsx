@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2 } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -26,9 +26,10 @@ import { SecurityPostureTab } from './SecurityPostureTab'
 import { DriftTab } from './DriftTab'
 import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
+import { TenantAdminTab } from './TenantAdminTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
 
 interface FilterState {
   severity?: string
@@ -83,6 +84,7 @@ const TAB_GROUPS: TabDef[][] = [
   // Config
   [
     { id: 'settings',    label: 'Settings',    Icon: Settings },
+    { id: 'admin',       label: 'Admin',       Icon: Building2 },
   ],
 ]
 
@@ -352,6 +354,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
           <SettingsTab />
+        </div>
+
+        <div id="tabpanel-admin" role="tabpanel" aria-labelledby="tab-admin" hidden={activeTab !== 'admin'}>
+          {activeTab === 'admin' && <TenantAdminTab />}
         </div>
       </div>
 

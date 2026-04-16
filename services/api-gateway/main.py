@@ -136,6 +136,7 @@ from services.api_gateway.admin_endpoints import router as admin_router
 from services.api_gateway.compliance_endpoints import router as compliance_router
 from services.api_gateway.capacity_endpoints import router as capacity_router
 from services.api_gateway.security_posture_endpoints import router as security_posture_router
+from services.api_gateway.cve_endpoints import router as cve_router
 from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
@@ -156,6 +157,8 @@ from services.api_gateway.drift_endpoints import router as drift_router
 from services.api_gateway.deployment_endpoints import router as deployment_router
 from services.api_gateway.quality_endpoints import router as quality_router
 from services.api_gateway.runbook_executor_endpoints import router as runbook_executor_router
+from services.api_gateway.tenant_endpoints import router as tenant_router
+from services.api_gateway.tenant_manager import TenantManager
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -633,6 +636,16 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("startup: suggestion sweep loop not started (COSMOS_ENDPOINT not set)")
 
+    # Initialize TenantManager (Phase 64 — multi-tenant gateway)
+    try:
+        from services.api_gateway.runbook_rag import resolve_postgres_dsn, RunbookSearchUnavailableError
+        _tenant_dsn = resolve_postgres_dsn()
+        app.state.tenant_manager = TenantManager(postgres_dsn=_tenant_dsn)
+        logger.info("startup: TenantManager initialized")
+    except Exception as _tm_exc:
+        app.state.tenant_manager = TenantManager(postgres_dsn=None)
+        logger.warning("startup: TenantManager initialized without DB (non-fatal) | error=%s", _tm_exc)
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -718,6 +731,7 @@ app.include_router(admin_router)
 app.include_router(compliance_router)
 app.include_router(capacity_router)
 app.include_router(security_posture_router)
+app.include_router(cve_router)
 app.include_router(sla_router)
 app.include_router(admin_sla_router)
 app.include_router(push_router)
@@ -725,6 +739,7 @@ app.include_router(drift_router)
 app.include_router(deployment_router)
 app.include_router(quality_router)
 app.include_router(runbook_executor_router)
+app.include_router(tenant_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
