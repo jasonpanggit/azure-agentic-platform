@@ -95,6 +95,18 @@ def _get_agents_client(credential: Optional[DefaultAzureCredential] = None):
     return AzureAgentsClient(endpoint=endpoint, credential=credential)
 
 
+def _get_openai_client(project=None):
+    """Get the OpenAI-compatible client from AIProjectClient for Responses API.
+
+    The Responses API (openai_client.responses.create) is the only path that
+    works reliably when the Foundry Agent Service threads/runs backend has
+    a broken capability host (ServiceInvocationException on every threads call).
+    """
+    if project is None:
+        project = _get_foundry_project()
+    return project.get_openai_client()
+
+
 def _get_foundry_client(credential: Optional[DefaultAzureCredential] = None):
     """Return an azure.ai.agents.AgentsClient for thread/message/run operations.
 
@@ -187,94 +199,84 @@ async def dispatch_chat_to_orchestrator(
     credential: Optional[DefaultAzureCredential] = None,
     conversation_id: Optional[str] = None,
 ) -> dict[str, str]:
-    """Dispatch an operator chat message to the Orchestrator.
+    """Dispatch an operator chat message to the Orchestrator via the Responses API.
 
-    If conversation_id (thread_id) is provided, continues the existing thread.
-    Otherwise creates a new thread.
+    Uses the Responses API (openai_client.responses.create) — the only path
+    that works when the Foundry Agent Service threads/runs backend returns
+    ServiceInvocationException (broken capability host state after re-provisioning).
 
-    Uses create_and_process_run for blocking execution — waits until the agent
-    completes and returns the reply text.
+    The Responses API is synchronous — it blocks until the agent produces a reply,
+    so the caller gets the final answer in one round trip with no polling.
+
+    Args:
+        message: The operator's chat message (plain text or JSON envelope).
+        credential: Optional pre-initialized credential.
+        conversation_id: Optional conversation/thread ID for continuity context.
 
     Returns:
-        Dict with "thread_id", "run_id", "status", and "reply" keys.
+        Dict with "response_id", "thread_id", "run_id", "status", and "reply" keys.
+        reply is the agent's text output, or None if the response was empty.
     """
-    orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID")
-    if not orchestrator_agent_id:
-        raise ValueError("ORCHESTRATOR_AGENT_ID environment variable is required.")
+    orchestrator_agent_name = os.environ.get(
+        "ORCHESTRATOR_AGENT_NAME", "aap-orchestrator-agent"
+    )
+
+    project = _get_foundry_project(credential)
+    openai_client = _get_openai_client(project)
 
     loop = asyncio.get_running_loop()
-    agents = _get_agents_client(credential)
 
-    with foundry_span("agents_chat_dispatch") as span:
-        # Get or create thread
+    def _call_responses():
+        kwargs: dict = {
+            "input": message,
+            "extra_body": {
+                "agent_reference": {
+                    "name": orchestrator_agent_name,
+                    "type": "agent_reference",
+                }
+            },
+        }
         if conversation_id:
-            thread_id = conversation_id
-            logger.debug("dispatch_chat: continuing thread %s", thread_id)
-        else:
-            thread = await loop.run_in_executor(None, agents.threads.create)
-            thread_id = thread.id
-            logger.debug("dispatch_chat: created new thread %s", thread_id)
+            kwargs["extra_body"]["conversation_id"] = conversation_id
+        return openai_client.responses.create(**kwargs)
 
-        # Post the user message
-        await loop.run_in_executor(
-            None,
-            lambda: agents.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=message,
-            ),
-        )
+    with foundry_span("responses_create_chat") as span:
+        response = await loop.run_in_executor(None, _call_responses)
+        span.set_attribute("foundry.response_id", response.id)
+        span.set_attribute("agent.name", orchestrator_agent_name)
 
-        # Run to completion (blocking)
-        run = await loop.run_in_executor(
-            None,
-            lambda: agents.runs.create_and_process(
-                thread_id=thread_id,
-                agent_id=orchestrator_agent_id,
-            ),
-        )
-
-        span.set_attribute("foundry.thread_id", thread_id)
-        span.set_attribute("foundry.run_id", run.id)
-        span.set_attribute("foundry.run_status", run.status)
-
-    # Extract the latest assistant message as the reply
+    # Extract text reply from response output
     reply: Optional[str] = None
     try:
-        messages = await loop.run_in_executor(
-            None,
-            lambda: list(agents.messages.list(thread_id=thread_id)),
-        )
-        # Messages are newest-first; find the first assistant message
-        for msg in messages:
-            role = getattr(msg, "role", None)
-            if role == "assistant":
-                content = getattr(msg, "content", [])
-                if isinstance(content, list):
-                    for block in content:
-                        text = getattr(block, "text", None)
-                        if text:
-                            reply = getattr(text, "value", None) or str(text)
+        output = response.output
+        if output:
+            for block in output:
+                if hasattr(block, "content"):
+                    for item in block.content:
+                        if hasattr(item, "text"):
+                            reply = item.text
                             break
-                elif isinstance(content, str):
-                    reply = content
-                if reply:
+                elif hasattr(block, "text"):
+                    reply = block.text
+                    break
+                elif isinstance(block, str):
+                    reply = block
                     break
     except Exception as exc:
-        logger.warning("Could not extract reply from thread messages: %s", exc)
+        logger.warning("Could not extract reply from response output: %s", exc)
 
     logger.info(
-        "Chat dispatched to Orchestrator (thread %s, run %s, status %s, reply_len %d)",
-        thread_id,
-        run.id,
-        run.status,
+        "Chat dispatched to Orchestrator (response %s, status %s, reply_len %d)",
+        response.id,
+        response.status,
         len(reply) if reply else 0,
     )
 
     return {
-        "thread_id": thread_id,
-        "run_id": run.id,
-        "status": run.status,
+        "response_id": response.id,
+        "thread_id": response.id,  # backward-compat: callers expecting thread_id
+        "run_id": response.id,     # backward-compat: callers expecting run_id
+        "status": response.status,
         "reply": reply,
     }
 
