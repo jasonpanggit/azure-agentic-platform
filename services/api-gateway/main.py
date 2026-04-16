@@ -134,6 +134,7 @@ from services.api_gateway.aks_endpoints import router as aks_router
 from services.api_gateway.subscription_registry import SubscriptionRegistry
 from services.api_gateway.admin_endpoints import router as admin_router
 from services.api_gateway.compliance_endpoints import router as compliance_router
+from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
     add_annotation,
@@ -142,6 +143,8 @@ from services.api_gateway.war_room import (
     register_sse_queue,
     deregister_sse_queue,
 )
+from services.api_gateway.push_notifications import router as push_router
+from services.api_gateway.push_notifications import send_push_to_all
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -302,9 +305,105 @@ async def _run_startup_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_remediation_policies_action_class "
                 "ON remediation_policies (action_class, enabled);"
             )
+            # sla_definitions table (Phase 55 — SLA Dashboard)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS sla_definitions (
+                    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name                    TEXT NOT NULL UNIQUE,
+                    target_availability_pct NUMERIC(6,3) NOT NULL,
+                    covered_resource_ids    TEXT[]          NOT NULL DEFAULT '{}',
+                    measurement_period      TEXT            NOT NULL DEFAULT 'monthly',
+                    customer_name           TEXT,
+                    report_recipients       TEXT[]          NOT NULL DEFAULT '{}',
+                    is_active               BOOLEAN         NOT NULL DEFAULT TRUE,
+                    created_at              TIMESTAMPTZ     NOT NULL DEFAULT now(),
+                    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sla_definitions_active "
+                "ON sla_definitions (is_active);"
+            )
+            # compliance_mappings table (Phase 54 — Compliance Framework Mapping)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS compliance_mappings (
+                    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    finding_type        TEXT NOT NULL,
+                    defender_rule_id    TEXT,
+                    display_name        TEXT NOT NULL,
+                    description         TEXT,
+                    cis_control_id      TEXT,
+                    cis_title           TEXT,
+                    nist_control_id     TEXT,
+                    nist_title          TEXT,
+                    asb_control_id      TEXT,
+                    asb_title           TEXT,
+                    severity            TEXT NOT NULL DEFAULT 'Medium',
+                    remediation_sop_id  UUID,
+                    created_at          TIMESTAMPTZ DEFAULT now(),
+                    updated_at          TIMESTAMPTZ DEFAULT now()
+                );
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_defender_rule_id "
+                "ON compliance_mappings (defender_rule_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_asb "
+                "ON compliance_mappings (asb_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_nist "
+                "ON compliance_mappings (nist_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_cis "
+                "ON compliance_mappings (cis_control_id);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compliance_mappings_finding_type "
+                "ON compliance_mappings (finding_type);"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_mappings_unique_finding "
+                "ON compliance_mappings (finding_type, COALESCE(defender_rule_id, display_name));"
+            )
+            # Seed compliance mappings (idempotent — ON CONFLICT DO NOTHING)
+            # Load seed data from the canonical seed script via importlib (hyphenated filename).
+            try:
+                import importlib.util as _ilu  # noqa: PLC0415
+                import os as _os  # noqa: PLC0415
+                _repo_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))
+                _seed_path = _os.path.join(_repo_root, "scripts", "seed-compliance-mappings.py")
+                _spec = _ilu.spec_from_file_location("seed_compliance_mappings", _seed_path)
+                _seed_mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+                _spec.loader.exec_module(_seed_mod)  # type: ignore[union-attr]
+                _CM = _seed_mod.COMPLIANCE_MAPPINGS
+                _INSERT_SQL = _seed_mod.INSERT_SQL
+                seeded = 0
+                for _row in _CM:
+                    await conn.execute(
+                        _INSERT_SQL,
+                        _row["finding_type"],
+                        _row.get("defender_rule_id"),
+                        _row["display_name"],
+                        _row.get("description"),
+                        _row.get("cis_control_id"),
+                        _row.get("cis_title"),
+                        _row.get("nist_control_id"),
+                        _row.get("nist_title"),
+                        _row.get("asb_control_id"),
+                        _row.get("asb_title"),
+                        _row.get("severity", "Medium"),
+                    )
+                    seeded += 1
+                logger.info("Compliance mappings seeded: %d rows (idempotent)", seeded)
+            except Exception as _seed_exc:  # noqa: BLE001
+                logger.warning("Compliance mappings seed skipped: %s", _seed_exc)
             logger.info(
                 "Startup migrations complete "
-                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions + remediation_policies)"
+                "(pgvector + runbooks + eol_cache + incident_memory + slo_definitions "
+                "+ remediation_policies + sla_definitions + compliance_mappings)"
             )
         finally:
             await conn.close()
@@ -586,6 +685,9 @@ app.include_router(vmss_router)
 app.include_router(aks_router)
 app.include_router(admin_router)
 app.include_router(compliance_router)
+app.include_router(sla_router)
+app.include_router(admin_sla_router)
+app.include_router(push_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
@@ -1020,6 +1122,27 @@ async def ingest_incident(
                 payload.incident_id,
                 exc,
             )
+
+    # Phase 56: Fire-and-forget push notification for P0/P1 incidents
+    if payload.severity in ("Sev0", "P0", "Sev1", "P1"):
+        _push_body = (
+            payload.description[:100]
+            if getattr(payload, "description", None)
+            else "New incident requires attention"
+        )
+        asyncio.ensure_future(
+            send_push_to_all(
+                title=f"{payload.severity} Incident: {payload.title}",
+                body=_push_body,
+                url="/approvals",
+                cosmos_client=cosmos,
+            )
+        )
+        logger.info(
+            "push: fire-and-forget dispatched | incident=%s severity=%s",
+            payload.incident_id,
+            payload.severity,
+        )
 
     return IncidentResponse(
         thread_id=result["thread_id"],

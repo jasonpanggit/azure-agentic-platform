@@ -31,23 +31,53 @@ interface FilterState {
   status?: string
 }
 
-const TABS: { id: TabId; label: string; Icon: React.FC<{ className?: string }> }[] = [
-  { id: 'ops', label: 'Ops', Icon: LayoutDashboard },
-  { id: 'alerts', label: 'Alerts', Icon: Bell },
-  { id: 'audit', label: 'Audit', Icon: ClipboardList },
-  { id: 'topology', label: 'Topology', Icon: Network },
-  { id: 'resources', label: 'Resources', Icon: Server },
-  { id: 'vms', label: 'VMs', Icon: Monitor },
-  { id: 'vmss', label: 'VMSS', Icon: Scaling },
-  { id: 'aks', label: 'AKS', Icon: Container },
-  { id: 'cost', label: 'FinOps', Icon: DollarSign },
-  { id: 'observability', label: 'Observability', Icon: Activity },
-  { id: 'patch', label: 'Patch', Icon: ShieldCheck },
-  { id: 'compliance', label: 'Compliance', Icon: FileCheck },
-  { id: 'runbooks', label: 'Runbooks', Icon: BookOpen },
-  { id: 'sla', label: 'SLA', Icon: BarChart2 },
-  { id: 'settings', label: 'Settings', Icon: Settings },
+interface TabDef {
+  id: TabId
+  label: string
+  Icon: React.FC<{ className?: string }>
+}
+
+/**
+ * Tab groups keep the nav readable as more tabs are added.
+ * Each group is separated by a thin vertical divider.
+ * To add a new tab: append to the appropriate group (or create a new one)
+ * and add its TabId to the TabId union above.
+ */
+const TAB_GROUPS: TabDef[][] = [
+  // Core operations
+  [
+    { id: 'ops',         label: 'Ops',         Icon: LayoutDashboard },
+    { id: 'alerts',      label: 'Alerts',      Icon: Bell },
+    { id: 'audit',       label: 'Audit',       Icon: ClipboardList },
+    { id: 'topology',    label: 'Topology',    Icon: Network },
+  ],
+  // Resources
+  [
+    { id: 'resources',   label: 'Resources',   Icon: Server },
+    { id: 'vms',         label: 'VMs',         Icon: Monitor },
+    { id: 'vmss',        label: 'VMSS',        Icon: Scaling },
+    { id: 'aks',         label: 'AKS',         Icon: Container },
+  ],
+  // Monitoring & cost
+  [
+    { id: 'cost',          label: 'FinOps',        Icon: DollarSign },
+    { id: 'observability', label: 'Observability', Icon: Activity },
+    { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
+  ],
+  // Governance
+  [
+    { id: 'patch',       label: 'Patch',       Icon: ShieldCheck },
+    { id: 'compliance',  label: 'Compliance',  Icon: FileCheck },
+    { id: 'runbooks',    label: 'Runbooks',    Icon: BookOpen },
+  ],
+  // Config
+  [
+    { id: 'settings',    label: 'Settings',    Icon: Settings },
+  ],
 ]
+
+// Flat list used for keyboard navigation (arrow keys cycle through all tabs in order)
+const TABS: TabDef[] = TAB_GROUPS.flat()
 
 interface DashboardPanelProps {
   onTabChange?: (tab: TabId) => void
@@ -136,40 +166,62 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--bg-canvas)' }}>
-      {/* Tab bar — z-35 keeps it above the z-30 backdrop so tabs remain clickable while a detail panel is open */}
+      {/* Tab bar
+            - overflow-x-auto + whitespace-nowrap: scrolls horizontally when tabs exceed viewport width
+            - [&::-webkit-scrollbar]:hidden: hides the scrollbar track so the bar looks clean
+            - The right-edge fade gradient (::after pseudo via inline style) hints that more tabs exist
+            - z-35 keeps tabs clickable above the z-30 detail-panel backdrop
+      */}
       <div
-        className="flex items-end flex-shrink-0 pl-4 relative z-[35]"
+        className="flex items-end shrink-0 relative z-[35] overflow-x-auto [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Dashboard sections"
-        style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}
+        style={{
+          background: 'var(--bg-surface)',
+          borderBottom: '1px solid var(--border)',
+          scrollbarWidth: 'none', // Firefox
+        }}
       >
-        {TABS.map(({ id, label, Icon }, index) => {
-          const isActive = activeTab === id
-          return (
-            <button
-              key={id}
-              id={`tab-${id}`}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`tabpanel-${id}`}
-              onClick={() => handleTabChange(id)}
-              onKeyDown={(e) => handleTabKeyDown(e, index)}
-              className="flex items-center gap-1.5 px-4 py-3 text-[13px] transition-colors outline-none relative focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
-              style={{
-                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: isActive ? 600 : 500,
-                borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
-                marginBottom: '-1px',
-                background: 'transparent',
-              }}
-              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-subtle)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          )
-        })}
+        {TAB_GROUPS.map((group, groupIdx) => (
+          <div key={groupIdx} className="flex items-end shrink-0">
+            {group.map(({ id, label, Icon }) => {
+              const index = TABS.findIndex(t => t.id === id)
+              const isActive = activeTab === id
+              return (
+                <button
+                  key={id}
+                  id={`tab-${id}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`tabpanel-${id}`}
+                  onClick={() => handleTabChange(id)}
+                  onKeyDown={(e) => handleTabKeyDown(e, index)}
+                  className="flex items-center gap-1.5 px-3 py-3 text-[13px] transition-colors outline-none relative whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
+                  style={{
+                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: isActive ? 600 : 500,
+                    borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                    marginBottom: '-1px',
+                    background: 'transparent',
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-subtle)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              )
+            })}
+            {/* Group divider — not rendered after the last group */}
+            {groupIdx < TAB_GROUPS.length - 1 && (
+              <div
+                className="self-center mx-1 shrink-0"
+                style={{ width: 1, height: 16, background: 'var(--border)' }}
+                aria-hidden="true"
+              />
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Tab panels */}
