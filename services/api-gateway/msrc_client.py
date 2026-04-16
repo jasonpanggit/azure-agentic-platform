@@ -94,19 +94,17 @@ def _parse_msrc_items(items: list[dict], product: str, seen: set[str]) -> list[d
     return records
 
 
-def _fetch_cves_for_product_sync(product: str, months_back: int = 12) -> list[dict]:
+def _fetch_cves_for_product_sync(product: str) -> list[dict]:
     """Fetch ALL CVEs for a specific product from MSRC SUG API using OData pagination.
 
+    No date filter — fetches the complete all-time CVE history for the product.
     MSRC caps each response at 500 rows and returns @odata.nextLink when more pages
-    exist. This function follows nextLink until exhausted, so all CVEs are returned
-    regardless of how many there are.
+    exist. This function follows nextLink until exhausted.
 
     Uses `product eq '<product>'` filter — MSRC exact product names like
     "Windows Server 2016", "Windows Server 2019", etc.
     """
-    from datetime import datetime, timezone, timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=months_back * 30)).strftime("%Y-%m-%dT00:00:00Z")
-    odata_filter = f"product eq '{product}' and initialReleaseDate gt {cutoff}"
+    odata_filter = f"product eq '{product}'"
     next_url: str | None = f"{_MSRC_SUG_BASE}?{urllib.parse.urlencode({'$filter': odata_filter, '$top': 500})}"
 
     records: list[dict] = []
@@ -140,9 +138,12 @@ _product_cve_cache: dict[str, tuple[list[dict], float]] = {}
 async def get_cves_for_product(os_version: str, months_back: int = 12) -> list[dict]:
     """Fetch all CVEs for an OS version's product family from MSRC.
 
+    Fetches the complete all-time CVE history (no date filter). Results are
+    cached in-process for 24 hours so the multi-page fetch only happens once.
+
     Args:
         os_version: ARG osVersion string (e.g. "Windows Server 2016 Standard").
-        months_back: How many months of CVE history to fetch (default 12).
+        months_back: Unused — kept for API compatibility. All CVEs are returned.
 
     Returns:
         List of CVE dicts with cve_id, cvss_score, severity, description, kb_ids,
@@ -162,7 +163,7 @@ async def get_cves_for_product(os_version: str, months_back: int = 12) -> list[d
             return list(cve_list)
 
     loop = asyncio.get_running_loop()
-    records = await loop.run_in_executor(None, _fetch_cves_for_product_sync, product, months_back)
+    records = await loop.run_in_executor(None, _fetch_cves_for_product_sync, product)
     _product_cve_cache[product] = (records, now)
     return records
 
