@@ -81,25 +81,60 @@ class TestHelpers:
 
 
 class TestCVEStatusCorrelation:
-    """Tests for PATCHED / PENDING_PATCH / UNPATCHED logic."""
+    """Tests for PATCHED / PENDING_PATCH / UNPATCHED logic.
+
+    New architecture (OS-version-based):
+      Step 1: _fetch_vm_os_version(credential, vm_name, subscription_id) → "Windows Server 2016"
+      Step 2: get_cves_for_product(os_version) → list of dicts with cve_id, kb_ids, ...
+      Step 3: fetch installed + pending KBs (best-effort)
+      Step 4: cross-reference KB digits → PATCHED / PENDING_PATCH / UNPATCHED
+    """
+
+    # Shared MSRC product CVE records for tests
+    MSRC_PRODUCT_RECORDS_INSTALLED = [
+        {
+            "cve_id": "CVE-2024-1111",
+            "cvss_score": 7.5,
+            "severity": "High",
+            "description": "Remote code execution",
+            "kb_ids": ["5034441"],
+            "published_date": "2024-01-09",
+            "affected_product": "Windows Server 2016",
+            "affected_versions": "Windows Server 2016",
+            "vector_string": "CVSS:3.1/AV:N",
+            "impact": "Remote Code Execution",
+        }
+    ]
+
+    MSRC_PRODUCT_RECORDS_PENDING = [
+        {
+            "cve_id": "CVE-2024-2222",
+            "cvss_score": 8.0,
+            "severity": "High",
+            "description": "Elevation of privilege",
+            "kb_ids": ["5035853"],
+            "published_date": "2024-02-13",
+            "affected_product": "Windows Server 2016",
+            "affected_versions": "Windows Server 2016",
+            "vector_string": "",
+            "impact": "Elevation of Privilege",
+        }
+    ]
 
     @pytest.mark.asyncio
     async def test_cve_status_patched_when_kb_installed(self):
         """CVE is PATCHED when its KB is in installed patches."""
         svc = make_service()
         with (
+            patch("services.api_gateway.cve_service._fetch_vm_os_version", return_value="Windows Server 2016"),
+            patch("services.api_gateway.msrc_client.get_cves_for_product", new=AsyncMock(return_value=self.MSRC_PRODUCT_RECORDS_INSTALLED)),
             patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=[]),
             patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=INSTALLED_PATCHES_WITH_KB)),
-            patch("services.api_gateway.cve_service.get_cves_for_kbs" if False else "services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=MSRC_MAP_INSTALLED)),
         ):
-            # Directly test correlation logic via _fetch_and_correlate
-            with patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=[]):
-                with patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=INSTALLED_PATCHES_WITH_KB)):
-                    with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=MSRC_MAP_INSTALLED)):
-                        records = await svc._fetch_and_correlate(
-                            "vm1", "sub-1", "rg-1",
-                            "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm1"
-                        )
+            records = await svc._fetch_and_correlate(
+                "vm1", "sub-1", "rg-1",
+                "/subscriptions/sub-1/resourcegroups/rg-1/vm/vm1"
+            )
         assert any(r.cve_id == "CVE-2024-1111" and r.status == "PATCHED" for r in records)
 
     @pytest.mark.asyncio
@@ -107,48 +142,46 @@ class TestCVEStatusCorrelation:
         """CVE is PENDING_PATCH when its KB is only in pending patches (not installed)."""
         svc = make_service()
         with (
+            patch("services.api_gateway.cve_service._fetch_vm_os_version", return_value="Windows Server 2016"),
+            patch("services.api_gateway.msrc_client.get_cves_for_product", new=AsyncMock(return_value=self.MSRC_PRODUCT_RECORDS_PENDING)),
             patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=PENDING_PATCHES_WITH_KB),
             patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=[])),
-            patch("services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=MSRC_MAP_PENDING)),
         ):
             records = await svc._fetch_and_correlate(
                 "vm1", "sub-1", "rg-1",
-                "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm1"
+                "/subscriptions/sub-1/resourcegroups/rg-1/vm/vm1"
             )
         assert any(r.cve_id == "CVE-2024-2222" and r.status == "PENDING_PATCH" for r in records)
 
     @pytest.mark.asyncio
     async def test_cve_status_unpatched_when_no_kb_match(self):
-        """CVE is UNPATCHED when KB is known but not in installed or pending patches.
-
-        Simulate: MSRC returns CVE for KB9999999, but that KB is not installed or pending.
-        """
+        """CVE is UNPATCHED when KB is known but not in installed or pending patches."""
         svc = make_service()
-        # The only CVE returned by MSRC maps to KB9999999 — not in any patch list
-        # We inject KB9999999 as a "known" KB that the MSRC lookup maps to CVE-2024-9999
-        msrc_map = {"KB9999999": ["CVE-2024-9999"]}
-
-        # Trick the service: pending patch has KB9999999, so it gets looked up,
-        # but installed has none of it and pending list is cleared after lookup
-        pending = [{"patchName": "Update KB9999999", "kbid": "9999999"}]
-
+        msrc_records = [
+            {
+                "cve_id": "CVE-2024-9999",
+                "cvss_score": 6.0,
+                "severity": "Medium",
+                "description": "Spoofing",
+                "kb_ids": ["9999999"],
+                "published_date": "2024-03-12",
+                "affected_product": "Windows Server 2016",
+                "affected_versions": "Windows Server 2016",
+                "vector_string": "",
+                "impact": "Spoofing",
+            }
+        ]
         with (
+            patch("services.api_gateway.cve_service._fetch_vm_os_version", return_value="Windows Server 2016"),
+            patch("services.api_gateway.msrc_client.get_cves_for_product", new=AsyncMock(return_value=msrc_records)),
             patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=[]),
             patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=[])),
-            patch("services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=msrc_map)),
         ):
-            # pending_kb_digits is empty (no pending patches), installed_kb_digits is empty
-            # → but we need at least one KB to trigger lookup. Use pending.
-            with patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=pending):
-                with patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=[])):
-                    with patch("services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=msrc_map)):
-                        records = await svc._fetch_and_correlate(
-                            "vm1", "sub-1", "rg-1",
-                            "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm1"
-                        )
-        # CVE-2024-9999's KB (9999999) IS in pending_kb_digits → status = PENDING_PATCH
-        # This tests the no-installed-match path
-        assert any(r.cve_id == "CVE-2024-9999" for r in records)
+            records = await svc._fetch_and_correlate(
+                "vm1", "sub-1", "rg-1",
+                "/subscriptions/sub-1/resourcegroups/rg-1/vm/vm1"
+            )
+        assert any(r.cve_id == "CVE-2024-9999" and r.status == "UNPATCHED" for r in records)
 
     @pytest.mark.asyncio
     async def test_cve_stats_counts_correctly(self):
@@ -192,22 +225,47 @@ class TestCVEStatusCorrelation:
     async def test_cve_severity_ordering(self):
         """CVEs returned by _fetch_and_correlate are sorted UNPATCHED first."""
         svc = make_service()
-        # Mix of pending + installed
+        # MSRC returns two CVEs: one whose KB is pending, one whose KB is installed
+        msrc_records = [
+            {
+                "cve_id": "CVE-PEND",
+                "cvss_score": 7.0,
+                "severity": "High",
+                "description": "desc",
+                "kb_ids": ["1111"],
+                "published_date": "2024-01-09",
+                "affected_product": "Windows Server 2016",
+                "affected_versions": "Windows Server 2016",
+                "vector_string": "",
+                "impact": "Elevation of Privilege",
+            },
+            {
+                "cve_id": "CVE-PATCHED",
+                "cvss_score": 6.0,
+                "severity": "Medium",
+                "description": "desc",
+                "kb_ids": ["2222"],
+                "published_date": "2024-01-09",
+                "affected_product": "Windows Server 2016",
+                "affected_versions": "Windows Server 2016",
+                "vector_string": "",
+                "impact": "Information Disclosure",
+            },
+        ]
         pending = [{"patchName": "Update KB1111", "kbid": "1111"}]
         installed = [{"SoftwareName": "Update KB2222", "SoftwareType": "Update"}]
-        msrc_map = {"KB1111": ["CVE-PEND"], "KB2222": ["CVE-PATCHED"]}
 
         with (
+            patch("services.api_gateway.cve_service._fetch_vm_os_version", return_value="Windows Server 2016"),
+            patch("services.api_gateway.msrc_client.get_cves_for_product", new=AsyncMock(return_value=msrc_records)),
             patch("services.api_gateway.cve_service._fetch_pending_patches_arg", return_value=pending),
             patch.object(svc, "_fetch_installed_patches", new=AsyncMock(return_value=installed)),
-            patch("services.api_gateway.msrc_client.get_cves_for_kbs", new=AsyncMock(return_value=msrc_map)),
         ):
             records = await svc._fetch_and_correlate(
                 "vm1", "sub-1", "rg-1",
-                "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm1"
+                "/subscriptions/sub-1/resourcegroups/rg-1/vm/vm1"
             )
 
-        statuses = [r.status for r in records]
         # PATCHED (from installed KB2222) comes last; PENDING_PATCH comes before PATCHED
         patched_idx = next(i for i, r in enumerate(records) if r.cve_id == "CVE-PATCHED")
         pending_idx = next(i for i, r in enumerate(records) if r.cve_id == "CVE-PEND")
