@@ -1347,6 +1347,16 @@ Plans:
 - [x] 45-1: MCP v2 Upgrade + Tool Name Migration (All Agents) — Wave 1
 - [x] 45-2: SRE Container Apps Self-Monitoring Tool — Wave 2
 
+### Phase 66: CVE database and tracking tab and show list of CVEs that affects the selected VM shown in VM details panel. also show which of the CVEs are already patched by the installed patches and which are pending based on the pending patches. this will help to provide complete view about the patch status and also the list of CVEs that's not patched for the selected VM.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 65
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 66 to break down)
+
 ---
 
 ## World-Class v3.0 Success Criteria
