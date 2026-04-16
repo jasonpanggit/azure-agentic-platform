@@ -28,22 +28,6 @@ resource "azurerm_cognitive_account_project" "main" {
   tags = var.required_tags
 }
 
-resource "azurerm_cognitive_deployment" "gpt4o" {
-  name                 = var.model_name
-  cognitive_account_id = azurerm_cognitive_account.foundry.id
-
-  model {
-    format  = "OpenAI"
-    name    = var.model_name
-    version = var.model_version
-  }
-
-  sku {
-    name     = "Standard"
-    capacity = var.model_capacity
-  }
-}
-
 # gpt-4.1 deployment — required by all agent definitions (orchestrator, domain agents)
 # Deployed manually 2026-04-17; managed here to prevent drift.
 resource "azurerm_cognitive_deployment" "gpt41" {

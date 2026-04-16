@@ -102,7 +102,7 @@ def _build_narrative(compliance_result: dict, sla_def: dict) -> str:
             f"Mention any significant downtime events if attainment is below target."
         )
         response = client.inference.get_chat_completions(
-            model_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
+            model_name=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1"),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
         )

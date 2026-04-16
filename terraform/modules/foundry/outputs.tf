@@ -24,8 +24,8 @@ output "foundry_project_endpoint" {
 }
 
 output "foundry_model_deployment_name" {
-  description = "Name of the gpt-4o model deployment"
-  value       = azurerm_cognitive_deployment.gpt4o.name
+  description = "Name of the primary model deployment (gpt-4.1)"
+  value       = azurerm_cognitive_deployment.gpt41.name
 }
 
 output "foundry_principal_id" {

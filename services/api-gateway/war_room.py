@@ -265,7 +265,7 @@ async def generate_handoff_summary(
         raise RuntimeError("openai package not installed") from exc
 
     endpoint = os.environ.get("FOUNDRY_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT", "")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
     if not endpoint:
         raise RuntimeError("FOUNDRY_ENDPOINT or AZURE_OPENAI_ENDPOINT not set")
 
