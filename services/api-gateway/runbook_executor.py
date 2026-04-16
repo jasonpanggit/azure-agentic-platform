@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    from jinja2 import Environment, StrictUndefined, TemplateError
-    _jinja_env = Environment(undefined=StrictUndefined)
+    from jinja2 import Environment, StrictUndefined, TemplateError, select_autoescape
+    _jinja_env = Environment(undefined=StrictUndefined, autoescape=select_autoescape([]))  # nosec B701 — templates render infra parameters, not HTML
 except ImportError:
     Environment = None  # type: ignore[assignment,misc]
     _jinja_env = None  # type: ignore[assignment]
