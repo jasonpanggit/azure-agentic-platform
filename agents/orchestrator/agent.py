@@ -301,7 +301,7 @@ def create_orchestrator() -> ChatAgent:
     agent = ChatAgent(
         chat_client=client,
         instructions=ORCHESTRATOR_SYSTEM_PROMPT,
-        name="orchestrator-agent",
+        name="aap-orchestrator-agent",
         description="Central incident dispatcher — classifies and routes to domain agents.",
         tools=[classify_incident_domain],
     )
@@ -346,7 +346,7 @@ def create_orchestrator_agent_version(project: "AIProjectClient") -> object:
         a2a_tools.append(A2APreviewTool(project_connection_id=conn.id))
 
     return project.agents.create_version(
-        agent_name="aap-orchestrator",
+        agent_name="aap-orchestrator-agent",
         definition=PromptAgentDefinition(
             model=os.environ.get("ORCHESTRATOR_MODEL_DEPLOYMENT", "gpt-4.1"),
             instructions=ORCHESTRATOR_SYSTEM_PROMPT,

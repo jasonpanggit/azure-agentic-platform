@@ -85,15 +85,15 @@ class AgentSpec:
 def _build_all_agents() -> list[AgentSpec]:
     """Return ordered specs for orchestrator + all 8 domain agents."""
     return [
-        AgentSpec("orchestrator_agent_id", "orchestrator-agent", "orchestrator"),
-        AgentSpec("compute_agent_id",      "compute-agent",      "compute"),
-        AgentSpec("network_agent_id",      "network-agent",      "network"),
-        AgentSpec("storage_agent_id",      "storage-agent",      "storage"),
-        AgentSpec("security_agent_id",     "security-agent",     "security"),
-        AgentSpec("sre_agent_id",          "sre-agent",          "sre"),
-        AgentSpec("arc_agent_id",          "arc-agent",          "arc"),
-        AgentSpec("patch_agent_id",        "patch-agent",        "patch"),
-        AgentSpec("eol_agent_id",          "eol-agent",          "eol"),
+        AgentSpec("orchestrator_agent_id", "aap-orchestrator-agent", "orchestrator"),
+        AgentSpec("compute_agent_id",      "aap-compute-agent",      "compute"),
+        AgentSpec("network_agent_id",      "aap-network-agent",      "network"),
+        AgentSpec("storage_agent_id",      "aap-storage-agent",      "storage"),
+        AgentSpec("security_agent_id",     "aap-security-agent",     "security"),
+        AgentSpec("sre_agent_id",          "aap-sre-agent",          "sre"),
+        AgentSpec("arc_agent_id",          "aap-arc-agent",          "arc"),
+        AgentSpec("patch_agent_id",        "aap-patch-agent",        "patch"),
+        AgentSpec("eol_agent_id",          "aap-eol-agent",          "eol"),
     ]
 
 

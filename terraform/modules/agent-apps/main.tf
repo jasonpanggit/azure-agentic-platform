@@ -321,7 +321,7 @@ resource "azurerm_container_app" "agents" {
         for_each = contains(["orchestrator", "api-gateway"], each.key) ? [1] : []
         content {
           name  = "ORCHESTRATOR_AGENT_NAME"
-          value = "orchestrator-agent"
+          value = "aap-orchestrator-agent"
         }
       }
       # Phase 30: SOP Engine — vector store ID for all domain agents (not orchestrator/services).
