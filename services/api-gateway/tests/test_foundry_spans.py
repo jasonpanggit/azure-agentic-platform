@@ -9,7 +9,10 @@ import pytest
 os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 os.environ.setdefault("AZURE_PROJECT_ENDPOINT", "https://test.services.ai.azure.com/api/projects/test")
 os.environ.setdefault("ORCHESTRATOR_AGENT_NAME", "aap-orchestrator")
-os.environ.setdefault("ORCHESTRATOR_AGENT_ID", "agent-test-id")
+# NOTE: Do NOT set ORCHESTRATOR_AGENT_ID at module level — it would bleed into
+# test_foundry_v2.py via os.environ.setdefault() if this file loads first.
+# The span test patches _get_agents_client so the env var value doesn't matter;
+# we inject it via patch.dict inside the test method.
 
 
 def _make_incident_payload():
@@ -45,6 +48,8 @@ class TestIncidentRunSpanAttributes:
     async def test_dispatch_records_incident_and_agent_spans(self, mock_get_project, mock_get_agents):
         """Verify both foundry.agents_create_thread_and_run and agent.orchestrator spans
         carry the correct incident and agent attributes."""
+        import unittest.mock as _mock
+
         mock_agents = MagicMock()
         mock_run = MagicMock()
         mock_run.thread_id = "thread-span-test"
@@ -68,11 +73,14 @@ class TestIncidentRunSpanAttributes:
         original_provider = otel_trace.get_tracer_provider()
         otel_trace.set_tracer_provider(provider)
 
+        # Inject ORCHESTRATOR_AGENT_ID locally — avoids module-level env pollution
+        # that would break test_foundry_v2.py when tests run together.
         try:
-            from services.api_gateway.foundry import dispatch_to_orchestrator
+            with _mock.patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "agent-test-id"}):
+                from services.api_gateway.foundry import dispatch_to_orchestrator
 
-            payload = _make_incident_payload()
-            await dispatch_to_orchestrator(payload)
+                payload = _make_incident_payload()
+                await dispatch_to_orchestrator(payload)
 
             provider.force_flush()
 
