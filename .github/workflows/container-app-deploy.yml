@@ -141,6 +141,14 @@ jobs:
         run: |
           printf 'ref=%s\n' "${{ vars.ACR_LOGIN_SERVER }}/${{ inputs.image_name }}:${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure ACR registry configured
+        run: |
+          az containerapp registry set \
+            --name "${{ inputs.container_app_name }}" \
+            --resource-group "${{ inputs.resource_group }}" \
+            --server "${{ vars.ACR_LOGIN_SERVER }}" \
+            --identity system
+
       - name: Deploy new revision
         run: |
           az containerapp update \
