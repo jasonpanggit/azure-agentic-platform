@@ -120,20 +120,46 @@ def _fetch_vm_os_version(credential: Any, vm_name: str, subscription_id: str) ->
 def _fetch_pending_patches_arg(
     credential: Any, vm_name: str, subscription_id: str, resource_group: str
 ) -> List[Dict[str, Any]]:
-    """Fetch pending patches from ARG patchassessmentresources."""
-    # Build resource_id prefix for filtering
-    rid_prefix = (
+    """Fetch pending patches from ARG patchassessmentresources.
+
+    Supports both Azure VMs (microsoft.compute/virtualmachines) and
+    Arc-enabled servers (microsoft.hybridcompute/machines).
+    """
+    rid_lower = (
         f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
-        f"/providers/microsoft.compute/virtualmachines/{vm_name}"
     ).lower()
-    kql = (
+
+    # Arc VMs use hybridcompute/machines path; Azure VMs use compute/virtualmachines
+    is_arc = False
+    # Try ARG for Arc first (hybridcompute), then Azure VM
+    arc_rid_prefix = (
+        f"{rid_lower}/providers/microsoft.hybridcompute/machines/{vm_name.lower()}"
+    )
+    azure_rid_prefix = (
+        f"{rid_lower}/providers/microsoft.compute/virtualmachines/{vm_name.lower()}"
+    )
+
+    # Try Arc type first
+    arc_kql = (
         "patchassessmentresources\n"
-        "| where type == 'microsoft.compute/virtualmachines/patchassessmentresults/softwarepatches'\n"
-        f"| where tolower(id) startswith '{rid_prefix}'\n"
+        "| where type == 'microsoft.hybridcompute/machines/patchassessmentresults/softwarepatches'\n"
+        f"| where tolower(id) startswith '{arc_rid_prefix}'\n"
         "| project patchName = tostring(properties.patchName),\n"
         "          kbid = tostring(properties.kbId)"
     )
-    return _run_arg_query(credential, [subscription_id], kql)
+    arc_rows = _run_arg_query(credential, [subscription_id], arc_kql)
+    if arc_rows:
+        return arc_rows
+
+    # Fall back to Azure VM type
+    azure_kql = (
+        "patchassessmentresources\n"
+        "| where type == 'microsoft.compute/virtualmachines/patchassessmentresults/softwarepatches'\n"
+        f"| where tolower(id) startswith '{azure_rid_prefix}'\n"
+        "| project patchName = tostring(properties.patchName),\n"
+        "          kbid = tostring(properties.kbId)"
+    )
+    return _run_arg_query(credential, [subscription_id], azure_kql)
 
 
 async def _get_pg_connection() -> Optional[Any]:
@@ -209,9 +235,11 @@ class CVEService:
         Returns list of CVERecord. Never raises — returns empty list on error.
         """
         start_time = time.monotonic()
+        # Use a provider-agnostic cache key — the actual provider path is resolved
+        # during patch fetch (Arc uses hybridcompute, Azure VM uses compute)
         vm_resource_id = (
             f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
-            f"/providers/Microsoft.Compute/virtualMachines/{vm_name}"
+            f"/vm/{vm_name}"
         ).lower()
 
         # Check cache first
@@ -255,12 +283,19 @@ class CVEService:
         pending_kb_digits = set(_extract_kbs_from_patches(pending_patches))
 
         # Fetch installed patches from LAW (best-effort)
+        # Use both provider paths — Arc machines use hybridcompute, Azure VMs use compute
         installed_kb_digits: set[str] = set()
-        try:
-            installed_patches = await self._fetch_installed_patches(vm_resource_id)
-            installed_kb_digits = set(_extract_kbs_from_patches(installed_patches))
-        except Exception as exc:
-            logger.debug("Installed patch fetch failed (degraded): %s", exc)
+        for provider_path in [
+            f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.HybridCompute/machines/{vm_name}",
+            f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Compute/virtualMachines/{vm_name}",
+        ]:
+            try:
+                installed_patches = await self._fetch_installed_patches(provider_path.lower())
+                if installed_patches:
+                    installed_kb_digits = set(_extract_kbs_from_patches(installed_patches))
+                    break
+            except Exception as exc:
+                logger.debug("Installed patch fetch failed for %s (degraded): %s", provider_path, exc)
 
         # Build full KB set to look up CVEs
         all_kb_digits = pending_kb_digits | installed_kb_digits
