@@ -62,16 +62,18 @@ except Exception:
 def _resolve_postgres_dsn() -> str:
     """Resolve PostgreSQL DSN from environment variables.
 
+    Priority: PGVECTOR_CONNECTION_STRING → POSTGRES_DSN → POSTGRES_HOST parts.
     Raises RuntimeError if not configured.
     """
-    dsn = os.environ.get("POSTGRES_DSN", "")
-    if dsn:
-        return dsn
+    for env_var in ("PGVECTOR_CONNECTION_STRING", "POSTGRES_DSN"):
+        val = os.environ.get(env_var, "").strip()
+        if val:
+            return val
 
-    host = os.environ.get("POSTGRES_HOST", "")
+    host = os.environ.get("POSTGRES_HOST", "").strip()
     if not host:
         raise RuntimeError(
-            "PostgreSQL not configured: set POSTGRES_DSN or POSTGRES_HOST"
+            "PostgreSQL not configured: set PGVECTOR_CONNECTION_STRING, POSTGRES_DSN, or POSTGRES_HOST"
         )
 
     user = os.environ.get("POSTGRES_USER", "aap_admin")
