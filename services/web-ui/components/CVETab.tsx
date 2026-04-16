@@ -304,7 +304,7 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, 
                 tabIndex={0}
                 onKeyDown={e => e.key === 'Enter' && setSelectedCve(cve)}
               >
-                {/* CVE ID — link to NVD */}
+                {/* CVE ID — opens detail modal; Ctrl/Cmd+click goes to NVD */}
                 <a
                   href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
                   target="_blank"
@@ -312,6 +312,7 @@ export function CVETab({ vmName, subscriptionId, resourceGroup, getAccessToken, 
                   className="font-mono font-medium hover:underline truncate"
                   style={{ color: 'var(--accent-blue)' }}
                   title={cve.cve_id}
+                  onClick={e => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); setSelectedCve(cve) } }}
                 >
                   {cve.cve_id}
                 </a>
