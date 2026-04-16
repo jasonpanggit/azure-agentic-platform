@@ -117,9 +117,9 @@ def test_build_evidence_context_truncates_long_change_list():
 # ---------------------------------------------------------------------------
 
 @patch("services.api_gateway.vm_chat.verify_token", return_value={"sub": "test"})
-@patch("services.api_gateway.vm_chat._create_or_continue_vm_thread", new_callable=AsyncMock)
+@patch("services.api_gateway.vm_chat._dispatch_vm_chat", new_callable=AsyncMock)
 def test_start_vm_chat_success(mock_create, mock_auth):
-    mock_create.return_value = {"thread_id": "thread-123", "run_id": "run-456"}
+    mock_create.return_value = {"thread_id": "thread-123", "run_id": "run-456", "status": "completed"}
 
     from services.api_gateway.main import app
     from fastapi.testclient import TestClient
@@ -141,9 +141,9 @@ def test_start_vm_chat_success(mock_create, mock_auth):
 
 
 @patch("services.api_gateway.vm_chat.verify_token", return_value={"sub": "test"})
-@patch("services.api_gateway.vm_chat._create_or_continue_vm_thread", new_callable=AsyncMock)
+@patch("services.api_gateway.vm_chat._dispatch_vm_chat", new_callable=AsyncMock)
 def test_start_vm_chat_continue_thread(mock_create, mock_auth):
-    mock_create.return_value = {"thread_id": "thread-123", "run_id": "run-789"}
+    mock_create.return_value = {"thread_id": "thread-123", "run_id": "run-789", "status": "completed"}
 
     from services.api_gateway.main import app
     from fastapi.testclient import TestClient
@@ -162,7 +162,7 @@ def test_start_vm_chat_continue_thread(mock_create, mock_auth):
 
 
 @patch("services.api_gateway.vm_chat.verify_token", return_value={"sub": "test"})
-@patch("services.api_gateway.vm_chat._create_or_continue_vm_thread", new_callable=AsyncMock)
+@patch("services.api_gateway.vm_chat._dispatch_vm_chat", new_callable=AsyncMock)
 def test_start_vm_chat_503_when_no_compute_agent(mock_create, mock_auth):
     mock_create.side_effect = ValueError("COMPUTE_AGENT_ID environment variable is required")
 

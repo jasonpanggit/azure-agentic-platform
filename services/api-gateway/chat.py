@@ -16,7 +16,7 @@ from typing import Any, Optional
 from agents.shared.routing import classify_query_text
 
 from services.api_gateway.arg_helper import run_arg_query
-from services.api_gateway.foundry import _get_foundry_client, dispatch_chat_to_orchestrator
+from services.api_gateway.foundry import dispatch_chat_to_orchestrator
 from services.api_gateway.instrumentation import agent_span, foundry_span, mcp_span
 from services.api_gateway.models import ChatRequest
 
@@ -192,45 +192,47 @@ async def create_chat_thread(
     effective_user_id = request.user_id or user_id
 
     # Build the operator query envelope (includes subscription context, VM inventory, domain hint)
-    # Use the response_id as a synthetic thread_id for envelope construction
+    # thread_id will be the real Foundry thread_id returned by dispatch_chat_to_orchestrator;
+    # use a placeholder here since we don't have it yet.
     import uuid as _uuid
-    synthetic_thread_id = request.thread_id or str(_uuid.uuid4())
+    envelope_thread_id = request.thread_id or str(_uuid.uuid4())
 
     loop = asyncio.get_running_loop()
     message_content = await loop.run_in_executor(
         None,
         lambda: _build_operator_query_envelope(
-            thread_id=synthetic_thread_id,
+            thread_id=envelope_thread_id,
             request=request,
             initiated_by=effective_user_id,
             credential=credential,
         ),
     )
 
-    # Dispatch via Responses API — synchronous, returns final reply
+    # Dispatch via AIProjectClient.agents — synchronous, returns final reply
     with agent_span("orchestrator", correlation_id=request.incident_id or ""):
         result = await dispatch_chat_to_orchestrator(
             message=message_content,
             conversation_id=request.thread_id,  # None for new conversations
         )
 
-    response_id = result["response_id"]
+    thread_id = result["thread_id"]
+    run_id = result["run_id"]
     reply = result.get("reply")
-    run_status = "completed" if result["status"] == "completed" else result["status"]
+    run_status = result.get("status", "completed")
 
     # Cache the result so get_chat_result() can return it immediately
-    _RESPONSE_CACHE[response_id] = {
-        "thread_id": response_id,
+    _RESPONSE_CACHE[thread_id] = {
+        "thread_id": thread_id,
         "run_status": run_status,
         "reply": reply,
     }
 
     logger.info(
-        "Chat dispatched for user %s, response %s, status %s, reply_len %d",
-        effective_user_id, response_id, run_status, len(reply) if reply else 0,
+        "Chat dispatched for user %s, thread %s, run %s, status %s, reply_len %d",
+        effective_user_id, thread_id, run_id, run_status, len(reply) if reply else 0,
     )
 
-    return {"thread_id": response_id, "run_id": response_id}
+    return {"thread_id": thread_id, "run_id": run_id}
 
 
 async def _submit_mcp_approval(

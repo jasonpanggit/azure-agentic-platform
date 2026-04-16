@@ -1,4 +1,4 @@
-"""Tests for foundry.py — Responses API dispatch (Phase 29 migration from threads/runs)."""
+"""Tests for foundry.py — AIProjectClient.agents dispatch (migrated from Responses API)."""
 from __future__ import annotations
 
 import os
@@ -8,7 +8,7 @@ import pytest
 
 os.environ.setdefault("API_GATEWAY_AUTH_MODE", "disabled")
 os.environ.setdefault("AZURE_PROJECT_ENDPOINT", "https://test.services.ai.azure.com/api/projects/test")
-os.environ.setdefault("ORCHESTRATOR_AGENT_NAME", "aap-orchestrator")
+os.environ.setdefault("ORCHESTRATOR_AGENT_ID", "asst_test123")
 
 
 def _make_incident_payload():
@@ -31,67 +31,63 @@ def _make_incident_payload():
     )
 
 
+def _make_mock_agents():
+    """Build a mock agents sub-client with create_thread_and_run."""
+    agents = MagicMock()
+    run = MagicMock()
+    run.id = "run_123"
+    run.thread_id = "thread_456"
+    run.status = "completed"
+    agents.create_thread_and_run.return_value = run
+    return agents, run
+
+
 class TestDispatchToOrchestrator:
-    """Verify dispatch_to_orchestrator uses Responses API (not threads/runs)."""
+    """Verify dispatch_to_orchestrator uses AIProjectClient.agents (not Responses API)."""
 
-    @patch("services.api_gateway.foundry._get_openai_client")
+    @patch("services.api_gateway.foundry._get_foundry_project")
     @pytest.mark.asyncio
-    async def test_calls_responses_create(self, mock_get_client):
-        mock_openai = MagicMock()
-        mock_response = MagicMock()
-        mock_response.id = "resp_123"
-        mock_response.status = "completed"
-        mock_openai.responses.create.return_value = mock_response
-        mock_get_client.return_value = mock_openai
+    async def test_calls_create_thread_and_run(self, mock_get_project):
+        agents, run = _make_mock_agents()
+        mock_get_project.return_value.agents = agents
 
         from services.api_gateway.foundry import dispatch_to_orchestrator
 
         payload = _make_incident_payload()
         result = await dispatch_to_orchestrator(payload)
 
-        mock_openai.responses.create.assert_called_once()
-        call_kwargs = mock_openai.responses.create.call_args
-        # Should pass agent_reference in extra_body
-        extra_body = call_kwargs.kwargs.get("extra_body", {})
-        assert "agent_reference" in extra_body
+        agents.create_thread_and_run.assert_called_once()
+        call_kwargs = agents.create_thread_and_run.call_args
+        assert call_kwargs.kwargs["agent_id"] == "asst_test123"
 
-    @patch("services.api_gateway.foundry._get_openai_client")
+    @patch("services.api_gateway.foundry._get_foundry_project")
     @pytest.mark.asyncio
-    async def test_returns_response_id(self, mock_get_client):
-        mock_openai = MagicMock()
-        mock_response = MagicMock()
-        mock_response.id = "resp_456"
-        mock_response.status = "completed"
-        mock_openai.responses.create.return_value = mock_response
-        mock_get_client.return_value = mock_openai
+    async def test_returns_thread_and_run_ids(self, mock_get_project):
+        agents, run = _make_mock_agents()
+        mock_get_project.return_value.agents = agents
 
         from services.api_gateway.foundry import dispatch_to_orchestrator
 
         payload = _make_incident_payload()
         result = await dispatch_to_orchestrator(payload)
-        assert "response_id" in result
-        assert result["response_id"] == "resp_456"
 
-    @patch("services.api_gateway.foundry._get_openai_client")
+        assert result["thread_id"] == "thread_456"
+        assert result["run_id"] == "run_123"
+        assert result["status"] == "completed"
+
+    @patch("services.api_gateway.foundry._get_foundry_project")
     @pytest.mark.asyncio
-    async def test_agent_reference_uses_env_var_name(self, mock_get_client):
-        mock_openai = MagicMock()
-        mock_response = MagicMock()
-        mock_response.id = "resp_789"
-        mock_response.status = "completed"
-        mock_openai.responses.create.return_value = mock_response
-        mock_get_client.return_value = mock_openai
+    async def test_agent_id_uses_env_var(self, mock_get_project):
+        agents, run = _make_mock_agents()
+        mock_get_project.return_value.agents = agents
 
-        from services.api_gateway.foundry import dispatch_to_orchestrator
+        with patch.dict("os.environ", {"ORCHESTRATOR_AGENT_ID": "asst_custom999"}):
+            from services.api_gateway.foundry import dispatch_to_orchestrator
+            payload = _make_incident_payload()
+            await dispatch_to_orchestrator(payload)
 
-        payload = _make_incident_payload()
-        await dispatch_to_orchestrator(payload)
-
-        call_kwargs = mock_openai.responses.create.call_args
-        extra_body = call_kwargs.kwargs.get("extra_body", {})
-        agent_ref = extra_body["agent_reference"]
-        assert agent_ref["name"] == "aap-orchestrator"
-        assert agent_ref["type"] == "agent_reference"
+        call_kwargs = agents.create_thread_and_run.call_args
+        assert call_kwargs.kwargs["agent_id"] == "asst_custom999"
 
 
 class TestBuildIncidentMessage:
@@ -116,20 +112,18 @@ class TestBuildIncidentMessage:
 class TestBackwardCompatAlias:
     """Verify create_foundry_thread backward-compat alias."""
 
-    @patch("services.api_gateway.foundry._get_openai_client")
+    @patch("services.api_gateway.foundry._get_foundry_project")
     @pytest.mark.asyncio
-    async def test_create_foundry_thread_maps_to_response_id(self, mock_get_client):
-        mock_openai = MagicMock()
-        mock_response = MagicMock()
-        mock_response.id = "resp_compat"
-        mock_response.status = "completed"
-        mock_openai.responses.create.return_value = mock_response
-        mock_get_client.return_value = mock_openai
+    async def test_create_foundry_thread_returns_thread_and_run(self, mock_get_project):
+        agents, run = _make_mock_agents()
+        run.id = "run_compat"
+        run.thread_id = "thread_compat"
+        mock_get_project.return_value.agents = agents
 
         from services.api_gateway.foundry import create_foundry_thread
 
         payload = _make_incident_payload()
         result = await create_foundry_thread(payload)
 
-        assert result["thread_id"] == "resp_compat"
-        assert result["response_id"] == "resp_compat"
+        assert result["thread_id"] == "thread_compat"
+        assert result["run_id"] == "run_compat"
