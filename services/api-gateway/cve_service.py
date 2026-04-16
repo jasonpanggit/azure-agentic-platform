@@ -97,7 +97,15 @@ def _run_arg_query(credential: Any, subscription_ids: List[str], kql: str) -> Li
 
 
 def _fetch_vm_os_version(credential: Any, vm_name: str, subscription_id: str) -> str:
-    """Fetch VM OS version from ARG. Returns empty string on failure."""
+    """Fetch VM OS version from ARG. Returns empty string on failure.
+
+    Tries multiple ARG fields in priority order:
+    1. properties.osSku — populated for Arc VMs (e.g. "Windows Server 2016 Standard")
+    2. properties.extended.instanceView.osName — populated when Azure Monitor extension present
+    3. properties.storageProfile.imageReference.sku — reliable for Azure VMs (e.g. "2016-Datacenter")
+    4. properties.storageProfile.imageReference.offer — fallback offer name (e.g. "WindowsServer")
+    5. properties.osType — last resort generic ("Windows" / "Linux")
+    """
     kql = (
         "resources\n"
         "| where type =~ 'microsoft.compute/virtualmachines'\n"
@@ -106,6 +114,8 @@ def _fetch_vm_os_version(credential: Any, vm_name: str, subscription_id: str) ->
         "| extend osVersion = coalesce(\n"
         "    tostring(properties.osSku),\n"
         "    tostring(properties.extended.instanceView.osName),\n"
+        "    tostring(properties.storageProfile.imageReference.sku),\n"
+        "    tostring(properties.storageProfile.imageReference.offer),\n"
         "    tostring(properties.osType)\n"
         "  )\n"
         "| project osVersion\n"

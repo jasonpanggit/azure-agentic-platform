@@ -30,6 +30,7 @@ _REQUEST_TIMEOUT_SECONDS = 5
 # Product name normalisation: ARG osVersion strings → MSRC product family strings
 # MSRC uses display names like "Windows Server 2016" not "Windows Server 2016 Standard"
 _OS_PRODUCT_MAP = [
+    # Full version strings (Arc VMs, instanceView.osName)
     ("Windows Server 2025", "Windows Server 2025"),
     ("Windows Server 2022", "Windows Server 2022"),
     ("Windows Server 2019", "Windows Server 2019"),
@@ -38,15 +39,30 @@ _OS_PRODUCT_MAP = [
     ("Windows Server 2012", "Windows Server 2012"),
     ("Windows 11", "Windows 11"),
     ("Windows 10", "Windows 10"),
+    # Azure VM image reference SKU strings (storageProfile.imageReference.sku)
+    ("2025-datacenter", "Windows Server 2025"),
+    ("2022-datacenter", "Windows Server 2022"),
+    ("2019-datacenter", "Windows Server 2019"),
+    ("2016-datacenter", "Windows Server 2016"),
+    ("2012-r2-datacenter", "Windows Server 2012 R2"),
+    ("2012-datacenter", "Windows Server 2012"),
+    # Azure VM image offer strings (storageProfile.imageReference.offer)
+    ("windowsserver", "Windows Server 2019"),  # generic offer → default to 2019
+    # Linux
     ("Ubuntu 24", "Ubuntu Linux"),
     ("Ubuntu 22", "Ubuntu Linux"),
     ("Ubuntu 20", "Ubuntu Linux"),
     ("Ubuntu 18", "Ubuntu Linux"),
+    ("ubuntu", "Ubuntu Linux"),
     ("RHEL", "Red Hat Enterprise Linux"),
     ("Red Hat", "Red Hat Enterprise Linux"),
+    ("rhel", "Red Hat Enterprise Linux"),
     ("CentOS", "CBL-Mariner"),
+    ("centos", "CBL-Mariner"),
     ("Debian", "Debian Linux"),
+    ("debian", "Debian Linux"),
     ("SUSE", "SUSE Linux"),
+    ("suse", "SUSE Linux"),
 ]
 
 
