@@ -243,6 +243,15 @@ resource "azurerm_container_app" "agents" {
           value = var.pgvector_connection_string
         }
       }
+      # API Gateway: POSTGRES_DSN for modules that resolve it directly
+      # (feedback_capture, cve_service) — fallback when PGVECTOR_CONNECTION_STRING is absent
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.postgres_dsn != "" ? [1] : []
+        content {
+          name  = "POSTGRES_DSN"
+          value = var.postgres_dsn
+        }
+      }
       # Inject Arc MCP Server URL into the arc agent
       dynamic "env" {
         for_each = each.key == "arc" && var.arc_mcp_server_url != "" ? [1] : []
@@ -312,7 +321,7 @@ resource "azurerm_container_app" "agents" {
         for_each = contains(["orchestrator", "api-gateway"], each.key) ? [1] : []
         content {
           name  = "ORCHESTRATOR_AGENT_NAME"
-          value = "aap-orchestrator"
+          value = "orchestrator-agent"
         }
       }
       # Phase 30: SOP Engine — vector store ID for all domain agents (not orchestrator/services).

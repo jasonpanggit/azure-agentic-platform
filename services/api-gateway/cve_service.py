@@ -184,7 +184,12 @@ async def _get_pg_connection() -> Optional[Any]:
     """Get a single asyncpg connection from env DSN. Returns None if unavailable."""
     if asyncpg is None:
         return None
-    dsn = os.environ.get("POSTGRES_DSN") or os.environ.get("DATABASE_URL") or ""
+    dsn = (
+        os.environ.get("PGVECTOR_CONNECTION_STRING")
+        or os.environ.get("POSTGRES_DSN")
+        or os.environ.get("DATABASE_URL")
+        or ""
+    )
     if not dsn:
         return None
     try:
