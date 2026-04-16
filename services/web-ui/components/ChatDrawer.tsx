@@ -76,9 +76,15 @@ export function ChatDrawer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Only auto-scroll to bottom when the user sends a message (last message role is 'user')
+  // or when streaming starts. This keeps the user bubble visible while the AI reply builds.
+  const lastRole = messages[messages.length - 1]?.role
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (lastRole === 'user' || isStreaming) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, isStreaming])
 
   // ── SSE auth token ──
   // Acquire a fresh token for the SSE polling route to forward to the API gateway.
