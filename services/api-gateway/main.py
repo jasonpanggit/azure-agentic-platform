@@ -143,6 +143,8 @@ from services.api_gateway.war_room import (
     register_sse_queue,
     deregister_sse_queue,
 )
+from services.api_gateway.push_notifications import router as push_router
+from services.api_gateway.push_notifications import send_push_to_all
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -685,6 +687,7 @@ app.include_router(admin_router)
 app.include_router(compliance_router)
 app.include_router(sla_router)
 app.include_router(admin_sla_router)
+app.include_router(push_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
@@ -1119,6 +1122,27 @@ async def ingest_incident(
                 payload.incident_id,
                 exc,
             )
+
+    # Phase 56: Fire-and-forget push notification for P0/P1 incidents
+    if payload.severity in ("Sev0", "P0", "Sev1", "P1"):
+        _push_body = (
+            payload.description[:100]
+            if getattr(payload, "description", None)
+            else "New incident requires attention"
+        )
+        asyncio.ensure_future(
+            send_push_to_all(
+                title=f"{payload.severity} Incident: {payload.title}",
+                body=_push_body,
+                url="/approvals",
+                cosmos_client=cosmos,
+            )
+        )
+        logger.info(
+            "push: fire-and-forget dispatched | incident=%s severity=%s",
+            payload.incident_id,
+            payload.severity,
+        )
 
     return IncidentResponse(
         thread_id=result["thread_id"],
