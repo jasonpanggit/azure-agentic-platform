@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from services.api_gateway.auth import verify_token
+from services.api_gateway.chat import _RESPONSE_CACHE
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
 from services.api_gateway.foundry import dispatch_chat_to_orchestrator
 
@@ -187,6 +188,15 @@ async def _dispatch_vm_chat(
         message=message,
         conversation_id=request.thread_id,
     )
+
+    # Cache the reply so the polling endpoint (GET /api/v1/chat/{id}/result)
+    # returns immediately on the first poll — same pattern as chat.py.
+    thread_id = result["thread_id"]
+    _RESPONSE_CACHE[thread_id] = {
+        "thread_id": thread_id,
+        "run_status": result.get("status", "completed"),
+        "reply": result.get("reply"),
+    }
 
     logger.info(
         "vm_chat: dispatched | resource=%s thread=%s run=%s status=%s user=%s",
