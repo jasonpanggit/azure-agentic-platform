@@ -111,7 +111,8 @@ jobs:
         run: |
           for file in \
             services/api-gateway/migrations/001_create_runbooks_table.sql \
-            services/api-gateway/migrations/003_create_gitops_config_table.sql; do
+            services/api-gateway/migrations/003_create_gitops_config_table.sql \
+            migrations/008_tenants.sql; do
             if [ ! -f "$file" ]; then
               echo "::error::Missing migration file: $file"
               exit 1
@@ -141,6 +142,12 @@ jobs:
             -U "$POSTGRES_ADMIN_USER" \
             -d "$POSTGRES_DATABASE" \
             -f services/api-gateway/migrations/003_create_gitops_config_table.sql
+          psql \
+            -v ON_ERROR_STOP=1 \
+            -h "${POSTGRES_SERVER_NAME}.postgres.database.azure.com" \
+            -U "$POSTGRES_ADMIN_USER" \
+            -d "$POSTGRES_DATABASE" \
+            -f migrations/008_tenants.sql
 
       - name: Remove Temporary Firewall Rule + Disable Public Access
         if: always()
