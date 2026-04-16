@@ -1,7 +1,7 @@
 """Pydantic models for the AAP API Gateway (DETECT-004)."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -639,3 +639,74 @@ class PolicySuggestion(BaseModel):
     dismissed: bool = Field(default=False, description="Whether operator dismissed this suggestion")
     converted_to_policy_id: Optional[str] = Field(default=None, description="Policy ID if operator converted this suggestion")
     message: str = Field(..., description="Human-readable suggestion message")
+
+
+# ── Capacity Planning Models ─────────────────────────────────────────────────
+
+class CapacityQuotaItem(BaseModel):
+    resource_category: str  # "compute_quota" | "network_quota" | "storage_quota"
+    name: str               # human-readable display name
+    quota_name: str         # machine-readable name (e.g. "standardDSv3Family")
+    current_value: int
+    limit: int
+    usage_pct: float
+    available: int
+    days_to_exhaustion: Optional[float] = None
+    confidence: Optional[str] = None  # "high" | "medium" | "low" | "insufficient_data"
+    traffic_light: str = "green"      # "red" | "yellow" | "green"
+    growth_rate_per_day: Optional[float] = None
+    projected_exhaustion_date: Optional[str] = None  # ISO date string
+    confidence_interval_upper_pct: Optional[float] = None  # ±90% CI upper bound as % of limit
+    confidence_interval_lower_pct: Optional[float] = None  # ±90% CI lower bound as % of limit
+
+
+class CapacityHeadroomResponse(BaseModel):
+    subscription_id: str
+    location: str
+    top_constrained: List[CapacityQuotaItem]
+    generated_at: str
+    snapshot_count: int = 0
+    data_note: Optional[str] = None
+
+
+class SubnetHeadroomItem(BaseModel):
+    vnet_name: str
+    resource_group: str
+    subnet_name: str
+    address_prefix: str
+    total_ips: int
+    reserved_ips: int = 5
+    ip_config_count: int
+    available_ips: int
+    usage_pct: float
+    traffic_light: str = "green"
+    note: Optional[str] = None
+
+
+class IPSpaceHeadroomResponse(BaseModel):
+    subscription_id: str
+    subnets: List[SubnetHeadroomItem]
+    generated_at: str
+    duration_ms: int
+    note: Optional[str] = None
+
+
+class AKSNodePoolHeadroomItem(BaseModel):
+    cluster_name: str
+    resource_group: str
+    location: str
+    pool_name: str
+    vm_size: str
+    quota_family: str
+    current_nodes: int
+    max_nodes: int
+    available_nodes: int
+    usage_pct: float
+    traffic_light: str = "green"
+
+
+class AKSHeadroomResponse(BaseModel):
+    subscription_id: str
+    clusters: List[AKSNodePoolHeadroomItem]
+    generated_at: str
+    duration_ms: int

@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: unknown
-last_updated: "2026-04-14T16:32:26.031Z"
+status: Ready to execute
+last_updated: "2026-04-16T01:48:02.283Z"
 progress:
   total_phases: 35
   completed_phases: 34
@@ -440,6 +440,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 42 added: surface runbooks in web-ui
 - Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
 - Phase 45 added: Azure MCP Server v2 Upgrade and New Capabilities — upgrade from archived Azure/azure-mcp to microsoft/mcp v2.0.0, wire advisor namespace into SRE agent and containerapps namespace for self-monitoring
+- Phase 66 added: CVE database and tracking tab and show list of CVEs that affects the selected VM shown in VM details panel. also show which of the CVEs are already patched by the installed patches and which are pending based on the pending patches. this will help to provide complete view about the patch status and also the list of CVEs that's not patched for the selected VM.
 
 ---
 

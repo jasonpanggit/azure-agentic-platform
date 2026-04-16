@@ -393,6 +393,24 @@ resource "azurerm_cosmosdb_sql_container" "war_rooms" {
   }
 }
 
+resource "azurerm_cosmosdb_sql_container" "capacity_snapshots" {
+  name                  = "capacity_snapshots"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_path    = "/subscription_id"
+  partition_key_version = 1
+  default_ttl           = 34560000 # 400 days in seconds
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
