@@ -93,19 +93,31 @@ jobs:
             --resource-group "$POSTGRES_RESOURCE_GROUP" \
             --name "$POSTGRES_SERVER_NAME" \
             --public-access Enabled
-          # Wait for Azure network propagation after enabling public access.
-          sleep 15
-          az postgres flexible-server firewall-rule delete \
-            --resource-group "$POSTGRES_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
-            --yes || true
-          az postgres flexible-server firewall-rule create \
-            --resource-group "$POSTGRES_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
-            --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
-            --end-ip-address "${{ steps.runner_ip.outputs.ip }}"
+          # Wait for Azure to propagate public access before firewall operations.
+          # Retry loop: firewall ops fail if public access hasn't propagated yet.
+          for attempt in 1 2 3 4 5; do
+            sleep 20
+            if az postgres flexible-server firewall-rule delete \
+              --resource-group "$POSTGRES_RESOURCE_GROUP" \
+              --name "$POSTGRES_SERVER_NAME" \
+              --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+              --yes 2>/dev/null || true; then
+              if az postgres flexible-server firewall-rule create \
+                --resource-group "$POSTGRES_RESOURCE_GROUP" \
+                --name "$POSTGRES_SERVER_NAME" \
+                --rule-name "$TEMP_FIREWALL_RULE_NAME" \
+                --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
+                --end-ip-address "${{ steps.runner_ip.outputs.ip }}"; then
+                echo "Firewall rule created on attempt ${attempt}"
+                break
+              fi
+            fi
+            echo "::warning::Firewall operation failed on attempt ${attempt}, retrying..."
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Failed to create firewall rule after 5 attempts"
+              exit 1
+            fi
+          done
 
       - name: Validate migration files
         run: |
