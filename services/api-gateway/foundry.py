@@ -218,30 +218,88 @@ async def dispatch_to_orchestrator(
 
 
 # ---------------------------------------------------------------------------
-# Agent instruction cache — populated on first use, reused across requests
+# Domain system prompts — used directly for chat.completions fallback.
+# Foundry list_versions() does not reliably filter by name, so we maintain
+# prompts locally to avoid cross-domain instruction contamination.
 # ---------------------------------------------------------------------------
 
-_AGENT_INSTRUCTION_CACHE: dict[str, tuple[str, str]] = {}  # name → (model, instructions)
+_DOMAIN_SYSTEM_PROMPTS: dict[str, str] = {
+    "compute_agent": (
+        "You are an Azure AIOps specialist for compute resources (Virtual Machines, VMSS, AKS, disks). "
+        "Help operators understand VM health, CPU/memory metrics, activity logs, resource health, "
+        "OS versions, and scale set status. Be concise and structured."
+    ),
+    "network_agent": (
+        "You are an Azure AIOps specialist for networking (VNets, NSGs, load balancers, DNS, "
+        "ExpressRoute, VPN, network peering, flow logs). Help operators diagnose connectivity issues, "
+        "review NSG rules, and understand network topology. Be concise and structured."
+    ),
+    "storage_agent": (
+        "You are an Azure AIOps specialist for storage (Blob, File Shares, Data Lake, ADLS, "
+        "Storage Accounts, Managed Disks). Help operators check storage health, diagnose errors, "
+        "review diagnostics, and understand usage patterns. Be concise and structured."
+    ),
+    "security_agent": (
+        "You are an Azure AIOps specialist for security (Microsoft Defender, Key Vault, RBAC, "
+        "security alerts, identity drift, Secure Score, policy compliance). Help operators understand "
+        "security posture and investigate alerts. Be concise and structured."
+    ),
+    "database_agent": (
+        "You are an Azure AIOps specialist for databases (Cosmos DB, PostgreSQL, Azure SQL, "
+        "elastic pools, DTU/RU consumption). Help operators diagnose performance issues, check "
+        "resource health, and review metrics. Be concise and structured."
+    ),
+    "messaging_agent": (
+        "You are an Azure AIOps specialist for messaging (Service Bus, Event Hubs, queues, "
+        "topics, dead-letter queues, consumer groups, throughput units). Help operators investigate "
+        "message backlogs, errors, and throughput issues. Be concise and structured."
+    ),
+    "appservice_agent": (
+        "You are an Azure AIOps specialist for App Service (Web Apps, Function Apps, App Service Plans). "
+        "Help operators diagnose deployment issues, review logs, check health, and understand "
+        "scaling behaviour. Be concise and structured."
+    ),
+    "containerapps_agent": (
+        "You are an Azure AIOps specialist for Container Apps (managed environments, Container Apps, "
+        "revisions, replicas). Help operators diagnose startup failures, scaling issues, and "
+        "container health. Be concise and structured."
+    ),
+    "arc_agent": (
+        "You are an Azure AIOps specialist for Azure Arc (Arc-enabled servers, Arc Kubernetes, "
+        "Arc SQL Managed Instance, Arc PostgreSQL, connected clusters, hybrid machines). "
+        "Help operators manage and diagnose hybrid infrastructure. Be concise and structured."
+    ),
+    "patch_agent": (
+        "You are an Azure AIOps specialist for patch management (Azure Update Manager, patch "
+        "compliance, missing patches, Windows/Linux updates, security patches). Help operators "
+        "assess and remediate patching gaps. Be concise and structured."
+    ),
+    "eol_agent": (
+        "You are an Azure AIOps specialist for end-of-life detection (outdated software, "
+        "deprecated OS versions, software lifecycle, unsupported versions). Help operators "
+        "identify EOL resources and plan upgrades. Be concise and structured."
+    ),
+    "finops_agent": (
+        "You are an Azure AIOps specialist for FinOps and cloud cost management (cost breakdown, "
+        "billing, budgets, idle resources, reserved instances, savings plans, rightsizing, burn rate). "
+        "Help operators understand and optimise cloud spend. Be concise and structured."
+    ),
+    "sre_agent": (
+        "You are an Azure AIOps SRE specialist for availability, reliability, and cross-domain "
+        "correlation (service health, Advisor recommendations, change analysis, performance baselines). "
+        "Help operators triage and investigate infrastructure incidents. Be concise and structured."
+    ),
+}
 
 
-def _get_cached_agent_instructions(
-    project, name: str
-) -> tuple[str, str]:
-    """Return (model, instructions) for named agent, cached after first fetch."""
-    if name not in _AGENT_INSTRUCTION_CACHE:
-        try:
-            versions = list(project.agents.list_versions(name))
-            if versions:
-                d = versions[0].as_dict() if hasattr(versions[0], "as_dict") else dict(versions[0])
-                defn = d.get("definition", {})
-                _AGENT_INSTRUCTION_CACHE[name] = (
-                    defn.get("model", "gpt-4.1"),
-                    defn.get("instructions", ""),
-                )
-        except Exception as exc:
-            logger.warning("Could not load agent %s: %s", name, exc)
-            _AGENT_INSTRUCTION_CACHE[name] = ("gpt-4.1", "")
-    return _AGENT_INSTRUCTION_CACHE.get(name, ("gpt-4.1", ""))
+def _get_domain_instructions(domain_agent_tool: str) -> tuple[str, str]:
+    """Return (model, instructions) for a domain agent tool name."""
+    instructions = _DOMAIN_SYSTEM_PROMPTS.get(
+        domain_agent_tool,
+        f"You are an Azure AIOps specialist for the {domain_agent_tool.replace('_', ' ')} domain. "
+        "Answer Azure infrastructure questions helpfully and concisely.",
+    )
+    return "gpt-4.1", instructions
 
 
 def _classify_domain(message: str) -> str:
@@ -320,7 +378,6 @@ async def dispatch_chat_to_orchestrator(
         Dict with "response_id", "thread_id", "run_id", "status", and "reply" keys.
     """
     import uuid
-    import re as _re
 
     loop = asyncio.get_running_loop()
 
@@ -329,26 +386,15 @@ async def dispatch_chat_to_orchestrator(
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
     logger.info("Keyword-routed to: %s", domain_agent_name)
 
-    # Load domain agent instructions (cached after first call).
-    # Only build the project client if the instructions are not already cached —
-    # AIProjectClient init + list_versions adds ~2-4s on cold start.
-    if domain_agent_name not in _AGENT_INSTRUCTION_CACHE:
-        project = _get_foundry_project(credential)
-        domain_model, domain_instructions = await loop.run_in_executor(
-            None, _get_cached_agent_instructions, project, domain_agent_name
-        )
-    else:
-        domain_model, domain_instructions = _AGENT_INSTRUCTION_CACHE[domain_agent_name]
+    # Load domain-specific system prompt from local map — no Foundry API call needed.
+    # list_versions() does not reliably filter by agent name and causes cross-domain
+    # instruction contamination (e.g. storage prompt returned for compute queries).
+    domain_model, domain_instructions = _get_domain_instructions(domain_agent_tool)
 
     # Use the account-level endpoint (cognitiveservices.azure.com) for chat.completions.
     # The project-scoped endpoint (services.ai.azure.com/api/projects/...) returns HTTP 500
     # on every responses.create() call — this is a known Foundry Preview issue.
     openai_client = _get_openai_client()
-    if not domain_instructions:
-        domain_instructions = (
-            f"You are an Azure AIOps specialist for {domain_agent_tool.replace('_', ' ')} domain. "
-            "Answer Azure infrastructure questions helpfully and concisely."
-        )
 
     with foundry_span("chat_completions_domain") as span:
         span.set_attribute("agent.name", domain_agent_name)
