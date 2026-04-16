@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -21,9 +21,10 @@ import { ComplianceTab } from './ComplianceTab'
 import { OpsTab } from './OpsTab'
 import { SettingsTab } from './SettingsTab'
 import { SLATab } from './SLATab'
+import { CapacityTab } from './CapacityTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'settings'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'settings'
 
 interface FilterState {
   severity?: string
@@ -63,6 +64,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'cost',          label: 'FinOps',        Icon: DollarSign },
     { id: 'observability', label: 'Observability', Icon: Activity },
     { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
+    { id: 'capacity',      label: 'Capacity',      Icon: Gauge },
   ],
   // Governance
   [
@@ -318,6 +320,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <SLATab subscriptions={selectedSubscriptions} />
           </div>
+        </div>
+
+        <div id="tabpanel-capacity" role="tabpanel" aria-labelledby="tab-capacity" hidden={activeTab !== 'capacity'}>
+          {activeTab === 'capacity' && <CapacityTab subscriptionId={selectedSubscriptions[0]} />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>

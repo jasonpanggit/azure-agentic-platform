@@ -441,6 +441,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 - Phase 43 added: Centralized logging — add option to route diagnostic settings and DCR-based logs to central Log Analytics Workspace
 - Phase 45 added: Azure MCP Server v2 Upgrade and New Capabilities — upgrade from archived Azure/azure-mcp to microsoft/mcp v2.0.0, wire advisor namespace into SRE agent and containerapps namespace for self-monitoring
 - Phase 66 added: CVE database and tracking tab and show list of CVEs that affects the selected VM shown in VM details panel. also show which of the CVEs are already patched by the installed patches and which are pending based on the pending patches. this will help to provide complete view about the patch status and also the list of CVEs that's not patched for the selected VM.
+- Phase 67 added: add quota tab to allow one to check quota allocation of the subscription. this will be very useful for capacity planning and scalability.
 
 ---
 

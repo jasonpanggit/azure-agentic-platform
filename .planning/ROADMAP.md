@@ -1357,6 +1357,16 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 66 to break down)
 
+### Phase 67: add quota tab to allow one to check quota allocation of the subscription. this will be very useful for capacity planning and scalability.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 66
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 67 to break down)
+
 ---
 
 ## World-Class v3.0 Success Criteria
