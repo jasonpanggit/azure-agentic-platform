@@ -12,7 +12,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Bell, Shield } from 'lucide-react';
 import { useAppState } from '@/lib/app-state-context';
-import { WarRoomPanel } from './WarRoomPanel';
+import { WarRoomDetailPanel } from './WarRoomDetailPanel';
 
 interface Incident {
   incident_id: string;
@@ -297,7 +297,7 @@ export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedPr
         </TableBody>
       </Table>
       {warRoomIncidentId && (
-        <WarRoomPanel
+        <WarRoomDetailPanel
           incidentId={warRoomIncidentId}
           incidentTitle={warRoomTitle}
           onClose={() => setWarRoomIncidentId(null)}

@@ -37,7 +37,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
  *
  * On unmount: closes SSE connection, clears heartbeat interval.
  */
-export function WarRoomPanel({ incidentId, incidentTitle, onClose }: WarRoomPanelProps) {
+export function WarRoomDetailPanel({ incidentId, incidentTitle, onClose }: WarRoomPanelProps) {
   const [state, setState] = useState<WarRoomState>({
     participants: [],
     annotations: [],
