@@ -218,6 +218,82 @@ async def dispatch_to_orchestrator(
 
 
 # ---------------------------------------------------------------------------
+# Agent instruction cache — populated on first use, reused across requests
+# ---------------------------------------------------------------------------
+
+_AGENT_INSTRUCTION_CACHE: dict[str, tuple[str, str]] = {}  # name → (model, instructions)
+
+
+def _get_cached_agent_instructions(
+    project, name: str
+) -> tuple[str, str]:
+    """Return (model, instructions) for named agent, cached after first fetch."""
+    if name not in _AGENT_INSTRUCTION_CACHE:
+        try:
+            versions = list(project.agents.list_versions(name))
+            if versions:
+                d = versions[0].as_dict() if hasattr(versions[0], "as_dict") else dict(versions[0])
+                defn = d.get("definition", {})
+                _AGENT_INSTRUCTION_CACHE[name] = (
+                    defn.get("model", "gpt-4.1"),
+                    defn.get("instructions", ""),
+                )
+        except Exception as exc:
+            logger.warning("Could not load agent %s: %s", name, exc)
+            _AGENT_INSTRUCTION_CACHE[name] = ("gpt-4.1", "")
+    return _AGENT_INSTRUCTION_CACHE.get(name, ("gpt-4.1", ""))
+
+
+def _classify_domain(message: str) -> str:
+    """Fast keyword-based domain routing — mirrors the orchestrator's routing rules.
+
+    Returns the domain agent tool name (e.g. 'compute_agent'). Falls back to
+    'sre_agent' for ambiguous queries. Avoids a round-trip LLM call for routing.
+    """
+    import re
+    msg = message.lower()
+
+    # Arc (must check before generic "server" / "machine" terms)
+    if re.search(r"arc[\s-]?enabled|arc[\s-]?server|arc[\s-]?kubernetes|arc[\s-]?sql|arc[\s-]?postgres|connected.cluster|hybrid.machine", msg):
+        return "arc_agent"
+    # Patch / update
+    if re.search(r"\bpatch\b|patching|update.manager|patch.compliance|missing.patch|windows.update|security.patch|linux.update", msg):
+        return "patch_agent"
+    # EOL
+    if re.search(r"end.of.life|\beol\b|outdated.software|software.lifecycle|unsupported.version|lifecycle.status|deprecated.version", msg):
+        return "eol_agent"
+    # Database
+    if re.search(r"\bcosmos\b|cosmosdb|cosmos.db|\bpostgresql\b|\bpostgres\b|azure.sql|sql.database|\bdtu\b|elastic.pool|flexibleserver|request.unit|\bru/s\b", msg):
+        return "database_agent"
+    # App Service
+    if re.search(r"app.service|web.app|function.app|azure.function|app.service.plan|\bwebapp\b|\bfunc.app\b", msg):
+        return "appservice_agent"
+    # Container Apps
+    if re.search(r"container.app|containerapps|managed.environment|container.apps.environment", msg):
+        return "containerapps_agent"
+    # Messaging
+    if re.search(r"service.bus|servicebus|\bqueue\b|dead.letter|\bdlq\b|\btopic\b|event.hub|eventhub|consumer.group|throughput.unit", msg):
+        return "messaging_agent"
+    # FinOps
+    if re.search(r"\bcost\b|\bspend\b|\bbilling\b|finops|\bbudget\b|idle.resource|reserved.instance|\bri.utiliz|savings.plan|cost.breakdown|cloud.cost|rightsizing|burn.rate|overspend", msg):
+        return "finops_agent"
+    # Security
+    if re.search(r"\bdefender\b|key.vault|keyvault|\brbac\b|security.alert|identity.drift|secure.score|policy.compliance", msg):
+        return "security_agent"
+    # Network
+    if re.search(r"\bvnet\b|\bnsg\b|load.balancer|\bdns\b|expressroute|network.peering|flow.log|\bvpn\b", msg):
+        return "network_agent"
+    # Storage
+    if re.search(r"\bblob\b|file.share|datalake|storage.account|adls|managed.disk", msg):
+        return "storage_agent"
+    # Compute (VMs — broad fallback for "show my virtual machines" etc.)
+    if re.search(r"\bvm\b|virtual.machine|\baks\b|\bcpu\b|compute|\bdisk\b|\bvmss\b|scale.set", msg):
+        return "compute_agent"
+    # Default
+    return "sre_agent"
+
+
+# ---------------------------------------------------------------------------
 # Chat dispatch (operator → orchestrator, with thread continuity)
 # ---------------------------------------------------------------------------
 
@@ -227,91 +303,47 @@ async def dispatch_chat_to_orchestrator(
     credential: Optional[DefaultAzureCredential] = None,
     conversation_id: Optional[str] = None,
 ) -> dict[str, str]:
-    """Dispatch an operator chat message via chat.completions two-hop fallback.
+    """Dispatch an operator chat message via single-hop chat.completions.
 
     The Foundry Agent Service (both threads/runs and responses APIs) is non-functional
-    on this project due to a broken capability host. Fallback: use chat.completions
-    directly with each agent's system prompt.
+    due to a broken capability host. Fallback: use chat.completions directly with
+    the domain agent's system prompt.
 
-    Two-hop flow:
-    1. Orchestrator (chat.completions) → determines domain + routes query
-    2. Domain agent (chat.completions) → executes the query and returns reply
+    Fast path (single LLM call):
+    1. Keyword classify the message → domain agent (no LLM routing call)
+    2. Domain agent chat.completions → reply
 
-    Args:
-        message: The operator's chat message.
-        credential: Optional Azure credential.
-        conversation_id: Ignored in fallback mode (no thread state).
+    Agent instructions are cached after first fetch — subsequent requests skip
+    the list_versions() API calls entirely.
 
     Returns:
         Dict with "response_id", "thread_id", "run_id", "status", and "reply" keys.
     """
     import uuid
+    import re as _re
 
     loop = asyncio.get_running_loop()
     project = _get_foundry_project(credential)
     openai_client = project.get_openai_client()
 
-    # Load all agent definitions once
-    def _get_agent_instructions(name: str) -> tuple[str, str]:
-        """Return (model, instructions) for named agent."""
-        try:
-            versions = list(project.agents.list_versions(name))
-            if versions:
-                d = versions[0].as_dict() if hasattr(versions[0], "as_dict") else dict(versions[0])
-                defn = d.get("definition", {})
-                return defn.get("model", "gpt-4.1"), defn.get("instructions", "")
-        except Exception as exc:
-            logger.warning("Could not load agent %s: %s", name, exc)
-        return "gpt-4.1", ""
-
-    # Step 1: Ask orchestrator which domain agent to call
-    orch_model, orch_instructions = await loop.run_in_executor(
-        None, _get_agent_instructions, "aap-orchestrator-agent"
-    )
-
-    # Routing prompt: ask orchestrator to identify the domain agent name only
-    routing_system = (
-        orch_instructions
-        + "\n\nIMPORTANT: Respond with ONLY the agent tool name to call (e.g. 'compute_agent', "
-        "'network_agent', 'storage_agent', 'security_agent', 'arc_agent', 'sre_agent', "
-        "'patch_agent', 'eol_agent', 'database_agent', 'appservice_agent', "
-        "'containerapps_agent', 'messaging_agent', 'finops_agent'). "
-        "No explanation. Just the agent name."
-    )
-
-    with foundry_span("chat_completions_route") as span:
-        span.set_attribute("agent.name", "aap-orchestrator-agent")
-        route_resp = await loop.run_in_executor(
-            None,
-            lambda: openai_client.chat.completions.create(
-                model=orch_model,
-                messages=[
-                    {"role": "system", "content": routing_system},
-                    {"role": "user", "content": message},
-                ],
-                max_tokens=20,
-                temperature=0,
-            ),
-        )
-
-    domain_agent_tool = route_resp.choices[0].message.content.strip().lower()
-    # Normalize: strip punctuation, extract agent name
-    import re
-    m = re.search(r"(compute|network|storage|security|arc|sre|patch|eol|database|appservice|containerapps|messaging|finops)_agent", domain_agent_tool)
-    domain_agent_tool = m.group(0) if m else "sre_agent"
+    # Fast keyword routing — no LLM call needed
+    domain_agent_tool = _classify_domain(message)
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
-    logger.info("Orchestrator routed to: %s (%s)", domain_agent_tool, domain_agent_name)
-    span.set_attribute("foundry.routed_to", domain_agent_name)
+    logger.info("Keyword-routed to: %s", domain_agent_name)
 
-    # Step 2: Call the domain agent with the original message
+    # Load domain agent instructions (cached after first call)
     domain_model, domain_instructions = await loop.run_in_executor(
-        None, _get_agent_instructions, domain_agent_name
+        None, _get_cached_agent_instructions, project, domain_agent_name
     )
     if not domain_instructions:
-        domain_instructions = f"You are the {domain_agent_name}. Answer Azure infrastructure questions."
+        domain_instructions = (
+            f"You are an Azure AIOps specialist for {domain_agent_tool.replace('_', ' ')} domain. "
+            "Answer Azure infrastructure questions helpfully and concisely."
+        )
 
-    with foundry_span("chat_completions_domain") as span2:
-        span2.set_attribute("agent.name", domain_agent_name)
+    with foundry_span("chat_completions_domain") as span:
+        span.set_attribute("agent.name", domain_agent_name)
+        span.set_attribute("foundry.routed_to", domain_agent_name)
         domain_resp = await loop.run_in_executor(
             None,
             lambda: openai_client.chat.completions.create(
@@ -328,7 +360,7 @@ async def dispatch_chat_to_orchestrator(
     response_id = f"chat-{uuid.uuid4().hex[:16]}"
 
     logger.info(
-        "Chat fallback complete (route=%s, reply_len=%d)",
+        "Chat complete (agent=%s, reply_len=%d)",
         domain_agent_name,
         len(reply) if reply else 0,
     )
