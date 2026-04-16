@@ -3,11 +3,6 @@ name: Prod DB Setup (one-time)
 on:
   workflow_dispatch:
     inputs:
-      resource_group:
-        description: 'Resource group containing the PostgreSQL server'
-        required: false
-        type: string
-        default: 'rg-aap-prod'
       postgres_server_name:
         description: 'PostgreSQL Flexible Server name'
         required: false
@@ -33,8 +28,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TEMP_FIREWALL_RULE_NAME: gh-runner-temp-prod-db-setup
-  POSTGRES_RESOURCE_GROUP: ${{ github.event.inputs.resource_group || 'rg-aap-prod' }}
   POSTGRES_SERVER_NAME: ${{ github.event.inputs.postgres_server_name || 'aap-postgres-prod' }}
   POSTGRES_DATABASE: ${{ github.event.inputs.postgres_database || 'aap' }}
   POSTGRES_ADMIN_USER: ${{ github.event.inputs.postgres_admin_user || 'aap_admin' }}
@@ -42,6 +35,8 @@ env:
 jobs:
   setup-pgvector:
     name: Enable pgvector + Run Migrations on Prod
+    # Self-hosted runner runs inside the VNet — can reach the private PostgreSQL
+    # endpoint directly. No public access or firewall rules needed.
     runs-on: [self-hosted, azure, linux]
     environment: prod
 
@@ -50,74 +45,18 @@ jobs:
 
       - name: Validate workflow inputs
         run: |
-          if [[ ! "$POSTGRES_RESOURCE_GROUP" =~ ^[A-Za-z0-9_.()-]{1,90}$ ]]; then
-            echo "::error::Invalid resource group name format"
-            exit 1
-          fi
-
           if [[ ! "$POSTGRES_SERVER_NAME" =~ ^[a-z0-9-]{3,63}$ ]]; then
             echo "::error::Invalid PostgreSQL server name format"
             exit 1
           fi
-
           if [[ ! "$POSTGRES_DATABASE" =~ ^[A-Za-z0-9_-]{1,63}$ ]]; then
             echo "::error::Invalid PostgreSQL database name format"
             exit 1
           fi
-
           if [[ ! "$POSTGRES_ADMIN_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$ ]]; then
             echo "::error::Invalid PostgreSQL admin username format"
             exit 1
           fi
-
-      - name: Azure Login
-        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Get Runner Egress IP
-        id: runner_ip
-        run: |
-          IP=$(curl -s --max-time 10 --retry 3 --retry-delay 2 https://api.ipify.org)
-          if [ -z "$IP" ]; then
-            echo "::error::Failed to retrieve runner egress IP"
-            exit 1
-          fi
-          echo "ip=$IP" >> "$GITHUB_OUTPUT"
-
-      - name: Enable Public Access + Add Temporary Firewall Rule
-        run: |
-          az postgres flexible-server update \
-            --resource-group "$POSTGRES_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --public-access Enabled
-          # Wait for Azure to propagate public access before firewall operations.
-          # Retry loop: firewall ops fail if public access hasn't propagated yet.
-          for attempt in 1 2 3 4 5; do
-            sleep 20
-            if az postgres flexible-server firewall-rule delete \
-              --resource-group "$POSTGRES_RESOURCE_GROUP" \
-              --name "$POSTGRES_SERVER_NAME" \
-              --rule-name "$TEMP_FIREWALL_RULE_NAME" \
-              --yes 2>/dev/null || true; then
-              if az postgres flexible-server firewall-rule create \
-                --resource-group "$POSTGRES_RESOURCE_GROUP" \
-                --name "$POSTGRES_SERVER_NAME" \
-                --rule-name "$TEMP_FIREWALL_RULE_NAME" \
-                --start-ip-address "${{ steps.runner_ip.outputs.ip }}" \
-                --end-ip-address "${{ steps.runner_ip.outputs.ip }}"; then
-                echo "Firewall rule created on attempt ${attempt}"
-                break
-              fi
-            fi
-            echo "::warning::Firewall operation failed on attempt ${attempt}, retrying..."
-            if [ "$attempt" -eq 5 ]; then
-              echo "::error::Failed to create firewall rule after 5 attempts"
-              exit 1
-            fi
-          done
 
       - name: Validate migration files
         run: |
@@ -136,11 +75,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
 
-      - name: Enable pgvector and Run Migrations
+      - name: Run Migrations
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           PGSSLMODE: require
         run: |
+          # Runner is inside the VNet — connects directly to private DNS endpoint.
           # 002_seed_runbooks.py is a data-seeding utility, not a schema migration.
           psql \
             -v ON_ERROR_STOP=1 \
@@ -160,27 +100,4 @@ jobs:
             -U "$POSTGRES_ADMIN_USER" \
             -d "$POSTGRES_DATABASE" \
             -f migrations/008_tenants.sql
-
-      - name: Remove Temporary Firewall Rule + Disable Public Access
-        if: always()
-        run: |
-          az postgres flexible-server firewall-rule delete \
-            --resource-group "$POSTGRES_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --rule-name "$TEMP_FIREWALL_RULE_NAME" \
-            --yes || echo "::warning::Failed to delete temporary firewall rule"
-
-          for attempt in 1 2 3; do
-            if az postgres flexible-server update \
-              --resource-group "$POSTGRES_RESOURCE_GROUP" \
-              --name "$POSTGRES_SERVER_NAME" \
-              --public-access Disabled; then
-              exit 0
-            fi
-
-            echo "::warning::Attempt ${attempt} to disable public access failed"
-            sleep 10
-          done
-
-          echo "::error::Failed to disable public access after multiple attempts"
-          exit 1
+          echo "All migrations applied successfully."
