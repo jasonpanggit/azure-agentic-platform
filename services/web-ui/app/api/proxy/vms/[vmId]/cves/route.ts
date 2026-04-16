@@ -2,33 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiGatewayUrl, buildUpstreamHeaders } from '@/lib/api-gateway';
 import { logger } from '@/lib/logger';
 
-const log = logger.child({ route: '/api/proxy/vms/[vmName]/cves' });
+const log = logger.child({ route: '/api/proxy/vms/[vmId]/cves' });
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/proxy/vms/[vmName]/cves
- *
- * Proxies per-VM CVE requests to the API gateway.
- * Query params forwarded as-is (subscription_id, resource_group).
- */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ vmName: string }> }
+  { params }: { params: Promise<{ vmId: string }> }
 ): Promise<NextResponse> {
   try {
     const apiGatewayUrl = getApiGatewayUrl();
     const { searchParams } = new URL(request.url);
     const query = searchParams.toString();
-    const { vmName } = await params;
+    const { vmId } = await params;
 
-    log.info('proxy request', { method: 'GET', vmName, query });
+    log.info('proxy request', { method: 'GET', vmId, query });
 
     const upstreamHeaders = buildUpstreamHeaders(request.headers.get('Authorization'), false);
 
     const res = await fetch(
-      `${apiGatewayUrl}/api/v1/vms/${encodeURIComponent(vmName)}/cves${query ? `?${query}` : ''}`,
+      `${apiGatewayUrl}/api/v1/vms/${encodeURIComponent(vmId)}/cves${query ? `?${query}` : ''}`,
       {
         headers: upstreamHeaders,
         signal: AbortSignal.timeout(15000),
