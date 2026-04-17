@@ -3,29 +3,36 @@
 POST /api/v1/vms/{resource_id_base64}/chat
   Body: { message: str, thread_id: str | null, incident_id: str | null }
 
-Routes to the orchestrator via AIProjectClient.agents (Foundry Agent Service).
-On new threads, prepends pre-fetched evidence context to the user message so
-the agent's first response is grounded without live tool calls.
+Uses chat.completions with function calling so the LLM can invoke live Azure
+SDK tools (get_vm_metrics, get_activity_logs, get_resource_health,
+get_vm_power_state) scoped to the selected VM's resource ID.
 
-Migrated from AgentsClient threads/runs pattern to AIProjectClient.agents
-(dispatch_chat_to_orchestrator) — same client path as chat.py.
-The orchestrator routes to the compute agent via connected_agent tools.
+On new threads, also prepends pre-fetched evidence context from Cosmos so the
+agent starts grounded. Function calling then lets it fetch additional live data
+on demand as the conversation continues.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import os
+import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.chat import _RESPONSE_CACHE
 from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
-from services.api_gateway.foundry import dispatch_chat_to_orchestrator
+from services.api_gateway.foundry import (
+    _CONVERSATION_HISTORY,
+    _CONVERSATION_HISTORY_LIMIT,
+    _get_domain_instructions,
+    _get_openai_client,
+)
+from services.api_gateway.vm_chat_tools import VM_CHAT_TOOL_SCHEMAS, dispatch_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -158,16 +165,23 @@ async def _dispatch_vm_chat(
     request: VMChatRequest,
     cosmos_client: Any,
     user_id: str,
+    credential: Any = None,
 ) -> dict[str, str]:
-    """Dispatch a VM-scoped chat message to the orchestrator.
+    """Dispatch a VM-scoped chat message with live function calling.
 
-    For new threads: prepends evidence context to the user message.
-    For continuing threads: passes the thread_id for continuity.
+    Flow:
+    1. Build system prompt (compute agent instructions + resource ID context)
+    2. Prepend evidence context on new threads
+    3. Replay conversation history for multi-turn continuity
+    4. Call chat.completions with Azure SDK tool schemas
+    5. Execute any tool calls the LLM requests (metrics, logs, health, power state)
+    6. Feed tool results back → repeat until LLM returns a final text reply
+    7. Persist turn to conversation history
     """
     loop = asyncio.get_running_loop()
-    message = request.message
 
-    # On new threads, prepend evidence context directly into the message content
+    # Build user message — prepend evidence context on new threads
+    user_message = request.message
     if not request.thread_id and cosmos_client:
         evidence = None
         if request.incident_id:
@@ -179,31 +193,121 @@ async def _dispatch_vm_chat(
                 None, _load_latest_evidence_for_resource, cosmos_client, resource_id
             )
         context = _build_evidence_context(resource_id, evidence)
-        message = context + request.message
+        user_message = context + request.message
         logger.info(
             "vm_chat: evidence context prepended | resource=%s evidence=%s",
             resource_id[-60:], "found" if evidence else "none",
         )
 
-    result = await dispatch_chat_to_orchestrator(
-        message=message,
-        conversation_id=request.thread_id,
+    # System prompt: compute specialist + explicit resource scope
+    vm_name = resource_id.rstrip("/").split("/")[-1]
+    _, base_instructions = _get_domain_instructions("compute_agent")
+    system_prompt = (
+        f"{base_instructions}\n\n"
+        f"You are investigating a specific Azure VM:\n"
+        f"  Name: {vm_name}\n"
+        f"  Resource ID: {resource_id}\n\n"
+        "You have live tools available to fetch real-time data for this VM. "
+        "Use them whenever the user asks about metrics, logs, health, or power state. "
+        "Do NOT say data is unavailable without first trying the relevant tool."
     )
 
-    # Cache the reply so the polling endpoint (GET /api/v1/chat/{id}/result)
-    # returns immediately on the first poll — same pattern as chat.py.
-    thread_id = result["thread_id"]
-    _RESPONSE_CACHE[thread_id] = {
-        "thread_id": thread_id,
-        "run_status": result.get("status", "completed"),
-        "reply": result.get("reply"),
-    }
+    # Conversation history for multi-turn continuity
+    history_key = request.thread_id or None
+    prior_history = _CONVERSATION_HISTORY.get(history_key, []) if history_key else []
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    messages.extend(prior_history)
+    messages.append({"role": "user", "content": user_message})
+
+    openai_client = _get_openai_client()
+    response_id = f"chat-{uuid.uuid4().hex[:16]}"
+
+    # Tool-calling loop — max 5 rounds to prevent runaway calls
+    MAX_TOOL_ROUNDS = 5
+    reply: Optional[str] = None
+
+    for _round in range(MAX_TOOL_ROUNDS):
+        response = await loop.run_in_executor(
+            None,
+            lambda m=messages: openai_client.chat.completions.create(
+                model="gpt-4.1",
+                messages=m,
+                tools=VM_CHAT_TOOL_SCHEMAS,
+                tool_choice="auto",
+                max_tokens=1500,
+            ),
+        )
+
+        choice = response.choices[0]
+
+        # Terminal: LLM returned a text reply
+        if choice.finish_reason == "stop" or not choice.message.tool_calls:
+            reply = choice.message.content
+            break
+
+        # LLM wants to call tools — execute each and feed results back
+        messages.append(choice.message)  # assistant message with tool_calls
+
+        for tool_call in choice.message.tool_calls:
+            tool_name = tool_call.function.name
+            try:
+                tool_args = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                tool_args = {}
+
+            logger.info("vm_chat: tool_call | tool=%s resource=%s", tool_name, resource_id[-60:])
+
+            tool_result = await loop.run_in_executor(
+                None,
+                lambda tn=tool_name, ta=tool_args: dispatch_tool_call(
+                    tool_name=tn,
+                    tool_args=ta,
+                    resource_id=resource_id,
+                    credential=credential,
+                ),
+            )
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result,
+            })
+    else:
+        # Exhausted tool rounds — ask LLM for a summary with what it has
+        messages.append({"role": "user", "content": "Please summarise your findings so far."})
+        final = await loop.run_in_executor(
+            None,
+            lambda: openai_client.chat.completions.create(
+                model="gpt-4.1",
+                messages=messages,
+                max_tokens=1000,
+            ),
+        )
+        reply = final.choices[0].message.content
+
+    # Persist this turn into conversation history (plain text, not envelopes)
+    new_history_key = history_key or response_id
+    history = list(_CONVERSATION_HISTORY.get(new_history_key, []))
+    history.append({"role": "user", "content": request.message})  # store plain user text
+    history.append({"role": "assistant", "content": reply or ""})
+    max_messages = _CONVERSATION_HISTORY_LIMIT * 2
+    if len(history) > max_messages:
+        history = history[-max_messages:]
+    _CONVERSATION_HISTORY[new_history_key] = history
 
     logger.info(
-        "vm_chat: dispatched | resource=%s thread=%s run=%s status=%s user=%s",
-        resource_id[-60:], result["thread_id"], result["run_id"], result["status"], user_id,
+        "vm_chat: complete | resource=%s thread=%s tool_rounds=%d reply_len=%d user=%s",
+        resource_id[-60:], new_history_key, _round + 1, len(reply or ""), user_id,
     )
-    return result
+
+    return {
+        "response_id": response_id,
+        "thread_id": new_history_key,
+        "run_id": response_id,
+        "status": "completed",
+        "reply": reply,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +345,7 @@ async def start_vm_chat(
             request=payload,
             cosmos_client=cosmos_client,
             user_id=user_id,
+            credential=credential,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
