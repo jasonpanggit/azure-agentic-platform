@@ -173,6 +173,7 @@ async def create_chat_thread(
     request: ChatRequest,
     user_id: str,
     credential: Any = None,
+    cosmos_client: Any = None,
 ) -> dict[str, str]:
     """Dispatch an operator chat message to the Orchestrator via the Responses API.
 
@@ -213,6 +214,7 @@ async def create_chat_thread(
         result = await dispatch_chat_to_orchestrator(
             message=message_content,
             conversation_id=request.thread_id,  # None for new conversations
+            cosmos_client=cosmos_client,
         )
 
     thread_id = result["thread_id"]

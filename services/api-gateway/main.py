@@ -164,6 +164,7 @@ from services.api_gateway.subscription_endpoints import router as subscription_m
 from services.api_gateway.simulation_endpoints import router as simulation_router
 from services.api_gateway.agent_health import AgentHealthMonitor
 from services.api_gateway.agent_health_endpoints import router as agent_health_router
+from services.api_gateway.trace_endpoints import router as trace_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -774,6 +775,7 @@ app.include_router(quota_router)
 app.include_router(subscription_mgmt_router)
 app.include_router(simulation_router)
 app.include_router(agent_health_router)
+app.include_router(trace_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
@@ -1578,6 +1580,7 @@ async def start_chat(
     payload: ChatRequest,
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
+    cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> ChatResponse:
     """Start an operator-initiated chat conversation via the Foundry Responses API.
 
@@ -1591,7 +1594,7 @@ async def start_chat(
     logger.info("Chat request from user %s: %s", user_id, payload.message[:100])
 
     try:
-        result = await create_chat_thread(payload, user_id, credential=credential)
+        result = await create_chat_thread(payload, user_id, credential=credential, cosmos_client=cosmos_client)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
