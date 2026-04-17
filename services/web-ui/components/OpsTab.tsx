@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AgentHealthPanel } from '@/components/AgentHealthPanel';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -973,6 +974,11 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
           </button>
         </div>
       </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Agent Health (Phase 70)                                            */}
+      {/* ------------------------------------------------------------------ */}
+      <AgentHealthPanel />
 
       {/* ------------------------------------------------------------------ */}
       {/* KPI row                                                             */}

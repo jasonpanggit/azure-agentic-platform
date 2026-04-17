@@ -370,6 +370,7 @@ async def dispatch_chat_to_orchestrator(
     message: str,
     credential: Optional[DefaultAzureCredential] = None,
     conversation_id: Optional[str] = None,
+    cosmos_client: Optional[Any] = None,
 ) -> dict[str, str]:
     """Dispatch an operator chat message via Foundry Agent Service threads/runs.
 
@@ -481,6 +482,24 @@ async def dispatch_chat_to_orchestrator(
         "Chat complete via threads/runs (thread=%s, run=%s, reply_len=%d)",
         thread_id, run.id, len(reply) if reply else 0,
     )
+
+    # Fire-and-forget trace capture — does not block the response
+    if cosmos_client is not None:
+        try:
+            from services.api_gateway.trace_service import capture_run_trace
+            asyncio.create_task(
+                capture_run_trace(
+                    agents_client=agents,
+                    thread_id=thread_id,
+                    run_id=run.id,
+                    conversation_id=conversation_id,
+                    agent_name="orchestrator",
+                    cosmos_client=cosmos_client,
+                    cosmos_database_name="aap",
+                )
+            )
+        except Exception as _exc:
+            logger.debug("dispatch_chat_to_orchestrator: trace task creation failed: %s", _exc)
 
     return {
         "response_id": run.id,

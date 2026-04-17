@@ -160,6 +160,11 @@ from services.api_gateway.runbook_executor_endpoints import router as runbook_ex
 from services.api_gateway.tenant_endpoints import router as tenant_router
 from services.api_gateway.tenant_manager import TenantManager
 from services.api_gateway.quota_endpoints import router as quota_router
+from services.api_gateway.subscription_endpoints import router as subscription_mgmt_router
+from services.api_gateway.simulation_endpoints import router as simulation_router
+from services.api_gateway.agent_health import AgentHealthMonitor
+from services.api_gateway.agent_health_endpoints import router as agent_health_router
+from services.api_gateway.trace_endpoints import router as trace_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -647,6 +652,31 @@ async def lifespan(app: FastAPI):
         app.state.tenant_manager = TenantManager(postgres_dsn=None)
         logger.warning("startup: TenantManager initialized without DB (non-fatal) | error=%s", _tm_exc)
 
+    # Phase 70: Agent Health Monitor
+    async def _agent_health_incident_callback(payload: dict) -> None:
+        """Best-effort incident injection from the agent health monitor."""
+        try:
+            # Resolve ingest_incident from the module at call time to avoid circular refs
+            import services.api_gateway.main as _gw_main
+            _fn = getattr(_gw_main, "ingest_incident", None)
+            if _fn is not None:
+                from services.api_gateway.models import IncidentPayload
+                _inc = IncidentPayload(**{k: v for k, v in payload.items() if k in IncidentPayload.model_fields})
+                await _fn(_inc)
+        except Exception as _cb_exc:
+            pass  # best-effort; log below is sufficient
+        logger.info("agent_health: incident raised | title=%s", payload.get("title"))
+
+    app.state.agent_health_monitor = AgentHealthMonitor(
+        cosmos_client=app.state.cosmos_client,
+        cosmos_database_name=os.environ.get("COSMOS_DATABASE", "aap"),
+        incident_callback=_agent_health_incident_callback,
+    )
+    asyncio.create_task(
+        app.state.agent_health_monitor.run_health_loop(interval_seconds=60)
+    )
+    logger.info("startup: agent_health_monitor started | interval=60s")
+
     await _run_startup_migrations()
     yield
     # Teardown: close Cosmos client if initialized
@@ -742,6 +772,10 @@ app.include_router(quality_router)
 app.include_router(runbook_executor_router)
 app.include_router(tenant_router)
 app.include_router(quota_router)
+app.include_router(subscription_mgmt_router)
+app.include_router(simulation_router)
+app.include_router(agent_health_router)
+app.include_router(trace_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
@@ -1546,6 +1580,7 @@ async def start_chat(
     payload: ChatRequest,
     token: dict[str, Any] = Depends(verify_token),
     credential: Any = Depends(get_credential),
+    cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> ChatResponse:
     """Start an operator-initiated chat conversation via the Foundry Responses API.
 
@@ -1559,7 +1594,7 @@ async def start_chat(
     logger.info("Chat request from user %s: %s", user_id, payload.message[:100])
 
     try:
-        result = await create_chat_thread(payload, user_id, credential=credential)
+        result = await create_chat_thread(payload, user_id, credential=credential, cosmos_client=cosmos_client)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
