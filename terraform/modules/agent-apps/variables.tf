@@ -230,6 +230,12 @@ variable "api_gateway_tenant_id" {
 # Default empty string = connection resource skipped (no-op in dev).
 # ---------------------------------------------------------------------------
 
+variable "orchestrator_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Orchestrator agent Container App (health checks)"
+  type        = string
+  default     = ""
+}
+
 variable "compute_agent_endpoint" {
   description = "Internal HTTPS endpoint for the Compute agent Container App (A2A)"
   type        = string

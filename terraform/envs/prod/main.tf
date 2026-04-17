@@ -290,6 +290,17 @@ module "agent_apps" {
   finops_agent_id                = var.finops_agent_id
   finops_agent_endpoint          = var.finops_agent_endpoint
 
+  # Phase 70: Agent health monitor — HTTP endpoints injected into api-gateway
+  orchestrator_agent_endpoint = var.orchestrator_agent_endpoint
+  compute_agent_endpoint      = var.compute_agent_endpoint
+  network_agent_endpoint      = var.network_agent_endpoint
+  storage_agent_endpoint      = var.storage_agent_endpoint
+  security_agent_endpoint     = var.security_agent_endpoint
+  sre_agent_endpoint          = var.sre_agent_endpoint
+  arc_agent_endpoint          = var.arc_agent_endpoint
+  patch_agent_endpoint        = var.patch_agent_endpoint
+  eol_agent_endpoint          = var.eol_agent_endpoint
+
   # Use placeholder image on first deploy — ACR images don't exist yet.
   # CI/CD pipeline deploys real images after initial infra provisioning.
   # lifecycle.ignore_changes on image prevents Terraform from reverting CI/CD deploys.

@@ -348,6 +348,71 @@ resource "azurerm_container_app" "agents" {
           value = var.notification_email_to
         }
       }
+      # Phase 70: Agent health monitor — inject HTTP endpoints so api-gateway can probe each agent.
+      # Only injected into api-gateway (the health monitor runs there).
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.orchestrator_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "ORCHESTRATOR_ENDPOINT"
+          value = var.orchestrator_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.compute_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "COMPUTE_ENDPOINT"
+          value = var.compute_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.network_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "NETWORK_ENDPOINT"
+          value = var.network_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.storage_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "STORAGE_ENDPOINT"
+          value = var.storage_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.security_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "SECURITY_ENDPOINT"
+          value = var.security_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.sre_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "SRE_ENDPOINT"
+          value = var.sre_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.arc_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "ARC_ENDPOINT"
+          value = var.arc_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.patch_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "PATCH_ENDPOINT"
+          value = var.patch_agent_endpoint
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.eol_agent_endpoint != "" ? [1] : []
+        content {
+          name  = "EOL_ENDPOINT"
+          value = var.eol_agent_endpoint
+        }
+      }
     }
   }
 
