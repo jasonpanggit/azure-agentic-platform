@@ -81,9 +81,7 @@ def get_vm_metrics(
         sub_id = _extract_subscription_id(resource_id)
         client = MonitorManagementClient(credential, sub_id)
 
-        end_time = datetime.now(timezone.utc)
-        start_time = end_time - timedelta(hours=timespan_hours)
-        timespan = f"{start_time.isoformat()}/{end_time.isoformat()}"
+        timespan = f"PT{timespan_hours}H"
 
         response = client.metrics.list(
             resource_uri=resource_id,
