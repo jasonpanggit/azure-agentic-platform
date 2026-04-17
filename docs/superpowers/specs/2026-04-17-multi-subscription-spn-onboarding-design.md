@@ -145,6 +145,8 @@ class CredentialStore:
         Do NOT call before writing the new secret to KV — always write
         KV first, then invalidate, to avoid a race where concurrent
         requests re-cache the old secret.
+
+        If subscription_id is not in cache (e.g. after a restart), this is a no-op.
         """
         ...
 
@@ -267,10 +269,10 @@ Accepts the same body as onboard but performs auth + permission checks only. Not
 1. Validate subscription ID is a valid UUID
 2. Validate `secret_expires_at` is in the future (if provided)
 3. Build `ClientSecretCredential` and call `SubscriptionClient.subscriptions.get(sub_id)` — fail fast (HTTP 422 `credential_auth_failed`) if auth fails
-4. Run permission validation in parallel (see §5.6)
+4. Run permission validation in parallel (see §5.7)
 5. **Write JSON blob to Key Vault** (`sub-{id}-secret`) — fail HTTP 503 if KV unavailable
-6. Upsert Cosmos `subscriptions` record (no secret fields)
-7. Invalidate CredentialStore cache entry (after KV write succeeds)
+6. **Upsert Cosmos `subscriptions` record** (no secret fields) — if this fails, attempt to delete the KV secret as a compensating action, then return HTTP 503. If the compensating KV delete also fails, log the orphaned secret name (`sub-{id}-secret`) at ERROR level so it can be cleaned up manually.
+7. Invalidate CredentialStore cache entry (after both KV write and Cosmos upsert succeed)
 8. Write audit log: `subscription_onboarded`
 9. Return onboard result with `permission_status`
 
@@ -306,15 +308,17 @@ Returns all non-deleted Cosmos `subscriptions` records with metadata. Does **not
 
 `client_id` is included (not a secret). `client_secret` is never included.
 
-### 5.4 GET /onboard/{subscription_id}/validate — Re-validate stored credentials
+### 5.4 POST /onboard/{subscription_id}/validate — Re-validate stored credentials
 
-Re-runs permission checks using the credential fetched from KV. Does not require re-entering the secret.
+Re-runs permission checks using the credential fetched from KV. Does not require re-entering the secret. Uses POST (not GET) because it writes `permission_status` and `last_validated_at` to Cosmos and appends an audit log entry — these side effects make GET semantically incorrect.
 
 Updates `permission_status` and `last_validated_at` in Cosmos. Writes audit log: `subscription_validated` with `changed_from` showing previous permission_status.
 
 ### 5.5 PUT /onboard/{subscription_id}/credentials — Rotate credentials
 
-Accepts new `client_id`, `client_secret`, `tenant_id`, `secret_expires_at`. Steps:
+Accepts `client_id`, `client_secret`, `tenant_id`, `secret_expires_at`. All four fields are **optional** — only fields provided are updated. A user rotating only the secret can send just `{"client_secret": "new-secret"}` keeping the existing `client_id` and `tenant_id` unchanged. The API merges the provided fields with the existing KV blob before writing.
+
+Steps:
 1. Validate new credential via auth check
 2. **Write new JSON blob to KV first** (overwrites existing)
 3. **Then** invalidate CredentialStore cache (after KV write, to avoid race — see §4.2)
@@ -694,9 +698,9 @@ The existing public `GET /subscriptions/managed` endpoint used by the current Su
 
 ### Phase 4 — Subscription column + global selector across all tabs
 1. `SubscriptionContext.tsx` — React context + provider for global subscription selection
-2. Update all affected resource tables — add Subscription column
-3. Update fetch hooks — pass `subscription_id` from context
-4. Update API endpoints — add `subscription_ids` filter where missing
+2. Update all affected resource tables — add Subscription column (display name + tooltip with full GUID)
+3. Update fetch hooks — pass selected subscription IDs from context as repeated query params
+4. Update API endpoints that aggregate across subscriptions — add `subscription_id` as a repeated query param (e.g. `?subscription_id=uuid1&subscription_id=uuid2`). FastAPI receives this as `List[str]`. Affected endpoints: resources inventory, VM inventory, alerts list, patch list, topology tree, cost endpoints, security posture, AZ coverage, disk audit, cert expiry, identity risks. Endpoints that already take a single `subscription_id` path param are unchanged.
 
 ### Phase 5 — Data migration + cleanup
 1. PostgreSQL migration: `tenants` → `platform_settings` (compliance_frameworks, operator_group_id)
