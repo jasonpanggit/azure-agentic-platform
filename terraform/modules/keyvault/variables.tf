@@ -33,3 +33,9 @@ variable "tenant_id" {
   description = "Entra tenant ID"
   type        = string
 }
+
+variable "allowed_ip_rules" {
+  description = "List of public IP CIDR ranges allowed through KV firewall (e.g. Container Apps outbound IPs). Empty = KV remains fully private."
+  type        = list(string)
+  default     = []
+}

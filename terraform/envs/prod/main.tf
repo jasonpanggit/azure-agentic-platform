@@ -166,6 +166,12 @@ module "keyvault" {
   required_tags       = local.required_tags
   tenant_id           = var.tenant_id
 
+  # Allow Container Apps outbound IP to reach KV for CredentialStore SPN secret writes.
+  # Container Apps egress via public IP even in VNet-integrated environments.
+  # Private endpoint remains the preferred path; this rule is a fallback for
+  # workloads that cannot egress via private route.
+  allowed_ip_rules = ["135.237.248.203/32"]
+
   # NOTE (ISSUE-01): No private_endpoint_subnet_id or private_dns_zone_keyvault_id
   # passed here. Key Vault PE is created by module.private_endpoints below.
 }
