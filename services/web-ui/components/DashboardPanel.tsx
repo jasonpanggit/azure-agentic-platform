@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Globe, MessageSquare, HardDrive } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -28,9 +28,13 @@ import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
+import { AppServiceHealthTab } from './AppServiceHealthTab'
+import { QueueDepthTab } from './QueueDepthTab'
+import { VMExtensionAuditTab } from './VMExtensionAuditTab'
+import { AlertCoverageTab } from './AlertCoverageTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'app-services' | 'queue-depth' | 'vm-extensions' | 'alert-coverage' | 'settings' | 'admin'
 
 interface FilterState {
   severity?: string
@@ -64,6 +68,8 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'vms',         label: 'VMs',         Icon: Monitor },
     { id: 'vmss',        label: 'VMSS',        Icon: Scaling },
     { id: 'aks',         label: 'AKS',         Icon: Container },
+    { id: 'app-services', label: 'App Services', Icon: Globe },
+    { id: 'queue-depth',  label: 'Queues',       Icon: MessageSquare },
   ],
   // Monitoring & cost
   [
@@ -82,6 +88,8 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
+    { id: 'vm-extensions',    label: 'VM Extensions',   Icon: HardDrive },
+    { id: 'alert-coverage',   label: 'Alert Coverage',  Icon: Bell },
   ],
   // Config
   [
@@ -298,6 +306,17 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
 
+        <div id="tabpanel-app-services" role="tabpanel" aria-labelledby="tab-app-services" hidden={activeTab !== 'app-services'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <AppServiceHealthTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
+
+        <div id="tabpanel-queue-depth" role="tabpanel" aria-labelledby="tab-queue-depth" hidden={activeTab !== 'queue-depth'}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <QueueDepthTab subscriptions={selectedSubscriptions} />
+          </div>
+        </div>
         <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost" hidden={activeTab !== 'cost'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <CostTab subscriptions={selectedSubscriptions} />
@@ -356,6 +375,14 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
           {activeTab === 'quality' && <QualityFlywheelTab />}
+        </div>
+
+        <div id="tabpanel-vm-extensions" role="tabpanel" aria-labelledby="tab-vm-extensions" hidden={activeTab !== 'vm-extensions'}>
+          {activeTab === 'vm-extensions' && <VMExtensionAuditTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-alert-coverage" role="tabpanel" aria-labelledby="tab-alert-coverage" hidden={activeTab !== 'alert-coverage'}>
+          {activeTab === 'alert-coverage' && <AlertCoverageTab subscriptionId={selectedSubscriptions[0]} />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
