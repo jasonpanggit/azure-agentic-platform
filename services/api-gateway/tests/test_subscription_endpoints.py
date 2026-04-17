@@ -98,7 +98,7 @@ def client_no_cosmos():
 def test_list_managed_subscriptions_happy_path(mock_cosmos, client):
     """Returns enriched subscription list from Cosmos."""
     _, subs_container, incidents_container = mock_cosmos
-    subs_container.read_all_items.return_value = [
+    subs_container.query_items.return_value = [
         _make_cosmos_item("sub-001", "Production"),
         _make_cosmos_item("sub-002", "Staging", environment="staging"),
     ]
@@ -119,7 +119,7 @@ def test_list_managed_subscriptions_happy_path(mock_cosmos, client):
 def test_list_managed_subscriptions_includes_incident_counts(mock_cosmos, client):
     """Incident counts are populated from Cosmos incidents container."""
     _, subs_container, incidents_container = mock_cosmos
-    subs_container.read_all_items.return_value = [
+    subs_container.query_items.return_value = [
         _make_cosmos_item("sub-001", "Production"),
     ]
     # open_incidents query returns 5, all others 0
@@ -157,7 +157,7 @@ def test_list_managed_subscriptions_cosmos_unavailable(client_no_cosmos):
 def test_list_managed_subscriptions_cosmos_read_error(mock_cosmos, client):
     """Returns empty list with warning when Cosmos read throws."""
     _, subs_container, _ = mock_cosmos
-    subs_container.read_all_items.side_effect = Exception("Connection timeout")
+    subs_container.query_items.side_effect = Exception("Connection timeout")
 
     resp = client.get("/api/v1/subscriptions/managed")
     assert resp.status_code == 200

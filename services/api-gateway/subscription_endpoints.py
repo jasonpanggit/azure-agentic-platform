@@ -237,8 +237,21 @@ async def list_managed_subscriptions(
 
         for item in items:
             sub_id = item.get("subscription_id") or item.get("id", "")
-            name = item.get("name", sub_id)
+            # display_name is set by the SPN onboard endpoint; fall back to name then sub_id
+            name = item.get("display_name") or item.get("name", sub_id)
             counts = _fetch_incident_counts(cosmos_client, sub_id)
+
+            # Compute days until SPN secret expiry
+            secret_expires_at = item.get("secret_expires_at")
+            days_until_expiry: int | None = None
+            if secret_expires_at:
+                try:
+                    from datetime import datetime, timezone
+                    exp = datetime.fromisoformat(secret_expires_at.replace("Z", "+00:00"))
+                    days_until_expiry = (exp - datetime.now(timezone.utc)).days
+                except Exception:
+                    pass
+
             subscriptions.append({
                 "id": sub_id,
                 "name": name,
@@ -248,6 +261,14 @@ async def list_managed_subscriptions(
                 "incident_count_24h": counts["incident_count_24h"],
                 "open_incidents": counts["open_incidents"],
                 "last_synced": item.get("last_synced"),
+                # SPN credential fields
+                "credential_type": item.get("credential_type", "mi"),
+                "client_id": item.get("client_id"),
+                "permission_status": item.get("permission_status", {}),
+                "secret_expires_at": secret_expires_at,
+                "days_until_expiry": days_until_expiry,
+                "last_validated_at": item.get("last_validated_at"),
+                "display_name": name,
             })
 
         duration_ms = round((time.monotonic() - start_time) * 1000, 1)
