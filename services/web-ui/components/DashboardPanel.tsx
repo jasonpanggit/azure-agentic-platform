@@ -1,51 +1,40 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe, GitCommitHorizontal, Key, Wrench, DatabaseBackup, Lock, HardDrive } from 'lucide-react'
+import {
+  LayoutDashboard, Bell, Network, Server, ShieldCheck,
+  DollarSign, GitBranch, Wrench, ClipboardList, Settings,
+  Building2,
+} from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
-import { AuditLogViewer } from './AuditLogViewer'
-import { TopologyTab } from './TopologyTab'
-import { ResourcesTab } from './ResourcesTab'
-import { ObservabilityTab } from './ObservabilityTab'
-import { PatchTab } from './PatchTab'
-import { VMTab } from './VMTab'
-import { VMDetailPanel } from './VMDetailPanel'
-import { VMSSTab } from './VMSSTab'
-import { VMSSDetailPanel } from './VMSSDetailPanel'
-import { AKSTab } from './AKSTab'
-import { AKSDetailPanel } from './AKSDetailPanel'
-import { CostTab } from './CostTab'
-import { RunbookTab } from './RunbookTab'
-import { ComplianceTab } from './ComplianceTab'
 import { OpsTab } from './OpsTab'
-import { SettingsTab } from './SettingsTab'
-import { SLATab } from './SLATab'
-import { CapacityTab } from './CapacityTab'
-import { SecurityPostureTab } from './SecurityPostureTab'
-import { DriftTab } from './DriftTab'
-import { DeploymentTab } from './DeploymentTab'
-import { QualityFlywheelTab } from './QualityFlywheelTab'
-import { TenantAdminTab } from './TenantAdminTab'
-import { QuotaTab } from './QuotaTab'
-import { SimulationTab } from './SimulationTab'
-import { SubscriptionManagementTab } from './SubscriptionManagementTab'
-import { TracesTab } from './TracesTab'
-import { IdentityRiskTab } from './IdentityRiskTab'
-import { MaintenanceTab } from './MaintenanceTab'
-import { BackupComplianceTab } from './BackupComplianceTab'
-import { PrivateEndpointTab } from './PrivateEndpointTab'
-import QuotaUsageTab from './QuotaUsageTab'
-import BudgetAlertTab from './BudgetAlertTab'
-import { CertExpiryTab } from './CertExpiryTab'
-import { StorageSecurityTab } from './StorageSecurityTab'
-import VNetPeeringTab from './VNetPeeringTab'
-import DiskAuditTab from './DiskAuditTab'
-import { LBHealthTab } from './LBHealthTab'
-import { AZCoverageTab } from './AZCoverageTab'
+import { VMDetailPanel } from './VMDetailPanel'
+import { VMSSDetailPanel } from './VMSSDetailPanel'
+import { AKSDetailPanel } from './AKSDetailPanel'
+import { ResourcesHubTab } from './ResourcesHubTab'
+import { NetworkHubTab } from './NetworkHubTab'
+import { SecurityHubTab } from './SecurityHubTab'
+import { CostHubTab } from './CostHubTab'
+import { ChangeHubTab } from './ChangeHubTab'
+import { OperationsHubTab } from './OperationsHubTab'
+import { AuditHubTab } from './AuditHubTab'
+import { AdminHubTab } from './AdminHubTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints' | 'quota-usage' | 'budgets' | 'cert-expiry' | 'storage-security' | 'vnet-peerings' | 'disk-audit' | 'lb-health' | 'az-coverage'
+// ─── Tab types ───────────────────────────────────────────────────────────────
+
+type TabId =
+  | 'dashboard'
+  | 'alerts'
+  | 'resources'
+  | 'network'
+  | 'security'
+  | 'cost'
+  | 'change'
+  | 'operations'
+  | 'audit'
+  | 'admin'
 
 interface FilterState {
   severity?: string
@@ -59,142 +48,90 @@ interface TabDef {
   Icon: React.FC<{ className?: string }>
 }
 
-/**
- * Tab groups keep the nav readable as more tabs are added.
- * Each group is separated by a thin vertical divider.
- * To add a new tab: append to the appropriate group (or create a new one)
- * and add its TabId to the TabId union above.
- */
+// ─── Top-level navigation ────────────────────────────────────────────────────
+// 10 purposeful top-level tabs. Each hub tab owns internal sub-navigation.
+
 const TAB_GROUPS: TabDef[][] = [
-  // Core operations
+  // Primary AIOps workflow
   [
-    { id: 'ops',         label: 'Ops',         Icon: LayoutDashboard },
-    { id: 'alerts',      label: 'Alerts',      Icon: Bell },
-    { id: 'audit',       label: 'Audit',       Icon: ClipboardList },
-    { id: 'topology',    label: 'Topology',    Icon: Network },
+    { id: 'dashboard',  label: 'Dashboard',  Icon: LayoutDashboard },
+    { id: 'alerts',     label: 'Alerts',     Icon: Bell },
+    { id: 'resources',  label: 'Resources',  Icon: Server },
+    { id: 'network',    label: 'Network',    Icon: Network },
   ],
-  // Resources
+  // Security / cost / change
   [
-    { id: 'resources',   label: 'Resources',   Icon: Server },
-    { id: 'vms',         label: 'VMs',         Icon: Monitor },
-    { id: 'vmss',        label: 'VMSS',        Icon: Scaling },
-    { id: 'aks',         label: 'AKS',         Icon: Container },
+    { id: 'security',   label: 'Security',   Icon: ShieldCheck },
+    { id: 'cost',       label: 'Cost',       Icon: DollarSign },
+    { id: 'change',     label: 'Change',     Icon: GitBranch },
+    { id: 'operations', label: 'Operations', Icon: Wrench },
   ],
-  // Monitoring & cost
+  // Audit / admin
   [
-    { id: 'cost',          label: 'FinOps',        Icon: DollarSign },
-    { id: 'observability', label: 'Observability', Icon: Activity },
-    { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
-    { id: 'capacity',      label: 'Capacity',      Icon: Gauge },
-    { id: 'quotas',        label: 'Quotas',        Icon: BarChart3 },
-  ],
-  // Security & compliance
-  [
-    { id: 'patch',            label: 'Patch',           Icon: ShieldCheck },
-    { id: 'compliance',       label: 'Compliance',      Icon: FileCheck },
-    { id: 'security-posture', label: 'Security Score',  Icon: ShieldCheck },
-    { id: 'runbooks',         label: 'Runbooks',        Icon: BookOpen },
-    { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
-    { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
-    { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
-    { id: 'simulations',      label: 'Simulations',     Icon: FlaskConical },
-  ],
-  // Identity & maintenance
-  [
-    { id: 'identity-risks',    label: 'Identity Risk',   Icon: Key },
-    { id: 'maintenance',       label: 'Maintenance',     Icon: Wrench },
-    { id: 'backup-compliance', label: 'Backup',          Icon: DatabaseBackup },
-    { id: 'private-endpoints', label: 'Private Endpoints', Icon: Lock },
-    { id: 'quota-usage',       label: 'Quota Usage',       Icon: BarChart3 },
-    { id: 'budgets',           label: 'Budgets',           Icon: DollarSign },
-    { id: 'cert-expiry',       label: 'Cert Expiry',       Icon: ShieldCheck },
-    { id: 'storage-security',  label: 'Storage Security',  Icon: HardDrive },
-    { id: 'vnet-peerings',     label: 'VNet Peerings',     Icon: Network },
-    { id: 'disk-audit',        label: 'Disk Audit',        Icon: HardDrive },
-    { id: 'lb-health',         label: 'Load Balancers',    Icon: Activity },
-    { id: 'az-coverage',       label: 'AZ Coverage',       Icon: Globe },
-  ],
-  // Config
-  [
-    { id: 'traces',        label: 'Traces',        Icon: GitCommitHorizontal },
-    { id: 'subscriptions', label: 'Subscriptions', Icon: Globe },
-    { id: 'settings',      label: 'Settings',      Icon: Settings },
-    { id: 'admin',         label: 'Admin',          Icon: Building2 },
+    { id: 'audit',      label: 'Audit',      Icon: ClipboardList },
+    { id: 'admin',      label: 'Admin',      Icon: Building2 },
   ],
 ]
 
-// Flat list used for keyboard navigation (arrow keys cycle through all tabs in order)
 const TABS: TabDef[] = TAB_GROUPS.flat()
+
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface DashboardPanelProps {
   onTabChange?: (tab: TabId) => void
-  /** Called once on mount with a function that navigates to the Alerts tab */
   onRegisterNavToAlerts?: (fn: () => void) => void
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: DashboardPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('ops')
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [filters, setFilters] = useState<FilterState>({})
+  const { selectedSubscriptions, selectedIncidentId } = useAppState()
+
+  // VM detail panel
   const [vmDetailOpen, setVMDetailOpen] = useState(false)
   const [selectedVM, setSelectedVM] = useState<{
     incidentId: string | null
     resourceId: string | null
     resourceName: string | null
   } | null>(null)
-  const { selectedSubscriptions, selectedIncidentId } = useAppState()
 
   function openVMDetail(incidentId: string | null, resourceId: string | null, resourceName: string | null) {
     setSelectedVM({ incidentId, resourceId, resourceName })
     setVMDetailOpen(true)
   }
+  function closeVMDetail() { setVMDetailOpen(false); setSelectedVM(null) }
 
-  function closeVMDetail() {
-    setVMDetailOpen(false)
-    setSelectedVM(null)
-  }
-
+  // VMSS detail panel
   const [vmssDetailOpen, setVMSSDetailOpen] = useState(false)
   const [selectedVMSS, setSelectedVMSS] = useState<{ resourceId: string; resourceName: string } | null>(null)
 
   function openVMSSDetail(resourceId: string, resourceName: string) {
-    setSelectedVMSS({ resourceId, resourceName })
-    setVMSSDetailOpen(true)
+    setSelectedVMSS({ resourceId, resourceName }); setVMSSDetailOpen(true)
   }
+  function closeVMSSDetail() { setVMSSDetailOpen(false); setSelectedVMSS(null) }
 
-  function closeVMSSDetail() {
-    setVMSSDetailOpen(false)
-    setSelectedVMSS(null)
-  }
-
+  // AKS detail panel
   const [aksDetailOpen, setAKSDetailOpen] = useState(false)
   const [selectedAKS, setSelectedAKS] = useState<{ resourceId: string; resourceName: string } | null>(null)
 
   function openAKSDetail(resourceId: string, resourceName: string) {
-    setSelectedAKS({ resourceId, resourceName })
-    setAKSDetailOpen(true)
+    setSelectedAKS({ resourceId, resourceName }); setAKSDetailOpen(true)
   }
-
-  function closeAKSDetail() {
-    setAKSDetailOpen(false)
-    setSelectedAKS(null)
-  }
+  function closeAKSDetail() { setAKSDetailOpen(false); setSelectedAKS(null) }
 
   function handleTabChange(tab: TabId) {
-    // Close any open detail panels when switching tabs to prevent stacked overlays
-    setVMDetailOpen(false)
-    setSelectedVM(null)
-    setVMSSDetailOpen(false)
-    setSelectedVMSS(null)
-    setAKSDetailOpen(false)
-    setSelectedAKS(null)
+    setVMDetailOpen(false); setSelectedVM(null)
+    setVMSSDetailOpen(false); setSelectedVMSS(null)
+    setAKSDetailOpen(false); setSelectedAKS(null)
     setActiveTab(tab)
     onTabChange?.(tab)
   }
 
-  // Register the navigate-to-alerts function with the parent once on mount
   useEffect(() => {
     onRegisterNavToAlerts?.(() => handleTabChange('alerts'))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
@@ -213,12 +150,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--bg-canvas)' }}>
-      {/* Tab bar
-            - overflow-x-auto + whitespace-nowrap: scrolls horizontally when tabs exceed viewport width
-            - [&::-webkit-scrollbar]:hidden: hides the scrollbar track so the bar looks clean
-            - The right-edge fade gradient (::after pseudo via inline style) hints that more tabs exist
-            - z-35 keeps tabs clickable above the z-30 detail-panel backdrop
-      */}
+      {/* ── Top nav tab bar ──────────────────────────────────────────────── */}
       <div
         className="flex items-end shrink-0 relative z-[35] overflow-x-auto [&::-webkit-scrollbar]:hidden"
         role="tablist"
@@ -226,7 +158,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         style={{
           background: 'var(--bg-surface)',
           borderBottom: '1px solid var(--border)',
-          scrollbarWidth: 'none', // Firefox
+          scrollbarWidth: 'none',
         }}
       >
         {TAB_GROUPS.map((group, groupIdx) => (
@@ -243,7 +175,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
                   aria-controls={`tabpanel-${id}`}
                   onClick={() => handleTabChange(id)}
                   onKeyDown={(e) => handleTabKeyDown(e, index)}
-                  className="flex items-center gap-1.5 px-3 py-3 text-[13px] transition-colors outline-none relative whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-3 text-[13px] transition-colors outline-none relative whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
                   style={{
                     color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                     fontWeight: isActive ? 600 : 500,
@@ -259,7 +191,6 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
                 </button>
               )
             })}
-            {/* Group divider — not rendered after the last group */}
             {groupIdx < TAB_GROUPS.length - 1 && (
               <div
                 className="self-center mx-1 shrink-0"
@@ -271,242 +202,125 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         ))}
       </div>
 
-      {/* Tab panels */}
+      {/* ── Tab panels ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto p-6">
-        <div id="tabpanel-ops" role="tabpanel" aria-labelledby="tab-ops" hidden={activeTab !== 'ops'}>
+
+        {/* Dashboard — platform health, agent status, SLA, quality */}
+        <div id="tabpanel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" hidden={activeTab !== 'dashboard'}>
           <OpsTab subscriptions={selectedSubscriptions} onNavigateToAlerts={() => handleTabChange('alerts')} />
         </div>
 
+        {/* Alerts — direct access, no sub-nav needed */}
         <div id="tabpanel-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden={activeTab !== 'alerts'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
               <AlertFilters filters={filters} onChange={setFilters} />
             </div>
-            <AlertFeed filters={filters} subscriptions={selectedSubscriptions} onInvestigate={(incidentId, resourceId, resourceName) => {
-              const resId = (resourceId ?? '').toLowerCase()
-              if (resId.includes('virtualmachinescalesets')) {
-                if (resourceId && resourceName) openVMSSDetail(resourceId, resourceName)
-              } else if (resId.includes('managedclusters')) {
-                if (resourceId && resourceName) openAKSDetail(resourceId, resourceName)
-              } else {
-                openVMDetail(incidentId, resourceId ?? null, resourceName ?? null)
-              }
-            }} />
+            <AlertFeed
+              filters={filters}
+              subscriptions={selectedSubscriptions}
+              onInvestigate={(incidentId, resourceId, resourceName) => {
+                const resId = (resourceId ?? '').toLowerCase()
+                if (resId.includes('virtualmachinescalesets')) {
+                  if (resourceId && resourceName) openVMSSDetail(resourceId, resourceName)
+                } else if (resId.includes('managedclusters')) {
+                  if (resourceId && resourceName) openAKSDetail(resourceId, resourceName)
+                } else {
+                  openVMDetail(incidentId, resourceId ?? null, resourceName ?? null)
+                }
+              }}
+            />
           </div>
         </div>
 
-        <div id="tabpanel-audit" role="tabpanel" aria-labelledby="tab-audit" hidden={activeTab !== 'audit'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <AuditLogViewer incidentId={selectedIncidentId ?? undefined} />
+        {/* Resources hub — All Resources · VMs · VMSS · AKS · Disks · AZ Coverage */}
+        {activeTab === 'resources' && (
+          <div id="tabpanel-resources" role="tabpanel" aria-labelledby="tab-resources">
+            <ResourcesHubTab
+              subscriptions={selectedSubscriptions}
+              onVMClick={(resourceId, resourceName) => openVMDetail(null, resourceId, resourceName)}
+              onVMSSClick={openVMSSDetail}
+              onAKSClick={openAKSDetail}
+            />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-topology" role="tabpanel" aria-labelledby="tab-topology" hidden={activeTab !== 'topology'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <TopologyTab subscriptions={selectedSubscriptions} />
+        {/* Network hub — Topology · VNet Peerings · Load Balancers · Private Endpoints */}
+        {activeTab === 'network' && (
+          <div id="tabpanel-network" role="tabpanel" aria-labelledby="tab-network">
+            <NetworkHubTab subscriptions={selectedSubscriptions} />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-resources" role="tabpanel" aria-labelledby="tab-resources" hidden={activeTab !== 'resources'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <ResourcesTab subscriptions={selectedSubscriptions} />
+        {/* Security hub — Posture · Compliance · Identity · Certs · Backup · Storage Security */}
+        {activeTab === 'security' && (
+          <div id="tabpanel-security" role="tabpanel" aria-labelledby="tab-security">
+            <SecurityHubTab subscriptions={selectedSubscriptions} />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-vms" role="tabpanel" aria-labelledby="tab-vms" hidden={activeTab !== 'vms'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <VMTab subscriptions={selectedSubscriptions} onVMClick={(resourceId, resourceName) => openVMDetail(null, resourceId, resourceName)} />
+        {/* Cost hub — FinOps · Budgets · Quota Usage · Capacity · Quota Limits */}
+        {activeTab === 'cost' && (
+          <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost">
+            <CostHubTab subscriptions={selectedSubscriptions} />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-vmss" role="tabpanel" aria-labelledby="tab-vmss" hidden={activeTab !== 'vmss'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <VMSSTab subscriptions={selectedSubscriptions} onVMSSClick={openVMSSDetail} />
+        {/* Change hub — Patch · Deployments · IaC Drift · Maintenance */}
+        {activeTab === 'change' && (
+          <div id="tabpanel-change" role="tabpanel" aria-labelledby="tab-change">
+            <ChangeHubTab subscriptions={selectedSubscriptions} />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-aks" role="tabpanel" aria-labelledby="tab-aks" hidden={activeTab !== 'aks'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <AKSTab subscriptions={selectedSubscriptions} onAKSClick={openAKSDetail} />
+        {/* Operations hub — Runbooks · Simulations · Observability · SLA · Quality */}
+        {activeTab === 'operations' && (
+          <div id="tabpanel-operations" role="tabpanel" aria-labelledby="tab-operations">
+            <OperationsHubTab subscriptions={selectedSubscriptions} />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost" hidden={activeTab !== 'cost'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <CostTab subscriptions={selectedSubscriptions} />
+        {/* Audit hub — Audit Log · Agent Traces */}
+        {activeTab === 'audit' && (
+          <div id="tabpanel-audit" role="tabpanel" aria-labelledby="tab-audit">
+            <AuditHubTab
+              subscriptions={selectedSubscriptions}
+              incidentId={selectedIncidentId ?? undefined}
+            />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-observability" role="tabpanel" aria-labelledby="tab-observability" hidden={activeTab !== 'observability'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <ObservabilityTab subscriptions={selectedSubscriptions} />
+        {/* Admin hub — Subscriptions · Settings · Tenant */}
+        {activeTab === 'admin' && (
+          <div id="tabpanel-admin" role="tabpanel" aria-labelledby="tab-admin">
+            <AdminHubTab />
           </div>
-        </div>
+        )}
 
-        <div id="tabpanel-patch" role="tabpanel" aria-labelledby="tab-patch" hidden={activeTab !== 'patch'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <PatchTab subscriptions={selectedSubscriptions} />
-          </div>
-        </div>
-
-        <div id="tabpanel-compliance" role="tabpanel" aria-labelledby="tab-compliance" hidden={activeTab !== 'compliance'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <ComplianceTab subscriptions={selectedSubscriptions} />
-          </div>
-        </div>
-
-        <div id="tabpanel-runbooks" role="tabpanel" aria-labelledby="tab-runbooks" hidden={activeTab !== 'runbooks'}>
-          <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <RunbookTab />
-          </div>
-        </div>
-
-        <div id="tabpanel-sla" role="tabpanel" aria-labelledby="tab-sla" hidden={activeTab !== 'sla'}>
-          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <SLATab subscriptions={selectedSubscriptions} />
-          </div>
-        </div>
-
-        <div id="tabpanel-capacity" role="tabpanel" aria-labelledby="tab-capacity" hidden={activeTab !== 'capacity'}>
-          {activeTab === 'capacity' && <CapacityTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-quotas" role="tabpanel" aria-labelledby="tab-quotas" hidden={activeTab !== 'quotas'}>
-          {activeTab === 'quotas' && <QuotaTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-security-posture" role="tabpanel" aria-labelledby="tab-security-posture" hidden={activeTab !== 'security-posture'}>
-          {activeTab === 'security-posture' && <SecurityPostureTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-drift" role="tabpanel" aria-labelledby="tab-drift" hidden={activeTab !== 'drift'}>
-          {activeTab === 'drift' && <DriftTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-deployments" role="tabpanel" aria-labelledby="tab-deployments" hidden={activeTab !== 'deployments'}>
-          {activeTab === 'deployments' && <DeploymentTab resourceGroup={undefined} />}
-        </div>
-
-        <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
-          {activeTab === 'quality' && <QualityFlywheelTab />}
-        </div>
-
-        <div id="tabpanel-simulations" role="tabpanel" aria-labelledby="tab-simulations" hidden={activeTab !== 'simulations'}>
-          {activeTab === 'simulations' && <SimulationTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-traces" role="tabpanel" aria-labelledby="tab-traces" hidden={activeTab !== 'traces'}>
-          {activeTab === 'traces' && <TracesTab subscriptionId={selectedSubscriptions[0]} />}
-        </div>
-
-        <div id="tabpanel-identity-risks" role="tabpanel" aria-labelledby="tab-identity-risks" hidden={activeTab !== 'identity-risks'}>
-          {activeTab === 'identity-risks' && <IdentityRiskTab />}
-        </div>
-
-        <div id="tabpanel-maintenance" role="tabpanel" aria-labelledby="tab-maintenance" hidden={activeTab !== 'maintenance'}>
-          {activeTab === 'maintenance' && <MaintenanceTab subscriptions={selectedSubscriptions} />}
-        </div>
-
-        <div id="tabpanel-backup-compliance" role="tabpanel" aria-labelledby="tab-backup-compliance" hidden={activeTab !== 'backup-compliance'}>
-          {activeTab === 'backup-compliance' && <BackupComplianceTab subscriptions={selectedSubscriptions} />}
-        </div>
-
-        <div id="tabpanel-private-endpoints" role="tabpanel" aria-labelledby="tab-private-endpoints" hidden={activeTab !== 'private-endpoints'}>
-          {activeTab === 'private-endpoints' && <PrivateEndpointTab subscriptions={selectedSubscriptions} />}
-        </div>
-
-        <div id="tabpanel-quota-usage" role="tabpanel" aria-labelledby="tab-quota-usage" hidden={activeTab !== 'quota-usage'}>
-          {activeTab === 'quota-usage' && <QuotaUsageTab />}
-        </div>
-
-        <div id="tabpanel-budgets" role="tabpanel" aria-labelledby="tab-budgets" hidden={activeTab !== 'budgets'}>
-          {activeTab === 'budgets' && <BudgetAlertTab />}
-        </div>
-
-        <div id="tabpanel-cert-expiry" role="tabpanel" aria-labelledby="tab-cert-expiry" hidden={activeTab !== 'cert-expiry'}>
-          {activeTab === 'cert-expiry' && <CertExpiryTab />}
-        </div>
-
-        <div id="tabpanel-storage-security" role="tabpanel" aria-labelledby="tab-storage-security" hidden={activeTab !== 'storage-security'}>
-          {activeTab === 'storage-security' && <StorageSecurityTab />}
-        </div>
-
-        <div id="tabpanel-vnet-peerings" role="tabpanel" aria-labelledby="tab-vnet-peerings" hidden={activeTab !== 'vnet-peerings'}>
-          {activeTab === 'vnet-peerings' && <VNetPeeringTab />}
-        </div>
-
-        <div id="tabpanel-disk-audit" role="tabpanel" aria-labelledby="tab-disk-audit" hidden={activeTab !== 'disk-audit'}>
-          {activeTab === 'disk-audit' && <DiskAuditTab />}
-        </div>
-
-        <div id="tabpanel-lb-health" role="tabpanel" aria-labelledby="tab-lb-health" hidden={activeTab !== 'lb-health'}>
-          {activeTab === 'lb-health' && <LBHealthTab />}
-        </div>
-
-        <div id="tabpanel-az-coverage" role="tabpanel" aria-labelledby="tab-az-coverage" hidden={activeTab !== 'az-coverage'}>
-          {activeTab === 'az-coverage' && <AZCoverageTab />}
-        </div>
-
-        <div id="tabpanel-subscriptions" role="tabpanel" aria-labelledby="tab-subscriptions" hidden={activeTab !== 'subscriptions'}>
-          {activeTab === 'subscriptions' && <SubscriptionManagementTab />}
-        </div>
-
-        <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
-          <SettingsTab />
-        </div>
-
-        <div id="tabpanel-admin" role="tabpanel" aria-labelledby="tab-admin" hidden={activeTab !== 'admin'}>
-          {activeTab === 'admin' && <TenantAdminTab />}
-        </div>
       </div>
 
-      {/* VM Detail Panel + backdrop */}
+      {/* ── Detail slide-overs ────────────────────────────────────────────── */}
       {vmDetailOpen && selectedVM && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            style={{ background: 'rgba(0,0,0,0.3)' }}
-            onClick={closeVMDetail}
-          />
-          <VMDetailPanel
-            incidentId={selectedVM.incidentId}
-            resourceId={selectedVM.resourceId}
-            resourceName={selectedVM.resourceName}
-            onClose={closeVMDetail}
-          />
-        </>
+        <VMDetailPanel
+          incidentId={selectedVM.incidentId}
+          resourceId={selectedVM.resourceId}
+          resourceName={selectedVM.resourceName}
+          onClose={closeVMDetail}
+        />
       )}
-
-      {/* VMSS Detail Panel + backdrop */}
       {vmssDetailOpen && selectedVMSS && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            style={{ background: 'rgba(0,0,0,0.3)' }}
-            onClick={closeVMSSDetail}
-          />
-          <VMSSDetailPanel
-            resourceId={selectedVMSS.resourceId}
-            resourceName={selectedVMSS.resourceName}
-            onClose={closeVMSSDetail}
-          />
-        </>
+        <VMSSDetailPanel
+          resourceId={selectedVMSS.resourceId}
+          resourceName={selectedVMSS.resourceName}
+          onClose={closeVMSSDetail}
+        />
       )}
-
-      {/* AKS Detail Panel + backdrop */}
       {aksDetailOpen && selectedAKS && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            style={{ background: 'rgba(0,0,0,0.3)' }}
-            onClick={closeAKSDetail}
-          />
-          <AKSDetailPanel
-            resourceId={selectedAKS.resourceId}
-            resourceName={selectedAKS.resourceName}
-            onClose={closeAKSDetail}
-          />
-        </>
+        <AKSDetailPanel
+          resourceId={selectedAKS.resourceId}
+          resourceName={selectedAKS.resourceName}
+          onClose={closeAKSDetail}
+        />
       )}
     </div>
   )
