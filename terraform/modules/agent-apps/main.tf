@@ -434,6 +434,22 @@ resource "azurerm_container_app" "agents" {
     }
   }
 
+  # Internal ingress for agent containers — allows api-gateway to health-probe each agent
+  # via https://ca-<name>-prod.internal.<env>.azurecontainerapps.io/health
+  # Agents expose the Foundry agentserver on port 8088.
+  dynamic "ingress" {
+    for_each = !each.value.ingress_external && each.key != "api-gateway" && each.key != "web-ui" ? [1] : []
+    content {
+      external_enabled = false
+      target_port      = 8088
+      transport        = "http"
+      traffic_weight {
+        percentage      = 100
+        latest_revision = true
+      }
+    }
+  }
+
   tags = var.required_tags
 
   # NOTE (TASK-12-03): template[0].container[0].env is intentionally NOT in ignore_changes.
