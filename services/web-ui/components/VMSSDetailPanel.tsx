@@ -306,10 +306,14 @@ export function VMSSDetailPanel({ resourceId, resourceName, onClose }: VMSSDetai
         body: JSON.stringify({ message, thread_id: chatThreadId }),
       })
       if (!res.ok) throw new Error(`Status ${res.status}`)
-      const { thread_id, run_id } = await res.json()
-      if (thread_id) setChatThreadId(thread_id)
-      // Poll for result
-      await pollChatResult(thread_id, run_id, token)
+      const data = await res.json()
+      if (data.thread_id) setChatThreadId(data.thread_id)
+      // chat.completions is synchronous — reply is in the POST response directly
+      if (data.reply) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
+      } else if (data.thread_id && data.run_id) {
+        await pollChatResult(data.thread_id, data.run_id, token)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${msg}` }])

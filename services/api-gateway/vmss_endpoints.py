@@ -367,6 +367,7 @@ class VMSSChatResponse(BaseModel):
     thread_id: str
     run_id: str
     status: str = "created"
+    reply: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -869,12 +870,10 @@ async def get_vmss_metrics(
 async def vmss_chat(
     resource_id_base64: str,
     request: VMSSChatRequest,
+    req: Request,
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
-    """Resource-scoped chat for VMSS investigation.
-
-    Routes to the compute agent directly (same as VM chat).
-    """
+    """Resource-scoped chat for VMSS investigation with live function calling."""
     start_time = time.monotonic()
     try:
         resource_id = _decode_resource_id(resource_id_base64)
@@ -882,24 +881,83 @@ async def vmss_chat(
         return {"error": "Invalid resource ID"}
 
     try:
-        from services.api_gateway.foundry import _get_foundry_client  # type: ignore[import]
-        from services.api_gateway.chat import create_chat_thread  # type: ignore[import]
-
-        agent_id = os.environ.get("COMPUTE_AGENT_ID", "")
-        if not agent_id:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.warning("vmss_chat: COMPUTE_AGENT_ID not set duration_ms=%.1f", duration_ms)
-            return {"error": "COMPUTE_AGENT_ID not configured"}
-
-        context = f"Resource: {resource_id}\nMessage: {request.message}"
-        thread_id, run_id = await create_chat_thread(
-            agent_id=agent_id,
-            message=context,
-            thread_id=request.thread_id,
+        import json
+        import uuid
+        from services.api_gateway.foundry import (
+            _CONVERSATION_HISTORY,
+            _CONVERSATION_HISTORY_LIMIT,
+            _get_domain_instructions,
+            _get_openai_client,
         )
+        from services.api_gateway.vmss_chat_tools import VMSS_CHAT_TOOL_SCHEMAS, dispatch_tool_call
+
+        credential = getattr(req.app.state, "credential", None)
+        vmss_name = resource_id.rstrip("/").split("/")[-1]
+        _, base_instructions = _get_domain_instructions("compute_agent")
+        system_prompt = (
+            f"{base_instructions}\n\n"
+            f"You are investigating a specific VM Scale Set:\n"
+            f"  Name: {vmss_name}\n"
+            f"  Resource ID: {resource_id}\n\n"
+            "You have live tools to fetch real-time data for this scale set. "
+            "Use them whenever the user asks about instances, metrics, health, or autoscale. "
+            "Do NOT say data is unavailable without first trying the relevant tool."
+        )
+
+        history_key = request.thread_id or None
+        prior_history = _CONVERSATION_HISTORY.get(history_key, []) if history_key else []
+        messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        messages.extend(prior_history)
+        messages.append({"role": "user", "content": request.message})
+
+        openai_client = _get_openai_client()
+        response_id = f"chat-{uuid.uuid4().hex[:16]}"
+        loop = __import__("asyncio").get_running_loop()
+        reply: Optional[str] = None
+
+        for _round in range(5):
+            response = await loop.run_in_executor(
+                None,
+                lambda m=messages: openai_client.chat.completions.create(
+                    model="gpt-4.1",
+                    messages=m,
+                    tools=VMSS_CHAT_TOOL_SCHEMAS,
+                    tool_choice="auto",
+                    max_tokens=1500,
+                ),
+            )
+            choice = response.choices[0]
+            if choice.finish_reason == "stop" or not choice.message.tool_calls:
+                reply = choice.message.content
+                break
+            messages.append(choice.message)
+            for tc in choice.message.tool_calls:
+                try:
+                    tool_args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    tool_args = {}
+                tool_result = await loop.run_in_executor(
+                    None,
+                    lambda tn=tc.function.name, ta=tool_args: dispatch_tool_call(tn, ta, resource_id, credential),
+                )
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
+        else:
+            messages.append({"role": "user", "content": "Please summarise your findings so far."})
+            final = await loop.run_in_executor(
+                None,
+                lambda: openai_client.chat.completions.create(model="gpt-4.1", messages=messages, max_tokens=1000),
+            )
+            reply = final.choices[0].message.content
+
+        new_key = history_key or response_id
+        history = list(_CONVERSATION_HISTORY.get(new_key, []))
+        history.extend([{"role": "user", "content": request.message}, {"role": "assistant", "content": reply or ""}])
+        max_msgs = _CONVERSATION_HISTORY_LIMIT * 2
+        _CONVERSATION_HISTORY[new_key] = history[-max_msgs:]
+
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("vmss_chat: thread_id=%s run_id=%s duration_ms=%.1f", thread_id, run_id, duration_ms)
-        return {"thread_id": thread_id, "run_id": run_id, "status": "created"}
+        logger.info("vmss_chat: thread_id=%s duration_ms=%.1f", new_key, duration_ms)
+        return VMSSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply)
 
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
