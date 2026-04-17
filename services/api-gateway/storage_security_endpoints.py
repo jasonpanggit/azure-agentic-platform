@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_cosmos_client, get_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions, get_optional_cosmos_client
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ async def list_storage_findings(
 @router.post("/security/scan")
 async def scan_storage(
     token: Dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Dict[str, Any]:
     """Trigger a live ARG scan for storage security misconfigurations and persist results."""

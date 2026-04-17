@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, Request
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential, get_scoped_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_credential_for_subscriptions, get_optional_cosmos_client
 from services.api_gateway.federation import resolve_subscription_ids
 from services.api_gateway.os_normalizer import normalize_os
 
@@ -348,7 +348,7 @@ async def list_vms(
     search: Optional[str] = Query(None, description="Filter by VM name (contains)"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
     _user: Any = Depends(verify_token),
     request: Request = None,

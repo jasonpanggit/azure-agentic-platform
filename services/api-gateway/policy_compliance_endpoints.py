@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ async def get_policy_compliance_summary(
 async def trigger_policy_compliance_scan(
     background_tasks: BackgroundTasks,
     _token: str = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> Dict[str, Any]:
     """Trigger a background policy compliance scan across all registered subscriptions."""

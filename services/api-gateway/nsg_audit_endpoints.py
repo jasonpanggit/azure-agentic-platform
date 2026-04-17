@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from fastapi.responses import JSONResponse
 
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 from services.api_gateway.nsg_audit_service import (
     get_findings,
     get_summary,
@@ -64,7 +64,7 @@ def _run_scan_background(credential: Any, subscription_ids: List[str], cosmos_cl
 async def list_nsg_findings(
     subscription_id: Optional[str] = Query(None, description="Filter by subscription ID"),
     severity: Optional[str] = Query(None, description="Filter by severity: critical | high | medium | info"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> Dict[str, Any]:
     """Return NSG security findings with optional filters.
@@ -98,7 +98,7 @@ async def list_nsg_findings(
 
 @router.get("/findings/summary")
 async def nsg_findings_summary(
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> Dict[str, Any]:
     """Return aggregated NSG finding counts by severity and top 5 risky NSGs."""
@@ -110,7 +110,7 @@ async def nsg_findings_summary(
 @router.post("/scan")
 async def trigger_nsg_scan(
     background_tasks: BackgroundTasks,
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> Dict[str, Any]:
     """Trigger an on-demand NSG compliance scan across all configured subscriptions.

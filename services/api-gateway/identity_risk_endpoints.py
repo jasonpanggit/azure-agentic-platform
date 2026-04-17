@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_cosmos_client, get_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions, get_optional_cosmos_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ async def identity_risks_summary(
 @router.post("/scan")
 async def scan_identity_risks(
     token: Dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Dict[str, Any]:
     """Trigger a live Microsoft Graph scan and persist results."""

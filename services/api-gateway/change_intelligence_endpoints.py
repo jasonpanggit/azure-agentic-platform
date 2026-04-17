@@ -18,7 +18,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 from services.api_gateway.change_intelligence_service import (
     get_change_summary,
     get_changes,
@@ -109,7 +109,7 @@ def get_summary(
 @router.post("/scan")
 def trigger_scan(
     background_tasks: BackgroundTasks,
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> Any:
     """Queue a change scan in the background."""

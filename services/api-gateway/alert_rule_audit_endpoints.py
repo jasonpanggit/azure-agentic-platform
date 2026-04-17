@@ -15,7 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 from services.api_gateway.alert_rule_audit_service import (
     get_alert_coverage_summary,
     get_gaps,
@@ -53,7 +53,7 @@ async def alert_coverage_summary(
 @router.post("/scan")
 async def trigger_alert_coverage_scan(
     subscription_id: Optional[str] = Query(None),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> JSONResponse:
     """Trigger a live alert coverage scan and persist results."""

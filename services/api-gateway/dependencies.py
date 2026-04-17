@@ -20,7 +20,7 @@ from typing import Optional
 
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Query, Request
 
 
 def get_credential(request: Request) -> DefaultAzureCredential:
@@ -62,3 +62,32 @@ async def get_scoped_credential(
     """
     store = request.app.state.credential_store
     return await store.get(subscription_id)
+
+
+async def get_credential_for_subscriptions(
+    subscriptions: Optional[str] = Query(default=None),
+    request: Request = None,
+) -> object:
+    """Return a per-subscription credential for multi-subscription ARG endpoints.
+
+    Reads the first subscription ID from the ?subscriptions= query param and
+    resolves its SPN credential from CredentialStore.  Falls back to the shared
+    DefaultAzureCredential (pod managed identity) when:
+    - no subscriptions param is provided, or
+    - the credential store lookup fails (e.g. subscription not onboarded yet).
+
+    Use this dependency on endpoints that accept ?subscriptions=sub1,sub2 instead
+    of a /{subscription_id}/ path parameter.
+    """
+    if subscriptions:
+        first_sub = subscriptions.split(",")[0].strip()
+        if first_sub:
+            try:
+                store = getattr(request.app.state, "credential_store", None)
+                if store is not None:
+                    cred = await store.get(first_sub)
+                    if cred:
+                        return cred
+            except Exception:
+                pass
+    return request.app.state.credential

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential_for_subscriptions
 from fastapi import Depends
 
 # Lazy imports — SDK may not be available in all environments
@@ -146,7 +146,7 @@ async def get_cost_breakdown(
         "ResourceGroup",
         description="Dimension: ResourceGroup | ResourceType | ServiceName",
     ),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return cost breakdown grouped by dimension for the subscription.
 
@@ -223,7 +223,7 @@ async def get_resource_cost(
     subscription_id: str = Query(..., description="Azure subscription GUID"),
     resource_id: str = Query(..., description="Full ARM resource ID"),
     days: int = Query(30, ge=7, le=90, description="Look-back window in days"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return amortized cost for a specific Azure resource.
 
@@ -307,7 +307,7 @@ async def get_idle_resources(
     subscription_id: str = Query(..., description="Azure subscription GUID"),
     threshold_cpu_pct: float = Query(2.0, ge=0.1, le=10.0, description="CPU % threshold for idle classification"),
     hours: int = Query(72, ge=24, le=168, description="Look-back window in hours"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return VMs identified as idle based on CPU and network thresholds.
 
@@ -443,7 +443,7 @@ async def get_idle_resources(
 @router.get("/ri-utilization")
 async def get_ri_utilization(
     subscription_id: str = Query(..., description="Azure subscription GUID"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return estimated RI/Savings Plan benefit using the amortized-delta method.
 
@@ -525,7 +525,7 @@ async def get_ri_utilization(
 async def get_cost_forecast(
     subscription_id: str = Query(..., description="Azure subscription GUID"),
     budget_name: Optional[str] = Query(None, description="Budget name for comparison (optional)"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return month-to-date spend, end-of-month forecast, and optional budget comparison.
 
@@ -637,7 +637,7 @@ async def get_top_cost_drivers(
     subscription_id: str = Query(..., description="Azure subscription GUID"),
     n: int = Query(10, ge=1, le=25, description="Number of top cost drivers to return"),
     days: int = Query(30, ge=7, le=90, description="Look-back window in days"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return top-N Azure service cost drivers ranked by spend.
 
