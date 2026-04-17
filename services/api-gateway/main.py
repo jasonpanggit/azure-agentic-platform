@@ -169,6 +169,10 @@ from services.api_gateway.identity_risk_endpoints import router as identity_risk
 from services.api_gateway.maintenance_endpoints import router as maintenance_router
 from services.api_gateway.backup_compliance_endpoints import router as backup_compliance_router
 from services.api_gateway.private_endpoint_endpoints import router as private_endpoint_router
+from services.api_gateway.cert_expiry_endpoints import router as cert_expiry_router
+from services.api_gateway.storage_security_endpoints import router as storage_security_router
+from services.api_gateway.quota_usage_endpoints import router as quota_usage_router
+from services.api_gateway.budget_alert_endpoints import router as budget_alert_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -784,6 +788,10 @@ app.include_router(identity_risk_router)
 app.include_router(maintenance_router)
 app.include_router(backup_compliance_router)
 app.include_router(private_endpoint_router)
+app.include_router(cert_expiry_router)
+app.include_router(storage_security_router)
+app.include_router(quota_usage_router)
+app.include_router(budget_alert_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
