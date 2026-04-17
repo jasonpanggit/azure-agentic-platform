@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Bell, Shield } from 'lucide-react';
+import { AlertTimelineDialog } from './AlertTimelineDialog';
 import { useAppState } from '@/lib/app-state-context';
 import { WarRoomDetailPanel } from './WarRoomDetailPanel';
 
@@ -290,6 +291,10 @@ export function AlertFeed({ subscriptions, filters, onInvestigate }: AlertFeedPr
                     Investigate
                   </button>
                 )}
+                <AlertTimelineDialog
+                  incidentId={incident.incident_id}
+                  incidentTitle={incident.title || incident.resource_name}
+                />
                 </div>
               </TableCell>
             </TableRow>

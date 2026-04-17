@@ -14,7 +14,10 @@ import {
   Activity,
   ShieldCheck,
   ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
+import { HandoverModal } from '@/components/HandoverModal';
+import { AdvisoryPanel } from '@/components/AdvisoryPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -770,6 +773,7 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
   });
   const [initialLoading, setInitialLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [showHandover, setShowHandover] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Suppress unused variable warning — subscriptions reserved for future per-subscription filtering
@@ -971,8 +975,22 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </button>
+          <button
+            onClick={() => setShowHandover(true)}
+            className="flex items-center gap-1.5 text-[12px] px-2 py-1 rounded"
+            style={{
+              color: 'var(--accent-blue)',
+              background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent-blue) 25%, transparent)',
+            }}
+          >
+            <ClipboardList className="h-3.5 w-3.5" />
+            Generate Handover
+          </button>
         </div>
       </div>
+
+      <HandoverModal open={showHandover} onClose={() => setShowHandover(false)} />
 
       {/* ------------------------------------------------------------------ */}
       {/* KPI row                                                             */}
@@ -1061,6 +1079,11 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
         error={errors.patterns}
         loading={initialLoading}
       />
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Pre-Incident Advisories                                            */}
+      {/* ------------------------------------------------------------------ */}
+      <AdvisoryPanel subscriptionId={subscriptions[0]} />
 
       {/* ------------------------------------------------------------------ */}
       {/* Error Budget Portfolio                                              */}
