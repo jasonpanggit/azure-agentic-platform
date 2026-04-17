@@ -112,10 +112,36 @@ class CredentialStore:
             logger.debug("credential_store: evicted %d expired entries", len(expired))
 
     async def write_secret(self, subscription_id: str, blob: dict) -> None:
-        """Write a credential blob to KV. Caller must call invalidate() after."""
+        """Write a credential blob to KV. Caller must call invalidate() after.
+
+        Handles the soft-delete recovery case: if the secret is in a deleted-but-recoverable
+        state (purge protection keeps it for 90 days), recover it first then overwrite.
+        """
+        from azure.core.exceptions import ResourceExistsError
         client = self._get_secret_client()
         secret_name = self._kv_secret_name(subscription_id)
-        await client.set_secret(secret_name, json.dumps(blob))
+        try:
+            await client.set_secret(secret_name, json.dumps(blob))
+        except HttpResponseError as exc:
+            if exc.error and exc.error.code == "ObjectIsDeletedButRecoverable":
+                logger.info(
+                    "credential_store: recovering soft-deleted secret for sub=%s before overwrite",
+                    subscription_id,
+                )
+                await client.recover_deleted_secret(secret_name)
+                # Recovery is async in KV — poll until the secret is available
+                import asyncio as _asyncio
+                for _ in range(10):
+                    await _asyncio.sleep(2)
+                    try:
+                        await client.set_secret(secret_name, json.dumps(blob))
+                        return
+                    except Exception:
+                        continue
+                raise RuntimeError(
+                    f"KV secret {secret_name} recovery timed out after 20s"
+                )
+            raise
 
     async def delete_secret(self, subscription_id: str) -> None:
         """Delete the KV secret for subscription_id (used on subscription removal)."""
