@@ -957,7 +957,7 @@ async def vmss_chat(
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("vmss_chat: thread_id=%s duration_ms=%.1f", new_key, duration_ms)
-        return VMSSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply)
+        return VMSSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply).model_dump()
 
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000

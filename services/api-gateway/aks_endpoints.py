@@ -1361,80 +1361,9 @@ async def aks_chat(
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info("aks_chat: thread_id=%s duration_ms=%.1f", new_key, duration_ms)
-        return AKSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply)
+        return AKSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply).model_dump()
 
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.error("aks_chat: error=%s duration_ms=%.1f", exc, duration_ms, exc_info=True)
-        return {"error": str(exc)}
-        cluster_name = resource_id.rstrip("/").split("/")[-1]
-        _, base_instructions = _get_domain_instructions("compute_agent")
-        system_prompt = (
-            f"{base_instructions}\n\n"
-            f"You are investigating a specific AKS cluster:\n"
-            f"  Name: {cluster_name}\n"
-            f"  Resource ID: {resource_id}\n\n"
-            "You have live tools to fetch real-time data for this cluster. "
-            "Use them whenever the user asks about node pools, workloads, metrics, or cluster health. "
-            "Do NOT say data is unavailable without first trying the relevant tool."
-        )
-
-        history_key = request.thread_id or None
-        prior_history = _CONVERSATION_HISTORY.get(history_key, []) if history_key else []
-        messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        messages.extend(prior_history)
-        messages.append({"role": "user", "content": request.message})
-
-        openai_client = _get_openai_client()
-        response_id = f"chat-{uuid.uuid4().hex[:16]}"
-        loop = __import__("asyncio").get_running_loop()
-        reply: Optional[str] = None
-
-        for _round in range(5):
-            response = await loop.run_in_executor(
-                None,
-                lambda m=messages: openai_client.chat.completions.create(
-                    model="gpt-4.1",
-                    messages=m,
-                    tools=AKS_CHAT_TOOL_SCHEMAS,
-                    tool_choice="auto",
-                    max_tokens=1500,
-                ),
-            )
-            choice = response.choices[0]
-            if choice.finish_reason == "stop" or not choice.message.tool_calls:
-                reply = choice.message.content
-                break
-            messages.append(choice.message)
-            for tc in choice.message.tool_calls:
-                try:
-                    tool_args = json.loads(tc.function.arguments or "{}")
-                except json.JSONDecodeError:
-                    tool_args = {}
-                tool_result = await loop.run_in_executor(
-                    None,
-                    lambda tn=tc.function.name, ta=tool_args: dispatch_tool_call(tn, ta, resource_id, credential),
-                )
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
-        else:
-            messages.append({"role": "user", "content": "Please summarise your findings so far."})
-            final = await loop.run_in_executor(
-                None,
-                lambda: openai_client.chat.completions.create(model="gpt-4.1", messages=messages, max_tokens=1000),
-            )
-            reply = final.choices[0].message.content
-
-        new_key = history_key or response_id
-        history = list(_CONVERSATION_HISTORY.get(new_key, []))
-        history.extend([{"role": "user", "content": request.message}, {"role": "assistant", "content": reply or ""}])
-        max_msgs = _CONVERSATION_HISTORY_LIMIT * 2
-        _CONVERSATION_HISTORY[new_key] = history[-max_msgs:]
-
-        duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info("aks_chat: thread_id=%s duration_ms=%.1f", new_key, duration_ms)
-        return AKSChatResponse(thread_id=new_key, run_id=response_id, status="created", reply=reply)
-
-    except Exception as exc:
-        duration_ms = (time.monotonic() - start_time) * 1000
-        logger.error("aks_chat: error=%s duration_ms=%.1f", exc, duration_ms)
         return {"error": str(exc)}
