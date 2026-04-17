@@ -160,6 +160,8 @@ from services.api_gateway.runbook_executor_endpoints import router as runbook_ex
 from services.api_gateway.tenant_endpoints import router as tenant_router
 from services.api_gateway.tenant_manager import TenantManager
 from services.api_gateway.quota_endpoints import router as quota_router
+from services.api_gateway.subscription_endpoints import router as subscription_mgmt_router
+from services.api_gateway.simulation_endpoints import router as simulation_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -742,6 +744,8 @@ app.include_router(quality_router)
 app.include_router(runbook_executor_router)
 app.include_router(tenant_router)
 app.include_router(quota_router)
+app.include_router(subscription_mgmt_router)
+app.include_router(simulation_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])

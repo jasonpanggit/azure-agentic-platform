@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -28,9 +28,11 @@ import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
+import { SimulationTab } from './SimulationTab'
+import { SubscriptionManagementTab } from './SubscriptionManagementTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin'
 
 interface FilterState {
   severity?: string
@@ -82,11 +84,13 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
+    { id: 'simulations',      label: 'Simulations',     Icon: FlaskConical },
   ],
   // Config
   [
-    { id: 'settings',    label: 'Settings',    Icon: Settings },
-    { id: 'admin',       label: 'Admin',       Icon: Building2 },
+    { id: 'subscriptions', label: 'Subscriptions', Icon: Globe },
+    { id: 'settings',      label: 'Settings',      Icon: Settings },
+    { id: 'admin',         label: 'Admin',          Icon: Building2 },
   ],
 ]
 
@@ -356,6 +360,14 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
           {activeTab === 'quality' && <QualityFlywheelTab />}
+        </div>
+
+        <div id="tabpanel-simulations" role="tabpanel" aria-labelledby="tab-simulations" hidden={activeTab !== 'simulations'}>
+          {activeTab === 'simulations' && <SimulationTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-subscriptions" role="tabpanel" aria-labelledby="tab-subscriptions" hidden={activeTab !== 'subscriptions'}>
+          {activeTab === 'subscriptions' && <SubscriptionManagementTab />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
