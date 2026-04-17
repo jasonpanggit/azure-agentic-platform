@@ -41,6 +41,15 @@ module "networking" {
   # created by module.private_endpoints below, not by the networking module.
 }
 
+# --- Foundry storage account (pre-existing, managed outside Terraform) ---
+# aapfoundrystore was created manually for Foundry Agent Service thread storage.
+# Referenced via data source so the foundry module can link it to the capability host.
+
+data "azurerm_storage_account" "foundry" {
+  name                = "aapfoundrystore"
+  resource_group_name = azurerm_resource_group.main.name
+}
+
 # --- Foundry (depends on: monitoring) ---
 
 module "foundry" {
@@ -54,6 +63,10 @@ module "foundry" {
 
   # Prod: higher TPM capacity
   model_capacity = 100
+
+  # Storage account for Foundry Agent Service thread persistence (capability host)
+  storage_account_name = data.azurerm_storage_account.foundry.name
+  storage_account_id   = data.azurerm_storage_account.foundry.id
 }
 
 # --- Agent Managed Identity Principal IDs (for Cosmos data-plane RBAC) ---

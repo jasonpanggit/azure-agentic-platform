@@ -18,6 +18,41 @@
 # model deployment to the Agent Service runtime. Without it, runs may stay
 # in "queued" status because the backend cannot discover the model endpoint.
 
+# ---------------------------------------------------------------------------
+# Blob Storage connection — required for Foundry Agent Service thread storage
+# ---------------------------------------------------------------------------
+# The Foundry Agent Service threads/runs API requires a Blob Storage connection
+# on the capability host to persist thread state (messages, run metadata, file
+# attachments). Without storageConnections, every create_thread_and_run() call
+# fails with ServiceInvocationException HTTP 500.
+#
+# Category must be "AzureBlob" (not "AzureStorageBlob"). AAD auth (managed
+# identity) is used — no SAS keys required.
+# AccountName + ContainerName are required metadata fields.
+resource "azapi_resource" "storage_connection" {
+  type      = "Microsoft.CognitiveServices/accounts/connections@2025-10-01-preview"
+  name      = "aap-storage-connection"
+  parent_id = azurerm_cognitive_account.foundry.id
+
+  body = {
+    properties = {
+      category     = "AzureBlob"
+      target       = "https://${var.storage_account_name}.blob.core.windows.net"
+      authType     = "AAD"
+      isSharedToAll = true
+      metadata = {
+        AccountName   = var.storage_account_name
+        ContainerName = "foundry-threads"
+        ResourceId    = var.storage_account_id
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
 resource "azapi_resource" "aiservices_connection" {
   type      = "Microsoft.CognitiveServices/accounts/connections@2025-10-01-preview"
   name      = "aap-aiservices-connection"
@@ -55,6 +90,7 @@ resource "azapi_resource" "capability_host" {
       capabilityHostKind             = "Agents"
       enablePublicHostingEnvironment = true
       aiServicesConnections          = [azapi_resource.aiservices_connection.id]
+      storageConnections             = [azapi_resource.storage_connection.id]
     }
   }
 
@@ -63,6 +99,8 @@ resource "azapi_resource" "capability_host" {
     update = "30m"
     delete = "30m"
   }
+
+  depends_on = [azapi_resource.storage_connection]
 
   lifecycle {
     # Ignore ALL changes — capability host was manually provisioned and is working.
