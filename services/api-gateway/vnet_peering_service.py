@@ -82,7 +82,7 @@ def _build_finding(row: Dict[str, Any], scanned_at: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def scan_vnet_peerings(subscription_ids: List[str]) -> List[Dict[str, Any]]:
+def scan_vnet_peerings(subscription_ids: List[str], credential: Any = None) -> List[Dict[str, Any]]:
     """ARG scan for all VNet peerings across the given subscriptions.
 
     Returns a flat list of peering findings.
@@ -94,8 +94,12 @@ def scan_vnet_peerings(subscription_ids: List[str]) -> List[Dict[str, Any]]:
         logger.warning("vnet_peering_service: scan called with empty subscription list")
         return []
 
+    if credential is None:
+        logger.warning("vnet_peering_service: no credential provided — scan skipped")
+        return []
+
     try:
-        from arg_helper import run_arg_query  # type: ignore[import]
+        from services.api_gateway.arg_helper import run_arg_query
     except ImportError:
         logger.warning("vnet_peering_service: arg_helper not available — scan skipped")
         return []
@@ -104,10 +108,7 @@ def scan_vnet_peerings(subscription_ids: List[str]) -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
 
     try:
-        rows = run_arg_query(
-            query=_ARG_QUERY,
-            subscription_ids=subscription_ids,
-        )
+        rows = run_arg_query(credential, subscription_ids, _ARG_QUERY)
         for row in rows:
             try:
                 finding = _build_finding(row, scanned_at)
