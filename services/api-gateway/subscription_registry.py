@@ -1,8 +1,8 @@
 from __future__ import annotations
-"""Subscription registry — ARG-backed discovery of all accessible Azure subscriptions.
+"""Subscription registry — discovers all accessible Azure subscriptions.
 
 Provides SubscriptionRegistry which:
-- Discovers all Enabled subscriptions via Azure Resource Graph
+- Discovers all Enabled subscriptions via azure-mgmt-subscription SDK
 - Persists to Cosmos DB `subscriptions` container
 - Caches in-memory for O(1) get_all_ids() access
 - Refreshes every 6 hours via run_refresh_loop()
@@ -15,14 +15,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-# ARG KQL: all enabled subscriptions accessible to the managed identity
-_SUBSCRIPTION_KQL = """
-Resources
-| where type =~ 'microsoft.resources/subscriptions'
-| where properties.state =~ 'Enabled'
-| project subscriptionId, displayName = name
-""".strip()
 
 COSMOS_DATABASE_NAME_DEFAULT = "aap"
 
@@ -42,35 +34,32 @@ class SubscriptionRegistry:
         self._cache: List[Dict[str, str]] = []
 
     # ------------------------------------------------------------------
-    # ARG discovery
+    # Subscription discovery via azure-mgmt-subscription
     # ------------------------------------------------------------------
 
-    def _run_arg_query(self) -> List[Dict[str, str]]:
-        """Execute ARG query to list enabled subscriptions. Returns raw rows."""
-        try:
-            from azure.mgmt.resourcegraph import ResourceGraphClient
-            from azure.mgmt.resourcegraph.models import QueryRequest
-        except ImportError as exc:
-            raise exc
-
-        client = ResourceGraphClient(self._credential)
-        # Query at tenant scope (no subscription filter) to find all accessible subs
-        request = QueryRequest(query=_SUBSCRIPTION_KQL, subscriptions=[])
-        response = client.resources(request)
-        return list(response.data) if response.data else []
-
     def discover(self) -> List[Dict[str, str]]:
-        """Discover all enabled subscriptions. Returns [{id, name}, ...].
+        """Discover all enabled subscriptions the managed identity can access.
 
-        Returns empty list (non-fatal) if azure-mgmt-resourcegraph is unavailable.
+        Uses azure-mgmt-subscription SubscriptionClient which lists all subscriptions
+        at the tenant level — the correct API for subscription discovery (not ARG).
+        Returns [{id, name}, ...]. Returns empty list (non-fatal) on any error.
         """
         start = time.monotonic()
         try:
-            rows = self._run_arg_query()
+            from azure.mgmt.subscription import SubscriptionClient  # type: ignore[import]
+        except ImportError:
+            logger.warning(
+                "subscription_registry: azure-mgmt-subscription not installed — returning empty list"
+            )
+            return []
+
+        try:
+            client = SubscriptionClient(self._credential)
             result = [
-                {"id": row["subscriptionId"], "name": row["displayName"]}
-                for row in rows
-                if row.get("subscriptionId")
+                {"id": sub.subscription_id, "name": sub.display_name or sub.subscription_id}
+                for sub in client.subscriptions.list()
+                if sub.state and str(sub.state).lower() == "enabled"
+                and sub.subscription_id
             ]
             logger.info(
                 "subscription_registry: discovered | count=%d duration_ms=%.1f",
@@ -78,11 +67,6 @@ class SubscriptionRegistry:
                 (time.monotonic() - start) * 1000,
             )
             return result
-        except ImportError:
-            logger.warning(
-                "subscription_registry: azure-mgmt-resourcegraph not available — returning empty list"
-            )
-            return []
         except Exception as exc:
             logger.error("subscription_registry: discover error | error=%s", exc)
             return []

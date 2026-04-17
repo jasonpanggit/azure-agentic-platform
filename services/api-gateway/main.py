@@ -162,6 +162,7 @@ from services.api_gateway.tenant_endpoints import router as tenant_router
 from services.api_gateway.tenant_manager import TenantManager
 from services.api_gateway.quota_endpoints import router as quota_router
 from services.api_gateway.subscription_endpoints import router as subscription_mgmt_router
+from services.api_gateway.cross_sub_endpoints import router as cross_sub_router
 from services.api_gateway.simulation_endpoints import router as simulation_router
 from services.api_gateway.agent_health import AgentHealthMonitor
 from services.api_gateway.agent_health_endpoints import router as agent_health_router
@@ -786,6 +787,7 @@ app.include_router(runbook_executor_router)
 app.include_router(tenant_router)
 app.include_router(quota_router)
 app.include_router(subscription_mgmt_router)
+app.include_router(cross_sub_router)
 app.include_router(simulation_router)
 app.include_router(agent_health_router)
 app.include_router(trace_router)
