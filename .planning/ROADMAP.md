@@ -1357,15 +1357,141 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 66 to break down)
 
-### Phase 67: add quota tab to allow one to check quota allocation of the subscription. this will be very useful for capacity planning and scalability.
+### Phase 67: Quota Tab
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 66
-**Plans:** 0 plans
+**Goal:** Add quota tab to allow one to check quota allocation of the subscription. This will be very useful for capacity planning and scalability.
+**Status:** ✅ Complete (2026-04-17) — 1/1 plans complete
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 67 to break down)
+- [x] 67-1: Quota Tab (backend + frontend + proxy routes)
+
+### Phase 68: Subscription Management Tab
+
+**Goal:** Give operators a dedicated UI tab to manage all Azure subscriptions under monitoring — view discovery status, label subscriptions, toggle monitoring per subscription, and inspect per-subscription health stats.
+**Status:** ✅ Complete (2026-04-17) — 1/1 plans complete
+
+Plans:
+- [x] 68-1: Subscription Management Tab (backend + frontend + proxy routes)
+
+### Phase 69: Simulation Tab
+
+**Goal:** Give operators a simulation panel to trigger realistic incident scenarios, validating that agents respond correctly, routing works, and the detection-to-triage pipeline is healthy end-to-end. 10 predefined scenarios covering all domains with dry-run support and run history.
+**Status:** ✅ Complete (2026-04-17) — 1/1 plans complete
+
+Plans:
+- [x] 69-1: Simulation Tab (backend + frontend + proxy routes)
+
+### Phase 70: Agent Health Monitor + Auto-Recovery
+
+**Goal:** Proactively monitor all 9 domain agents' health: heartbeat, response latency, error rates, model token usage. Surface a live "Agent Health" panel in the Ops tab and trigger auto-remediation (restart Container App) when an agent goes unhealthy. This closes the self-healing gap — the platform must watch itself with the same rigor it watches customer infrastructure.
+
+**Requirements:**
+- Poll `/health` endpoint on each agent Container App every 60s (background task in API gateway)
+- Track consecutive failures → mark agent DEGRADED or OFFLINE after 3 failures
+- Emit `incident` for OFFLINE agent (domain=platform, sev=Sev1)
+- REST endpoints: `GET /api/v1/agents/health`, `GET /api/v1/agents/{name}/health`
+- UI: AgentHealthPanel in Ops tab showing agent name, status badge, last heartbeat, latency p50/p95, error rate
+- Auto-restart: call Azure Container Apps revision management API to restart Container App on OFFLINE (behind HITL approval for prod)
+- Cosmos persistence: `agent_health` container with 24h TTL for timeseries
+
+**Complexity:** M
+**Depends on:** Phase 44 (Ops Dashboard)
+**Plans:** 0 plans (run /gsd-plan-phase 70 to break down)
+
+### Phase 71: Live Agent Trace Viewer
+
+**Goal:** Give operators real-time visibility into what agents are "thinking" — show live tool call traces, intermediate reasoning steps, and token usage per conversation turn. Surfaces in the Chat panel as a collapsible "Agent Trace" section and in a dedicated Traces tab. Essential for trust-building and debugging agent misbehavior.
+
+**Requirements:**
+- Stream Foundry agent run events (tool_call, tool_result, message_delta) via SSE
+- Chat panel: collapsible "🔍 Agent Trace" section below each assistant message showing tool calls in chronological order
+- Traces tab: full trace history with search by incident_id, agent name, time range
+- Tool call display: tool name, input (collapsed JSON), output (collapsed JSON), duration_ms
+- Token usage per run: prompt_tokens, completion_tokens, total_tokens
+- Store traces in Cosmos `agent_traces` container (7-day TTL)
+- Proxy SSE stream from `/api/v1/chat/stream` through Next.js `/api/stream/`
+
+**Complexity:** L
+**Depends on:** Phase 29 (Foundry Migration), Phase 44 (Ops Dashboard)
+**Plans:** 0 plans (run /gsd-plan-phase 71 to break down)
+
+### Phase 72: Alert Correlation Timeline
+
+**Goal:** Visualise how a cluster of related alerts arrived and were collapsed into a single incident. Show operators the timeline of raw Azure Monitor alerts, the correlation logic that fired (temporal, topological, causal), and the resulting composite incident. Replaces the "black box" impression of noise reduction with transparent reasoning.
+
+**Requirements:**
+- `GET /api/v1/incidents/{id}/alert-timeline` endpoint returning raw alert events with correlation annotations
+- AlertTimeline component: horizontal timeline with alert bubbles, grouped by resource, with arrows showing correlation edges
+- Correlation reason chips: "Temporal (within 2 min)", "Topological (same VNet)", "Causal (blast radius)"
+- Displayed in Incident detail panel as a new "Timeline" tab
+- Powered by existing `change_correlator.py` and `noise_reducer.py` data
+
+**Complexity:** M
+**Depends on:** Phase 23 (Change Correlator), Phase 24 (Noise Reducer)
+**Plans:** 0 plans (run /gsd-plan-phase 72 to break down)
+
+### Phase 73: Predictive Incident Prevention
+
+**Goal:** Move from reactive to predictive: surface early-warning indicators BEFORE incidents occur. Extend the forecaster to detect anomaly precursors (CPU trending up 3 hours before alert threshold), correlate leading indicators across domains (disk growth → storage alert), and generate "Pre-Incident Advisories" that operators can act on before SLO breach.
+
+**Requirements:**
+- Extend `forecaster.py` with anomaly detection (z-score on 7-day rolling baseline, threshold: >2.5σ)
+- New Cosmos container: `pre_incident_advisories` (partition /subscription_id, 48h TTL)
+- New endpoint: `GET /api/v1/advisories` with filter by severity/domain
+- Advisory card in Ops tab: "⚠️ VM my-vm-01: CPU trending to 95% in ~3h. Historical pattern: 4 of 5 similar trends led to alert."
+- Link advisory to historical incident patterns from `pattern_analyzer.py`
+- Advisory dismissed via PATCH /api/v1/advisories/{id}/dismiss
+
+**Complexity:** L
+**Depends on:** Phase 26 (Predictive Ops), Phase 28 (Platform Intelligence)
+**Plans:** 0 plans (run /gsd-plan-phase 73 to break down)
+
+### Phase 74: Operator Shift Handover Report
+
+**Goal:** Auto-generate a shift handover briefing at the end of each 8-hour shift: open incidents, resolved since shift start, SLO status, top-3 patterns, pending approvals, and recommended focus areas for the next shift. Delivered via Teams message and available as a download from the UI.
+
+**Requirements:**
+- `POST /api/v1/reports/shift-handover` — generates report for a given time window (defaults to last 8h)
+- Pulls data from: Cosmos incidents, approvals, SLO tracker, pattern analyzer
+- Output formats: JSON (for Teams card), Markdown (for download)
+- Teams proactive message: Adaptive Card with sections for each category
+- UI: "Generate Handover" button in Ops tab, opens modal with rendered report + download button
+- Schedule: auto-generate every 8h (00:00, 08:00, 16:00 UTC) via background task
+
+**Complexity:** M
+**Depends on:** Phase 25 (Institutional Memory), Phase 28 (Platform Intelligence), Phase 55 (SLA Dashboard)
+**Plans:** 0 plans (run /gsd-plan-phase 74 to break down)
+
+### Phase 75: Resource Tagging Compliance
+
+**Goal:** Give operators visibility into tagging hygiene across all Azure resources. Enforce a mandatory tag schema (Environment, Owner, CostCenter, Application) and surface non-compliant resources by subscription, resource group, and resource type. Auto-generate remediation scripts.
+
+**Requirements:**
+- `GET /api/v1/tagging/compliance` — ARG-based scan of all resources, grouped by compliance status
+- Configurable required tags stored in PostgreSQL `platform_settings`
+- TaggingComplianceTab.tsx in the dashboard
+- Non-compliance summary: total resources, compliant %, by-subscription breakdown
+- "Generate Fix Script" button: downloads Azure CLI script to apply missing tags to non-compliant resources
+- Agent integration: Security/SRE agents can query tagging compliance as a tool
+
+**Complexity:** M
+**Depends on:** Phase 50 (Cross-Subscription View)
+**Plans:** 0 plans (run /gsd-plan-phase 75 to break down)
+
+---
+
+## World-Class v4.0 Success Criteria
+
+When all phases 70–75 complete:
+
+| Metric | Target |
+|--------|--------|
+| **Agent self-healing** | OFFLINE agent detected in <60s, HITL restart approval delivered via Teams in <2 min |
+| **Trace transparency** | 100% of agent conversations have queryable tool-call trace |
+| **Pre-incident prevention** | >30% of Sev2 incidents preceded by actionable advisory ≥2h in advance |
+| **Shift handover** | Zero manual data collection for shift handover; auto-generated in <5s |
+| **Tagging compliance** | Non-compliant resources identified across all subscriptions; remediation script generated in 1 click |
+| **Alert timeline** | Operators can explain correlation logic for any incident within 30 seconds |
 
 ---
 
