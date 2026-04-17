@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Shield, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Lock, ShieldAlert, GitCommitHorizontal } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -28,11 +28,12 @@ import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
-import { CostAnomalyTab } from './CostAnomalyTab'
-import { NsgAuditTab } from './NsgAuditTab'
+import { LockAuditTab } from './LockAuditTab'
+import { DefenderTab } from './DefenderTab'
+import { ChangeIntelligenceTab } from './ChangeIntelligenceTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin' | 'cost-anomalies' | 'nsg-audit'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin' | 'lock-audit' | 'defender' | 'changes'
 
 interface FilterState {
   severity?: string
@@ -70,7 +71,6 @@ const TAB_GROUPS: TabDef[][] = [
   // Monitoring & cost
   [
     { id: 'cost',          label: 'FinOps',        Icon: DollarSign },
-    { id: 'cost-anomalies', label: 'Cost Anomalies', Icon: TrendingUp },
     { id: 'observability', label: 'Observability', Icon: Activity },
     { id: 'sla',           label: 'SLA',           Icon: BarChart2 },
     { id: 'capacity',      label: 'Capacity',      Icon: Gauge },
@@ -81,11 +81,13 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'patch',            label: 'Patch',           Icon: ShieldCheck },
     { id: 'compliance',       label: 'Compliance',      Icon: FileCheck },
     { id: 'security-posture', label: 'Security Score',  Icon: ShieldCheck },
-    { id: 'nsg-audit',        label: 'NSG Audit',       Icon: Shield },
     { id: 'runbooks',         label: 'Runbooks',        Icon: BookOpen },
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
+    { id: 'lock-audit',       label: 'Lock Audit',      Icon: Lock },
+    { id: 'defender',         label: 'Defender',        Icon: ShieldAlert },
+    { id: 'changes',          label: 'Changes',         Icon: GitCommitHorizontal },
   ],
   // Config
   [
@@ -308,14 +310,6 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
 
-        <div id="tabpanel-cost-anomalies" role="tabpanel" aria-labelledby="tab-cost-anomalies" hidden={activeTab !== 'cost-anomalies'}>
-          {activeTab === 'cost-anomalies' && (
-            <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-              <CostAnomalyTab subscriptions={selectedSubscriptions} />
-            </div>
-          )}
-        </div>
-
         <div id="tabpanel-observability" role="tabpanel" aria-labelledby="tab-observability" hidden={activeTab !== 'observability'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <ObservabilityTab subscriptions={selectedSubscriptions} />
@@ -358,10 +352,6 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           {activeTab === 'security-posture' && <SecurityPostureTab subscriptionId={selectedSubscriptions[0]} />}
         </div>
 
-        <div id="tabpanel-nsg-audit" role="tabpanel" aria-labelledby="tab-nsg-audit" hidden={activeTab !== 'nsg-audit'}>
-          {activeTab === 'nsg-audit' && <NsgAuditTab subscriptions={selectedSubscriptions} />}
-        </div>
-
         <div id="tabpanel-drift" role="tabpanel" aria-labelledby="tab-drift" hidden={activeTab !== 'drift'}>
           {activeTab === 'drift' && <DriftTab subscriptionId={selectedSubscriptions[0]} />}
         </div>
@@ -372,6 +362,18 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
           {activeTab === 'quality' && <QualityFlywheelTab />}
+        </div>
+
+        <div id="tabpanel-lock-audit" role="tabpanel" aria-labelledby="tab-lock-audit" hidden={activeTab !== 'lock-audit'}>
+          {activeTab === 'lock-audit' && <LockAuditTab subscriptions={selectedSubscriptions} />}
+        </div>
+
+        <div id="tabpanel-defender" role="tabpanel" aria-labelledby="tab-defender" hidden={activeTab !== 'defender'}>
+          {activeTab === 'defender' && <DefenderTab />}
+        </div>
+
+        <div id="tabpanel-changes" role="tabpanel" aria-labelledby="tab-changes" hidden={activeTab !== 'changes'}>
+          {activeTab === 'changes' && <ChangeIntelligenceTab subscriptions={selectedSubscriptions} />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
