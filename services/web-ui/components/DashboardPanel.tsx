@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe, GitCommitHorizontal, Key, Wrench, DatabaseBackup, Lock } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe, GitCommitHorizontal, Key, Wrench, DatabaseBackup, Lock, HardDrive } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -35,9 +35,13 @@ import { IdentityRiskTab } from './IdentityRiskTab'
 import { MaintenanceTab } from './MaintenanceTab'
 import { BackupComplianceTab } from './BackupComplianceTab'
 import { PrivateEndpointTab } from './PrivateEndpointTab'
+import QuotaUsageTab from './QuotaUsageTab'
+import BudgetAlertTab from './BudgetAlertTab'
+import { CertExpiryTab } from './CertExpiryTab'
+import { StorageSecurityTab } from './StorageSecurityTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints' | 'quota-usage' | 'budgets' | 'cert-expiry' | 'storage-security'
 
 interface FilterState {
   severity?: string
@@ -97,6 +101,10 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'maintenance',       label: 'Maintenance',     Icon: Wrench },
     { id: 'backup-compliance', label: 'Backup',          Icon: DatabaseBackup },
     { id: 'private-endpoints', label: 'Private Endpoints', Icon: Lock },
+    { id: 'quota-usage',       label: 'Quota Usage',       Icon: BarChart3 },
+    { id: 'budgets',           label: 'Budgets',           Icon: DollarSign },
+    { id: 'cert-expiry',       label: 'Cert Expiry',       Icon: ShieldCheck },
+    { id: 'storage-security',  label: 'Storage Security',  Icon: HardDrive },
   ],
   // Config
   [
@@ -397,6 +405,22 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-private-endpoints" role="tabpanel" aria-labelledby="tab-private-endpoints" hidden={activeTab !== 'private-endpoints'}>
           {activeTab === 'private-endpoints' && <PrivateEndpointTab subscriptions={selectedSubscriptions} />}
+        </div>
+
+        <div id="tabpanel-quota-usage" role="tabpanel" aria-labelledby="tab-quota-usage" hidden={activeTab !== 'quota-usage'}>
+          {activeTab === 'quota-usage' && <QuotaUsageTab />}
+        </div>
+
+        <div id="tabpanel-budgets" role="tabpanel" aria-labelledby="tab-budgets" hidden={activeTab !== 'budgets'}>
+          {activeTab === 'budgets' && <BudgetAlertTab />}
+        </div>
+
+        <div id="tabpanel-cert-expiry" role="tabpanel" aria-labelledby="tab-cert-expiry" hidden={activeTab !== 'cert-expiry'}>
+          {activeTab === 'cert-expiry' && <CertExpiryTab />}
+        </div>
+
+        <div id="tabpanel-storage-security" role="tabpanel" aria-labelledby="tab-storage-security" hidden={activeTab !== 'storage-security'}>
+          {activeTab === 'storage-security' && <StorageSecurityTab />}
         </div>
 
         <div id="tabpanel-subscriptions" role="tabpanel" aria-labelledby="tab-subscriptions" hidden={activeTab !== 'subscriptions'}>
