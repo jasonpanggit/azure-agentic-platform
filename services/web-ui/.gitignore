@@ -5,3 +5,11 @@ dist/
 .env
 .env.*
 !.env.example
+
+# next-pwa generates these during `next build` — do not commit stale artifacts
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/swe-worker-*.js
+public/swe-worker-*.js.map
