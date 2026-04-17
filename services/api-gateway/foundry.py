@@ -390,15 +390,31 @@ async def dispatch_chat_to_orchestrator(
 
     loop = asyncio.get_running_loop()
 
+    # The caller may pass the full operator-query JSON envelope (from chat.py).
+    # Extract the plain user text for routing and history so that:
+    # 1. _classify_domain operates on the operator's actual words, not JSON soup
+    # 2. Conversation history stores readable text, not raw envelopes
+    user_text = message
+    try:
+        envelope = json.loads(message)
+        if isinstance(envelope, dict) and "payload" in envelope:
+            payload_msg = envelope["payload"].get("message", "")
+            if payload_msg:
+                user_text = payload_msg
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        pass  # message is plain text — use as-is
+
     # Fast keyword routing — no LLM call needed
-    domain_agent_tool = _classify_domain(message)
+    domain_agent_tool = _classify_domain(user_text)
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
-    logger.info("Keyword-routed to: %s", domain_agent_name)
+    logger.info("Keyword-routed to: %s (user_text=%r)", domain_agent_name, user_text[:80])
 
     domain_model, domain_instructions = _get_domain_instructions(domain_agent_tool)
     openai_client = _get_openai_client()
 
-    # Build messages list: system prompt + prior history + current user message
+    # Build messages list: system prompt + prior history + current user message.
+    # History and the LLM call both use the full envelope so the agent has
+    # subscription + VM context, but routing uses the plain user_text.
     prior_history = _CONVERSATION_HISTORY.get(conversation_id, []) if conversation_id else []
     messages: list[dict[str, str]] = [{"role": "system", "content": domain_instructions}]
     messages.extend(prior_history)
@@ -424,7 +440,9 @@ async def dispatch_chat_to_orchestrator(
     # Use conversation_id for continuation, response_id for new threads.
     history_key = conversation_id or response_id
     history = list(_CONVERSATION_HISTORY.get(history_key, []))
-    history.append({"role": "user", "content": message})
+    # Store plain user_text (not the full envelope) so history is readable
+    # and doesn't inflate subsequent requests with repeated VM inventory blobs.
+    history.append({"role": "user", "content": user_text})
     history.append({"role": "assistant", "content": reply or ""})
     # Trim to limit: keep newest N pairs (2 messages per pair)
     max_messages = _CONVERSATION_HISTORY_LIMIT * 2

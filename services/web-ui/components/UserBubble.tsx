@@ -5,10 +5,10 @@ interface UserBubbleProps {
 
 export function UserBubble({ content, timestamp }: UserBubbleProps) {
   return (
-    <div className="group flex flex-col items-end mb-3 ml-auto max-w-[85%]">
+    <div className="group flex flex-col items-end mb-3 ml-auto max-w-[85%] min-w-0 w-full">
       <div
-        className="rounded-2xl rounded-br-sm px-3 py-2.5 text-sm text-white"
-        style={{ background: 'var(--accent-blue)' }}
+        className="rounded-2xl rounded-br-sm px-3 py-2.5 text-sm text-white break-words overflow-wrap-anywhere"
+        style={{ background: 'var(--accent-blue)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
       >
         {content}
       </div>
