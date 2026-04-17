@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Lock, ShieldAlert } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -28,9 +28,11 @@ import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
+import { LockAuditTab } from './LockAuditTab'
+import { DefenderTab } from './DefenderTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin' | 'lock-audit' | 'defender'
 
 interface FilterState {
   severity?: string
@@ -82,6 +84,8 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
+    { id: 'lock-audit',       label: 'Lock Audit',      Icon: Lock },
+    { id: 'defender',         label: 'Defender',        Icon: ShieldAlert },
   ],
   // Config
   [
@@ -356,6 +360,14 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden={activeTab !== 'quality'}>
           {activeTab === 'quality' && <QualityFlywheelTab />}
+        </div>
+
+        <div id="tabpanel-lock-audit" role="tabpanel" aria-labelledby="tab-lock-audit" hidden={activeTab !== 'lock-audit'}>
+          {activeTab === 'lock-audit' && <LockAuditTab subscriptions={selectedSubscriptions} />}
+        </div>
+
+        <div id="tabpanel-defender" role="tabpanel" aria-labelledby="tab-defender" hidden={activeTab !== 'defender'}>
+          {activeTab === 'defender' && <DefenderTab />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
