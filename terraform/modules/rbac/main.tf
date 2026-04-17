@@ -224,11 +224,12 @@ locals {
       }
     },
 
-    # API Gateway: Key Vault Secrets User — read SPN secrets for CredentialStore
+    # API Gateway: Key Vault Secrets Officer — read + write SPN secrets for CredentialStore
+    # Secrets Officer is required: onboard endpoint writes secrets, CredentialStore reads them
     var.key_vault_id != "" ? {
-      "api-gateway-kv-secrets-user" = {
+      "api-gateway-kv-secrets-officer" = {
         principal_id         = var.agent_principal_ids["api-gateway"]
-        role_definition_name = "Key Vault Secrets User"
+        role_definition_name = "Key Vault Secrets Officer"
         scope                = var.key_vault_id
       }
     } : {},
