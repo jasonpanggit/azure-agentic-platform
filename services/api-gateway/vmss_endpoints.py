@@ -891,7 +891,8 @@ async def vmss_chat(
         )
         from services.api_gateway.vmss_chat_tools import VMSS_CHAT_TOOL_SCHEMAS, dispatch_tool_call
 
-        credential = getattr(req.app.state, "credential", None)
+        credential = getattr(getattr(req, "app", None), "state", None)
+        credential = getattr(credential, "credential", None) if credential else None
         vmss_name = resource_id.rstrip("/").split("/")[-1]
         _, base_instructions = _get_domain_instructions("compute_agent")
         system_prompt = (
@@ -961,5 +962,5 @@ async def vmss_chat(
 
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
-        logger.error("vmss_chat: error=%s duration_ms=%.1f", exc, duration_ms)
+        logger.error("vmss_chat: error=%s duration_ms=%.1f", exc, duration_ms, exc_info=True)
         return {"error": str(exc)}
