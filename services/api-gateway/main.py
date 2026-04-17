@@ -160,10 +160,10 @@ from services.api_gateway.runbook_executor_endpoints import router as runbook_ex
 from services.api_gateway.tenant_endpoints import router as tenant_router
 from services.api_gateway.tenant_manager import TenantManager
 from services.api_gateway.quota_endpoints import router as quota_router
-from services.api_gateway.aks_health_endpoints import router as aks_health_router
-from services.api_gateway.policy_compliance_endpoints import router as policy_compliance_router
-from services.api_gateway.runbook_history_endpoints import router as runbook_history_router
-from services.api_gateway.cross_sub_endpoints import router as cross_sub_router
+from services.api_gateway.app_service_endpoints import router as app_service_router
+from services.api_gateway.queue_depth_endpoints import router as queue_depth_router
+from services.api_gateway.vm_extension_endpoints import router as vm_extension_router
+from services.api_gateway.alert_rule_audit_endpoints import router as alert_coverage_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -746,10 +746,10 @@ app.include_router(quality_router)
 app.include_router(runbook_executor_router)
 app.include_router(tenant_router)
 app.include_router(quota_router)
-app.include_router(aks_health_router)
-app.include_router(policy_compliance_router)
-app.include_router(runbook_history_router)
-app.include_router(cross_sub_router)
+app.include_router(app_service_router)
+app.include_router(queue_depth_router)
+app.include_router(vm_extension_router)
+app.include_router(alert_coverage_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
