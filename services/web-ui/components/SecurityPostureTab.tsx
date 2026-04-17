@@ -23,6 +23,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
+import type { ValueType } from 'recharts/types/component/DefaultTooltipContent'
 import { RefreshCw, MessageSquare } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -213,7 +214,7 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
             borderRadius: 8,
             color: 'var(--text-primary)',
           }}
-          formatter={(value: number | string) => [value != null ? Number(value).toFixed(1) : '—', 'Score']}
+          formatter={(value: ValueType) => [value != null ? Number(value).toFixed(1) : '—', 'Score']}
         />
         <Line
           type="monotone"
