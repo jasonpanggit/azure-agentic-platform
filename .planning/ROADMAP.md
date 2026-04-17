@@ -1369,6 +1369,171 @@ Plans:
 
 ---
 
+### Phase 68: Subscription Management Tab
+
+**Goal:** Let operators add, remove, and toggle subscriptions directly from the Web UI — replacing manual environment variable edits.
+**Status:** ✅ COMPLETE (PR #96)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 68-1: Subscription registry CRUD endpoints + Management tab UI
+
+---
+
+### Phase 69: Simulation Tab
+
+**Goal:** Provide a curated list of incident simulations (compute/network/storage/security/arc/AKS/FinOps) that operators can trigger from the UI to validate agent response.
+**Status:** ✅ COMPLETE (PR #96)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 69-1: Simulation scenarios + POST /run endpoint + Simulations tab
+
+---
+
+### Phase 70: Agent Health Monitor
+
+**Goal:** Continuous health monitoring of all 9 domain agents with HTTP probes, failure thresholds, Cosmos persistence, and Sev0/Sev1 escalation.
+**Status:** ✅ COMPLETE (PR #96)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 70-1: AgentHealthMonitor loop + health endpoints + OpsTab health panel
+
+---
+
+### Phase 71: Agent Run Trace Capture
+
+**Goal:** Capture Foundry run steps (tool calls, messages, outputs) to Cosmos for debugging and audit, with trace viewer in the UI.
+**Status:** ✅ COMPLETE (PR #96)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 71-1: trace_service.py + trace endpoints + Traces tab
+
+---
+
+### Phase 72: Alert Correlation Timeline Scoring
+
+**Goal:** Score and rank correlated changes for each incident using temporal, topological, and change-type signals; render as visual timeline with reason chips.
+**Status:** ✅ COMPLETE (PR #97)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 72-1: alert_timeline_endpoints.py + AlertTimeline.tsx + AlertTimelineDialog.tsx
+
+---
+
+### Phase 73: Predictive Incident Prevention (Advisories)
+
+**Goal:** Pure-Python z-score anomaly detection over incident metrics; surfaces pre-incident advisories (2.5σ=warning, >3.5σ=critical) with 48h TTL and dismiss support.
+**Status:** ✅ COMPLETE (PR #97)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 73-1: advisory_service.py + advisory_endpoints.py + AdvisoryPanel.tsx
+
+---
+
+### Phase 74: Operator Shift Handover Reports
+
+**Goal:** Auto-generate structured shift handover reports aggregating 8h of incident/alert/agent stats, with Adaptive Card for Teams delivery and markdown download.
+**Status:** ✅ COMPLETE (PR #97)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 74-1: handover_report.py + handover_endpoints.py + HandoverModal.tsx
+
+---
+
+### Phase 75: Resource Tagging Compliance
+
+**Goal:** ARG-based scan for missing required tags (Environment/Owner/CostCenter/Application) across all resources; az CLI remediation script generation; TaggingComplianceTab.
+**Status:** ✅ COMPLETE (PR #97)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 75-1: tagging_service.py + tagging_endpoints.py + TaggingComplianceTab.tsx
+
+---
+
+### Phase 76: Terraform Infrastructure Gaps
+
+**Goal:** Provision new Cosmos containers for phases 68-75 and wire agent HTTP endpoint env vars into api-gateway Container App for the health monitor.
+**Status:** ✅ COMPLETE (PR #98)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 76-1: 5 new Cosmos containers + orchestrator/domain agent endpoint env vars in Terraform
+
+---
+
+### Phase 77: NSG Security Audit
+
+**Goal:** ARG-based scan of all Network Security Groups; classify rules as Critical/High/Medium/Info by port+source; uuid5 stable findings; 7-day TTL; NsgAuditTab.
+**Status:** ✅ COMPLETE (PR #99)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 77-1: nsg_audit_service.py + nsg_audit_endpoints.py + NsgAuditTab.tsx
+
+---
+
+### Phase 78: Cost Anomaly Detection
+
+**Goal:** Azure Cost Management REST API integration; z-score anomaly detection per service (warning ≥2.5σ, critical >3.5σ); 7-day rolling baseline; CostAnomalyTab.
+**Status:** ✅ COMPLETE (PR #99)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 78-1: cost_service.py + cost_endpoints.py + CostAnomalyTab.tsx
+
+---
+
+### Phase 79: Azure Defender for Cloud Integration
+
+**Goal:** Pull active Defender security alerts and unhealthy recommendations via ARG SecurityResources; uuid5 stable IDs; DefenderTab with Alerts/Recommendations sub-tabs.
+**Status:** ✅ COMPLETE (PR #100)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 79-1: defender_service.py + defender_endpoints.py + DefenderTab.tsx
+
+---
+
+### Phase 80: Resource Lock Audit
+
+**Goal:** Audit high-value Azure resources for missing CanNotDelete locks; classify no_lock=high/rg_lock_only=medium; az CLI remediation script; LockAuditTab.
+**Status:** ✅ COMPLETE (PR #100)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 80-1: lock_audit_service.py + lock_audit_endpoints.py + LockAuditTab.tsx
+
+---
+
+### Phase 81: Activity Log Change Intelligence
+
+**Goal:** ARG resourcechanges scan with impact scoring (Delete critical=0.9, NSG/Firewall=0.8, VM/AKS=0.7); 24h window; timeline feed UI; links changes to incidents.
+**Status:** ✅ COMPLETE (PR #100)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 81-1: change_intelligence_service.py + change_intelligence_endpoints.py + ChangeIntelligenceTab.tsx
+
+---
+
+### Phase 82: Incident Report Export
+
+**Goal:** On-demand structured Markdown+JSON incident reports generated from Cosmos incidents + agent_traces; IncidentReportButton triggers browser download.
+**Status:** ✅ COMPLETE (PR #100)
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 82-1: incident_report_service.py + incident_report_endpoints.py + IncidentReportButton.tsx
+
+---
+
 ## World-Class v3.0 Success Criteria
 
 When all phases 44–64 complete:
