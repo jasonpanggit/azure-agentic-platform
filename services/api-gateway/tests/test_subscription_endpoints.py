@@ -58,7 +58,7 @@ def mock_cosmos():
 def client(mock_cosmos):
     """TestClient with subscription management router mounted."""
     from services.api_gateway.subscription_endpoints import router
-    from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+    from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client, get_scoped_credential
 
     cosmos_client, _, _ = mock_cosmos
     app = FastAPI()
@@ -67,6 +67,7 @@ def client(mock_cosmos):
     mock_credential = MagicMock(name="DefaultAzureCredential")
 
     app.dependency_overrides[get_credential] = lambda: mock_credential
+    app.dependency_overrides[get_scoped_credential] = lambda: mock_credential
     app.dependency_overrides[get_optional_cosmos_client] = lambda: cosmos_client
 
     return TestClient(app)
@@ -76,7 +77,7 @@ def client(mock_cosmos):
 def client_no_cosmos():
     """TestClient with Cosmos unavailable (None)."""
     from services.api_gateway.subscription_endpoints import router
-    from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+    from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client, get_scoped_credential
 
     app = FastAPI()
     app.include_router(router)
@@ -84,6 +85,7 @@ def client_no_cosmos():
     mock_credential = MagicMock(name="DefaultAzureCredential")
 
     app.dependency_overrides[get_credential] = lambda: mock_credential
+    app.dependency_overrides[get_scoped_credential] = lambda: mock_credential
     app.dependency_overrides[get_optional_cosmos_client] = lambda: None
 
     return TestClient(app)

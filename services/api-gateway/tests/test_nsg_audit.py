@@ -367,6 +367,7 @@ def app_client():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from services.api_gateway.nsg_audit_endpoints import router
+    from services.api_gateway.dependencies import get_scoped_credential, get_cosmos_client
 
     application = FastAPI()
     application.include_router(router)
@@ -377,6 +378,14 @@ def app_client():
     # Wire state
     application.state.cosmos_client = cosmos_mock
     application.state.credential = credential_mock
+
+    # Override scoped credential — NSG endpoints don't have a /{subscription_id} path param,
+    # so get_scoped_credential would fail with 422. Return the flat credential instead.
+    async def _mock_scoped_credential() -> object:
+        return credential_mock
+
+    application.dependency_overrides[get_scoped_credential] = _mock_scoped_credential
+    application.dependency_overrides[get_cosmos_client] = lambda: cosmos_mock
 
     return TestClient(application), cosmos_mock, credential_mock
 

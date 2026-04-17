@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, Request
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_credential, get_scoped_credential, get_optional_cosmos_client
 from services.api_gateway.federation import resolve_subscription_ids
 from services.api_gateway.os_normalizer import normalize_os
 
