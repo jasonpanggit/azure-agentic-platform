@@ -84,7 +84,6 @@ export function LBHealthTab() {
   const [findings, setFindings] = useState<LBFinding[]>([])
   const [summary, setSummary] = useState<LBSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
@@ -117,18 +116,6 @@ export function LBHealthTab() {
   useEffect(() => {
     void fetchData()
   }, [fetchData])
-
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/network/lb/scan', { method: 'POST' })
-      await fetchData()
-    } catch {
-      // Scan errors handled silently
-    } finally {
-      setScanning(false)
-    }
-  }
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -172,12 +159,12 @@ export function LBHealthTab() {
         <Button
           variant="outline"
           size="sm"
-          onClick={handleScan}
-          disabled={scanning || loading}
+          onClick={fetchData}
+          disabled={loading}
           className="flex items-center gap-1.5"
         >
-          <RefreshCw className="h-3.5 w-3.5" aria-label="Scan" />
-          {scanning ? 'Scanning…' : 'Scan Now'}
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-label="Refresh" />
+          Refresh
         </Button>
       </div>
 
@@ -188,7 +175,7 @@ export function LBHealthTab() {
         </div>
       ) : findings.length === 0 ? (
         <div style={{ color: 'var(--text-secondary)' }} className="text-sm py-8 text-center">
-          No load balancer findings. Run a scan to populate data.
+          No load balancers found in the current subscriptions.
         </div>
       ) : (
         <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>

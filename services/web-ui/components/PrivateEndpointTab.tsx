@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, RefreshCw, AlertTriangle, ScanLine } from 'lucide-react'
+import { Lock, RefreshCw, AlertTriangle } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -96,7 +96,6 @@ export function PrivateEndpointTab({ subscriptions = [] }: PrivateEndpointTabPro
   const [findings, setFindings] = useState<PEFinding[]>([])
   const [summary, setSummary] = useState<PESummary | null>(null)
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Filters
@@ -140,20 +139,6 @@ export function PrivateEndpointTab({ subscriptions = [] }: PrivateEndpointTabPro
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      const params = new URLSearchParams()
-      if (filterSubscription) params.set('subscription_id', filterSubscription)
-      await fetch(`/api/proxy/private-endpoints/scan${params.toString() ? `?${params}` : ''}`, { method: 'POST' })
-      setTimeout(fetchData, 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const coveragePct = summary?.pe_coverage_pct ?? 0
 
   // Unique resource types from findings for filter dropdown
@@ -179,15 +164,6 @@ export function PrivateEndpointTab({ subscriptions = [] }: PrivateEndpointTabPro
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleScan}
-            disabled={scanning}
-            className="flex items-center gap-1.5"
-          >
-            <ScanLine className="h-3.5 w-3.5" />
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -329,7 +305,7 @@ export function PrivateEndpointTab({ subscriptions = [] }: PrivateEndpointTabPro
             ) : findings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>
-                  No findings. Run a scan to populate data.
+                  No findings. All resources appear compliant or no resources found.
                 </TableCell>
               </TableRow>
             ) : (

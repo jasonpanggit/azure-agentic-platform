@@ -1,110 +1,75 @@
 from __future__ import annotations
-"""VNet Peering Health Audit API endpoints — Phase 99.
+"""VNet Peering Health Audit API endpoints.
 
 Routes:
   GET  /api/v1/network/peerings?subscription_id=&is_healthy=
-  POST /api/v1/network/peerings/scan
   GET  /api/v1/network/peerings/summary?subscription_id=
+
+Data is queried live from Azure Resource Graph on every request — no
+scan-then-read cycle required.
 """
-import os
-import os
 
 import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.federation import resolve_subscription_ids
+from services.api_gateway.vnet_peering_service import scan_vnet_peerings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/network/peerings", tags=["vnet-peering"])
 
-_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
-
 
 @router.get("")
 async def list_peerings(
+    request: Request,
     subscription_id: Optional[str] = Query(None, description="Filter by subscription ID"),
     is_healthy: Optional[bool] = Query(None, description="Filter by health status"),
     token: Dict[str, Any] = Depends(verify_token),
-    cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Dict[str, Any]:
-    """Return VNet peering findings from the last scan."""
+    """Return VNet peering findings queried live from ARG."""
     start_time = time.monotonic()
-    from services.api_gateway.vnet_peering_service import get_peering_findings
 
-    findings = (
-        get_peering_findings(
-            cosmos_client=cosmos_client,
-            cosmos_db=_COSMOS_DB,
-            subscription_id=subscription_id,
-            is_healthy=is_healthy,
-        )
-        if cosmos_client
-        else []
-    )
+    subscription_ids = resolve_subscription_ids(subscription_id, request)
+    findings: List[Dict[str, Any]] = scan_vnet_peerings(subscription_ids)
+
+    if is_healthy is not None:
+        findings = [f for f in findings if f.get("is_healthy") == is_healthy]
+
     duration_ms = (time.monotonic() - start_time) * 1000
     logger.info("GET /network/peerings → %d findings (%.0fms)", len(findings), duration_ms)
     return {"findings": findings, "total": len(findings)}
 
 
-@router.post("/scan")
-async def scan_peerings(
-    token: Dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
-    cosmos_client: Any = Depends(get_optional_cosmos_client),
-) -> Dict[str, Any]:
-    """Trigger a live ARG scan of VNet peerings."""
-    start_time = time.monotonic()
-    from services.api_gateway.vnet_peering_service import (
-        scan_vnet_peerings,
-        persist_peering_findings,
-    )
-    from services.api_gateway.subscription_registry import get_managed_subscription_ids
-
-    subscription_ids: List[str] = []
-    try:
-        subscription_ids = await get_managed_subscription_ids()
-    except Exception as exc:
-        logger.warning("vnet_peering_endpoints: could not fetch subscription list: %s", exc)
-
-    findings = scan_vnet_peerings(subscription_ids)
-    if cosmos_client and findings:
-        persist_peering_findings(findings, cosmos_client=cosmos_client, cosmos_db=_COSMOS_DB)
-
-    duration_ms = (time.monotonic() - start_time) * 1000
-    logger.info(
-        "POST /network/peerings/scan → %d findings (%.0fms)", len(findings), duration_ms
-    )
-    return {
-        "scanned": True,
-        "findings_found": len(findings),
-        "duration_ms": round(duration_ms),
-    }
-
-
 @router.get("/summary")
 async def peering_summary(
+    request: Request,
     subscription_id: Optional[str] = Query(None, description="Filter by subscription ID"),
     token: Dict[str, Any] = Depends(verify_token),
-    cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Dict[str, Any]:
-    """Return aggregated VNet peering health summary."""
+    """Return aggregated VNet peering health summary queried live from ARG."""
     start_time = time.monotonic()
-    from services.api_gateway.vnet_peering_service import get_peering_summary
 
-    summary = (
-        get_peering_summary(
-            cosmos_client=cosmos_client,
-            cosmos_db=_COSMOS_DB,
-            subscription_id=subscription_id,
-        )
-        if cosmos_client
-        else {"total": 0, "healthy": 0, "unhealthy": 0, "disconnected": 0}
+    subscription_ids = resolve_subscription_ids(subscription_id, request)
+    findings = scan_vnet_peerings(subscription_ids)
+
+    total = len(findings)
+    healthy = sum(1 for f in findings if f.get("is_healthy"))
+    unhealthy = total - healthy
+    disconnected = sum(
+        1 for f in findings if f.get("peering_state", "").lower() == "disconnected"
     )
+
+    summary = {
+        "total": total,
+        "healthy": healthy,
+        "unhealthy": unhealthy,
+        "disconnected": disconnected,
+    }
     duration_ms = (time.monotonic() - start_time) * 1000
     logger.info("GET /network/peerings/summary (%.0fms)", duration_ms)
     return summary
