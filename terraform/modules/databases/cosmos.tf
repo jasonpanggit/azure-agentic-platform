@@ -411,11 +411,25 @@ resource "azurerm_cosmosdb_sql_container" "capacity_snapshots" {
   throughput = 400
 }
 
+resource "azurerm_cosmosdb_sql_database" "ops" {
+  name                = "aap-ops"
+  resource_group_name = var.resource_group_name
+  account_name        = azurerm_cosmosdb_account.main.name
+
+  # Autoscale throughput for provisioned mode only
+  dynamic "autoscale_settings" {
+    for_each = var.cosmos_serverless ? [] : [1]
+    content {
+      max_throughput = var.cosmos_max_throughput
+    }
+  }
+}
+
 resource "azurerm_cosmosdb_sql_container" "aks_health" {
   name                  = "aks_health"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — AKS cluster health snapshots
@@ -431,7 +445,7 @@ resource "azurerm_cosmosdb_sql_container" "policy_violations" {
   name                  = "policy_violations"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — policy compliance findings
@@ -447,7 +461,7 @@ resource "azurerm_cosmosdb_sql_container" "correlation_groups" {
   name                  = "correlation_groups"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/correlation_id"]
   partition_key_version = 2
   default_ttl           = 2592000 # 30 days — cross-subscription correlation groups
@@ -463,7 +477,7 @@ resource "azurerm_cosmosdb_sql_container" "nsg_findings" {
   name                  = "nsg_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — NSG audit findings
@@ -479,7 +493,7 @@ resource "azurerm_cosmosdb_sql_container" "cost_anomalies" {
   name                  = "cost_anomalies"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 2592000 # 30 days — cost anomaly detection results
@@ -495,7 +509,7 @@ resource "azurerm_cosmosdb_sql_container" "defender_findings" {
   name                  = "defender_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — Defender for Cloud findings
@@ -511,7 +525,7 @@ resource "azurerm_cosmosdb_sql_container" "lock_audit" {
   name                  = "lock_audit"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — resource lock audit results
@@ -527,7 +541,7 @@ resource "azurerm_cosmosdb_sql_container" "change_events" {
   name                  = "change_events"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — change intelligence events
@@ -543,7 +557,7 @@ resource "azurerm_cosmosdb_sql_container" "incident_reports" {
   name                  = "incident_reports"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/incident_id"]
   partition_key_version = 2
   default_ttl           = 7776000 # 90 days — exported incident reports
@@ -559,7 +573,7 @@ resource "azurerm_cosmosdb_sql_container" "app_service_health" {
   name                  = "app_service_health"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — App Service health snapshots
@@ -575,7 +589,7 @@ resource "azurerm_cosmosdb_sql_container" "queue_depth_snapshots" {
   name                  = "queue_depth_snapshots"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — Service Bus/Event Hub queue depth snapshots
@@ -591,7 +605,7 @@ resource "azurerm_cosmosdb_sql_container" "vm_extension_findings" {
   name                  = "vm_extension_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — VM extension audit results
@@ -607,7 +621,7 @@ resource "azurerm_cosmosdb_sql_container" "alert_rule_findings" {
   name                  = "alert_rule_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — alert rule coverage audit findings
@@ -623,7 +637,7 @@ resource "azurerm_cosmosdb_sql_container" "backup_findings" {
   name                  = "backup_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — backup compliance findings
@@ -639,7 +653,7 @@ resource "azurerm_cosmosdb_sql_container" "pe_findings" {
   name                  = "pe_findings"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — private endpoint coverage findings
@@ -655,7 +669,7 @@ resource "azurerm_cosmosdb_sql_container" "identity_risks" {
   name                  = "identity_risks"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/tenant_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — identity/credential expiry risks
@@ -671,7 +685,7 @@ resource "azurerm_cosmosdb_sql_container" "maintenance_events" {
   name                  = "maintenance_events"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — maintenance window events
@@ -694,7 +708,7 @@ resource "azurerm_cosmosdb_sql_container" "simulation_runs" {
   name                  = "simulation_runs"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/scenario_id"]
   partition_key_version = 2
   default_ttl           = 2592000 # 30 days — simulation history for trend analysis
@@ -712,7 +726,7 @@ resource "azurerm_cosmosdb_sql_container" "agent_health" {
   name                  = "agent_health"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/name"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — health records are ephemeral; monitor re-writes each cycle
@@ -730,7 +744,7 @@ resource "azurerm_cosmosdb_sql_container" "agent_traces" {
   name                  = "agent_traces"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/thread_id"]
   partition_key_version = 2
   default_ttl           = 604800 # 7 days — run-step traces for debugging and audit
@@ -749,7 +763,7 @@ resource "azurerm_cosmosdb_sql_container" "pre_incident_advisories" {
   name                  = "pre_incident_advisories"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/subscription_id"]
   partition_key_version = 2
   default_ttl           = 172800 # 48h — advisories expire after two operator shifts
@@ -767,7 +781,7 @@ resource "azurerm_cosmosdb_sql_container" "handover_reports" {
   name                  = "handover_reports"
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.main.name
-  database_name         = azurerm_cosmosdb_sql_database.main.name
+  database_name         = azurerm_cosmosdb_sql_database.ops.name
   partition_key_paths   = ["/report_id"]
   partition_key_version = 2
   default_ttl           = 86400 # 24h — one shift handover per day is sufficient

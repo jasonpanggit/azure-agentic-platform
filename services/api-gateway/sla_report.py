@@ -1,8 +1,9 @@
+from __future__ import annotations
 """SLA monthly report generation — PDF + GPT-4o narrative + SMTP email (Phase 55).
 
 Entry point: generate_and_send_sla_report(sla_id) -> ReportResult
 """
-from __future__ import annotations
+import os
 
 import io
 import logging

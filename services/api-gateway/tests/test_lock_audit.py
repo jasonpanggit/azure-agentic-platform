@@ -1,7 +1,7 @@
+from __future__ import annotations
 """Tests for lock_audit_service.py — 25+ unit tests covering classification,
 scan logic, remediation script generation, and endpoint responses.
 """
-from __future__ import annotations
 
 import uuid
 from dataclasses import asdict

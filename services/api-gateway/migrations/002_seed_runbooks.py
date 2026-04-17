@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Seed ~60 synthetic runbooks into PostgreSQL with Azure OpenAI embeddings.
 
 Usage:
@@ -8,7 +9,7 @@ Requires:
     - AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY env vars (or DefaultAzureCredential)
     - EMBEDDING_DEPLOYMENT_NAME (default: text-embedding-3-small)
 """
-from __future__ import annotations
+import os
 
 import os
 import sys

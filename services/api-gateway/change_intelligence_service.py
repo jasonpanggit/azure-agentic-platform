@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Activity Log Change Intelligence service — Phase 81.
 
 Scans Azure Activity Logs via the ARG ``resourcechanges`` table and surfaces
@@ -5,7 +6,6 @@ recent high-impact infrastructure changes, linking them to incidents.
 
 Never raises from public functions; all return [] or {} on error.
 """
-from __future__ import annotations
 
 import logging
 import time

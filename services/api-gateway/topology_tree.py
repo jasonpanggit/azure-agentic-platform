@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Topology tree endpoint — hierarchical subscription → RG → resource view via ARG.
 
 GET /api/v1/topology/tree
@@ -13,7 +14,6 @@ Node shapes:
 Uses run_arg_query() so counts are identical to /api/v1/resources/inventory.
 No per-RG cap, no global resource cap.
 """
-from __future__ import annotations
 
 import asyncio
 import logging

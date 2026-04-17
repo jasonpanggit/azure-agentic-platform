@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Forecast API endpoints — capacity exhaustion forecasts (INTEL-005).
 
 Routes:
@@ -7,7 +8,6 @@ Routes:
 Both endpoints require Entra ID Bearer token (verify_token).
 ForecasterClient is accessed via request.app.state.forecaster_client.
 """
-from __future__ import annotations
 
 import asyncio
 import logging

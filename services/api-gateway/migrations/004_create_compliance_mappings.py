@@ -10,6 +10,8 @@ Run:
 """
 from __future__ import annotations
 
+import os
+
 UP_SQL = """
 CREATE TABLE IF NOT EXISTS compliance_mappings (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),

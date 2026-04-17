@@ -1,5 +1,6 @@
-"""Tests for foundry.py — AIProjectClient.agents dispatch (migrated from Responses API)."""
 from __future__ import annotations
+"""Tests for foundry.py — AIProjectClient.agents dispatch (migrated from Responses API)."""
+import os
 
 import os
 from unittest.mock import MagicMock, patch

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AKS Cluster Health Dashboard service (Phase 83).
 
 Scans all AKS clusters via Azure Resource Graph, classifies health,
@@ -6,7 +7,6 @@ structured summary data.
 
 Never raises — all exceptions are caught and logged.
 """
-from __future__ import annotations
 
 import logging
 import time

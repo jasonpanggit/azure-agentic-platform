@@ -1,5 +1,5 @@
-"""Tests for DriftDetector — Phase 58 IaC Drift Detection."""
 from __future__ import annotations
+"""Tests for DriftDetector — Phase 58 IaC Drift Detection."""
 
 import json
 import time

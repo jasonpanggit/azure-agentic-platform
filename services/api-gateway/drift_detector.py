@@ -1,3 +1,4 @@
+from __future__ import annotations
 """IaC Drift Detector — compares Terraform state against live ARM API (Phase 58).
 
 Architecture:
@@ -6,7 +7,7 @@ Architecture:
 - classify_drift_severity: pure function, no side effects
 - All Azure SDK calls never raise — structured error dicts returned instead
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for lb_health_service.py — Phase 101.
 
 Covers:
@@ -7,7 +8,7 @@ Covers:
 - get_lb_findings: with / without filters, cosmos error
 - get_lb_summary: aggregation, zero state, error fallback
 """
-from __future__ import annotations
+import os
 
 import os
 import sys

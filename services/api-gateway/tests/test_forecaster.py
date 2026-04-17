@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for the Forecaster Service (INTEL-005).
 
 Tests cover:
@@ -8,7 +9,6 @@ Tests cover:
 - ForecasterClient.get_forecasts (test 16)
 - _emit_forecast_alert structure (test 17)
 """
-from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 

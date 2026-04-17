@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AKS Cluster Health Dashboard endpoints (Phase 83).
 
 Router prefix: /api/v1/aks-health
@@ -6,7 +7,7 @@ GET  /api/v1/aks-health/clusters  — list clusters (filter: subscription_id, he
 GET  /api/v1/aks-health/summary   — aggregate summary
 POST /api/v1/aks-health/scan      — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import time

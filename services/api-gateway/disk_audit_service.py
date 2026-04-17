@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Orphaned Disk & Snapshot Audit Service — Phase 100.
 
 ARG scan for unattached managed disks and old snapshots (>30 days).
@@ -6,7 +7,8 @@ Persists findings to Cosmos DB container 'disk_audit'.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _NAMESPACE = uuid.NAMESPACE_URL
 _COSMOS_CONTAINER = "disk_audit"
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 # Cost estimates per GB/month (USD)
 _COST_PER_GB: Dict[str, float] = {

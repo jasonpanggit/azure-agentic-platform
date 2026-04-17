@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for custom AIOps evaluators (Phase 33).
 
 Each evaluator must:
@@ -5,7 +6,6 @@ Each evaluator must:
 - Return a dict with a numeric score key
 - Score between 0.0 and 5.0 (consistent with azure-ai-evaluation scale)
 """
-from __future__ import annotations
 
 import pytest
 

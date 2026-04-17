@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Resource lock audit service.
 
 Scans Azure for high-value resources missing CanNotDelete / ReadOnly locks.
@@ -6,7 +7,6 @@ are a significant operational risk.
 
 Never raises; all public functions return [] or {} on error.
 """
-from __future__ import annotations
 
 import logging
 import time

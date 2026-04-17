@@ -1,5 +1,5 @@
-"""Quality Flywheel endpoints — eval regression metrics and SOP effectiveness."""
 from __future__ import annotations
+"""Quality Flywheel endpoints — eval regression metrics and SOP effectiveness."""
 
 import logging
 import time

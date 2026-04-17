@@ -1,3 +1,4 @@
+from __future__ import annotations
 """FastAPI dependency providers for shared service clients (CONCERNS 4.4).
 
 Clients are initialized once in main.py lifespan and stored on app.state.
@@ -14,7 +15,6 @@ Usage in route handlers:
     ):
         ...
 """
-from __future__ import annotations
 
 from typing import Optional
 

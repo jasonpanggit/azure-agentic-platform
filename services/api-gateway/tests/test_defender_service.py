@@ -1,5 +1,5 @@
-"""Tests for defender_service.py — 25+ tests covering parsing, normalization, summary, persistence."""
 from __future__ import annotations
+"""Tests for defender_service.py — 25+ tests covering parsing, normalization, summary, persistence."""
 
 import json
 import uuid

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Resource topology graph service — adjacency-list in Cosmos DB.
 
 Maintains a real-time property graph of all Azure resources and their
@@ -9,7 +10,7 @@ Architecture:
 - TopologyClient: manages Cosmos container, bootstrap, sync, and graph queries
 - Background task: launched in lifespan, syncs every TOPOLOGY_SYNC_INTERVAL_SECONDS
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

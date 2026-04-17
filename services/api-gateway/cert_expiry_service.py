@@ -1,3 +1,4 @@
+from __future__ import annotations
 """TLS / Certificate Expiry Service — Phase 97.
 
 Scans Azure Key Vault certificates and App Service certificates via ARG.
@@ -6,7 +7,6 @@ Reports any certs expiring within 90 days and persists findings to Cosmos DB.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
 
 import logging
 import time

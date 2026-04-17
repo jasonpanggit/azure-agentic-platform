@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for forecast API endpoints (INTEL-005).
 
 Tests cover:
@@ -5,7 +6,7 @@ Tests cover:
 - GET /api/v1/forecasts/imminent (tests 7–9)
 - _docs_to_forecast_result helper (test 10)
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock

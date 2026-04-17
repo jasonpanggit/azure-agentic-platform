@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for Platform Intelligence endpoints (PLATINT-001, PLATINT-002, PLATINT-003, PLATINT-004).
 
 Tests cover:
@@ -14,7 +15,7 @@ Tests cover:
 - GET /api/v1/intelligence/patterns 500 on Cosmos error (test 11)
 - GET /api/v1/admin/business-tiers 503 when Cosmos not configured (test 12)
 """
-from __future__ import annotations
+import os
 
 import os
 from datetime import datetime, timezone

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """OS name normalizer for Azure VM and Arc machine image SKU strings.
 
 Converts raw Azure image SKU strings (e.g. "WindowsServer2022-datacenter-g2")
@@ -8,7 +9,6 @@ Also provides a VM type classifier based on ARM resource type.
 This module is pure Python (stdlib only) with no Azure SDK dependencies.
 All functions are deterministic with no side effects.
 """
-from __future__ import annotations
 
 import re
 from typing import Optional

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Compliance posture computation logic (Phase 54).
 
 Separates business logic from routing following the project convention.
@@ -8,7 +9,7 @@ Contains:
 - In-memory posture cache (1h TTL) and mappings cache (24h TTL)
 - get_compliance_mappings: load mapping rows from PostgreSQL
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

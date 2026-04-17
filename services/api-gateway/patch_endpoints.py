@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Patch assessment and installation endpoints for the Web UI Patch tab.
 
 Exposes ARG PatchAssessmentResources and PatchInstallationResources data
@@ -6,7 +7,7 @@ from Log Analytics, and exposes a per-VM installed patch detail endpoint.
 
 Decisions: D-01, D-02 (from 13-CONTEXT.md)
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

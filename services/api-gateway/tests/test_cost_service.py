@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for cost_service.py — cost anomaly detection service.
 
 Covers:
@@ -7,7 +8,7 @@ Covers:
 - get_cost_summary: aggregation logic
 - cost_endpoints: GET anomalies, GET summary, POST scan (background task queued)
 """
-from __future__ import annotations
+import os
 
 import json
 import os

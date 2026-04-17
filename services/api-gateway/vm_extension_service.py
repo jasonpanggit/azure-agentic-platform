@@ -1,9 +1,9 @@
+from __future__ import annotations
 """VM Extension Health Audit service (Phase 89).
 
 Scans Azure VMs for missing critical extensions (monitoring agent,
 antivirus, Defender for Servers) and persists findings to Cosmos DB.
 """
-from __future__ import annotations
 
 import logging
 import time

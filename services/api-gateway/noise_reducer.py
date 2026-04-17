@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Noise reducer service for alert intelligence (INTEL-001).
 
 Implements three noise reduction mechanisms:
@@ -5,7 +6,7 @@ Implements three noise reduction mechanisms:
 - Temporal/topological correlation: route new alerts to existing incident threads
 - Composite severity scoring: re-weight severity with blast radius and domain SLO risk
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

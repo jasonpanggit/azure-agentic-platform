@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Tenant admin endpoints — CRUD for multi-tenant management.
 
 Registers under /api/v1/admin/tenants.
 These endpoints are excluded from TenantScopeMiddleware (admin/* skip list).
 """
-from __future__ import annotations
 
 import logging
 import os

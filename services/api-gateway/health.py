@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Readiness health check for the API gateway (CONCERNS 5.1).
 
 GET /health/ready — checks three required config dependencies:
@@ -10,7 +11,7 @@ Returns 503 {"status": "not_ready", "checks": {...}} if any fail.
 
 The existing /health (liveness) remains unchanged in main.py.
 """
-from __future__ import annotations
+import os
 
 import os
 from typing import Any

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Subscription management endpoints — Phase 68.
 
 Provides enriched subscription management:
@@ -8,7 +9,6 @@ Provides enriched subscription management:
 
 All tool functions never raise — structured error dicts returned on failure.
 """
-from __future__ import annotations
 
 import logging
 import time

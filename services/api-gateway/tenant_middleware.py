@@ -1,3 +1,4 @@
+from __future__ import annotations
 """TenantScopeMiddleware — injects tenant context into every request.
 
 Extracts operator_id from the Authorization header (JWT sub claim) or the
@@ -7,7 +8,7 @@ tenant_id + tenant_subscriptions into request.state.
 Skipped for: /health, /api/v1/admin/* routes.
 Returns 403 when operator is not assigned to any tenant.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

@@ -1,5 +1,5 @@
-"""Tests for SubscriptionRegistry — ARG-backed subscription discovery."""
 from __future__ import annotations
+"""Tests for SubscriptionRegistry — ARG-backed subscription discovery."""
 
 import asyncio
 from typing import Any, List

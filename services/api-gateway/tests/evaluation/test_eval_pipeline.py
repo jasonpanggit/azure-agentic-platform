@@ -1,5 +1,5 @@
-"""Tests for eval_pipeline.py -- CI quality gate runner."""
 from __future__ import annotations
+"""Tests for eval_pipeline.py -- CI quality gate runner."""
 
 from unittest.mock import MagicMock, patch
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Gateway-side tool executor for domain agent function tool calls.
 
 When a Foundry domain-agent sub-run enters ``requires_action`` /
@@ -14,7 +15,7 @@ Tool functions follow project conventions:
 - Tool functions **never raise** --- they return structured error dicts.
 - Lazy SDK imports at module level with ``= None`` fallback.
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

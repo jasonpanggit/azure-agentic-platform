@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Runbook search availability and connection contract tests.
 
 Async tests in this module use `pytest.mark.anyio` so focused local runs work
 with the AnyIO plugin available in the workspace runner.
 """
-from __future__ import annotations
 
 import importlib
 import sys

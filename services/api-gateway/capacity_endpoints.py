@@ -1,5 +1,5 @@
-"""Capacity planning endpoints — quota headroom, IP space, AKS node headroom."""
 from __future__ import annotations
+"""Capacity planning endpoints — quota headroom, IP space, AKS node headroom."""
 
 import logging
 import time

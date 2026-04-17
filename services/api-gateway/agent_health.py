@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Phase 70: Agent Health Monitor.
 
 Monitors all 9 domain agents by polling their /health endpoints,
 persists health records to Cosmos DB, and raises platform incidents
 when agents go offline.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

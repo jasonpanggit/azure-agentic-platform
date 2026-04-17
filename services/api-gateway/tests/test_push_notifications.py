@@ -1,5 +1,5 @@
-"""Tests for push_notifications.py — routes and send_push_to_all logic."""
 from __future__ import annotations
+"""Tests for push_notifications.py — routes and send_push_to_all logic."""
 
 from unittest.mock import MagicMock, patch
 

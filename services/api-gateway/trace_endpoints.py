@@ -1,5 +1,5 @@
-"""Trace endpoints — GET /api/v1/traces and GET /api/v1/traces/{thread_id}/{run_id}."""
 from __future__ import annotations
+"""Trace endpoints — GET /api/v1/traces and GET /api/v1/traces/{thread_id}/{run_id}."""
 
 import logging
 from datetime import datetime, timezone

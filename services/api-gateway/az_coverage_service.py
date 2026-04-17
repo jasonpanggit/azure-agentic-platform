@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Availability Zone Coverage Audit Service — Phase 102.
 
 Scans VMs and VMSS instances via ARG to determine if they are deployed
 across Availability Zones. Only flags resources in regions that support AZs.
 All functions follow the never-raise pattern.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -60,7 +61,7 @@ Resources
 # ---------------------------------------------------------------------------
 
 COSMOS_AZ_COVERAGE_CONTAINER = os.environ.get("COSMOS_AZ_COVERAGE_CONTAINER", "az_coverage")
-COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE", "aap")
+COSMOS_DATABASE = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ---------------------------------------------------------------------------

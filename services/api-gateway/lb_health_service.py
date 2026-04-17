@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Load Balancer Health & Rule Audit Service — Phase 101.
 
 Scans Azure Load Balancers via ARG for health probe / backend pool status.
@@ -5,7 +6,7 @@ Persists findings to Cosmos DB container ``lb_health``.
 All functions follow the never-raise pattern: exceptions are caught, logged,
 and callers receive [] or {}.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -37,7 +38,7 @@ Resources
 # ---------------------------------------------------------------------------
 
 COSMOS_LB_HEALTH_CONTAINER = os.environ.get("COSMOS_LB_HEALTH_CONTAINER", "lb_health")
-COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE", "aap")
+COSMOS_DATABASE = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ---------------------------------------------------------------------------

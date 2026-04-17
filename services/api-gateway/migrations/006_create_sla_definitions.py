@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Migration 006 — Create sla_definitions table (Phase 55).
 
 Customer-facing SLA contracts.  Each row defines an SLA with target
@@ -7,7 +8,6 @@ name, and the e-mail addresses to receive monthly reports.
 Run:
     python services/api-gateway/migrations/006_create_sla_definitions.py
 """
-from __future__ import annotations
 
 UP_SQL = """
 CREATE TABLE IF NOT EXISTS sla_definitions (

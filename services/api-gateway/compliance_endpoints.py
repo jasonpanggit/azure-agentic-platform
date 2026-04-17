@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Compliance posture and export API endpoints (Phase 54).
 
 Provides:
   GET /api/v1/compliance/posture  — per-framework compliance scores
   GET /api/v1/compliance/export   — PDF or CSV audit report
 """
-from __future__ import annotations
 
 import asyncio
 import csv

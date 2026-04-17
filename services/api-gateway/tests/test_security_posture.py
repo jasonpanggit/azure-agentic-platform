@@ -1,5 +1,5 @@
-"""Tests for SecurityPostureClient and security posture endpoints (Phase 59)."""
 from __future__ import annotations
+"""Tests for SecurityPostureClient and security posture endpoints (Phase 59)."""
 
 from unittest.mock import MagicMock, patch
 

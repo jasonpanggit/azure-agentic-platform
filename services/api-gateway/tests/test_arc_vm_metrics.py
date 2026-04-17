@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Tests for Arc VM metrics via Log Analytics (Perf table).
 
 Covers the fix for "Arc VM metrics tab shows placeholder instead of actual data"
 — Arc VMs now query the Log Analytics Perf table via LogsQueryClient instead of
 Azure Monitor platform metrics (which return empty for Arc VMs).
 """
-from __future__ import annotations
+import os
 
 import base64
 import os

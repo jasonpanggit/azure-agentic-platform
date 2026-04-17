@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Tests for queue_depth_service.py — Phase 88.
 
 Covers: namespace type classification, health thresholds, metrics parsing,
 scan (ARG + metrics mocking), persist, get, summary.
 """
-from __future__ import annotations
 
 import uuid
 from unittest.mock import MagicMock, patch

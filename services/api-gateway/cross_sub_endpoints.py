@@ -1,8 +1,9 @@
+from __future__ import annotations
 """Cross-subscription correlation endpoints — Phase 86.
 
 Router prefix: /api/v1/correlations
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -23,7 +24,7 @@ from services.api_gateway.cross_sub_correlator import (
 router = APIRouter(prefix="/api/v1/correlations", tags=["correlations"])
 logger = logging.getLogger(__name__)
 
-COSMOS_DATABASE_NAME = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+COSMOS_DATABASE_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 def _group_to_dict(g: Any) -> dict:

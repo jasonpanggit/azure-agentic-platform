@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VM inventory endpoint — fleet-level VM listing with health and alert enrichment.
 
 Covers both Azure VMs (microsoft.compute/virtualmachines) and Arc-enabled
@@ -20,7 +21,7 @@ Each VM record contains:
 vm_type: "Azure VM" for microsoft.compute/virtualmachines,
          "Arc VM" for microsoft.hybridcompute/machines
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

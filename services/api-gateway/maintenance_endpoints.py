@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Maintenance Window Intelligence API endpoints — Phase 94.
 
 Routes:
@@ -5,7 +6,8 @@ Routes:
   GET  /api/v1/maintenance/summary — summary counts
   POST /api/v1/maintenance/scan    — trigger live ARG scan
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 @router.get("/events")

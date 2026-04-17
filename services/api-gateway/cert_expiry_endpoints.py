@@ -1,3 +1,4 @@
+from __future__ import annotations
 """TLS / Certificate Expiry API endpoints — Phase 97.
 
 Routes:
@@ -5,7 +6,8 @@ Routes:
   POST /api/v1/certs/scan
   GET  /api/v1/certs/summary?subscription_id=
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/certs", tags=["cert-expiry"])
 
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 @router.get("/expiry")

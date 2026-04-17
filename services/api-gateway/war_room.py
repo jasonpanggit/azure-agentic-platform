@@ -1,3 +1,4 @@
+from __future__ import annotations
 """War Room — multi-operator collaborative incident investigation (Phase 53).
 
 Provides Cosmos CRUD helpers for IncidentWarRoom documents and the in-memory
@@ -32,7 +33,7 @@ Document schema:
         "_etag":           "<cosmos-etag>",
     }
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

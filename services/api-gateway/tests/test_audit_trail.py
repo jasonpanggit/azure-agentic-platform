@@ -1,3 +1,4 @@
+import os
 """Tests for the dual-write audit trail (AUDIT-002, AUDIT-004).
 
 Async tests in this module use `pytest.mark.anyio` so focused local runs work

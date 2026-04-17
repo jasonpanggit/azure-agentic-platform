@@ -1,5 +1,5 @@
-"""Security posture API endpoints — composite score, trend, and top findings (Phase 59)."""
 from __future__ import annotations
+"""Security posture API endpoints — composite score, trend, and top findings (Phase 59)."""
 
 import logging
 import time

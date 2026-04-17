@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Incident Report Service — Phase 82.
 
 Generates structured Markdown + JSON reports for any incident, including
@@ -6,7 +7,6 @@ agent conversation transcript, timeline, findings, and remediation steps.
 Generated on-demand; no Cosmos persistence for reports themselves.
 Never raises from public functions.
 """
-from __future__ import annotations
 
 import logging
 import uuid

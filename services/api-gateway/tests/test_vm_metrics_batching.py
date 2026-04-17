@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Tests for per-metric concurrent fetching in GET /api/v1/vms/{id}/metrics.
 
 Covers the fix for "Select All metrics shows no data" — Azure Monitor returns
 empty when any unsupported metric is included in a batched request.  The fix
 fetches each metric individually and filters out None (unsupported) results.
 """
-from __future__ import annotations
+import os
 
 import base64
 import os

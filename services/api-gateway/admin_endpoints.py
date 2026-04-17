@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Admin CRUD endpoints for remediation policies (Phase 51 — Autonomous Remediation).
 
 Provides full CRUD on the PostgreSQL remediation_policies table, plus
@@ -12,7 +13,7 @@ Routes:
   DELETE /api/v1/admin/remediation-policies/{policy_id}  — delete policy
   GET    /api/v1/admin/remediation-policies/{policy_id}/executions — execution history
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

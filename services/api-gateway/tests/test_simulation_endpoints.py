@@ -1,5 +1,5 @@
-"""Tests for simulation endpoints (Phase 69)."""
 from __future__ import annotations
+"""Tests for simulation endpoints (Phase 69)."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch

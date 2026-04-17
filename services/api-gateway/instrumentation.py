@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Manual OTel span helpers for AAP API Gateway (D-13, D-14).
 
 Provides three context managers for domain-specific instrumentation
@@ -16,7 +17,6 @@ is the operation or agent name. For agent spans this produces `agent.{agent_name
 All spans are exported to Application Insights via the existing
 configure_azure_monitor() setup in main.py. No new exporters needed.
 """
-from __future__ import annotations
 
 from contextlib import contextmanager
 from time import time

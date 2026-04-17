@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Storage Account Security Audit Service — Phase 98.
 
 Scans storage accounts for security misconfigurations via Azure Resource Graph
@@ -6,7 +7,6 @@ and persists findings to Cosmos DB.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
 
 import logging
 import time

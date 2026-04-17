@@ -1,5 +1,5 @@
-"""IaC Drift Detection endpoints — list findings, trigger scans (Phase 58)."""
 from __future__ import annotations
+"""IaC Drift Detection endpoints — list findings, trigger scans (Phase 58)."""
 
 import logging
 import time

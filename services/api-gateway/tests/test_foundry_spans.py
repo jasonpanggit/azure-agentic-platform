@@ -1,5 +1,6 @@
-"""Tests for incident-run span attributes in foundry.py dispatch (Phase 29)."""
 from __future__ import annotations
+"""Tests for incident-run span attributes in foundry.py dispatch (Phase 29)."""
+import os
 
 import os
 from unittest.mock import MagicMock, patch

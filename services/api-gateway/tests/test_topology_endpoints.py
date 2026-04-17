@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for topology API endpoints (topology_endpoints.py).
 
 Tests cover all four endpoints with mocked TopologyClient:
@@ -9,7 +10,7 @@ Tests cover all four endpoints with mocked TopologyClient:
 Uses FastAPI TestClient with app.state.topology_client overridden to a mock.
 verify_token is patched to return a dummy claims dict.
 """
-from __future__ import annotations
+import os
 
 import os
 from typing import Any

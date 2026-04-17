@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Resource Tagging Compliance Service (Phase 75).
 
 Scans all Azure resources via ARG and evaluates them against a mandatory tag
 schema. Provides compliance summarisation and Azure CLI remediation script
 generation.
 """
-from __future__ import annotations
 
 import logging
 import time

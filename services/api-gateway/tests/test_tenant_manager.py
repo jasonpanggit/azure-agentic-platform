@@ -1,5 +1,6 @@
-"""Tests for TenantManager and tenant middleware/endpoints (Phase 64)."""
 from __future__ import annotations
+"""Tests for TenantManager and tenant middleware/endpoints (Phase 64)."""
+import os
 
 import json
 from datetime import datetime, timezone

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for the EOL batch endpoint (POST /api/v1/vms/eol).
 
 Covers:
@@ -8,7 +9,7 @@ Covers:
 - Unrecognised OS name
 - DB connection failure (graceful degradation)
 """
-from __future__ import annotations
+import os
 
 import os
 from datetime import date, datetime, timedelta, timezone

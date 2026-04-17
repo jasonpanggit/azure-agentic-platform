@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Capacity exhaustion forecaster — double exponential smoothing (INTEL-005).
 
 Implements Holt's method (double exponential smoothing) in pure Python
@@ -9,7 +10,7 @@ Architecture:
 - ForecasterClient: collects metrics, stores baselines in Cosmos, emits alerts
 - run_forecast_sweep_loop: asyncio background task (mirrors topology.py pattern)
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

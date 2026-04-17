@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for noise_reducer.py (INTEL-001).
 
 Covers:
@@ -5,7 +6,6 @@ Covers:
 - Group 2: check_causal_suppression logic (5 tests)
 - Group 3: check_temporal_topological_correlation logic (5 tests)
 """
-from __future__ import annotations
 
 import asyncio
 import math

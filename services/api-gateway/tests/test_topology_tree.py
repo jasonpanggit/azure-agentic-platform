@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for GET /api/v1/topology/tree — hierarchical resource tree.
 
 Tests cover:
@@ -8,7 +9,7 @@ Tests cover:
 - ARG failure returns 500
 - Empty subscriptions returns empty nodes/edges
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

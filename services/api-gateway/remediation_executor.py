@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Remediation executor — closed-loop ARM execution with WAL, verification, and auto-rollback.
 
 Flow per execution:
@@ -12,7 +13,7 @@ Flow per execution:
 Background task:
   run_wal_stale_monitor — every 5 min, alerts on pending WAL records > WAL_STALE_ALERT_MINUTES old
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

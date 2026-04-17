@@ -1,5 +1,6 @@
-"""Tests for GET /api/v1/vms/{id} and GET /api/v1/vms/{id}/metrics."""
 from __future__ import annotations
+"""Tests for GET /api/v1/vms/{id} and GET /api/v1/vms/{id}/metrics."""
+import os
 
 import base64
 import os

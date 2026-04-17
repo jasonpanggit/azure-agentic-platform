@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Capacity Planning Engine — linear regression, quota headroom, and IP space (Phase 57).
 
 Architecture:
@@ -8,7 +9,7 @@ Architecture:
 
 All Azure SDK calls never raise — structured error dicts returned instead.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import ipaddress

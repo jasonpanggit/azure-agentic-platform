@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Identity Risk Service — Phase 93.
 
 Scans service principal credential expiry via Microsoft Graph API.
 Falls back gracefully (returns []) if Graph permissions are not available.
 """
-from __future__ import annotations
 
 import logging
 import time

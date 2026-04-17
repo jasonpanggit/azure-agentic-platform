@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for os_normalizer module.
 
 Covers all raw image SKU values from the task specification plus edge cases.
@@ -5,7 +6,6 @@ Tests both normalize_os() and get_vm_type() functions.
 
 Task: fix/patch-tab-vm-count-and-machine-name (OS normalizer)
 """
-from __future__ import annotations
 
 import pytest
 

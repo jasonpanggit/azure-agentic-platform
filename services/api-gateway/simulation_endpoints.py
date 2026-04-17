@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Simulation endpoints — Phase 69.
 
 Provides a library of predefined incident scenarios that operators can trigger
@@ -12,7 +13,6 @@ Endpoints:
 All tool functions never raise — structured error dicts returned on failure.
 Simulation incidents use the ``sim-`` prefix to distinguish them from real incidents.
 """
-from __future__ import annotations
 
 import logging
 import time

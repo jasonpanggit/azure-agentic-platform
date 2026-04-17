@@ -1,5 +1,5 @@
-"""Phase 33 smoke tests -- evaluation package importable and wired."""
 from __future__ import annotations
+"""Phase 33 smoke tests -- evaluation package importable and wired."""
 
 import pytest
 

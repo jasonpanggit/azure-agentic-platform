@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Cost anomaly detection service — Azure Cost Management REST API + z-score detection.
 
 Calls the Azure Cost Management REST API directly (no SDK) to fetch daily cost
@@ -13,7 +14,7 @@ Design rules:
   - Python 3.9 compat: Optional[X] not X | None in signatures.
   - Pure-Python z-score via statistics.mean / statistics.stdev.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -42,7 +43,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 COST_SNAPSHOTS_CONTAINER = os.environ.get("COSMOS_COST_SNAPSHOTS_CONTAINER", "cost_snapshots")
 COST_ANOMALIES_CONTAINER = os.environ.get("COSMOS_COST_ANOMALIES_CONTAINER", "cost_anomalies")
-COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE", "aap")
+COSMOS_DATABASE = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 # ---------------------------------------------------------------------------
 # Dataclasses

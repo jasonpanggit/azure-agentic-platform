@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for GET /api/v1/resources/inventory — flat resource listing.
 
 Tests cover:
@@ -7,7 +8,7 @@ Tests cover:
 - Empty subscription list returns empty resources
 - ARG failure returns 500
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

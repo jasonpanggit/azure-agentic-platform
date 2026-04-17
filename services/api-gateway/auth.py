@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Entra ID Bearer token validation for the API Gateway (D-10).
 
 Uses fastapi-azure-auth for production-grade Entra token validation.
@@ -13,7 +14,7 @@ Unauthenticated paths (no verify_token dependency):
 
 All /api/v1/* endpoints require a valid Bearer token via Depends(verify_token).
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

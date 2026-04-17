@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Shift Handover Report endpoints — Phase 74.
 
 POST /api/v1/reports/shift-handover       — generate a new handover report
 GET  /api/v1/reports/shift-handover/latest — fetch most recent (or generate on-demand)
 """
-from __future__ import annotations
+import os
 
 import logging
 from typing import Optional

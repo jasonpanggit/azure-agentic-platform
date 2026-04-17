@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Alert Rule Coverage Audit endpoints (Phase 90).
 
 Routes:
@@ -5,7 +6,8 @@ Routes:
   GET  /api/v1/alert-coverage/summary  — aggregate summary
   POST /api/v1/alert-coverage/scan     — trigger live scan
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 from typing import Any, Optional
@@ -24,7 +26,7 @@ from services.api_gateway.alert_rule_audit_service import (
 router = APIRouter(prefix="/api/v1/alert-coverage", tags=["alert-coverage"])
 logger = logging.getLogger(__name__)
 
-_DB_NAME = "aap"
+_DB_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 @router.get("/gaps")

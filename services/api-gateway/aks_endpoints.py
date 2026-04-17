@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AKS cluster inventory and chat endpoints.
 
 GET  /api/v1/aks                           — list AKS clusters in subscriptions via ARG
@@ -9,7 +10,7 @@ POST /api/v1/aks/{resource_id_base64}/chat     — resource-scoped chat for AKS 
 When the Azure SDK packages are unavailable, all list endpoints return empty
 structured responses matching the shape the frontend expects.
 """
-from __future__ import annotations
+import os
 
 import base64
 import logging

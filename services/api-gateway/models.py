@@ -1,5 +1,5 @@
-"""Pydantic models for the AAP API Gateway (DETECT-004)."""
 from __future__ import annotations
+"""Pydantic models for the AAP API Gateway (DETECT-004)."""
 
 from typing import List, Optional
 

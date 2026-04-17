@@ -1,5 +1,5 @@
-"""Tests for the `sops` PostgreSQL migration (Phase 30)."""
 from __future__ import annotations
+"""Tests for the `sops` PostgreSQL migration (Phase 30)."""
 
 import pytest
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Azure Policy Compliance Drill-Down service (Phase 84).
 
 Scans non-compliant policy states via Azure Resource Graph, classifies severity,
@@ -6,7 +7,6 @@ structured summary data.
 
 Never raises — all exceptions are caught and logged.
 """
-from __future__ import annotations
 
 import logging
 import time

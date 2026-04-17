@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Defender for Cloud Service — pull security alerts and recommendations via ARG.
 
 Architecture:
@@ -7,7 +8,6 @@ Architecture:
 - get_alerts / get_recommendations / get_defender_summary: query Cosmos
 - All functions never raise — return [] or {} on error, log warning
 """
-from __future__ import annotations
 
 import logging
 import time

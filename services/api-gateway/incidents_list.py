@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Incident list endpoint for the alert feed (UI-006).
 
 Returns incidents from Cosmos DB filtered by subscription, severity,
 domain, and status. Supports polling from the Web UI alert feed.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

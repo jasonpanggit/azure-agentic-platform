@@ -1,8 +1,8 @@
+from __future__ import annotations
 """Tests for app_service_health_service.py — Phase 87.
 
 Covers: classification helpers, scan (ARG mocking), persist, get, summary.
 """
-from __future__ import annotations
 
 import uuid
 from unittest.mock import MagicMock, patch

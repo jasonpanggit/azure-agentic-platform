@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Operator Shift Handover Report — Phase 74.
 
 Generates an 8-hour shift briefing: open incidents, resolved, SLO status,
@@ -5,7 +6,7 @@ top patterns, pending approvals, and recommended focus areas.
 
 Entry point: generate_handover_report(cosmos_client, cosmos_database_name, shift_hours)
 """
-from __future__ import annotations
+import os
 
 import logging
 import time

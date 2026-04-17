@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for SLA monthly report generation (Phase 55).
 
 16 tests covering:
@@ -6,7 +7,7 @@
   Group C — _send_email (4 tests)
   Group D — generate_and_send_sla_report (4 tests)
 """
-from __future__ import annotations
+import os
 
 import os
 from typing import Optional

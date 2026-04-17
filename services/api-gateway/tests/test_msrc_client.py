@@ -1,8 +1,8 @@
+from __future__ import annotations
 """Unit tests for the MSRC KB-to-CVE mapper (msrc_client.py).
 
 All HTTP calls are mocked — no external requests during testing.
 """
-from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock, patch

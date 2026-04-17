@@ -1,5 +1,5 @@
-"""Tests for RunbookExecutor — Phase 62 Runbook Automation Studio."""
 from __future__ import annotations
+"""Tests for RunbookExecutor — Phase 62 Runbook Automation Studio."""
 
 import uuid
 from typing import AsyncGenerator

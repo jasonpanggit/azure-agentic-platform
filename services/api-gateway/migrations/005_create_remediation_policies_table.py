@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Migration 005 — Create remediation_policies table (Phase 51).
 
 Auto-approval policies for known-safe remediation actions. Each policy
@@ -8,7 +9,7 @@ against SAFE_ARM_ACTIONS before insert.
 Run:
     python services/api-gateway/migrations/005_create_remediation_policies_table.py
 """
-from __future__ import annotations
+import os
 
 UP_SQL = """
 CREATE TABLE IF NOT EXISTS remediation_policies (

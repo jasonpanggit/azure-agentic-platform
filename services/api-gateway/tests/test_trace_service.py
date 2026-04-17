@@ -1,5 +1,5 @@
-"""Tests for Phase 71: Agent Trace Service."""
 from __future__ import annotations
+"""Tests for Phase 71: Agent Trace Service."""
 
 import asyncio
 from datetime import datetime, timezone

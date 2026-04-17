@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VM Chat function-calling tools.
 
 Live Azure SDK tool functions exposed to the LLM via chat.completions
@@ -10,7 +11,6 @@ Tools:
   get_resource_health    — Azure Resource Health availability state
   get_vm_power_state     — Current power state via Resource Graph ARG
 """
-from __future__ import annotations
 
 import json
 import logging

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Pre-incident advisory service — z-score anomaly detection (Phase 73).
 
 Detects anomaly precursors BEFORE incidents occur by comparing the latest
@@ -10,7 +11,6 @@ Architecture:
 - Cosmos helpers: get_advisories, dismiss_advisory, persist_advisory
 - Container: pre_incident_advisories, partitionKey=/subscription_id, TTL 172800s
 """
-from __future__ import annotations
 
 import logging
 import statistics

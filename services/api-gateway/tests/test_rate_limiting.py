@@ -1,4 +1,5 @@
 """Tests for remediation rate limiting and safety guards (REMEDI-005, REMEDI-006)."""
+import os
 import pytest
 from unittest.mock import patch
 

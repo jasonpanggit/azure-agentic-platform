@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for cross_sub_correlator.py (Phase 86).
 
 Covers:
@@ -9,7 +10,7 @@ Covers:
 - persist_groups: upsert, empty list, error handling
 - get_correlation_summary: computation, error handling
 """
-from __future__ import annotations
+import os
 
 import os
 import math

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Alert Correlation Timeline endpoints — Phase 72.
 
 Exposes the change-correlation and noise-reduction story for a single incident
@@ -7,7 +8,7 @@ resource changes caused them.
 All handlers follow the no-raise convention: structured error dicts are
 returned instead of raising exceptions.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

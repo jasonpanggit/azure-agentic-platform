@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for FinOps API gateway endpoints.
 
 GET /api/v1/finops/cost-breakdown
@@ -7,7 +8,7 @@ GET /api/v1/finops/ri-utilization
 GET /api/v1/finops/cost-forecast
 GET /api/v1/finops/top-cost-drivers
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

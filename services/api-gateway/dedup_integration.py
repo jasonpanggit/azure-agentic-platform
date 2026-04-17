@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Thin integration layer connecting the API gateway to the detection-plane dedup logic.
 
 The gateway remains a thin router — this module provides the dedup check
 as a dependency that runs before Foundry dispatch. If dedup detects a
 duplicate, it short-circuits the response without creating a new Foundry thread.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

@@ -1,5 +1,6 @@
-"""Tests for VM Extension Health Audit service and endpoints (Phase 89)."""
 from __future__ import annotations
+"""Tests for VM Extension Health Audit service and endpoints (Phase 89)."""
+import os
 
 import os
 from unittest.mock import MagicMock, patch

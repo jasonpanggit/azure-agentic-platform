@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NSG security audit API endpoints (Phase 77).
 
 Provides:
@@ -5,7 +6,7 @@ Provides:
   GET  /api/v1/nsg/findings/summary — severity counts + top risky NSGs
   POST /api/v1/nsg/scan             — trigger on-demand background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -41,7 +42,7 @@ def _get_subscription_ids() -> List[str]:
 
 
 def _get_db_name() -> str:
-    return os.environ.get("COSMOS_DATABASE_NAME", "aap-db")
+    return os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 def _run_scan_background(credential: Any, subscription_ids: List[str], cosmos_client: Any, db_name: str) -> None:

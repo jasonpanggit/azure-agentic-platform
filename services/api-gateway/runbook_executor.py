@@ -1,10 +1,11 @@
+from __future__ import annotations
 """RunbookExecutor — execute automation runbook steps sequentially with HITL gates.
 
 Each step is streamed via SSE. Steps with require_approval=True create a Cosmos DB
 approval record and wait for HITL resolution. WAL records track every step attempt.
 Jinja2 templates in parameters_template are resolved from incident_context at runtime.
 """
-from __future__ import annotations
+import os
 
 import logging
 import time

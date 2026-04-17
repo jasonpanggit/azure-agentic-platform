@@ -1,5 +1,6 @@
-"""Tests for remediation_executor.py — WAL, pre-flight, verification, rollback, orchestration."""
 from __future__ import annotations
+"""Tests for remediation_executor.py — WAL, pre-flight, verification, rollback, orchestration."""
+import os
 
 import asyncio
 import os

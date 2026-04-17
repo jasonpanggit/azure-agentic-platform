@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for storage_security_service — mocks ARG and Cosmos DB.
 
 ~30 tests covering:
@@ -11,7 +12,6 @@
 - get_storage_findings with filter combinations
 - get_storage_summary counts and top risks
 """
-from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List

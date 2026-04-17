@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Subscription registry — ARG-backed discovery of all accessible Azure subscriptions.
 
 Provides SubscriptionRegistry which:
@@ -6,7 +7,6 @@ Provides SubscriptionRegistry which:
 - Caches in-memory for O(1) get_all_ids() access
 - Refreshes every 6 hours via run_refresh_loop()
 """
-from __future__ import annotations
 
 import asyncio
 import logging

@@ -1,8 +1,8 @@
+from __future__ import annotations
 """Runbook execution history service — reads from remediation_audit Cosmos container.
 
 Never raises; all errors are logged and empty/default results are returned.
 """
-from __future__ import annotations
 
 import logging
 import time
