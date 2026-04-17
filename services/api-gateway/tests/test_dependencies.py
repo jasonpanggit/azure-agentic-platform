@@ -71,3 +71,21 @@ class TestDependencies:
                         assert mock_cosmos_cls.call_count == 1, (
                             f"CosmosClient() called {mock_cosmos_cls.call_count} times, expected 1"
                         )
+
+
+@pytest.mark.asyncio
+async def test_get_scoped_credential_calls_credential_store():
+    """get_scoped_credential delegates to app.state.credential_store.get()."""
+    from unittest.mock import AsyncMock, MagicMock
+    from fastapi import Request
+    from services.api_gateway.dependencies import get_scoped_credential
+
+    mock_store = MagicMock()
+    mock_store.get = AsyncMock(return_value=MagicMock())
+    request = MagicMock(spec=Request)
+    request.app.state.credential_store = mock_store
+
+    cred = await get_scoped_credential(subscription_id="sub-abc", request=request)
+
+    mock_store.get.assert_called_once_with("sub-abc")
+    assert cred is mock_store.get.return_value

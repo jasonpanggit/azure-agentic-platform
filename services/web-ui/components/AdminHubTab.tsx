@@ -1,18 +1,16 @@
 'use client'
 import { useState } from 'react'
-import { Globe, Settings, Building2 } from 'lucide-react'
-import { SubscriptionManagementTab } from './SubscriptionManagementTab'
+import { Globe, Settings } from 'lucide-react'
+import { MonitoredSubscriptionsTab } from './MonitoredSubscriptionsTab'
 import { SettingsTab } from './SettingsTab'
-import { TenantAdminTab } from './TenantAdminTab'
 
 interface AdminHubTabProps {
   initialSubTab?: string
 }
 
 const subTabs = [
-  { id: 'subscriptions', label: 'Subscriptions', icon: Globe },
+  { id: 'monitored-subscriptions', label: 'Monitored Subscriptions', icon: Globe },
   { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'tenant', label: 'Tenant & Admin', icon: Building2 },
 ]
 
 export function AdminHubTab({ initialSubTab }: AdminHubTabProps) {
@@ -41,9 +39,8 @@ export function AdminHubTab({ initialSubTab }: AdminHubTabProps) {
         ))}
       </div>
 
-      {activeSubTab === 'subscriptions' && <SubscriptionManagementTab />}
+      {activeSubTab === 'monitored-subscriptions' && <MonitoredSubscriptionsTab />}
       {activeSubTab === 'settings' && <SettingsTab />}
-      {activeSubTab === 'tenant' && <TenantAdminTab />}
     </div>
   )
 }

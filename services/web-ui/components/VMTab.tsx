@@ -6,6 +6,7 @@ import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { gatewayTokenRequest } from '@/lib/msal-config'
 import type { VMRow, EolEntry } from '@/types/azure-resources'
+import { useAppState } from '@/lib/app-state-context'
 
 interface VMTabProps {
   subscriptions: string[]
@@ -72,6 +73,7 @@ function VMTypeBadge({ vmType }: { vmType: string }) {
 
 export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
   const { instance, accounts } = useMsal()
+  const { managedSubscriptions } = useAppState()
   const [vms, setVMs] = useState<VMRow[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -221,7 +223,7 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Resource Group', 'Size', 'OS', 'EOL Date', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
+                {['Name', 'Subscription', 'Resource Group', 'Size', 'OS', 'EOL Date', 'Type', 'Power State', 'Health', 'Alerts'].map(col => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide"
@@ -244,6 +246,16 @@ export function VMTab({ subscriptions, onVMClick }: VMTabProps) {
                 >
                   <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                     {vm.name}
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {(() => {
+                      const sub = managedSubscriptions.find(s => s.subscription_id === vm.subscription_id)
+                      return (
+                        <span title={vm.subscription_id}>
+                          {sub?.display_name ?? vm.subscription_id?.slice(0, 8) ?? '—'}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     {vm.resource_group}

@@ -22,6 +22,7 @@ from typing import Any, Optional
 from azure.cosmos import CosmosClient
 from azure.core.exceptions import HttpResponseError
 from azure.identity import DefaultAzureCredential
+from services.api_gateway.credential_store import CredentialStore
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -139,6 +140,7 @@ from services.api_gateway.capacity_endpoints import router as capacity_router
 from services.api_gateway.security_posture_endpoints import router as security_posture_router
 from services.api_gateway.cve_endpoints import router as cve_router
 from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
+from services.api_gateway.subscription_credential_endpoints import router as subscription_credential_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
     add_annotation,
@@ -456,6 +458,52 @@ async def lifespan(app: FastAPI):
     logger.info("startup: CORS_ALLOWED_ORIGINS=%s", os.environ.get("CORS_ALLOWED_ORIGINS", "*"))
     # Initialize shared credential and Cosmos client singletons (CONCERNS 4.4)
     app.state.credential = DefaultAzureCredential()
+    # CredentialStore — per-subscription SPN credential routing
+    _kv_url = os.environ.get("KEY_VAULT_URL", "")
+    if _kv_url:
+        app.state.credential_store = CredentialStore(kv_url=_kv_url)
+        # Background eviction task — runs every 30 minutes
+        async def _eviction_loop():
+            while True:
+                await asyncio.sleep(1800)
+                await app.state.credential_store._evict_expired()
+        asyncio.create_task(_eviction_loop())
+        logger.info("credential_store: initialized with KV_URL=%s", _kv_url)
+
+        # Startup warning: log any subscriptions expiring within 7 days (spec §6)
+        async def _check_expiry_on_startup():
+            try:
+                cosmos = app.state.cosmos_client
+                if cosmos is None:
+                    return
+                db = cosmos.get_database_client("aap")
+                container = db.get_container_client("subscriptions")
+                subs = list(container.query_items(
+                    query="SELECT c.subscription_id, c.display_name, c.secret_expires_at FROM c WHERE NOT IS_DEFINED(c.deleted_at) OR c.deleted_at = null",
+                    enable_cross_partition_query=True,
+                ))
+                from datetime import datetime, timezone, timedelta
+                now = datetime.now(timezone.utc)
+                for sub in subs:
+                    exp_str = sub.get("secret_expires_at")
+                    if not exp_str:
+                        continue
+                    try:
+                        exp = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
+                        days = (exp - now).days
+                        if days < 7:
+                            logger.warning(
+                                "credential_store: SPN secret for sub=%s (%s) expires in %d days — rotate soon",
+                                sub.get("subscription_id"), sub.get("display_name"), max(0, days),
+                            )
+                    except Exception:
+                        pass
+            except Exception as exc:
+                logger.debug("credential_store: startup expiry check failed: %s", exc)
+        asyncio.create_task(_check_expiry_on_startup())
+    else:
+        app.state.credential_store = CredentialStore(kv_url="")
+        logger.warning("credential_store: KEY_VAULT_URL not set — MI fallback only")
     cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
     if cosmos_endpoint:
         app.state.cosmos_client = CosmosClient(
@@ -803,6 +851,7 @@ app.include_router(vnet_peering_router)
 app.include_router(disk_audit_router)
 app.include_router(lb_health_router)
 app.include_router(az_coverage_router)
+app.include_router(subscription_credential_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])

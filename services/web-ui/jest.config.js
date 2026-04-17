@@ -19,6 +19,7 @@ const config = {
     ],
   },
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  setupFilesAfterEnv: ['@testing-library/jest-dom'],
 };
 
 module.exports = config;
