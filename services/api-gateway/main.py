@@ -140,6 +140,7 @@ from services.api_gateway.capacity_endpoints import router as capacity_router
 from services.api_gateway.security_posture_endpoints import router as security_posture_router
 from services.api_gateway.cve_endpoints import router as cve_router
 from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
+from services.api_gateway.subscription_credential_endpoints import router as subscription_credential_router
 from services.api_gateway.war_room import (
     get_or_create_war_room,
     add_annotation,
@@ -850,6 +851,7 @@ app.include_router(vnet_peering_router)
 app.include_router(disk_audit_router)
 app.include_router(lb_health_router)
 app.include_router(az_coverage_router)
+app.include_router(subscription_credential_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
