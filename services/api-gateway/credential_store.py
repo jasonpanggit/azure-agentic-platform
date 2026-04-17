@@ -123,23 +123,46 @@ class CredentialStore:
         try:
             await client.set_secret(secret_name, json.dumps(blob))
         except HttpResponseError as exc:
-            if exc.error and exc.error.code == "ObjectIsDeletedButRecoverable":
+            # Match both the inner error code and the message substring to be robust
+            # across SDK versions that may nest the code differently
+            is_soft_deleted = (
+                (exc.error and exc.error.code == "ObjectIsDeletedButRecoverable")
+                or "ObjectIsDeletedButRecoverable" in str(exc)
+            )
+            if is_soft_deleted:
                 logger.info(
                     "credential_store: recovering soft-deleted secret for sub=%s before overwrite",
                     subscription_id,
                 )
-                await client.recover_deleted_secret(secret_name)
+                try:
+                    await client.recover_deleted_secret(secret_name)
+                except Exception as recover_exc:
+                    logger.error(
+                        "credential_store: recover_deleted_secret failed for sub=%s: %s",
+                        subscription_id, recover_exc,
+                    )
+                    raise
                 # Recovery is async in KV — poll until the secret is available
                 import asyncio as _asyncio
-                for _ in range(10):
-                    await _asyncio.sleep(2)
+                last_exc: Exception = RuntimeError("recovery polling not started")
+                for attempt in range(10):
+                    await _asyncio.sleep(3)
                     try:
                         await client.set_secret(secret_name, json.dumps(blob))
+                        logger.info(
+                            "credential_store: recovered and wrote secret for sub=%s after %d attempts",
+                            subscription_id, attempt + 1,
+                        )
                         return
-                    except Exception:
+                    except Exception as retry_exc:
+                        last_exc = retry_exc
+                        logger.debug(
+                            "credential_store: set_secret attempt %d failed for sub=%s: %s",
+                            attempt + 1, subscription_id, retry_exc,
+                        )
                         continue
                 raise RuntimeError(
-                    f"KV secret {secret_name} recovery timed out after 20s"
+                    f"KV secret {secret_name} recovery timed out after 30s: {last_exc}"
                 )
             raise
 
