@@ -6,15 +6,16 @@ resource "azurerm_key_vault" "main" {
   sku_name                      = "standard"
   soft_delete_retention_days    = 90
   purge_protection_enabled      = true
-  public_network_access_enabled = length(var.allowed_ip_rules) > 0 ? true : false
+  public_network_access_enabled = length(var.allowed_ip_rules) > 0 || length(var.allowed_subnet_ids) > 0 ? true : false
   rbac_authorization_enabled    = true
 
   dynamic "network_acls" {
-    for_each = length(var.allowed_ip_rules) > 0 ? [1] : []
+    for_each = length(var.allowed_ip_rules) > 0 || length(var.allowed_subnet_ids) > 0 ? [1] : []
     content {
-      default_action = "Deny"
-      bypass         = "AzureServices"
-      ip_rules       = var.allowed_ip_rules
+      default_action             = "Deny"
+      bypass                     = "AzureServices"
+      ip_rules                   = var.allowed_ip_rules
+      virtual_network_subnet_ids = var.allowed_subnet_ids
     }
   }
 

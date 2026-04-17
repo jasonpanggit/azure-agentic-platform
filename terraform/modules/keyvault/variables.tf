@@ -39,3 +39,9 @@ variable "allowed_ip_rules" {
   type        = list(string)
   default     = []
 }
+
+variable "allowed_subnet_ids" {
+  description = "List of subnet resource IDs allowed through KV VNet firewall (requires Microsoft.KeyVault service endpoint on the subnet)."
+  type        = list(string)
+  default     = []
+}

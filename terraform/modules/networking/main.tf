@@ -36,6 +36,10 @@ resource "azurerm_subnet" "container_apps" {
   address_prefixes     = [var.subnet_container_apps_cidr]
   default_outbound_access_enabled = false
 
+  # Microsoft.KeyVault service endpoint enables VNet-based KV firewall rules
+  # so the api-gateway can write SPN secrets without going through the public internet.
+  service_endpoints = ["Microsoft.KeyVault"]
+
   delegation {
     name = "container-apps-delegation"
     service_delegation {
