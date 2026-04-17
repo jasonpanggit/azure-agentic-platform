@@ -1480,6 +1480,186 @@ Plans:
 
 ---
 
+### Phase 83: AKS Health ✅ Complete (PR #101)
+
+**Goal:** ARG-based AKS cluster health scanning, node pool status, and upgrade availability detection across all subscriptions.
+
+**What was built:**
+- `get_aks_cluster_health` tool: ARG query for cluster provisioning state, Kubernetes version, upgrade availability
+- Node pool status scanning: ready/not-ready node counts, VM size, OS disk type
+- `aks_health` Cosmos DB container (24h TTL) for health snapshots
+- Security agent integration: AKS clusters surfaced in security posture queries
+
+**Complexity:** M
+**Depends on:** Phase 20 (Network/Security agent depth)
+
+---
+
+### Phase 84: Policy Compliance ✅ Complete (PR #101)
+
+**Goal:** Azure Policy assignment compliance state scanning across subscriptions to surface non-compliant resources.
+
+**What was built:**
+- `get_policy_compliance` tool: subscription-level compliance state via `azure.mgmt.policyinsights`
+- Non-compliant resource breakdown by policy definition and resource type
+- `policy_violations` Cosmos DB container (7-day TTL) for compliance findings
+- Security agent integration: policy compliance surfaced alongside Defender findings
+
+**Complexity:** M
+**Depends on:** Phase 83
+
+---
+
+### Phase 85: Runbook History ✅ Complete (PR #101)
+
+**Goal:** Automation account runbook execution history and success rate tracking for operational visibility.
+
+**What was built:**
+- `get_runbook_execution_history` tool: last N job executions per runbook, status, duration, error output
+- Success rate aggregation: 7-day and 30-day rolling success % per runbook
+- SRE agent integration: runbook history surfaced during incident triage
+- PostgreSQL persistence for runbook metadata alongside existing runbook library
+
+**Complexity:** S
+**Depends on:** Phase 84
+
+---
+
+### Phase 86: Cross-Subscription Correlation ✅ Complete (PR #101)
+
+**Goal:** Cross-subscription resource correlation for multi-subscription incidents where a single root cause spans tenant-wide shared services.
+
+**What was built:**
+- `correlate_cross_subscription` tool: identifies shared dependencies (VNet peerings, shared Key Vaults, shared DNS zones) across subscriptions
+- `correlation_groups` Cosmos DB container (30-day TTL) for persistent correlation group state
+- Orchestrator enhancement: automatically fans out to cross-sub correlation when incident touches shared infrastructure
+- War room integration: correlation group members shown in war room participant list
+
+**Complexity:** L
+**Depends on:** Phase 85
+
+---
+
+### Phase 87: App Service Health ✅ Complete (PR #102)
+
+**Goal:** App Service and Function App availability and configuration scanning for the application layer.
+
+**What was built:**
+- `get_app_service_health` tool: availability state, HTTP 5xx rate, average response time via Azure Monitor metrics
+- Function App health: execution count, failure rate, throttle count
+- `app_service_health` Cosmos DB container (24h TTL) for health snapshots
+- SRE agent integration: App Service health included in availability metric sweeps
+
+**Complexity:** M
+**Depends on:** Phase 86
+
+---
+
+### Phase 88: Queue Depth Monitoring ✅ Complete (PR #102)
+
+**Goal:** Service Bus queue depth and Event Hub consumer lag monitoring to detect message backlog buildup before it causes downstream failures.
+
+**What was built:**
+- `get_service_bus_queue_depth` tool: active message count, dead-letter count, scheduled message count per queue/topic
+- `get_eventhub_consumer_lag` tool: consumer group lag per partition via Event Hub metrics
+- `queue_depth_snapshots` Cosmos DB container (24h TTL) for depth snapshots
+- Alerting integration: queue depth breach raises incident via detection plane
+
+**Complexity:** M
+**Depends on:** Phase 87
+
+---
+
+### Phase 89: VM Extension Audit ✅ Complete (PR #102)
+
+**Goal:** Missing MMA/AMA/vulnerability scanner extension detection to ensure monitoring agent coverage across all VMs.
+
+**What was built:**
+- `audit_vm_extensions` tool: ARG-based scan for MicrosoftMonitoringAgent, AzureMonitorLinuxAgent, AzureMonitorWindowsAgent, MDE.Linux/Windows presence
+- Coverage gap report: VMs missing one or more required extensions, grouped by subscription and resource group
+- `vm_extension_findings` Cosmos DB container (24h TTL) for audit results
+- Security agent integration: extension gaps surfaced as security findings
+
+**Complexity:** M
+**Depends on:** Phase 88
+
+---
+
+### Phase 90: Alert Rule Audit ✅ Complete (PR #102)
+
+**Goal:** Monitor alert rule coverage audit to find resource types with no active alert rules, ensuring no Azure resource type is silently unmonitored.
+
+**What was built:**
+- `audit_alert_rule_coverage` tool: ARG-based scan of all Monitor alert rules vs. deployed resource types; identifies uncovered resource types
+- Coverage score: % of deployed resource types with at least one alert rule
+- `alert_rule_findings` Cosmos DB container (24h TTL) for audit findings
+- SRE agent integration: alert coverage gaps surfaced during observability queries
+
+**Complexity:** M
+**Depends on:** Phase 89
+
+---
+
+### Phase 91: Backup Compliance ✅ Complete (PR #103)
+
+**Goal:** Azure Backup coverage audit for unprotected VMs to enforce backup policy compliance across all subscriptions.
+
+**What was built:**
+- `audit_backup_compliance` tool: Recovery Services Vault protected items vs. all VMs; identifies unprotected VMs
+- Compliance score: % of VMs covered by at least one backup policy, by subscription
+- `backup_findings` Cosmos DB container (24h TTL) for compliance findings
+- Security agent integration: unprotected VMs surfaced alongside Defender findings
+
+**Complexity:** M
+**Depends on:** Phase 90
+
+---
+
+### Phase 92: Private Endpoint Coverage ✅ Complete (PR #103)
+
+**Goal:** Public exposure audit for Storage, Key Vault, and SQL resources to identify resources accessible over the public internet.
+
+**What was built:**
+- `audit_private_endpoint_coverage` tool: ARG-based scan of Storage accounts, Key Vaults, SQL servers for public network access enabled + no private endpoint
+- Exposure severity classification: public + no firewall = HIGH, public + firewall rules = MEDIUM, private endpoint = compliant
+- `pe_findings` Cosmos DB container (24h TTL) for coverage findings
+- Security agent integration: public exposure findings included in security posture queries
+
+**Complexity:** M
+**Depends on:** Phase 91
+
+---
+
+### Phase 93: Identity Risk ✅ Complete (PR #103)
+
+**Goal:** Service principal expiring credential detection via Microsoft Graph to prevent authentication outages from expired secrets/certificates.
+
+**What was built:**
+- `get_identity_risks` tool: Microsoft Graph API scan of all service principals for secrets/certificates expiring within 30/60/90 days
+- Risk classification: CRITICAL (<7 days), HIGH (<30 days), MEDIUM (<60 days), LOW (<90 days)
+- `identity_risks` Cosmos DB container (24h TTL, partitioned by `/tenant_id`) for risk records
+- Security agent integration: identity risks surfaced alongside IAM change findings
+
+**Complexity:** M
+**Depends on:** Phase 92
+
+---
+
+### Phase 94: Maintenance Events ✅ Complete (PR #103)
+
+**Goal:** Planned maintenance window detection via Resource Health and Service Health to give operators advance warning of upcoming platform-initiated changes.
+
+**What was built:**
+- `get_maintenance_events` tool: Resource Health + Service Health API scan for planned maintenance events affecting subscriptions
+- Event classification: VM host maintenance, AKS node image upgrades, platform updates
+- `maintenance_events` Cosmos DB container (7-day TTL) for upcoming event records
+- Teams integration: proactive Teams notification when high-impact maintenance window detected ≥24h in advance
+
+**Complexity:** M
+**Depends on:** Phase 93
+
+---
+
 ## World-Class v4.0 Success Criteria
 
 When all phases 70–75 complete:

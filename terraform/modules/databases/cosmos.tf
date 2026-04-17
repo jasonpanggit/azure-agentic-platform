@@ -411,6 +411,278 @@ resource "azurerm_cosmosdb_sql_container" "capacity_snapshots" {
   throughput = 400
 }
 
+resource "azurerm_cosmosdb_sql_container" "aks_health" {
+  name                  = "aks_health"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — AKS cluster health snapshots
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "policy_violations" {
+  name                  = "policy_violations"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — policy compliance findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "correlation_groups" {
+  name                  = "correlation_groups"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/correlation_id"]
+  partition_key_version = 2
+  default_ttl           = 2592000 # 30 days — cross-subscription correlation groups
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "nsg_findings" {
+  name                  = "nsg_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — NSG audit findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "cost_anomalies" {
+  name                  = "cost_anomalies"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 2592000 # 30 days — cost anomaly detection results
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "defender_findings" {
+  name                  = "defender_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — Defender for Cloud findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "lock_audit" {
+  name                  = "lock_audit"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — resource lock audit results
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "change_events" {
+  name                  = "change_events"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — change intelligence events
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "incident_reports" {
+  name                  = "incident_reports"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/incident_id"]
+  partition_key_version = 2
+  default_ttl           = 7776000 # 90 days — exported incident reports
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "app_service_health" {
+  name                  = "app_service_health"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — App Service health snapshots
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "queue_depth_snapshots" {
+  name                  = "queue_depth_snapshots"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — Service Bus/Event Hub queue depth snapshots
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "vm_extension_findings" {
+  name                  = "vm_extension_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — VM extension audit results
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "alert_rule_findings" {
+  name                  = "alert_rule_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — alert rule coverage audit findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "backup_findings" {
+  name                  = "backup_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — backup compliance findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "pe_findings" {
+  name                  = "pe_findings"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — private endpoint coverage findings
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "identity_risks" {
+  name                  = "identity_risks"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/tenant_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — identity/credential expiry risks
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "maintenance_events" {
+  name                  = "maintenance_events"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — maintenance window events
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/_etag/?" }
+  }
+}
+
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
