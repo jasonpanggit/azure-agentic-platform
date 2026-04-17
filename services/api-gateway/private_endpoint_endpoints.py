@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Private Endpoint Compliance API endpoints (Phase 92).
 
 Router prefix: /api/v1/private-endpoints
@@ -5,7 +6,7 @@ Router prefix: /api/v1/private-endpoints
   GET  /api/v1/private-endpoints/summary   — aggregate summary
   POST /api/v1/private-endpoints/scan      — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _scan_jobs: Dict[str, Dict[str, Any]] = {}
 
-COSMOS_DATABASE = "aap"
+COSMOS_DATABASE = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ---------------------------------------------------------------------------

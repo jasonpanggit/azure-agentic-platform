@@ -1,5 +1,6 @@
-"""Tests for services/api-gateway/tool_executor.py — gateway-side tool executor."""
 from __future__ import annotations
+"""Tests for services/api-gateway/tool_executor.py — gateway-side tool executor."""
+import os
 
 import json
 import os

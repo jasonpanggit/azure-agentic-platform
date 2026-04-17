@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Service Bus / Event Hub queue depth monitoring service.
 
 Scans namespaces via ARG then enriches with Azure Monitor Metrics REST API
@@ -6,7 +7,6 @@ for active and dead-letter message counts.  Persists to Cosmos DB container
 
 Never raises — all exceptions are caught and logged.
 """
-from __future__ import annotations
 
 import logging
 import time

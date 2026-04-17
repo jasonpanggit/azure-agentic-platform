@@ -1,3 +1,4 @@
+from __future__ import annotations
 """FastAPI router for Change Intelligence endpoints — Phase 81.
 
 Prefix: /api/v1/changes
@@ -7,7 +8,7 @@ Endpoints:
 - GET  /api/v1/changes/summary — aggregate stats
 - POST /api/v1/changes/scan    — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/changes", tags=["change-intelligence"])
 
-COSMOS_DB_NAME = os.environ.get("COSMOS_DB_NAME", "aap-db")
+COSMOS_DB_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 def _default_subscription_ids() -> List[str]:

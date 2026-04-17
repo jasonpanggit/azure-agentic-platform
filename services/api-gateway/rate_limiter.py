@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Remediation rate limiter — per agent per subscription (REMEDI-006).
 
 Enforces:
@@ -5,7 +6,7 @@ Enforces:
 - Protected-tag guard: resources tagged "protected" cannot be remediated
 - Production scope confirmation for prod subscription actions
 """
-from __future__ import annotations
+import os
 
 import os
 import time

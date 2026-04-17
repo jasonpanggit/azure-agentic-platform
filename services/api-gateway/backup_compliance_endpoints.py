@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Backup Compliance API endpoints (Phase 91).
 
 Router prefix: /api/v1/backup
@@ -5,7 +6,7 @@ Router prefix: /api/v1/backup
   GET  /api/v1/backup/summary   — aggregate summary
   POST /api/v1/backup/scan      — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import time
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _scan_jobs: Dict[str, Dict[str, Any]] = {}
 
-COSMOS_DATABASE = "aap"
+COSMOS_DATABASE = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import os
 """Tests for approvals endpoints returning 404 on missing records (CONCERNS 5.7)."""
 import os
 import pytest

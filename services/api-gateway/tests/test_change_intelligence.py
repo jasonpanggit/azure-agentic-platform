@@ -1,5 +1,5 @@
-"""Tests for change_intelligence_service — Phase 81."""
 from __future__ import annotations
+"""Tests for change_intelligence_service — Phase 81."""
 
 import uuid
 from datetime import datetime, timezone

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """EOL batch lookup endpoint for VM tab.
 
 Accepts a list of OS names, checks the eol_cache PostgreSQL table
@@ -6,7 +7,7 @@ Accepts a list of OS names, checks the eol_cache PostgreSQL table
 Does NOT import from agents/eol/tools.py — this is a standalone gateway
 module following the same per-request asyncpg.connect() pattern as runbook_rag.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

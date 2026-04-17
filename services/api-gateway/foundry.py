@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Foundry Agent Service dispatch — Orchestrator invocation.
 
 Chat path: AIProjectClient.get_openai_client() at ACCOUNT level endpoint
@@ -7,7 +8,7 @@ Chat path: AIProjectClient.get_openai_client() at ACCOUNT level endpoint
 
 Incident dispatch path: AzureAgentsClient.create_thread_and_run() (threads/runs API).
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import json

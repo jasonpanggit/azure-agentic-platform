@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Cost summary endpoint.
 
 GET /api/v1/vms/cost-summary — returns top-N Azure Advisor Cost recommendations
@@ -9,7 +10,6 @@ Design notes:
 - Returns the top-N resources sorted by highest estimated monthly savings opportunity
 - 24-48h data lag for Cost Management data is documented in response
 """
-from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List

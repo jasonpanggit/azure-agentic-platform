@@ -1,5 +1,5 @@
-"""Tests for private_endpoint_service — ARG-based public network access audit (Phase 92)."""
 from __future__ import annotations
+"""Tests for private_endpoint_service — ARG-based public network access audit (Phase 92)."""
 
 from unittest.mock import MagicMock, patch
 

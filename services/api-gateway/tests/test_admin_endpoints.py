@@ -1,5 +1,5 @@
-"""Tests for admin_endpoints.py — CRUD for remediation policies (Phase 51)."""
 from __future__ import annotations
+"""Tests for admin_endpoints.py — CRUD for remediation policies (Phase 51)."""
 
 import json
 import uuid

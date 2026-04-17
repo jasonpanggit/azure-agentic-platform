@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for cert_expiry_service — mocks ARG and Cosmos DB.
 
 ~30 tests covering:
@@ -9,7 +10,6 @@
 - get_cert_findings with all filter combinations
 - get_cert_summary counts and soonest expiry
 """
-from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List

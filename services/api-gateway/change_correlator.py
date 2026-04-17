@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Change Correlation Engine — correlates incidents with recent Azure resource changes.
 
 Runs as a FastAPI BackgroundTask after POST /api/v1/incidents. Queries the Azure
@@ -12,7 +13,7 @@ of incident creation.
 All steps run with individual error handling. Correlator never raises — all
 failures are logged. Partial results are better than no results.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

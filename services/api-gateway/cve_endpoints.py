@@ -1,5 +1,5 @@
-"""CVE API endpoints for per-VM CVE tracking."""
 from __future__ import annotations
+"""CVE API endpoints for per-VM CVE tracking."""
 
 import logging
 import time

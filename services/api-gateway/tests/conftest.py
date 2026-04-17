@@ -1,3 +1,4 @@
+import os
 """Shared pytest fixtures for Phase 5 api-gateway tests.
 
 Fixtures:

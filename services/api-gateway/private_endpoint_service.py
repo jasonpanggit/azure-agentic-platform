@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Private Endpoint Compliance Service — ARG-based public network access audit (Phase 92).
 
 Scans PaaS resources that should use Private Endpoints and identifies those with
@@ -5,7 +6,6 @@ public network access enabled. Persists findings to Cosmos DB.
 
 Never raises from public functions.
 """
-from __future__ import annotations
 
 import logging
 import time

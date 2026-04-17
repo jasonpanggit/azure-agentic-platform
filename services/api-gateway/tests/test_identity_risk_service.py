@@ -1,5 +1,5 @@
-"""Tests for identity_risk_service — mocks Graph API and Cosmos DB."""
 from __future__ import annotations
+"""Tests for identity_risk_service — mocks Graph API and Cosmos DB."""
 
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone

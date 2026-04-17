@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for AKS system pod health enrichment.
 
 Tests cover:
@@ -5,7 +6,7 @@ Tests cover:
 - list_aks_clusters: enrichment wiring — system_pod_health populated from batch query
 - list_aks_clusters: graceful fallback to 'unknown' when Container Insights unavailable
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

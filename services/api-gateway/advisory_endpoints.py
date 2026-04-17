@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Advisory endpoints — pre-incident anomaly advisories (Phase 73).
 
 Routes:
@@ -5,7 +6,7 @@ Routes:
   GET  /api/v1/advisories/summary               aggregate counts
   PATCH /api/v1/advisories/{advisory_id}/dismiss dismiss an advisory
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

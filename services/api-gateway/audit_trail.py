@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Audit trail — dual write to Cosmos DB + Fabric OneLake (AUDIT-002).
 
 Every approval state transition is written to:
@@ -6,7 +7,7 @@ Every approval state transition is written to:
 
 OneLake failures are logged but never block the approval flow.
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

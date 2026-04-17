@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Azure Compute Quota Utilisation Service — Phase 95.
 
 Queries Compute quota usage per subscription using Azure Resource Manager REST API
@@ -6,7 +7,7 @@ and persists findings to Cosmos DB.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -27,7 +28,7 @@ _NAMESPACE = uuid.NAMESPACE_URL
 _DEFAULT_LOCATIONS = ["eastus", "eastus2", "westus2", "westeurope", "southeastasia"]
 
 _COSMOS_CONTAINER = "quota_usage"
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 _ARM_API_VERSION = "2024-03-01"
 

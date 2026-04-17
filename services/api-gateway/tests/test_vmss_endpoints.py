@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for VMSS endpoints — vmss_endpoints.py.
 
 Tests cover:
@@ -8,7 +9,7 @@ Tests cover:
   returns "Unknown", instance count enrichment from ARG VM query
 - _enum_value: Azure SDK enum extraction
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

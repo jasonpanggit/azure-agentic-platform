@@ -1,3 +1,4 @@
+from __future__ import annotations
 """App Service / Function App health scanning service.
 
 Scans Azure App Service Plans and Web Apps (including Function Apps and Logic Apps)
@@ -6,7 +7,6 @@ tier) and persists results to Cosmos DB container 'app_service_health'.
 
 Never raises — all exceptions are caught and logged.
 """
-from __future__ import annotations
 
 import logging
 import time

@@ -1,4 +1,5 @@
 """Tests for the HITL approval lifecycle (REMEDI-002, REMEDI-003, REMEDI-004, REMEDI-005, REMEDI-006)."""
+import os
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, call, patch

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Migration 003 — Create sops metadata table (Phase 30).
 
 The sops table is a lightweight metadata registry. SOP content lives
@@ -8,7 +9,7 @@ and idempotent upload.
 Run:
     python services/api-gateway/migrations/003_create_sops_table.py
 """
-from __future__ import annotations
+import os
 
 UP_SQL = """
 CREATE TABLE IF NOT EXISTS sops (

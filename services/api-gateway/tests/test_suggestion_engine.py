@@ -1,5 +1,5 @@
-"""Unit tests for suggestion_engine.py — pattern detection sweep and suggestion CRUD."""
 from __future__ import annotations
+"""Unit tests for suggestion_engine.py — pattern detection sweep and suggestion CRUD."""
 
 import uuid
 from datetime import datetime, timezone

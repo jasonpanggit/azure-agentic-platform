@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VM detail and metrics endpoints.
 
 GET  /api/v1/vms/{resource_id_base64}                        — full VM profile
@@ -8,7 +9,7 @@ POST /api/v1/vms/{resource_id_base64}/diagnostic-settings    — enable diag set
 resource_id_base64: ARM resource ID base64url-encoded (no padding).
 Decode with: base64.urlsafe_b64decode(pad(resource_id_base64)).decode()
 """
-from __future__ import annotations
+import os
 
 import base64
 import datetime

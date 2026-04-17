@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Push notification service — VAPID-signed Web Push for P0/P1 on-call alerts.
 
 Stores subscriptions in Cosmos DB `push_subscriptions` container.
@@ -8,7 +9,7 @@ Env vars required:
   VAPID_PRIVATE_KEY — URL-safe base64 VAPID private key
   VAPID_EMAIL       — mailto: contact (e.g. mailto:ops@example.com)
 """
-from __future__ import annotations
+import os
 
 import hashlib
 import logging

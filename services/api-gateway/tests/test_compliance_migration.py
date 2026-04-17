@@ -1,5 +1,5 @@
-"""Tests for compliance_mappings migration DDL and seed data integrity (Phase 54)."""
 from __future__ import annotations
+"""Tests for compliance_mappings migration DDL and seed data integrity (Phase 54)."""
 
 import importlib.util
 import sys

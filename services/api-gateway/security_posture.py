@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Security Posture Service — Defender secure score, policy compliance, composite scoring (Phase 59).
 
 Architecture:
@@ -6,7 +7,7 @@ Architecture:
 - All Azure SDK calls never raise — structured error dicts returned instead
 - TTL annotation on Cosmos docs (3600s = 1h)
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

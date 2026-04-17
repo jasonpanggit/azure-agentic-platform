@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Teams notification proxy -- sends card requests to the Teams bot (D-04, D-11).
 
 Phase 5 posted directly to a Teams webhook URL (now deprecated).
 Phase 6 sends structured payloads to the Teams bot Container App's
 internal notify endpoint, which renders cards and posts to Teams.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for NSG audit service (Phase 77).
 
 Coverage:
@@ -7,7 +8,7 @@ Coverage:
 - get_summary: aggregation logic
 - API endpoints: GET findings, GET summary, POST scan
 """
-from __future__ import annotations
+import os
 
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch

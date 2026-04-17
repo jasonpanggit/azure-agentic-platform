@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Alert Rule Coverage Audit service (Phase 90).
 
 Identifies Azure resource types with no Monitor Alert Rules configured,
 exposing governance blind spots across subscriptions.
 """
-from __future__ import annotations
 
 import logging
 import time

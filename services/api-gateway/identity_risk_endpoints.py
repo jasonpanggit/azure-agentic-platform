@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Identity Risk API endpoints — Phase 93.
 
 Routes:
@@ -5,7 +6,8 @@ Routes:
   GET  /api/v1/identity-risks/summary — summary counts
   POST /api/v1/identity-risks/scan    — trigger live Graph scan
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/identity-risks", tags=["identity-risks"])
 
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 @router.get("")

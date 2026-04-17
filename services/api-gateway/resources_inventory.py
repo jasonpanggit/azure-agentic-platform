@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Resources inventory endpoint — flat listing of all Azure resources via ARG.
 
 GET /api/v1/resources/inventory
@@ -10,7 +11,6 @@ Each resource item: { id, name, type, location }
 Uses run_arg_query() from arg_helper so counts match topology/tree exactly
 (same ARG data source, no ARM pagination caps).
 """
-from __future__ import annotations
 
 import asyncio
 import logging

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Deployment API endpoints — GitOps integration (Phase 60).
 
 Routes:
@@ -5,7 +6,6 @@ Routes:
   GET  /api/v1/deployments          — list recent deployments
   GET  /api/v1/deployments/correlate — correlate deployments to an incident
 """
-from __future__ import annotations
 
 import logging
 import time

@@ -1,5 +1,5 @@
-"""Tests for agent_evaluators.py -- standard azure-ai-evaluation wrappers."""
 from __future__ import annotations
+"""Tests for agent_evaluators.py -- standard azure-ai-evaluation wrappers."""
 
 from unittest.mock import MagicMock, patch
 

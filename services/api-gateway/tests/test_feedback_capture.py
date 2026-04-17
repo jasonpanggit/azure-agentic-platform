@@ -1,5 +1,5 @@
-"""Tests for FeedbackCapture — FeedbackRecord model, FeedbackCaptureService, quality endpoints."""
 from __future__ import annotations
+"""Tests for FeedbackCapture — FeedbackRecord model, FeedbackCaptureService, quality endpoints."""
 
 import uuid
 from datetime import datetime, timezone

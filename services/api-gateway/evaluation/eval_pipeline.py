@@ -1,3 +1,4 @@
+from __future__ import annotations
 """CI eval pipeline -- runs agentic evaluators with quality gates (Phase 33).
 
 Entry point for the GitHub Actions agent-eval workflow.
@@ -10,7 +11,7 @@ Exit code:
     0 = all quality gates passed
     1 = one or more gates failed
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

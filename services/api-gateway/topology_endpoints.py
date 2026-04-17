@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Topology graph API endpoints — blast-radius, path, snapshot, bootstrap.
 
 Exposes the resource property graph (TOPO-001) via:
@@ -9,7 +10,6 @@ Exposes the resource property graph (TOPO-001) via:
 All endpoints require Entra ID Bearer token (verify_token).
 TopologyClient is accessed via request.app.state.topology_client.
 """
-from __future__ import annotations
 
 import asyncio
 import logging

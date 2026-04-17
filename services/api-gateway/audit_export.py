@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Audit report export — remediation activity report for SOC 2 (AUDIT-006).
 
 Combines data from:
@@ -8,7 +9,7 @@ Combines data from:
 Returns a JSON document covering all remediation events in the requested
 time range with full approval chains.
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

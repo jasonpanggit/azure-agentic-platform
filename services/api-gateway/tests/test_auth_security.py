@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Security tests for API gateway auth mode handling.
 
 These tests use `pytest.mark.anyio` because the local verification runner for
 this repo exposes AnyIO but not pytest-asyncio.
 """
-from __future__ import annotations
 
 import importlib
 import sys

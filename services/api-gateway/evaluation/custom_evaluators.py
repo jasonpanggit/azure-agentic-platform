@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Custom AIOps agentic evaluators (Phase 33).
 
 Extends azure-ai-evaluation with AIOps-specific quality metrics:
@@ -15,7 +16,6 @@ Scoring:
 - Binary evaluators (completeness, safety, grounding): 0.0 or 1.0
 - Adherence evaluator: 0.0-5.0 (proportional to steps followed)
 """
-from __future__ import annotations
 
 import logging
 from typing import Any

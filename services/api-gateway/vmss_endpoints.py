@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VMSS inventory and chat endpoints.
 
 GET  /api/v1/vmss                          — list VMSS in subscriptions via ARG
@@ -8,7 +9,6 @@ POST /api/v1/vmss/{resource_id_base64}/chat    — resource-scoped chat
 When the Azure SDK packages are unavailable, all list endpoints return empty
 structured responses matching the shape the frontend expects.
 """
-from __future__ import annotations
 
 import base64
 import logging

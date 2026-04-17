@@ -1,5 +1,5 @@
-"""Tests for budget_alert_service.py — Phase 96."""
 from __future__ import annotations
+"""Tests for budget_alert_service.py — Phase 96."""
 
 import uuid
 from typing import Any, Dict

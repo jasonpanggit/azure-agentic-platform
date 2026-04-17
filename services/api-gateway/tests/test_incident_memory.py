@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Unit tests for incident_memory.py — INTEL-003 historical pattern matching.
 
 All 12 tests use mocked embeddings and postgres; no real DB or Azure OpenAI
 calls are made.  Async tests use pytest.mark.anyio (consistent with
 test_runbook_search_availability.py).
 """
-from __future__ import annotations
 
 import datetime
 import sys

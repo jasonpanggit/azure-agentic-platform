@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Subscription federation helpers for inventory endpoints.
 
 Provides resolve_subscription_ids() — the single source of truth for
@@ -9,7 +10,6 @@ Priority:
 2. app.state.subscription_registry.get_all_ids() — all discovered subscriptions
 3. [] — empty fallback (triggers graceful no-op in ARG-backed endpoints)
 """
-from __future__ import annotations
 
 import logging
 from typing import List, Optional

@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Availability Zone Coverage Audit API endpoints — Phase 102.
 
 GET  /api/v1/compute/az-coverage              — list AZ findings (filterable)
 POST /api/v1/compute/az-coverage/scan         — trigger on-demand ARG scan
 GET  /api/v1/compute/az-coverage/summary      — aggregate summary
 """
-from __future__ import annotations
 
 import logging
 import time

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for aks_health_service.py (Phase 83).
 
 Covers:
@@ -9,7 +10,7 @@ Covers:
 - get_aks_clusters: filters, error handling
 - get_aks_summary: computation, error handling
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

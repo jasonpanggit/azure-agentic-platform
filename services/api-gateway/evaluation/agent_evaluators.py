@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Standard azure-ai-evaluation agentic evaluator configuration (Phase 33).
 
 Provides build_eval_config() for assembling the evaluator dict used in
@@ -8,7 +9,6 @@ Note on metric key format (azure-ai-evaluation SDK):
     e.g. "task_adherence.task_adherence" or "task_adherence.score"
     Use extract_eval_score() to safely access these with fallback.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any, Optional

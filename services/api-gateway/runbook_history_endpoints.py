@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Runbook history endpoints — Phase 85.
 
 Router prefix: /api/v1/runbooks/history, /api/v1/runbooks/stats,
                /api/v1/runbooks/incidents/{incident_id}
 """
-from __future__ import annotations
+import os
 
 import logging
 import os
@@ -23,7 +24,7 @@ from services.api_gateway.runbook_history_service import (
 router = APIRouter(prefix="/api/v1/runbooks", tags=["runbook-history"])
 logger = logging.getLogger(__name__)
 
-COSMOS_DATABASE_NAME = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+COSMOS_DATABASE_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 def _serialise_execution(e: Any) -> Dict[str, Any]:

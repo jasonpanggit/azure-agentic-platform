@@ -1,5 +1,6 @@
-"""FeedbackCapture — capture operator approve/reject decisions as training signal."""
 from __future__ import annotations
+"""FeedbackCapture — capture operator approve/reject decisions as training signal."""
+import os
 
 import logging
 import os

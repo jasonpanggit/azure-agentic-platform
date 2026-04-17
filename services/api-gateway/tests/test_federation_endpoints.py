@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for cross-subscription federation: endpoints default to all subscriptions from registry.
 
 PLAN: 50-02, Task 1 (TDD — RED phase)
@@ -11,7 +12,7 @@ Tests verify that:
 6. GET /api/v1/vmss without subscriptions uses registry all_ids
 7. GET /api/v1/aks without subscriptions uses registry all_ids
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

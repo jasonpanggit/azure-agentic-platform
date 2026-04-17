@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Resource-scoped chat endpoint for VM investigation.
 
 POST /api/v1/vms/{resource_id_base64}/chat
@@ -11,7 +12,7 @@ On new threads, also prepends pre-fetched evidence context from Cosmos so the
 agent starts grounded. Function calling then lets it fetch additional live data
 on demand as the conversation continues.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import base64

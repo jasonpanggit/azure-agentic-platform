@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for AKS Container Insights (Log Analytics) metrics endpoint.
 
 Tests cover:
@@ -7,7 +8,7 @@ Tests cover:
 - No workspace configured: returns fetch_error
 - Computer filter removed: KQL no longer filters by cluster name on Computer field
 """
-from __future__ import annotations
+import os
 
 import os
 import sys

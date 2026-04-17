@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for topology service core (topology.py).
 
 Tests cover:
@@ -8,7 +9,6 @@ Tests cover:
 - TopologyClient.get_snapshot: single document read
 - TopologyClient._row_to_document: ARG row → Cosmos document conversion
 """
-from __future__ import annotations
 
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch

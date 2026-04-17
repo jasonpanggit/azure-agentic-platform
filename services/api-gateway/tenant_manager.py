@@ -1,9 +1,9 @@
+from __future__ import annotations
 """TenantManager — multi-tenant isolation for AAP.
 
 Manages tenant records in PostgreSQL and provides fast in-memory caching
 (5-minute TTL) for operator → tenant lookups on the hot path.
 """
-from __future__ import annotations
 
 import json as _json
 import logging

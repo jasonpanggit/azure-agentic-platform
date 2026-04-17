@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Approval endpoints — HITL gate for remediation proposals (REMEDI-002, REMEDI-003, REMEDI-005).
 
 Handles approval lifecycle: read, approve, reject with ETag concurrency.
 Expired proposals return 410 Gone. Thread resume on approval callback.
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

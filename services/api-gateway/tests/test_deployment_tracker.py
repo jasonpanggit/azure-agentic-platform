@@ -1,5 +1,5 @@
-"""Tests for deployment_tracker.py — Phase 60 GitOps integration."""
 from __future__ import annotations
+"""Tests for deployment_tracker.py — Phase 60 GitOps integration."""
 
 import pytest
 from datetime import datetime, timedelta, timezone

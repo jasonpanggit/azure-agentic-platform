@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AAP API Gateway — incident ingestion and Foundry dispatch.
 
 A minimal FastAPI service handling:
@@ -8,7 +9,7 @@ A minimal FastAPI service handling:
 No business logic; agents own the reasoning. The gateway is a thin
 routing layer between external callers and the Foundry agent runtime.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

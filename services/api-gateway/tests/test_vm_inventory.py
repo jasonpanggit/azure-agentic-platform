@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for GET /api/v1/vms — VM inventory endpoint.
 
 Tests cover:
@@ -7,7 +8,7 @@ Tests cover:
 - list_vms route: success response shape, ARG failure degrades to empty list, pagination
 - OS normalization: raw Azure SKU strings → human-readable OS names via normalize_os
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

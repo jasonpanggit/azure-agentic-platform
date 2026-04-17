@@ -1,5 +1,5 @@
-"""Tests for CVEService — mocks MSRC API and Azure SDK."""
 from __future__ import annotations
+"""Tests for CVEService — mocks MSRC API and Azure SDK."""
 
 import asyncio
 import json

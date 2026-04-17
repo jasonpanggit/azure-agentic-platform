@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Platform-wide incident pattern analysis — pure Python (PLATINT-001, PLATINT-002, PLATINT-003).
 
 Groups incidents by (domain, resource_type, detection_rule) tuples.
@@ -9,7 +10,7 @@ Architecture:
 - analyze_patterns: orchestrates full analysis and writes to Cosmos
 - run_pattern_analysis_loop: asyncio background task (mirrors forecaster.py)
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

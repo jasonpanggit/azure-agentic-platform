@@ -1,3 +1,4 @@
+import os
 """Tests for GET /health/ready readiness endpoint (CONCERNS 5.1)."""
 import os
 import importlib

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Defender for Cloud API endpoints.
 
 Routes:
@@ -6,7 +7,6 @@ Routes:
 - GET  /api/v1/defender/summary         — combined counts
 - POST /api/v1/defender/scan            — trigger background scan
 """
-from __future__ import annotations
 
 import logging
 import time

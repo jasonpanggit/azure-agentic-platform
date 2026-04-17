@@ -1,5 +1,6 @@
-"""Tests for Alert Rule Coverage Audit service and endpoints (Phase 90)."""
 from __future__ import annotations
+"""Tests for Alert Rule Coverage Audit service and endpoints (Phase 90)."""
+import os
 
 import os
 from unittest.mock import MagicMock, patch

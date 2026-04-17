@@ -1,9 +1,9 @@
+from __future__ import annotations
 """FinOps API endpoints — Azure Cost Management direct queries for the Web UI.
 
 These endpoints call Azure Cost Management SDK directly (not via the FinOps agent)
 for fast Web UI polling. The FinOps agent is for conversational Foundry threads.
 """
-from __future__ import annotations
 
 import logging
 from calendar import monthrange

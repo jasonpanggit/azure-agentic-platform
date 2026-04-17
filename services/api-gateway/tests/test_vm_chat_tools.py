@@ -1,5 +1,5 @@
-"""Tests for vm_chat_tools.py — live Azure SDK tool functions."""
 from __future__ import annotations
+"""Tests for vm_chat_tools.py — live Azure SDK tool functions."""
 
 import json
 import sys

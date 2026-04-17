@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Deployment Tracker — GitOps integration for deployment event ingestion and correlation (Phase 60).
 
 Architecture:
@@ -8,7 +9,7 @@ Architecture:
 
 Cosmos container: `deployments` (partition key: resource_group)
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

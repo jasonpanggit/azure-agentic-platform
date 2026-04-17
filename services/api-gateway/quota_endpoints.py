@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Quota management endpoints — subscription-wide quota browser (Phase 67).
 
 Extends CapacityPlannerClient to provide:
@@ -8,7 +9,6 @@ Extends CapacityPlannerClient to provide:
 
 All tool functions never raise — structured error dicts returned on failure.
 """
-from __future__ import annotations
 
 import logging
 import time

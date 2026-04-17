@@ -1,3 +1,4 @@
+from __future__ import annotations
 """FastAPI router for resource lock audit endpoints.
 
 Prefix: /api/v1/locks
@@ -8,7 +9,7 @@ Endpoints:
 - GET  /api/v1/locks/remediation-script — az CLI script (text/plain)
 - POST /api/v1/locks/scan               — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import uuid
@@ -43,7 +44,7 @@ def _default_subscription_ids() -> List[str]:
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
-COSMOS_DB_NAME = os.environ.get("COSMOS_DB_NAME", "aap-db")
+COSMOS_DB_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

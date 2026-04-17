@@ -1,3 +1,4 @@
+from __future__ import annotations
 """SLO Tracking Service — CRUD, error budget computation, and burn-rate alerting (INTEL-004).
 
 Provides `create_slo`, `list_slos`, `get_slo_health`, `update_slo_metrics`, and
@@ -6,7 +7,6 @@ Provides `create_slo`, `list_slos`, `get_slo_health`, `update_slo_metrics`, and
 Postgres DSN resolution is delegated to `resolve_postgres_dsn` from `runbook_rag`
 so that all database configuration is managed in one place.
 """
-from __future__ import annotations
 
 import logging
 import uuid

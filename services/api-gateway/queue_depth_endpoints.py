@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Queue depth (Service Bus / Event Hub) endpoints.
 
 GET  /api/v1/queues          — list namespaces (filters: subscription_id, health_status, namespace_type)
 GET  /api/v1/queues/summary  — aggregate counts
 POST /api/v1/queues/scan     — trigger ARG + metrics scan and persist
 """
-from __future__ import annotations
+import os
 
 import logging
 import time
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/queues", tags=["queues"])
 
-COSMOS_DB = "aap"
+COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 class ScanResponse(BaseModel):

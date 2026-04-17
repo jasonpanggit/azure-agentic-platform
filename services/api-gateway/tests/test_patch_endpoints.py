@@ -1,3 +1,4 @@
+import os
 """Unit tests for the Patch Management API gateway endpoints.
 
 Tests GET /api/v1/patch/assessment, GET /api/v1/patch/installations,

@@ -1,5 +1,5 @@
-"""Phase 70: Agent Health Monitor — FastAPI endpoints."""
 from __future__ import annotations
+"""Phase 70: Agent Health Monitor — FastAPI endpoints."""
 
 import logging
 from datetime import datetime, timezone

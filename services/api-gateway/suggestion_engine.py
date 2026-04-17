@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Learning suggestion engine — detects repeated HITL-approved patterns and proposes policies.
 
 Background sweep queries the remediation_audit container for HITL-approved executions
@@ -11,7 +12,7 @@ Architecture:
 - dismiss_suggestion: marks a suggestion dismissed=True
 - convert_suggestion_to_policy: records the policy_id the suggestion was converted to
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

@@ -1,5 +1,5 @@
-"""Tests for maintenance_service — mocks ARG queries and Cosmos DB."""
 from __future__ import annotations
+"""Tests for maintenance_service — mocks ARG queries and Cosmos DB."""
 
 from dataclasses import asdict
 from datetime import datetime, timezone

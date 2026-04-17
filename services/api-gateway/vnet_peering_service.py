@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VNet Peering Health Audit Service — Phase 99.
 
 ARG scan for all VNet peerings and their health status. Persists findings
@@ -6,7 +7,8 @@ to Cosmos DB container 'vnet_peerings'.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _NAMESPACE = uuid.NAMESPACE_URL
 _COSMOS_CONTAINER = "vnet_peerings"
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 _ARG_QUERY = """
 Resources

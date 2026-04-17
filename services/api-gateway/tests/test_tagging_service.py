@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for tagging_service.py and tagging_endpoints.py (Phase 75).
 
 Covers:
@@ -17,7 +18,7 @@ Covers:
 - remediation-script endpoint returns text/plain
 - required_tags override via query param
 """
-from __future__ import annotations
+import os
 
 import os
 from typing import Any

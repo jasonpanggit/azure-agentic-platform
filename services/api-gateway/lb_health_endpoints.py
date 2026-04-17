@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Load Balancer Health API endpoints — Phase 101.
 
 GET  /api/v1/network/lb              — list LB findings (filterable)
 POST /api/v1/network/lb/scan         — trigger on-demand ARG scan
 GET  /api/v1/network/lb/summary      — aggregate summary
 """
-from __future__ import annotations
 
 import logging
 import time

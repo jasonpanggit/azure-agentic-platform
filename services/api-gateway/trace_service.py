@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Trace service — capture and query Foundry run step traces.
 
 Captures run steps from Foundry Agent Service after a run completes and
@@ -5,7 +6,6 @@ persists them to Cosmos DB (agent_traces container, TTL 7 days).
 
 All errors are caught and logged — this is fire-and-forget, never raises.
 """
-from __future__ import annotations
 
 import asyncio
 import logging

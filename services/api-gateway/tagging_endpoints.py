@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tagging compliance API endpoints (Phase 75).
 
 Routes:
@@ -5,7 +6,6 @@ Routes:
   GET /api/v1/tagging/remediation-script — bash script (text/plain)
   GET /api/v1/tagging/summary           — lightweight summary only
 """
-from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone

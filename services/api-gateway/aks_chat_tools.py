@@ -1,3 +1,4 @@
+from __future__ import annotations
 """AKS Chat function-calling tools.
 
 Live Azure SDK tool functions exposed to the LLM via chat.completions
@@ -10,7 +11,6 @@ Tools:
   get_aks_metrics          — platform metrics via Azure Monitor
   get_aks_workload_summary — pod counts via KubePodInventory KQL (Container Insights)
 """
-from __future__ import annotations
 
 import json
 import logging

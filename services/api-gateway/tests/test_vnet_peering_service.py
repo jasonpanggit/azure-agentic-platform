@@ -1,5 +1,5 @@
-"""Tests for vnet_peering_service.py — Phase 99."""
 from __future__ import annotations
+"""Tests for vnet_peering_service.py — Phase 99."""
 
 import uuid
 from datetime import datetime, timezone

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Azure Policy Compliance Drill-Down endpoints (Phase 84).
 
 Router prefix: /api/v1/policy
@@ -6,7 +7,7 @@ GET  /api/v1/policy/violations  — list violations (filter: subscription_id, se
 GET  /api/v1/policy/summary     — aggregate summary
 POST /api/v1/policy/scan        — trigger background scan
 """
-from __future__ import annotations
+import os
 
 import logging
 import time
@@ -27,7 +28,7 @@ def _run_scan_background(credential: Any, subscription_ids: List[str], cosmos_cl
     import os
     from services.api_gateway.policy_compliance_service import persist_violations, scan_policy_compliance
 
-    db_name = os.environ.get("COSMOS_DATABASE", "aap")
+    db_name = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
     try:
         violations = scan_policy_compliance(credential, subscription_ids)
         if cosmos_client is not None:
@@ -50,7 +51,7 @@ async def list_policy_violations(
     from services.api_gateway.policy_compliance_service import get_violations
 
     start_time = time.monotonic()
-    db_name = os.environ.get("COSMOS_DATABASE", "aap")
+    db_name = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
     subscription_ids = [subscription_id] if subscription_id else None
     violations = get_violations(cosmos_client, db_name, subscription_ids, severity, policy_name)
@@ -72,7 +73,7 @@ async def get_policy_compliance_summary(
     import os
     from services.api_gateway.policy_compliance_service import get_policy_summary
 
-    db_name = os.environ.get("COSMOS_DATABASE", "aap")
+    db_name = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
     return get_policy_summary(cosmos_client, db_name)
 
 

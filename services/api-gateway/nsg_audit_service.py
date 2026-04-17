@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NSG security audit service (Phase 77).
 
 Scans all Network Security Groups across subscriptions for risky rules
@@ -10,7 +11,6 @@ Contains:
 - get_findings: query findings with optional filters
 - get_summary: aggregate counts by severity + top risky NSGs
 """
-from __future__ import annotations
 
 import logging
 import os

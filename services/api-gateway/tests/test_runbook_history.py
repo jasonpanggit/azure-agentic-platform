@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for runbook_history_service.py (Phase 85).
 
 Covers:
@@ -7,7 +8,7 @@ Covers:
 - get_runbook_stats: aggregation, empty data, error handling
 - get_execution_by_incident: happy path, error handling
 """
-from __future__ import annotations
+import os
 
 import os
 from datetime import datetime, timedelta, timezone

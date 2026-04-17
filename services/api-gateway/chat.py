@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Chat endpoint — operator-initiated conversations (D-06, TEAMS-004).
 
 Creates a Foundry thread for ad-hoc operator queries, separate
 from detection-plane incident ingestion (POST /api/v1/incidents).
 Supports thread continuation for cross-surface thread sharing (TEAMS-004).
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import json

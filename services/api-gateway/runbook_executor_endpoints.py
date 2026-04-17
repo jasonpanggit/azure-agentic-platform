@@ -1,5 +1,5 @@
-"""Runbook automation endpoints — execute runbooks and manage automation steps."""
 from __future__ import annotations
+"""Runbook automation endpoints — execute runbooks and manage automation steps."""
 
 import json
 import logging

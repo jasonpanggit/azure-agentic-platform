@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for az_coverage_service.py — Phase 102.
 
 Covers:
@@ -8,7 +9,7 @@ Covers:
 - get_az_findings: with / without filters, cosmos error
 - get_az_summary: aggregation, zero state, coverage_pct
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

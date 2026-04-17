@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for policy_compliance_service.py (Phase 84).
 
 Covers:
@@ -10,7 +11,7 @@ Covers:
 - get_violations: filters, error handling
 - get_policy_summary: computation, error handling
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

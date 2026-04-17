@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for war_room.py — Phase 53: Incident War Room backend.
 
 ≥35 unit tests across 8 test classes covering:
@@ -10,7 +11,7 @@
 - generate_handoff_summary
 - SSE event generator
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import os

@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Shared Azure Resource Graph query helper.
 
 Extracted from vm_inventory.py and patch_endpoints.py (which contain identical
 copies). New modules (topology.py) import from here. Existing modules retain
 their local copies until a future cleanup phase.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional

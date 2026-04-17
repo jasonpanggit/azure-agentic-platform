@@ -1,5 +1,5 @@
-"""Tests for disk_audit_service.py — Phase 100."""
 from __future__ import annotations
+"""Tests for disk_audit_service.py — Phase 100."""
 
 import uuid
 from datetime import datetime, timedelta, timezone

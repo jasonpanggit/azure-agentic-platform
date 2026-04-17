@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Cost anomaly API endpoints — /api/v1/cost/*
 
 Exposes cost anomaly detection results and scan triggering.
 Business logic lives in cost_service.py; this file is a thin router.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

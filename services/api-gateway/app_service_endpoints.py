@@ -1,10 +1,12 @@
+from __future__ import annotations
 """App Service / Function App health endpoints.
 
 GET  /api/v1/app-services          — list apps (filters: subscription_id, health_status, app_type)
 GET  /api/v1/app-services/summary  — aggregate summary counts
 POST /api/v1/app-services/scan     — trigger ARG scan and persist results
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/app-services", tags=["app-services"])
 
-COSMOS_DB = "aap"
+COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 class ScanResponse(BaseModel):

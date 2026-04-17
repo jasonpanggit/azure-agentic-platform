@@ -1,5 +1,6 @@
-"""Tests for POST /api/v1/vms/{id}/chat — resource-scoped compute agent chat."""
 from __future__ import annotations
+"""Tests for POST /api/v1/vms/{id}/chat — resource-scoped compute agent chat."""
+import os
 
 import base64
 import os

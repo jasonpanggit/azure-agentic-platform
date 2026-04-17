@@ -1,3 +1,4 @@
+from __future__ import annotations
 """FastAPI router for Incident Report endpoints — Phase 82.
 
 Prefix: /api/v1/incidents/{incident_id}/report
@@ -6,7 +7,7 @@ Endpoints:
 - GET /api/v1/incidents/{incident_id}/report          — JSON report
 - GET /api/v1/incidents/{incident_id}/report/markdown — Markdown download
 """
-from __future__ import annotations
+import os
 
 import logging
 from typing import Any
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["incident-reports"])
 
-COSMOS_DB_NAME = os.environ.get("COSMOS_DB_NAME", "aap-db")
+COSMOS_DB_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -1,10 +1,11 @@
+from __future__ import annotations
 """CVEService — fetch CVEs affecting VM OS/software, correlate with patch status.
 
 Fetches CVEs via the existing msrc_client (KB → CVE mapping) and cross-references
 with installed/pending patches to produce PATCHED / PENDING_PATCH / UNPATCHED status.
 Results are cached in PostgreSQL cve_cache table with 24h TTL.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import json

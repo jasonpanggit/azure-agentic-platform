@@ -1,5 +1,5 @@
-"""Unit tests for policy_engine.py — all guard paths for evaluate_auto_approval()."""
 from __future__ import annotations
+"""Unit tests for policy_engine.py — all guard paths for evaluate_auto_approval()."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch

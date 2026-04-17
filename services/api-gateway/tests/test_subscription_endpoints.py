@@ -1,5 +1,5 @@
-"""Tests for subscription management endpoints (Phase 68)."""
 from __future__ import annotations
+"""Tests for subscription management endpoints (Phase 68)."""
 
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch

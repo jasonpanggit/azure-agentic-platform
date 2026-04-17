@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for compliance posture and export API endpoints (Phase 54).
 
 Covers:
@@ -5,7 +6,7 @@ Covers:
 - GET /api/v1/compliance/export  — CSV and PDF generation
 - compute_posture pure function unit tests
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import os

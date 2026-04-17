@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Remediation audit logger — writes events to Fabric OneLake (REMEDI-007).
 
 Every executed remediation action and every rejected/expired proposal
@@ -6,7 +7,7 @@ is recorded in OneLake with the full action log schema.
 Write pattern: fire-and-forget async — never blocks the approval response.
 Path: {lakehouse}.Lakehouse/Files/remediation_audit/year=YYYY/month=MM/day=DD/{event_id}.json
 """
-from __future__ import annotations
+import os
 
 import json
 import logging

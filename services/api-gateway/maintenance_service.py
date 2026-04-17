@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Maintenance Window Intelligence Service — Phase 94.
 
 Queries Azure Resource Health and Service Health via ARG for planned maintenance
 and health advisory events across subscriptions.
 """
-from __future__ import annotations
 
 import logging
 import uuid

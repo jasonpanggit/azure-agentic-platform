@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Tests for GET /api/v1/vms/cost-summary.
 
 Includes a regression test ensuring the /cost-summary route is not
 swallowed by the vm_detail wildcard /{resource_id_base64} route.
 """
-from __future__ import annotations
+import os
 
 import os
 from unittest.mock import MagicMock, patch

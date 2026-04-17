@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Cross-subscription alert correlator — Phase 86.
 
 Detects subscription_storm and blast_radius patterns in recent incidents.
 Never raises from public functions.
 """
-from __future__ import annotations
 
 import logging
 import math

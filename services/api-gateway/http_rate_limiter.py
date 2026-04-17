@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Per-IP HTTP rate limiter for the API gateway (CONCERNS 1.5).
 
 Uses a sliding window (1 minute) with in-memory storage per IP address.
@@ -7,7 +8,7 @@ Limits applied in main.py:
   /api/v1/chat      — 10 req/min per IP
   /api/v1/incidents — 30 req/min per IP
 """
-from __future__ import annotations
+import os
 
 import os
 import time

@@ -1,5 +1,5 @@
-"""Unit tests for cross-subscription topology edges (VNet peering, Private Endpoints)."""
 from __future__ import annotations
+"""Unit tests for cross-subscription topology edges (VNet peering, Private Endpoints)."""
 
 from services.api_gateway.topology import _extract_relationships
 

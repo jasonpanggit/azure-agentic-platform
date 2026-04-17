@@ -1,3 +1,4 @@
+from __future__ import annotations
 """MSRC (Microsoft Security Response Center) API client.
 
 Maps KB article IDs to CVE identifiers using the Security Update Guide API.
@@ -5,7 +6,6 @@ API docs: https://api.msrc.microsoft.com/sug/v2.0
 
 No authentication required.
 """
-from __future__ import annotations
 
 import asyncio
 import json

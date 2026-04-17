@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for alert_timeline_endpoints — Phase 72.
 
 Covers:
@@ -14,7 +15,7 @@ Covers:
 - Multiple changes sorted by correlation_score descending
 - Missing optional fields default gracefully
 """
-from __future__ import annotations
+import os
 
 import os
 from typing import Any

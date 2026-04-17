@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Incident memory service — pgvector historical pattern matching (INTEL-003).
 
 Embeds resolved incidents into the incident_memory table and searches
@@ -6,7 +7,7 @@ historical patterns for new incidents using cosine similarity.
 generate_query_embedding and resolve_postgres_dsn are imported from
 runbook_rag — no reimplementation.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

@@ -1,5 +1,5 @@
-"""Tests for quota endpoints (Phase 67)."""
 from __future__ import annotations
+"""Tests for quota endpoints (Phase 67)."""
 
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch

@@ -1,10 +1,11 @@
+from __future__ import annotations
 """Tests for the GET /api/v1/incidents alert feed endpoint (UI-006).
 
 Covers:
 - list_incidents() helper (incidents_list.py) with various filter combinations
 - GET /api/v1/incidents HTTP endpoint (happy path, filters, subscription split, 503, 401)
 """
-from __future__ import annotations
+import os
 
 from unittest.mock import MagicMock, patch
 

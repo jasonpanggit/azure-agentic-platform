@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Diagnostic Pipeline — pre-fetches evidence when an incident is ingested.
 
 Runs as a FastAPI BackgroundTask after POST /api/v1/incidents. Collects:
@@ -12,7 +13,7 @@ Updates the incident document in Cosmos to set investigation_status = 'evidence_
 All steps run with individual error handling — partial evidence is better than no evidence.
 Pipeline never raises — all failures are logged and stored in the evidence document.
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import logging

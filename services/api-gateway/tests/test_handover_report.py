@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for Operator Shift Handover Report — Phase 74.
 
 12+ tests covering:
@@ -8,7 +9,6 @@
   Group E — render_markdown / render_teams_card
   Group F — POST endpoint
 """
-from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone

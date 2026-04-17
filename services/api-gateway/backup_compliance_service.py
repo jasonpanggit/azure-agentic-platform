@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Backup Compliance Service — ARG-based scan for VM backup coverage (Phase 91).
 
 Scans Recovery Services Vaults and protected items via Azure Resource Graph,
@@ -6,7 +7,6 @@ identifies unprotected VMs, and persists findings to Cosmos DB.
 Never raises from public functions — errors are logged and empty/partial results
 returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
 
 import logging
 import time

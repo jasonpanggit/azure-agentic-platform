@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Subscription Budget & Spending Alerts Service — Phase 96.
 
 Queries Azure Cost Management for budgets and current spend, persists
@@ -6,7 +7,8 @@ findings to Cosmos DB.
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 import time
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 _NAMESPACE = uuid.NAMESPACE_URL
 _COSMOS_CONTAINER = "budget_alerts"
-_COSMOS_DB = "aap"
+_COSMOS_DB = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 _CONSUMPTION_API_VERSION = "2023-11-01"
 

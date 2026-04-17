@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Tests for SLA definition admin CRUD and compliance endpoints (Phase 55).
 
 27 tests covering:
@@ -5,7 +6,6 @@
   Group B — Compliance (8 tests)
   Group C — Edge (4 tests)
 """
-from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

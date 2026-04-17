@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for the SLO Tracking Service (INTEL-004).
 
 Tests cover:
@@ -8,7 +9,6 @@ Tests cover:
 - list_slos non-fatal availability (test 13)
 - get_slo_health KeyError path (test 14)
 """
-from __future__ import annotations
 
 import sys
 import types

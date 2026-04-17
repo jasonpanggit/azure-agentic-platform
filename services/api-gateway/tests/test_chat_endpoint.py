@@ -1,4 +1,5 @@
 """Tests for the chat endpoint (UI-001, UI-002)."""
+import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 

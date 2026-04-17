@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Policy evaluation engine — auto-approval guard for known-safe remediation actions (Phase 51).
 
 Evaluation flow per request (in order):
@@ -12,7 +13,6 @@ Evaluation flow per request (in order):
 
 Never raises — all guard exceptions are caught and treated as guard-FAILURE (conservative).
 """
-from __future__ import annotations
 
 import asyncio
 import logging

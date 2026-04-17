@@ -1,5 +1,5 @@
-"""Tests for backup_compliance_service — ARG-based VM backup coverage scan (Phase 91)."""
 from __future__ import annotations
+"""Tests for backup_compliance_service — ARG-based VM backup coverage scan (Phase 91)."""
 
 from unittest.mock import MagicMock, patch
 

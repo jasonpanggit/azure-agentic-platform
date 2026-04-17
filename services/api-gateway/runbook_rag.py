@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Runbook RAG retrieval — pgvector cosine similarity search (TRIAGE-005).
 
 Searches the PostgreSQL `runbooks` table using pgvector cosine similarity.
 Returns top-N results above a configurable similarity threshold.
 """
-from __future__ import annotations
+import os
 
 import logging
 import os

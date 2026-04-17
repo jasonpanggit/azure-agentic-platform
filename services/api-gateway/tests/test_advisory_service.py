@@ -1,5 +1,5 @@
-"""Tests for advisory_service.py — Phase 73 Predictive Incident Prevention."""
 from __future__ import annotations
+"""Tests for advisory_service.py — Phase 73 Predictive Incident Prevention."""
 
 import statistics
 from typing import Any

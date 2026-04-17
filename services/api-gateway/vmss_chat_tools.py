@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VMSS Chat function-calling tools.
 
 Live Azure SDK tool functions exposed to the LLM via chat.completions
@@ -10,7 +11,6 @@ Tools:
   get_vmss_metrics       — CPU, memory, disk, network metrics via Azure Monitor
   get_vmss_autoscale     — Autoscale settings targeting this VMSS resource
 """
-from __future__ import annotations
 
 import json
 import logging

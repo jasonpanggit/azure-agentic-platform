@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Audit query endpoint — agent action history from Application Insights (AUDIT-004).
 
 Queries OpenTelemetry spans exported to Application Insights via
@@ -5,7 +6,7 @@ Log Analytics KQL. Returns agent tool calls, handoffs, and approval
 events for a given incident, filterable by agent, action type,
 resource, and time range.
 """
-from __future__ import annotations
+import os
 
 from datetime import datetime
 import logging

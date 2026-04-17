@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Azure tools endpoint — calls @azure/mcp via stdio subprocess.
 
 Follows the gcc-demo pattern (azure_mcp_client.py) where the API gateway
@@ -8,7 +9,7 @@ The Foundry orchestrator calls this as a regular OpenAI function tool:
   POST /api/v1/azure-tools
   {"tool_name": "compute", "arguments": {"intent": "...", "command": "...", "parameters": {...}}}
 """
-from __future__ import annotations
+import os
 
 import asyncio
 import json

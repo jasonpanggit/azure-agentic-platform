@@ -1,4 +1,5 @@
 """Tests for FastAPI dependency providers (CONCERNS 4.4)."""
+import os
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi import FastAPI

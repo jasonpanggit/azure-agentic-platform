@@ -1,3 +1,4 @@
+from __future__ import annotations
 """VM Extension Health Audit endpoints (Phase 89).
 
 Routes:
@@ -5,7 +6,8 @@ Routes:
   GET  /api/v1/vm-extensions/summary  — aggregate compliance summary
   POST /api/v1/vm-extensions/scan     — trigger a live scan
 """
-from __future__ import annotations
+import os
+import os
 
 import logging
 from typing import Any, List, Optional
@@ -24,7 +26,7 @@ from services.api_gateway.vm_extension_service import (
 router = APIRouter(prefix="/api/v1/vm-extensions", tags=["vm-extensions"])
 logger = logging.getLogger(__name__)
 
-_DB_NAME = "aap"
+_DB_NAME = os.environ.get("COSMOS_OPS_DB_NAME", "aap-ops")
 
 
 @router.get("")

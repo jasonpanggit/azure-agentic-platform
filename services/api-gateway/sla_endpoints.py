@@ -1,3 +1,4 @@
+from __future__ import annotations
 """SLA Definition admin CRUD and compliance endpoints (Phase 55).
 
 Provides:
@@ -11,7 +12,6 @@ Provides:
 All admin endpoints require Entra ID Bearer token via Depends(verify_token).
 The compliance endpoint is public (no auth required).
 """
-from __future__ import annotations
 
 import logging
 import time

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unit tests for the Pattern Analyzer (PLATINT-001, PLATINT-002, PLATINT-003).
 
 Tests cover:
@@ -9,7 +10,6 @@ Tests cover:
 - analyze_patterns returns PatternAnalysisResult with top_patterns <= 5 (test 12)
 - Feedback tag aggregation: operator_flagged=True when >= 2 false_positive (test 13)
 """
-from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
