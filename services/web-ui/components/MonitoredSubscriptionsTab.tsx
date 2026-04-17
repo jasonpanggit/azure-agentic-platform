@@ -187,7 +187,20 @@ export function MonitoredSubscriptionsTab() {
       const resp = await fetch('/api/proxy/subscriptions/managed')
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
-      setSubscriptions(data.subscriptions ?? [])
+      // Normalise API field names: managed endpoint returns `id`/`name`, component expects `subscription_id`/`display_name`
+      const normalised = (data.subscriptions ?? []).map((s: Record<string, unknown>) => ({
+        subscription_id: s.subscription_id ?? s.id,
+        display_name: s.display_name ?? s.name ?? s.id,
+        credential_type: s.credential_type ?? 'mi',
+        client_id: s.client_id ?? null,
+        permission_status: (s.permission_status as Record<string, string>) ?? {},
+        secret_expires_at: s.secret_expires_at ?? null,
+        days_until_expiry: s.days_until_expiry ?? null,
+        last_validated_at: s.last_validated_at ?? null,
+        monitoring_enabled: s.monitoring_enabled ?? true,
+        environment: s.environment ?? 'prod',
+      }))
+      setSubscriptions(normalised)
     } catch {
       setError('Failed to load subscriptions')
     } finally {
