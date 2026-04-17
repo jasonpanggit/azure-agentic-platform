@@ -252,6 +252,14 @@ resource "azurerm_container_app" "agents" {
           value = var.postgres_dsn
         }
       }
+      # API Gateway: Key Vault URI for CredentialStore SPN credential resolution
+      dynamic "env" {
+        for_each = each.key == "api-gateway" && var.key_vault_url != "" ? [1] : []
+        content {
+          name  = "KEY_VAULT_URL"
+          value = var.key_vault_url
+        }
+      }
       # Inject Arc MCP Server URL into the arc agent
       dynamic "env" {
         for_each = each.key == "arc" && var.arc_mcp_server_url != "" ? [1] : []
