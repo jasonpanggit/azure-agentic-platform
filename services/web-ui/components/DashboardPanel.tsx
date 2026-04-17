@@ -39,9 +39,13 @@ import QuotaUsageTab from './QuotaUsageTab'
 import BudgetAlertTab from './BudgetAlertTab'
 import { CertExpiryTab } from './CertExpiryTab'
 import { StorageSecurityTab } from './StorageSecurityTab'
+import VNetPeeringTab from './VNetPeeringTab'
+import DiskAuditTab from './DiskAuditTab'
+import { LBHealthTab } from './LBHealthTab'
+import { AZCoverageTab } from './AZCoverageTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints' | 'quota-usage' | 'budgets' | 'cert-expiry' | 'storage-security'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints' | 'quota-usage' | 'budgets' | 'cert-expiry' | 'storage-security' | 'vnet-peerings' | 'disk-audit' | 'lb-health' | 'az-coverage'
 
 interface FilterState {
   severity?: string
@@ -105,6 +109,10 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'budgets',           label: 'Budgets',           Icon: DollarSign },
     { id: 'cert-expiry',       label: 'Cert Expiry',       Icon: ShieldCheck },
     { id: 'storage-security',  label: 'Storage Security',  Icon: HardDrive },
+    { id: 'vnet-peerings',     label: 'VNet Peerings',     Icon: Network },
+    { id: 'disk-audit',        label: 'Disk Audit',        Icon: HardDrive },
+    { id: 'lb-health',         label: 'Load Balancers',    Icon: Activity },
+    { id: 'az-coverage',       label: 'AZ Coverage',       Icon: Globe },
   ],
   // Config
   [
@@ -421,6 +429,22 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-storage-security" role="tabpanel" aria-labelledby="tab-storage-security" hidden={activeTab !== 'storage-security'}>
           {activeTab === 'storage-security' && <StorageSecurityTab />}
+        </div>
+
+        <div id="tabpanel-vnet-peerings" role="tabpanel" aria-labelledby="tab-vnet-peerings" hidden={activeTab !== 'vnet-peerings'}>
+          {activeTab === 'vnet-peerings' && <VNetPeeringTab />}
+        </div>
+
+        <div id="tabpanel-disk-audit" role="tabpanel" aria-labelledby="tab-disk-audit" hidden={activeTab !== 'disk-audit'}>
+          {activeTab === 'disk-audit' && <DiskAuditTab />}
+        </div>
+
+        <div id="tabpanel-lb-health" role="tabpanel" aria-labelledby="tab-lb-health" hidden={activeTab !== 'lb-health'}>
+          {activeTab === 'lb-health' && <LBHealthTab />}
+        </div>
+
+        <div id="tabpanel-az-coverage" role="tabpanel" aria-labelledby="tab-az-coverage" hidden={activeTab !== 'az-coverage'}>
+          {activeTab === 'az-coverage' && <AZCoverageTab />}
         </div>
 
         <div id="tabpanel-subscriptions" role="tabpanel" aria-labelledby="tab-subscriptions" hidden={activeTab !== 'subscriptions'}>
