@@ -182,6 +182,16 @@ import {
 #     --secrets "teams-bot-password=$(az keyvault secret show --vault-name kv-aap-prod \
 #     --name teams-bot-password-kv --query value -o tsv)"
 
+# --- Storage connection import (state drift fix 2026-04-17) ---
+# aap-storage-connection already exists in Azure (created during initial Foundry setup)
+# but was not in Terraform state. Import to resolve "Resource already exists" error.
+# Remove after first successful apply.
+
+import {
+  to = module.foundry.azapi_resource.storage_connection
+  id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.CognitiveServices/accounts/aap-foundry-prod/connections/aap-storage-connection"
+}
+
 # import {
 #   to = module.teams_bot[0].azurerm_bot_service_azure_bot.main
 #   id = "/subscriptions/4c727b88-12f4-4c91-9c2b-372aab3bbae9/resourceGroups/rg-aap-prod/providers/Microsoft.BotService/botServices/aap-teams-bot-prod"
