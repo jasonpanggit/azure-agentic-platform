@@ -47,6 +47,7 @@ class VMChatResponse(BaseModel):
     thread_id: str
     run_id: str
     status: str = "created"
+    reply: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -251,4 +252,5 @@ async def start_vm_chat(
         thread_id=result["thread_id"],
         run_id=result["run_id"],
         status="created" if not payload.thread_id else "continued",
+        reply=result.get("reply"),
     )

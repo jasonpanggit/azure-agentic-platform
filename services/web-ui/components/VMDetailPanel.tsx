@@ -619,7 +619,17 @@ export function VMDetailPanel({ incidentId, resourceId, resourceName, onClose }:
       const data = await res.json()
       setChatThreadId(data.thread_id)
       setChatRunId(data.run_id)
-      startChatPolling(data.thread_id, data.run_id)
+      // chat.completions is synchronous — reply comes back in the POST response.
+      // Use it directly instead of polling to avoid multi-replica cache misses.
+      if (data.reply) {
+        setChatStreaming(false)
+        setChatMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: data.reply },
+        ])
+      } else {
+        startChatPolling(data.thread_id, data.run_id)
+      }
     } catch (err) {
       setChatStreaming(false)
       const detail = err instanceof Error ? err.message : 'Unknown error'
