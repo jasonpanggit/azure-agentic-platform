@@ -339,7 +339,17 @@ export function MonitoredSubscriptionsTab() {
                           className="text-[var(--accent-red)]"
                           onClick={async () => {
                             if (!confirm(`Remove monitoring for ${sub.display_name}? This cannot be undone.`)) return
-                            await fetch(`/api/proxy/subscriptions/onboard/${sub.subscription_id}`, { method: 'DELETE' })
+                            try {
+                              const res = await fetch(`/api/proxy/subscriptions/onboard/${sub.subscription_id}`, { method: 'DELETE' })
+                              if (!res.ok) {
+                                const body = await res.json().catch(() => ({}))
+                                setError(body?.error ?? `Delete failed (HTTP ${res.status})`)
+                                return
+                              }
+                            } catch {
+                              setError('Failed to reach API gateway')
+                              return
+                            }
                             fetchSubscriptions()
                           }}
                         >
