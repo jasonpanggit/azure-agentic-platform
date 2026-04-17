@@ -291,14 +291,14 @@ export function MonitoredSubscriptionsTab() {
                     {sub.credential_type === 'spn' ? (
                       <Badge
                         style={{ background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)' }}
-                        className="text-xs"
+                        className="text-xs text-[var(--accent-blue)]"
                       >
                         🔑 SPN
                       </Badge>
                     ) : (
                       <Badge
                         style={{ background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)' }}
-                        className="text-xs"
+                        className="text-xs text-[var(--accent-blue)]"
                         title="Platform Managed Identity — re-onboard required"
                       >
                         🔵 Platform MI
