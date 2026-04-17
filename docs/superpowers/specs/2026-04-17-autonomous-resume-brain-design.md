@@ -135,14 +135,18 @@ The only hook required. Updates `gsd-session-start.js` to:
       "command": "uvx",
       "args": ["basic-memory", "mcp"],
       "env": {
-        "BASIC_MEMORY_HOME": "~/brain"
+        "BASIC_MEMORY_HOME": "/Users/<you>/brain"
       }
     }
   }
 }
 ```
 
+**Note:** Use an absolute path — `~` is not shell-expanded in JSON. Replace `/Users/<you>` with your actual home directory (e.g. `/Users/jasonmba/brain`).
+
 **Prerequisites:** `uv` installed (`brew install uv` or `pip install uv`). Falls back to `pip install basic-memory` if `uvx` unavailable.
+
+**Known limitation:** Concurrent Claude sessions writing to the same `RESUME.md` may overwrite each other. Acceptable for single-user local development — not a concern for this setup.
 
 ---
 
