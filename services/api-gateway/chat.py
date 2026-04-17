@@ -69,6 +69,21 @@ Resources
 | order by name asc
 """
 
+# ARG KQL: lightweight storage account inventory.
+_STORAGE_INVENTORY_KQL = """
+Resources
+| where type =~ 'microsoft.storage/storageaccounts'
+| project
+    id            = tolower(id),
+    name,
+    resourceGroup,
+    location,
+    subscriptionId,
+    kind          = tostring(kind),
+    sku           = tostring(sku.name)
+| order by name asc
+"""
+
 
 def _fetch_vm_inventory(credential: Any, subscription_ids: list[str]) -> list[dict]:
     """Fetch a lightweight VM inventory from ARG for agent grounding.
@@ -91,6 +106,31 @@ def _fetch_vm_inventory(credential: Any, subscription_ids: list[str]) -> list[di
         ]
     except Exception as exc:
         logger.warning("_fetch_vm_inventory: ARG query failed — agents will lack VM context | error=%s", exc)
+        return []
+
+
+def _fetch_storage_inventory(credential: Any, subscription_ids: list[str]) -> list[dict]:
+    """Fetch a lightweight storage account inventory from ARG for agent grounding.
+
+    Returns [] on any error — resource context is best-effort, never blocks chat.
+    """
+    try:
+        rows = run_arg_query(credential, subscription_ids, _STORAGE_INVENTORY_KQL)
+        return [
+            {
+                "id": r.get("id", ""),
+                "name": r.get("name", ""),
+                "resourceGroup": r.get("resourceGroup", ""),
+                "location": r.get("location", ""),
+                "subscriptionId": r.get("subscriptionId", ""),
+                "kind": r.get("kind", ""),
+                "sku": r.get("sku", ""),
+            }
+            for r in rows
+            if r.get("name")
+        ]
+    except Exception as exc:
+        logger.warning("_fetch_storage_inventory: ARG query failed — agents will lack storage context | error=%s", exc)
         return []
 
 
@@ -121,18 +161,23 @@ def _build_operator_query_envelope(
     if subscription_ids:
         payload["subscription_ids"] = subscription_ids
 
-    # Inject VM inventory so all domain agents can resolve resource names to IDs
+    # Inject resource inventory so domain agents can resolve resource names to IDs
     # without guessing resource groups. Best-effort: skipped if ARG unavailable.
     if credential is not None:
         vms = _fetch_vm_inventory(credential, subscription_ids)
-        if vms:
-            payload["resource_context"] = {
-                "virtual_machines": vms,
+        storage_accounts = _fetch_storage_inventory(credential, subscription_ids)
+        if vms or storage_accounts:
+            resource_context: dict[str, object] = {
                 "note": (
                     "Use 'id' from this list as the resource_id parameter when a user "
-                    "refers to a VM by name. Never guess or fabricate a resource group."
+                    "refers to a resource by name. Never guess or fabricate a resource group."
                 ),
             }
+            if vms:
+                resource_context["virtual_machines"] = vms
+            if storage_accounts:
+                resource_context["storage_accounts"] = storage_accounts
+            payload["resource_context"] = resource_context
 
     envelope = {
         "correlation_id": request.incident_id or thread_id,
