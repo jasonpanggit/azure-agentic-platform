@@ -276,7 +276,7 @@ Accepts the same body as onboard but performs auth + permission checks only. Not
 8. Write audit log: `subscription_onboarded`
 9. Return onboard result with `permission_status`
 
-**RBAC propagation:** Soft roles (`Monitoring Reader`, `Security Reader`, `Cost Management Reader`) may show `"missing"` immediately after role assignment due to Azure's 2–5 minute propagation delay. The subscription is saved regardless. The UI informs the user: "Some permissions may be propagating — re-validate in 5 minutes."
+**RBAC propagation:** All soft roles (`Monitoring Reader`, `Security Reader`, `Cost Management Reader`, `Virtual Machine Contributor`, `Azure Kubernetes Service Contributor`, `Container Apps Contributor`) may show `"missing"` immediately after assignment due to Azure's 2–5 minute propagation delay. The subscription is saved regardless. The UI informs the user: "Some permissions may be propagating — re-validate in 5 minutes."
 
 ### 5.3 GET /managed — List all monitored subscriptions
 
@@ -339,14 +339,19 @@ Soft-delete is chosen over hard-delete to preserve the audit trail. Deleted subs
 
 ### 5.7 Permission Validation Logic
 
-Four roles checked via live SDK calls using the provided SPN credential. All checks run concurrently via `asyncio.gather`. Each is independently try/except.
+Seven roles checked via live SDK calls using the provided SPN credential. All checks run concurrently via `asyncio.gather`. Each is independently try/except.
 
 | Role | Check method | Required? | Missing means |
 |------|-------------|----------|--------------|
 | `Reader` | `SubscriptionClient.subscriptions.get(sub_id)` | ✅ Hard required | Blocks onboard (HTTP 422) |
-| `Monitoring Reader` | `MonitorManagementClient.metric_definitions.list(...)` | ⚠️ Soft | Metrics/alerts tabs degraded |
+| `Monitoring Reader` | `MonitorManagementClient.metric_definitions.list(...)` | ⚠️ Soft | Metrics/alerts/logs tabs degraded |
 | `Security Reader` | `SecurityCenter.secure_scores.list(...)` | ⚠️ Soft | Security tab degraded |
 | `Cost Management Reader` | `CostManagementClient.query.usage(...)` | ⚠️ Soft | Cost tab degraded |
+| `Virtual Machine Contributor` | `ComputeManagementClient.virtual_machines.get(...)` then check action via ARM permissions | ⚠️ Soft | VM restart/deallocate/start remediations disabled |
+| `Azure Kubernetes Service Contributor` | `ContainerServiceClient.managed_clusters.get(...)` then check action | ⚠️ Soft | AKS upgrade remediations disabled |
+| `Container Apps Contributor` | `ContainerAppsAPIClient.container_apps.get(...)` then check action | ⚠️ Soft | Container App restart remediations disabled |
+
+> **Note on action-permission checks:** Azure RBAC action permissions (write/action vs read) cannot be tested directly without attempting the operation. The validation checks use `AuthorizationManagementClient.permissions.list_for_resource_group()` to enumerate what actions the SPN has, then asserts the required action strings are present (e.g. `Microsoft.Compute/virtualMachines/restart/action`). This avoids performing destructive test operations.
 
 **Result shape:**
 ```json
@@ -354,7 +359,10 @@ Four roles checked via live SDK calls using the provided SPN credential. All che
   "reader": "granted",
   "monitoring_reader": "granted",
   "security_reader": "missing",
-  "cost_management_reader": "missing"
+  "cost_management_reader": "missing",
+  "vm_contributor": "granted",
+  "aks_contributor": "missing",
+  "container_apps_contributor": "missing"
 }
 ```
 
@@ -524,10 +532,13 @@ Step 2: Grant required roles on the target subscription
 
   Option B — Azure Portal:
     Subscriptions → <your subscription> → Access control (IAM) → Add role:
-      - Reader                    (required)
-      - Monitoring Reader         (recommended)
-      - Security Reader           (recommended)
-      - Cost Management Reader    (recommended)
+      - Reader                        (required)
+      - Monitoring Reader             (required — logs, metrics, alerts)
+      - Security Reader               (required — Defender, compliance)
+      - Cost Management Reader        (required — cost, Advisor)
+      - Virtual Machine Contributor   (required — VM restart/deallocate remediations)
+      - Azure Kubernetes Service Contributor  (required — AKS upgrade remediations)
+      - Container Apps Contributor    (required — Container App restart remediations)
 
 Step 3: Click "+ Add" above and enter your credentials
 ```
@@ -618,7 +629,8 @@ All resource tables that can show data from multiple subscriptions gain a **Subs
 ```bash
 1. Validate required inputs; print --help if missing
 2. az account show --subscription $SUBSCRIPTION_ID  (verify accessible)
-3. For each required role (Reader, Monitoring Reader, Security Reader, Cost Management Reader):
+3. For each required role (Reader, Monitoring Reader, Security Reader, Cost Management Reader,
+   Virtual Machine Contributor, Azure Kubernetes Service Contributor, Container Apps Contributor):
    az role assignment create \
      --assignee $CLIENT_ID \
      --role "$ROLE" \
@@ -637,16 +649,22 @@ All resource tables that can show data from multiple subscriptions gain a **Subs
 **Output example:**
 ```
 Role assignments:
-✅ Reader                  assigned
-✅ Monitoring Reader       assigned
-✅ Security Reader         assigned
-✅ Cost Management Reader  assigned
+✅ Reader                                  assigned
+✅ Monitoring Reader                       assigned
+✅ Security Reader                         assigned
+✅ Cost Management Reader                  assigned
+✅ Virtual Machine Contributor             assigned
+✅ Azure Kubernetes Service Contributor    assigned
+✅ Container Apps Contributor              assigned
 
 Onboarding to platform...
-✅ Reader             granted
-✅ Monitoring Reader  granted
-⚠️  Security Reader   missing  (RBAC propagation may take 2-5 min — re-validate in the UI)
-⚠️  Cost Management   missing  (RBAC propagation may take 2-5 min — re-validate in the UI)
+✅ Reader                          granted
+✅ Monitoring Reader               granted
+✅ Security Reader                 granted
+✅ Cost Management Reader          granted
+⚠️  Virtual Machine Contributor    missing  (RBAC propagation may take 2-5 min — re-validate in the UI)
+⚠️  AKS Contributor                missing  (RBAC propagation may take 2-5 min — re-validate in the UI)
+⚠️  Container Apps Contributor     missing  (RBAC propagation may take 2-5 min — re-validate in the UI)
 
 Subscription 'APAC Production' added to platform. Re-validate in 5 minutes if permissions show missing.
 ```
