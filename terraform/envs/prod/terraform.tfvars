@@ -67,6 +67,19 @@ api_gateway_tenant_id = "abbdca26-d233-4a1e-9d8c-c4eebbc16e50"
 # Once set, run: terraform apply -var-file=credentials.tfvars -target=module.agent_apps
 teams_channel_id = ""
 
+# Agent HTTP endpoints — internal Container Apps FQDNs for health probing by api-gateway
+# Pattern: https://ca-<name>-prod.internal.<env-domain>
+# These are populated once internal ingress is enabled via Terraform apply.
+orchestrator_agent_endpoint = "https://ca-orchestrator-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+compute_agent_endpoint      = "https://ca-compute-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+network_agent_endpoint      = "https://ca-network-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+storage_agent_endpoint      = "https://ca-storage-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+security_agent_endpoint     = "https://ca-security-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+arc_agent_endpoint          = "https://ca-arc-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+sre_agent_endpoint          = "https://ca-sre-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+patch_agent_endpoint        = "https://ca-patch-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+eol_agent_endpoint          = "https://ca-eol-prod.internal.wittypebble-0144adc3.eastus2.azurecontainerapps.io"
+
 # PostgreSQL pgvector connection string for runbook RAG (BUG-002 / F-02 fix — Plan 19-4)
 # IMPORTANT: Do NOT set this here — the actual value is in credentials.tfvars.
 # Setting it to "" here overwrites the credentials.tfvars value because
