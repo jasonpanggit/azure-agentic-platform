@@ -1,7 +1,14 @@
 'use client'
 
-import { createContext, useContext, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { Message } from '@/types/sse'
+
+interface ManagedSubscription {
+  subscription_id: string
+  display_name: string
+  credential_type: 'spn' | 'mi'
+  environment: string
+}
 
 interface AppStateContextValue {
   drawerOpen: boolean
@@ -25,6 +32,7 @@ interface AppStateContextValue {
   setSelectedIncidentId: (id: string | null) => void
   selectedSubscriptions: string[]
   setSelectedSubscriptions: (subs: string[]) => void
+  managedSubscriptions: ManagedSubscription[]
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null)
@@ -41,6 +49,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [alertCount, setAlertCount] = useState(0)
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null)
   const [selectedSubscriptions, setSelectedSubscriptions] = useState<string[]>([])
+  const [managedSubscriptions, setManagedSubscriptions] = useState<ManagedSubscription[]>([])
+
+  useEffect(() => {
+    fetch('/api/proxy/subscriptions/managed')
+      .then(r => r.json())
+      .then(d => setManagedSubscriptions(d.subscriptions ?? []))
+      .catch(() => {}) // silent fail — non-critical
+  }, [])
 
   return (
     <AppStateContext.Provider value={{
@@ -55,6 +71,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       alertCount, setAlertCount,
       selectedIncidentId, setSelectedIncidentId,
       selectedSubscriptions, setSelectedSubscriptions,
+      managedSubscriptions,
     }}>
       {children}
     </AppStateContext.Provider>
