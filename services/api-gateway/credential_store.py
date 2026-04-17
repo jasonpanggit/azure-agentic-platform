@@ -17,6 +17,7 @@ from typing import Optional
 
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
+from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
 from azure.keyvault.secrets.aio import SecretClient
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,10 @@ class CredentialStore:
         self._kv_url = kv_url
         self._cache: dict[str, tuple[object, datetime]] = {}
         self._lock = asyncio.Lock()
+        # Sync credential returned to callers (e.g. Azure SDK clients outside KV)
         self._default_credential = DefaultAzureCredential()
+        # Async credential used exclusively for the async KV SecretClient
+        self._async_kv_credential = AsyncDefaultAzureCredential()
         # Injected in tests; created lazily otherwise
         self._secret_client: Optional[SecretClient] = None
 
@@ -45,7 +49,7 @@ class CredentialStore:
         if self._secret_client is None:
             self._secret_client = SecretClient(
                 vault_url=self._kv_url,
-                credential=self._default_credential,
+                credential=self._async_kv_credential,
             )
         return self._secret_client
 
