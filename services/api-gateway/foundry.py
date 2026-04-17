@@ -371,29 +371,139 @@ async def dispatch_chat_to_orchestrator(
     credential: Optional[DefaultAzureCredential] = None,
     conversation_id: Optional[str] = None,
 ) -> dict[str, str]:
-    """Dispatch an operator chat message via single-hop chat.completions.
+    """Dispatch an operator chat message via Foundry Agent Service threads/runs.
 
-    The Foundry Agent Service (both threads/runs and responses APIs) is non-functional
-    due to a broken capability host. Fallback: use chat.completions directly with
-    the domain agent's system prompt.
+    Primary path: create_thread_and_run → poll until completed → return reply.
+    Thread continuation: if conversation_id is a known thread_id, creates a new
+    message on that thread instead of a new thread (preserving agent context).
 
-    Fast path (single LLM call):
-    1. Keyword classify the message → domain agent (no LLM routing call)
-    2. Replay prior turns from _CONVERSATION_HISTORY (keyed by conversation_id)
-    3. Domain agent chat.completions → reply
-    4. Append new turn to history for next request
+    Falls back to chat.completions if ORCHESTRATOR_AGENT_ID is not set (local dev).
 
     Returns:
         Dict with "response_id", "thread_id", "run_id", "status", and "reply" keys.
+    """
+    import time as _time
+
+    orchestrator_agent_id = os.environ.get("ORCHESTRATOR_AGENT_ID")
+
+    # -------------------------------------------------------------------
+    # Fallback: chat.completions (no ORCHESTRATOR_AGENT_ID, local dev)
+    # -------------------------------------------------------------------
+    if not orchestrator_agent_id:
+        return await _dispatch_chat_completions_fallback(
+            message=message,
+            conversation_id=conversation_id,
+        )
+
+    # -------------------------------------------------------------------
+    # Primary path: Foundry Agent Service threads/runs
+    # -------------------------------------------------------------------
+    loop = asyncio.get_running_loop()
+    agents = _get_agents_client(credential)
+
+    _POLL_INTERVAL = 3   # seconds between status checks
+    _POLL_TIMEOUT  = 120 # seconds max wait
+
+    with foundry_span("agents_chat_thread_run") as span:
+        span.set_attribute("incident.id", conversation_id or "")
+
+        # Thread continuation: add message to existing thread, then create run.
+        # New conversation: create thread + run in one call.
+        if conversation_id:
+            span.set_attribute("foundry.thread_id", conversation_id)
+            run = await loop.run_in_executor(
+                None,
+                lambda: (
+                    agents.messages.create(
+                        thread_id=conversation_id,
+                        role="user",
+                        content=message,
+                    ),
+                    agents.runs.create(
+                        thread_id=conversation_id,
+                        agent_id=orchestrator_agent_id,
+                    ),
+                )[1],
+            )
+            thread_id = conversation_id
+        else:
+            run = await loop.run_in_executor(
+                None,
+                lambda: agents.create_thread_and_run(
+                    agent_id=orchestrator_agent_id,
+                    thread={"messages": [{"role": "user", "content": message}]},
+                ),
+            )
+            thread_id = run.thread_id
+
+        span.set_attribute("foundry.run_id", run.id)
+
+        # Poll until terminal state
+        deadline = _time.monotonic() + _POLL_TIMEOUT
+        while _time.monotonic() < deadline:
+            run = await loop.run_in_executor(
+                None,
+                lambda: agents.runs.get(thread_id=thread_id, run_id=run.id),
+            )
+            status_str = str(run.status).lower().replace("runstatus.", "")
+            if status_str == "completed":
+                break
+            if status_str in ("failed", "cancelled", "expired"):
+                err = getattr(run, "last_error", None)
+                raise RuntimeError(
+                    f"Orchestrator run {run.id} {status_str}: {err}"
+                )
+            await asyncio.sleep(_POLL_INTERVAL)
+        else:
+            raise TimeoutError(
+                f"Orchestrator run {run.id} did not complete within {_POLL_TIMEOUT}s"
+            )
+
+        # Retrieve the assistant reply (most recent assistant message)
+        msgs = await loop.run_in_executor(
+            None,
+            lambda: list(agents.messages.list(thread_id=thread_id)),
+        )
+
+    reply: Optional[str] = None
+    for m in msgs:
+        role_str = str(getattr(m, "role", "")).lower().replace("messagerole.", "")
+        if role_str in ("agent", "assistant"):
+            for c in getattr(m, "content", []):
+                text_block = getattr(c, "text", None)
+                if text_block is not None:
+                    reply = getattr(text_block, "value", None) or str(text_block)
+                    break
+            if reply:
+                break
+
+    logger.info(
+        "Chat complete via threads/runs (thread=%s, run=%s, reply_len=%d)",
+        thread_id, run.id, len(reply) if reply else 0,
+    )
+
+    return {
+        "response_id": run.id,
+        "thread_id": thread_id,
+        "run_id": run.id,
+        "status": "completed",
+        "reply": reply,
+    }
+
+
+async def _dispatch_chat_completions_fallback(
+    message: str,
+    conversation_id: Optional[str] = None,
+) -> dict[str, str]:
+    """Fallback: chat.completions with local domain prompts (no agent tools).
+
+    Used when ORCHESTRATOR_AGENT_ID is not set (local dev / CI without Foundry).
     """
     import uuid
 
     loop = asyncio.get_running_loop()
 
-    # The caller may pass the full operator-query JSON envelope (from chat.py).
-    # Extract the plain user text for routing and history so that:
-    # 1. _classify_domain operates on the operator's actual words, not JSON soup
-    # 2. Conversation history stores readable text, not raw envelopes
+    # Extract plain user text from JSON envelope for routing + history
     user_text = message
     try:
         envelope = json.loads(message)
@@ -402,27 +512,22 @@ async def dispatch_chat_to_orchestrator(
             if payload_msg:
                 user_text = payload_msg
     except (json.JSONDecodeError, TypeError, AttributeError):
-        pass  # message is plain text — use as-is
+        pass
 
-    # Fast keyword routing — no LLM call needed
     domain_agent_tool = _classify_domain(user_text)
     domain_agent_name = f"aap-{domain_agent_tool.replace('_agent', '-agent')}"
-    logger.info("Keyword-routed to: %s (user_text=%r)", domain_agent_name, user_text[:80])
+    logger.info("Fallback keyword-routed to: %s (user_text=%r)", domain_agent_name, user_text[:80])
 
     domain_model, domain_instructions = _get_domain_instructions(domain_agent_tool)
     openai_client = _get_openai_client()
 
-    # Build messages list: system prompt + prior history + current user message.
-    # History and the LLM call both use the full envelope so the agent has
-    # subscription + VM context, but routing uses the plain user_text.
     prior_history = _CONVERSATION_HISTORY.get(conversation_id, []) if conversation_id else []
     messages: list[dict[str, str]] = [{"role": "system", "content": domain_instructions}]
     messages.extend(prior_history)
     messages.append({"role": "user", "content": message})
 
-    with foundry_span("chat_completions_domain") as span:
+    with foundry_span("chat_completions_fallback") as span:
         span.set_attribute("agent.name", domain_agent_name)
-        span.set_attribute("foundry.routed_to", domain_agent_name)
         span.set_attribute("chat.history_turns", len(prior_history) // 2)
         domain_resp = await loop.run_in_executor(
             None,
@@ -436,27 +541,14 @@ async def dispatch_chat_to_orchestrator(
     reply = domain_resp.choices[0].message.content
     response_id = f"chat-{uuid.uuid4().hex[:16]}"
 
-    # Persist this turn into conversation history so the next request has context.
-    # Use conversation_id for continuation, response_id for new threads.
     history_key = conversation_id or response_id
     history = list(_CONVERSATION_HISTORY.get(history_key, []))
-    # Store plain user_text (not the full envelope) so history is readable
-    # and doesn't inflate subsequent requests with repeated VM inventory blobs.
     history.append({"role": "user", "content": user_text})
     history.append({"role": "assistant", "content": reply or ""})
-    # Trim to limit: keep newest N pairs (2 messages per pair)
     max_messages = _CONVERSATION_HISTORY_LIMIT * 2
     if len(history) > max_messages:
         history = history[-max_messages:]
     _CONVERSATION_HISTORY[history_key] = history
-
-    logger.info(
-        "Chat complete (agent=%s, reply_len=%d, history_turns=%d, key=%s)",
-        domain_agent_name,
-        len(reply) if reply else 0,
-        len(history) // 2,
-        history_key,
-    )
 
     return {
         "response_id": response_id,
