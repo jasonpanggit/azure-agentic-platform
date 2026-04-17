@@ -49,3 +49,16 @@ def get_optional_cosmos_client(request: Request) -> Optional[CosmosClient]:
     (e.g., the diagnostic pipeline which gracefully degrades without persistence).
     """
     return request.app.state.cosmos_client
+
+
+async def get_scoped_credential(
+    subscription_id: str,
+    request: Request,
+) -> object:
+    """Return the per-subscription credential from CredentialStore.
+
+    FastAPI resolves subscription_id from the path parameter automatically.
+    This dependency is safe to use on any endpoint with /{subscription_id}/ in its path.
+    """
+    store = request.app.state.credential_store
+    return await store.get(subscription_id)
