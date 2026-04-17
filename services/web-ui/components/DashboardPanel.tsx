@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3 } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Scale } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -17,6 +17,7 @@ import { AKSTab } from './AKSTab'
 import { AKSDetailPanel } from './AKSDetailPanel'
 import { CostTab } from './CostTab'
 import { RunbookTab } from './RunbookTab'
+import { RunbookHistoryTab } from './RunbookHistoryTab'
 import { ComplianceTab } from './ComplianceTab'
 import { OpsTab } from './OpsTab'
 import { SettingsTab } from './SettingsTab'
@@ -28,9 +29,11 @@ import { DeploymentTab } from './DeploymentTab'
 import { QualityFlywheelTab } from './QualityFlywheelTab'
 import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
+import { AKSHealthTab } from './AKSHealthTab'
+import { PolicyComplianceTab } from './PolicyComplianceTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'aks-health' | 'cost' | 'observability' | 'patch' | 'compliance' | 'policy-compliance' | 'runbooks' | 'runbook-history' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin'
 
 interface FilterState {
   severity?: string
@@ -64,6 +67,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'vms',         label: 'VMs',         Icon: Monitor },
     { id: 'vmss',        label: 'VMSS',        Icon: Scaling },
     { id: 'aks',         label: 'AKS',         Icon: Container },
+    { id: 'aks-health',  label: 'AKS Health',  Icon: Container },
   ],
   // Monitoring & cost
   [
@@ -76,9 +80,11 @@ const TAB_GROUPS: TabDef[][] = [
   // Security & compliance
   [
     { id: 'patch',            label: 'Patch',           Icon: ShieldCheck },
-    { id: 'compliance',       label: 'Compliance',      Icon: FileCheck },
+    { id: 'compliance',        label: 'Compliance',      Icon: FileCheck },
+    { id: 'policy-compliance', label: 'Policy',          Icon: Scale },
     { id: 'security-posture', label: 'Security Score',  Icon: ShieldCheck },
     { id: 'runbooks',         label: 'Runbooks',        Icon: BookOpen },
+    { id: 'runbook-history',  label: 'Run History',     Icon: BookOpen },
     { id: 'drift',            label: 'IaC Drift',       Icon: GitBranch },
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
@@ -298,6 +304,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
 
+        <div id="tabpanel-aks-health" role="tabpanel" aria-labelledby="tab-aks-health" hidden={activeTab !== 'aks-health'}>
+          {activeTab === 'aks-health' && <AKSHealthTab subscriptions={selectedSubscriptions} />}
+        </div>
+
         <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost" hidden={activeTab !== 'cost'}>
           <div className="rounded-lg overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <CostTab subscriptions={selectedSubscriptions} />
@@ -322,10 +332,20 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         </div>
 
+        <div id="tabpanel-policy-compliance" role="tabpanel" aria-labelledby="tab-policy-compliance" hidden={activeTab !== 'policy-compliance'}>
+          {activeTab === 'policy-compliance' && <PolicyComplianceTab subscriptions={selectedSubscriptions} />}
+        </div>
+
         <div id="tabpanel-runbooks" role="tabpanel" aria-labelledby="tab-runbooks" hidden={activeTab !== 'runbooks'}>
           <div className="rounded-lg overflow-hidden p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <RunbookTab />
           </div>
+        </div>
+
+        <div id="tabpanel-runbook-history" role="tabpanel" aria-labelledby="tab-runbook-history" hidden={activeTab !== 'runbook-history'}>
+          {activeTab === 'runbook-history' && (
+            <RunbookHistoryTab subscriptions={selectedSubscriptions} />
+          )}
         </div>
 
         <div id="tabpanel-sla" role="tabpanel" aria-labelledby="tab-sla" hidden={activeTab !== 'sla'}>

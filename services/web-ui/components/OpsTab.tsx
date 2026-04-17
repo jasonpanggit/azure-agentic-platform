@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react';
+import { CorrelationGroupsPanel } from './CorrelationGroupsPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1069,6 +1070,11 @@ export function OpsTab({ subscriptions, onNavigateToAlerts }: OpsTabProps) {
         portfolio={errorBudget}
         loading={initialLoading}
       />
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Correlation Groups (Phase 86)                                       */}
+      {/* ------------------------------------------------------------------ */}
+      <CorrelationGroupsPanel subscriptions={subscriptions} />
     </div>
   );
 }
