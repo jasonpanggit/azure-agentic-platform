@@ -117,7 +117,6 @@ export default function VNetPeeringTab() {
   const [findings, setFindings] = useState<PeeringFinding[]>([])
   const [summary, setSummary] = useState<PeeringSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [healthFilter, setHealthFilter] = useState('')
 
@@ -162,22 +161,6 @@ export default function VNetPeeringTab() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      const res = await fetch('/api/proxy/network/peerings/scan', { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d?.error ?? `HTTP ${res.status}`)
-      }
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   return (
     <div className="space-y-4 p-4">
       {/* Header */}
@@ -206,9 +189,6 @@ export default function VNetPeeringTab() {
               className={loading ? 'animate-spin' : ''}
             />
             Refresh
-          </Button>
-          <Button size="sm" onClick={handleScan} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -287,7 +267,7 @@ export default function VNetPeeringTab() {
                   className="text-center py-8"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  No peering findings. Run a scan to populate data.
+                  No VNet peerings found in the current subscriptions.
                 </TableCell>
               </TableRow>
             ) : (
