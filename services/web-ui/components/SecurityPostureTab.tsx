@@ -213,7 +213,7 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
             borderRadius: 8,
             color: 'var(--text-primary)',
           }}
-          formatter={(value: any) => [value != null ? Number(value).toFixed(1) : '—', 'Score']}
+          formatter={(value: number | string) => [value != null ? Number(value).toFixed(1) : '—', 'Score']}
         />
         <Line
           type="monotone"

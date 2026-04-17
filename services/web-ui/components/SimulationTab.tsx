@@ -317,7 +317,7 @@ function RunModal({ scenario, subscriptionId, initialDryRun, onClose, onSuccess 
                 className="rounded"
               />
               <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                Dry Run — validate only, don't inject incident
+                Dry Run — validate only, don&apos;t inject incident
               </span>
             </label>
 
