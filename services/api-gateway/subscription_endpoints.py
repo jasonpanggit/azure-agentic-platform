@@ -220,7 +220,10 @@ async def list_managed_subscriptions(
 
         container = _get_subscriptions_container(cosmos_client)
         try:
-            items = list(container.read_all_items())
+            items = list(container.query_items(
+                query="SELECT * FROM c WHERE NOT IS_DEFINED(c.deleted_at) OR c.deleted_at = null",
+                enable_cross_partition_query=True,
+            ))
         except Exception as exc:
             logger.warning(
                 "subscription_endpoints: managed list cosmos read failed | error=%s", exc
