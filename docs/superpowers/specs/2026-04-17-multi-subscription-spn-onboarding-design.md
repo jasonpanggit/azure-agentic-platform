@@ -380,13 +380,17 @@ Values: `"granted"` | `"missing"` | `"auth_failed"` | `"check_failed"` (unexpect
 
 ## 7. Existing Subscription Migration
 
-The current subscription (`4c727b88-12f4-4c91-9c2b-372aab3bbae9`) uses `DefaultAzureCredential` (platform MI).
+The current subscription (`4c727b88-12f4-4c91-9c2b-372aab3bbae9`) will be re-onboarded via SPN — the operator will create an App Registration, run `setup_spn.sh`, and onboard it through the UI like any other subscription. The `DefaultAzureCredential` MI fallback in `CredentialStore` is retained as a safety net during the transition window (between Phase 1 deploy and the re-onboard completing) but is not the intended long-term credential for any subscription.
 
-**Strategy:** `CredentialStore.get()` falls back to `DefaultAzureCredential` when no KV secret exists for the subscription. The existing subscription continues working without re-onboarding.
+**Cosmos record:** The existing subscription already has a record in the `subscriptions` container. Phase 1 schema migration adds the new fields (`credential_type`, `client_id`, `tenant_id`, `kv_secret_name`, `permission_status`, `last_validated_at`, `secret_expires_at`, `deleted_at`) with safe defaults (null for all / `"mi"` for `credential_type` as temporary placeholder until re-onboarded).
 
-**Cosmos record:** The existing subscription already has a record in the `subscriptions` container. Phase 1 adds a schema migration that adds the new fields (`credential_type`, `client_id`, `tenant_id`, `kv_secret_name`, `permission_status`, `last_validated_at`, `secret_expires_at`, `deleted_at`) with safe defaults (null / "mi" for `credential_type`).
+**Re-onboard sequence:**
+1. Deploy Phases 1–3
+2. Operator creates App Registration for the existing subscription, grants roles via `setup_spn.sh`
+3. Operator onboards via the new UI — KV secret is written, `credential_type` updates to `"spn"`
+4. CredentialStore now uses the SPN for this subscription; MI fallback is no longer exercised
 
-**UI treatment:** The existing subscription appears in the list with `credential_type: "mi"` and a distinct "🔵 Platform MI" badge (no expiry, no SPN fields shown). The "Update Credentials" action allows migrating it to SPN if desired.
+**UI treatment before re-onboard:** The existing subscription appears with a `"🔵 Platform MI — re-onboard required"` warning badge prompting the operator to complete the SPN migration.
 
 ---
 
@@ -399,10 +403,11 @@ The `TenantAdminTab` and `tenants` PostgreSQL table currently store:
 
 **Migration steps (Phase 5):**
 1. Run migration script: read `tenants` PostgreSQL table → write `compliance_frameworks` and `operator_group_id` to new `platform_settings` table
-2. The `tenants` table is **not dropped** — left in place for safety. A follow-up migration can clean it up after the new schema is verified in production
-3. `TenantAdminTab` is hidden (not rendered) starting Phase 3, before removal in Phase 5
+2. Verify no application code references the `tenants` table (grep codebase for `tenants` table queries)
+3. Run `DROP TABLE tenants` — the data has been migrated and the table is no longer needed
+4. `TenantAdminTab` is hidden (not rendered) starting Phase 3, before removal in Phase 5
 
-**No data loss risk:** The tenants table is read-only during migration. All data is copied (not moved) to the new table before the old tab is removed.
+**No data loss risk:** All data is copied to `platform_settings` before the table is dropped. The migration script is idempotent — safe to re-run if interrupted.
 
 ---
 
@@ -706,7 +711,7 @@ The existing public `GET /subscriptions/managed` endpoint used by the current Su
 1. PostgreSQL migration: `tenants` → `platform_settings` (compliance_frameworks, operator_group_id)
 2. Remove `TenantAdminTab.tsx`
 3. Remove `tenant_endpoints.py` registration from `main.py`
-4. Verify `tenants` table is no longer referenced before dropping (leave table, add comment)
+4. Grep codebase to confirm no code references the `tenants` table, then run `DROP TABLE tenants`
 
 ---
 
