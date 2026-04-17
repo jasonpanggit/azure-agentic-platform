@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from services.api_gateway.auth import verify_token
+from services.api_gateway.dependencies import get_credential
 from services.api_gateway.federation import resolve_subscription_ids
 
 logger = logging.getLogger(__name__)
@@ -1274,7 +1275,7 @@ async def enable_aks_container_insights(
 async def aks_chat(
     resource_id_base64: str,
     request: AKSChatRequest,
-    req: Request,
+    credential=Depends(get_credential),
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
     """Resource-scoped chat for AKS cluster investigation with live function calling."""
@@ -1294,9 +1295,6 @@ async def aks_chat(
             _get_openai_client,
         )
         from services.api_gateway.aks_chat_tools import AKS_CHAT_TOOL_SCHEMAS, dispatch_tool_call
-
-        credential = getattr(getattr(req, "app", None), "state", None)
-        credential = getattr(credential, "credential", None) if credential else None
 
         cluster_name = resource_id.rstrip("/").split("/")[-1]
         _, base_instructions = _get_domain_instructions("compute_agent")

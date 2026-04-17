@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from services.api_gateway.auth import verify_token
+from services.api_gateway.dependencies import get_credential
 from services.api_gateway.federation import resolve_subscription_ids
 
 logger = logging.getLogger(__name__)
@@ -870,7 +871,7 @@ async def get_vmss_metrics(
 async def vmss_chat(
     resource_id_base64: str,
     request: VMSSChatRequest,
-    req: Request,
+    credential=Depends(get_credential),
     _token: str = Depends(verify_token),
 ) -> Dict[str, Any]:
     """Resource-scoped chat for VMSS investigation with live function calling."""
@@ -891,8 +892,6 @@ async def vmss_chat(
         )
         from services.api_gateway.vmss_chat_tools import VMSS_CHAT_TOOL_SCHEMAS, dispatch_tool_call
 
-        credential = getattr(getattr(req, "app", None), "state", None)
-        credential = getattr(credential, "credential", None) if credential else None
         vmss_name = resource_id.rstrip("/").split("/")[-1]
         _, base_instructions = _get_domain_instructions("compute_agent")
         system_prompt = (
