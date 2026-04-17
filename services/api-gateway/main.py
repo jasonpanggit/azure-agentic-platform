@@ -162,6 +162,8 @@ from services.api_gateway.tenant_manager import TenantManager
 from services.api_gateway.quota_endpoints import router as quota_router
 from services.api_gateway.defender_endpoints import router as defender_router
 from services.api_gateway.lock_audit_endpoints import router as lock_audit_router
+from services.api_gateway.change_intelligence_endpoints import router as change_intelligence_router
+from services.api_gateway.incident_report_endpoints import router as incident_report_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -746,6 +748,8 @@ app.include_router(tenant_router)
 app.include_router(quota_router)
 app.include_router(defender_router)
 app.include_router(lock_audit_router)
+app.include_router(change_intelligence_router)
+app.include_router(incident_report_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Lock, ShieldAlert } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, Lock, ShieldAlert, GitCommitHorizontal } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -30,9 +30,10 @@ import { TenantAdminTab } from './TenantAdminTab'
 import { QuotaTab } from './QuotaTab'
 import { LockAuditTab } from './LockAuditTab'
 import { DefenderTab } from './DefenderTab'
+import { ChangeIntelligenceTab } from './ChangeIntelligenceTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin' | 'lock-audit' | 'defender'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'settings' | 'admin' | 'lock-audit' | 'defender' | 'changes'
 
 interface FilterState {
   severity?: string
@@ -86,6 +87,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
     { id: 'lock-audit',       label: 'Lock Audit',      Icon: Lock },
     { id: 'defender',         label: 'Defender',        Icon: ShieldAlert },
+    { id: 'changes',          label: 'Changes',         Icon: GitCommitHorizontal },
   ],
   // Config
   [
@@ -368,6 +370,10 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-defender" role="tabpanel" aria-labelledby="tab-defender" hidden={activeTab !== 'defender'}>
           {activeTab === 'defender' && <DefenderTab />}
+        </div>
+
+        <div id="tabpanel-changes" role="tabpanel" aria-labelledby="tab-changes" hidden={activeTab !== 'changes'}>
+          {activeTab === 'changes' && <ChangeIntelligenceTab subscriptions={selectedSubscriptions} />}
         </div>
 
         <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
