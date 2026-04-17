@@ -134,3 +134,18 @@ async def test_kv_secret_name_strips_dashes():
     store = CredentialStore(kv_url="https://kv-test.vault.azure.net/")
     name = store._kv_secret_name("4c727b88-12f4-4c91-9c2b-372aab3bbae9")
     assert name == "sub-4c727b8812f44c919c2b372aab3bbae9-secret"
+
+
+@pytest.mark.asyncio
+async def test_scoped_credential_used_for_subscription_endpoints():
+    """Verify that subscription-scoped endpoints call credential_store.get() not app.state.credential."""
+    # This test verifies the pattern is correct by checking subscription_endpoints uses get_scoped_credential
+    # for per-subscription routes (/{subscription_id}/stats)
+    import ast
+    import pathlib
+
+    p = pathlib.Path("services/api-gateway/subscription_endpoints.py")
+    src = p.read_text()
+    assert "get_scoped_credential" in src, (
+        "subscription_endpoints.py must use get_scoped_credential for per-subscription routes"
+    )

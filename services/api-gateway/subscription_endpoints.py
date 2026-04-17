@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_credential, get_scoped_credential, get_optional_cosmos_client
 
 router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
 logger = logging.getLogger(__name__)
@@ -387,7 +387,7 @@ async def sync_subscriptions(
 async def get_subscription_stats(
     subscription_id: str,
     cosmos_client: Any = Depends(get_optional_cosmos_client),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_scoped_credential),
 ) -> Any:
     """Return per-subscription incident and resource stats.
 
