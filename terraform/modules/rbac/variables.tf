@@ -54,3 +54,9 @@ variable "foundry_account_name" {
   type        = string
   default     = ""
 }
+
+variable "key_vault_id" {
+  description = "Resource ID of the Key Vault for api-gateway Key Vault Secrets User role assignment"
+  type        = string
+  default     = ""
+}

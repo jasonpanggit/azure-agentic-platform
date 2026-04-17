@@ -223,6 +223,15 @@ locals {
         scope                = "/subscriptions/${var.platform_subscription_id}"
       }
     },
+
+    # API Gateway: Key Vault Secrets User — read SPN secrets for CredentialStore
+    var.key_vault_id != "" ? {
+      "api-gateway-kv-secrets-user" = {
+        principal_id         = var.agent_principal_ids["api-gateway"]
+        role_definition_name = "Key Vault Secrets User"
+        scope                = var.key_vault_id
+      }
+    } : {},
   )
 }
 

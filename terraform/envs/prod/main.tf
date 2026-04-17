@@ -329,6 +329,9 @@ module "agent_apps" {
 
   # PostgreSQL connection string for runbook RAG on the api-gateway (TRIAGE-005 / F-02)
   pgvector_connection_string = var.pgvector_connection_string
+
+  # Key Vault URI for CredentialStore SPN credential resolution
+  key_vault_url = module.keyvault.keyvault_uri
 }
 
 # --- RBAC (depends on: agent-apps) ---
@@ -349,6 +352,9 @@ module "rbac" {
   # F-01 fix: grant Azure AI Developer to gateway MI on Foundry account
   resource_group_name  = azurerm_resource_group.main.name
   foundry_account_name = module.foundry.foundry_account_name
+
+  # SPN onboarding: grant api-gateway MI Key Vault Secrets User on the platform KV
+  key_vault_id = module.keyvault.keyvault_id
 }
 
 # --- Event Hub (depends on: networking) ---

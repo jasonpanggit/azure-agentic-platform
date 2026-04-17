@@ -350,3 +350,9 @@ variable "finops_agent_endpoint" {
   type        = string
   default     = ""
 }
+
+variable "key_vault_url" {
+  description = "Azure Key Vault URI injected into api-gateway as KEY_VAULT_URL for SPN credential store"
+  type        = string
+  default     = ""
+}
