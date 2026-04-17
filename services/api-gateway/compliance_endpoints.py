@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential_for_subscriptions
 from services.api_gateway.compliance_posture import (
     compute_posture,
     fetch_defender_assessments,
@@ -220,7 +220,7 @@ async def get_compliance_posture(
     framework: Optional[str] = Query(
         None, description="Filter by framework: asb | cis | nist"
     ),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return compliance posture scores per framework for a subscription.
 
@@ -276,7 +276,7 @@ async def export_compliance(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     format: str = Query(..., description="Export format: csv or pdf"),
     framework: Optional[str] = Query(None, description="Filter by framework: asb | cis | nist"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> StreamingResponse:
     """Export compliance report as CSV or PDF.
 

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from services.api_gateway.arg_helper import run_arg_query
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential_for_subscriptions
 from services.api_gateway.federation import resolve_subscription_ids
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ async def list_resources(
         default="",
         description="Comma-separated subscription IDs. All accessible if omitted.",
     ),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     _token: dict = Depends(verify_token),
     request: Request = None,
 ) -> Dict[str, Any]:

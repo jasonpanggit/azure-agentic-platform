@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential, get_credential_for_subscriptions
 from services.api_gateway.federation import resolve_subscription_ids
 from services.api_gateway.os_normalizer import normalize_os
 
@@ -425,7 +425,7 @@ async def get_patch_assessment(
         description="Comma-separated subscription IDs. Omit to query all registered subscriptions.",
     ),
     token: dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     request: Request = None,
 ) -> Dict[str, Any]:
     """Return per-machine patch compliance data from ARG.
@@ -588,7 +588,7 @@ async def get_patch_installations(
     ),
     days: int = 7,
     token: dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     request: Request = None,
 ) -> Dict[str, Any]:
     """Return patch installation run history from ARG.

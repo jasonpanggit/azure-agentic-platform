@@ -282,7 +282,7 @@ class TestCVEEndpoints:
         from fastapi import FastAPI
         from services.api_gateway.cve_endpoints import router
         from services.api_gateway.auth import verify_token
-        from services.api_gateway.dependencies import get_credential
+        from services.api_gateway.dependencies import get_credential_for_subscriptions
 
         app = FastAPI()
         app.include_router(router)
@@ -292,7 +292,7 @@ class TestCVEEndpoints:
         ]
 
         app.dependency_overrides[verify_token] = lambda: {}
-        app.dependency_overrides[get_credential] = lambda: MOCK_CREDENTIAL
+        app.dependency_overrides[get_credential_for_subscriptions] = lambda: MOCK_CREDENTIAL
 
         with patch("services.api_gateway.cve_service.CVEService.get_cves_for_vm", new=AsyncMock(return_value=records)):
             client = TestClient(app)

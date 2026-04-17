@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from services.api_gateway.dependencies import get_credential, get_optional_cosmos_client
+from services.api_gateway.dependencies import get_credential_for_subscriptions, get_optional_cosmos_client
 from services.api_gateway.capacity_planner import (
     CapacityPlannerClient,
     CAPACITY_DEFAULT_LOCATION,
@@ -52,7 +52,7 @@ async def get_capacity_headroom(
     location: str = Query(default=CAPACITY_DEFAULT_LOCATION, description="Azure region"),
     days_threshold: int = Query(default=30, description="Days-to-exhaustion threshold for filtering"),
     include_categories: str = Query(default="compute,network,storage,aks"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Any:
     """Return top-10 most constrained resources sorted by days_to_exhaustion ASC (nulls last)."""
@@ -100,7 +100,7 @@ async def get_capacity_headroom(
 async def get_capacity_quotas(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     location: str = Query(default=CAPACITY_DEFAULT_LOCATION, description="Azure region"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Any:
     """Return all quotas sorted by usage_pct DESC."""
@@ -135,7 +135,7 @@ async def get_capacity_quotas(
 @router.get("/ip-space", response_model=IPSpaceHeadroomResponse)
 async def get_ip_space_headroom(
     subscription_id: str = Query(..., description="Azure subscription ID"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Any:
     """Return IP address space headroom per subnet."""
@@ -180,7 +180,7 @@ async def get_ip_space_headroom(
 @router.get("/aks", response_model=AKSHeadroomResponse)
 async def get_aks_headroom(
     subscription_id: str = Query(..., description="Azure subscription ID"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_optional_cosmos_client),
 ) -> Any:
     """Return AKS node pool headroom per cluster pool."""

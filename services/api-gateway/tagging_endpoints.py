@@ -14,7 +14,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import PlainTextResponse, JSONResponse
 
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential_for_subscriptions
 from services.api_gateway.tagging_service import (
     DEFAULT_REQUIRED_TAGS,
     compute_compliance_summary,
@@ -56,7 +56,7 @@ async def get_tagging_compliance(
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     compliant_filter: str = Query("all", description="all | non_compliant | compliant"),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> JSONResponse:
     tags = [t.strip() for t in required_tags.split(",")] if required_tags else DEFAULT_REQUIRED_TAGS
 
@@ -97,7 +97,7 @@ async def get_tagging_compliance(
 async def get_remediation_script(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     required_tags: Optional[str] = Query(None),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> PlainTextResponse:
     tags = [t.strip() for t in required_tags.split(",")] if required_tags else DEFAULT_REQUIRED_TAGS
 
@@ -121,7 +121,7 @@ async def get_remediation_script(
 async def get_tagging_summary(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     required_tags: Optional[str] = Query(None),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> JSONResponse:
     tags = [t.strip() for t in required_tags.split(",")] if required_tags else DEFAULT_REQUIRED_TAGS
 

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_credential
+from services.api_gateway.dependencies import get_credential_for_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def get_vm_cves(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     resource_group: str = Query(..., description="Resource group name"),
     token: dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return CVEs affecting a specific VM, correlated with patch status.
 
@@ -66,7 +66,7 @@ async def get_vm_cve_stats(
     subscription_id: str = Query(..., description="Azure subscription ID"),
     resource_group: str = Query(..., description="Resource group name"),
     token: dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
 ) -> Dict[str, Any]:
     """Return CVE count summary for a specific VM.
 

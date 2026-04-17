@@ -17,7 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import JSONResponse
 
 from services.api_gateway.auth import verify_token
-from services.api_gateway.dependencies import get_cosmos_client, get_credential
+from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ async def trigger_scan(
     background_tasks: BackgroundTasks,
     subscription_id: Optional[str] = Query(None, description="Scope scan to a single subscription"),
     token: Dict[str, Any] = Depends(verify_token),
-    credential: Any = Depends(get_credential),
+    credential: Any = Depends(get_credential_for_subscriptions),
     cosmos_client: Any = Depends(get_cosmos_client),
 ) -> JSONResponse:
     """Trigger a background Defender data scan.

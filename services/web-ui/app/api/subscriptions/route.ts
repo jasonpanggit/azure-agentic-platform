@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { DefaultAzureCredential } from '@azure/identity';
+import { NextRequest, NextResponse } from 'next/server';
+import { getApiGatewayUrl, buildUpstreamHeaders } from '@/lib/api-gateway';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ route: '/api/subscriptions' });
@@ -7,80 +7,60 @@ const log = logger.child({ route: '/api/subscriptions' });
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface AzureSubscription {
-  subscriptionId: string;
-  displayName: string;
-  state: string;
-}
-
-interface ArmSubscriptionListResponse {
-  value: AzureSubscription[];
-  nextLink?: string;
-}
-
 /**
  * GET /api/subscriptions
  *
- * Returns all accessible Azure subscriptions using the container app's
- * system-assigned managed identity (DefaultAzureCredential).
+ * Returns onboarded (managed) subscriptions from the API gateway's Cosmos-backed
+ * subscription registry. This ensures the nav dropdown shows exactly the
+ * subscriptions that have been onboarded with SPN credentials — not all ARM-visible
+ * subscriptions.
  *
- * The web-ui managed identity needs Reader (or equivalent) on the subscriptions
- * returned — granted via the rbac module.
+ * Previously this called ARM directly using DefaultAzureCredential, which returned
+ * all subscriptions the web-ui MI had Reader on (not the onboarded set).
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     log.info('request start');
-    const credential = new DefaultAzureCredential();
 
-    // Acquire ARM token
-    const tokenResponse = await credential.getToken(
-      'https://management.azure.com/.default'
-    );
+    const url = `${getApiGatewayUrl()}/api/v1/subscriptions/managed`;
+    const upstreamHeaders = buildUpstreamHeaders(req.headers.get('Authorization'), false);
 
-    const subscriptions: { id: string; name: string }[] = [];
-    let url: string | undefined =
-      'https://management.azure.com/subscriptions?api-version=2022-12-01';
+    const res = await fetch(url, {
+      headers: upstreamHeaders,
+      signal: AbortSignal.timeout(15000),
+    });
 
-    // Page through all subscriptions
-    while (url) {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${tokenResponse.token}` },
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        return NextResponse.json(
-          { error: `ARM subscriptions API error: ${res.status} ${body}` },
-          { status: res.status }
-        );
-      }
-
-      const data: ArmSubscriptionListResponse = await res.json();
-
-      for (const sub of data.value ?? []) {
-        // Only include enabled subscriptions
-        if (sub.state === 'Enabled') {
-          subscriptions.push({
-            id: sub.subscriptionId,
-            name: sub.displayName,
-          });
-        }
-      }
-
-      url = data.nextLink;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      log.error('upstream error', { status: res.status, body });
+      return NextResponse.json(
+        { error: `managed subscriptions API error: ${res.status} ${body}`, subscriptions: [] },
+        { status: res.status >= 500 ? 502 : res.status }
+      );
     }
 
-    // Sort alphabetically by name
+    const data = await res.json();
+
+    // Map to { id, name } shape that SubscriptionSelector expects.
+    // The managed endpoint returns { id, name, display_name, ... }
+    const subscriptions: { id: string; name: string }[] = (data.subscriptions ?? []).map(
+      (sub: { id?: string; name?: string; display_name?: string }) => ({
+        id: sub.id ?? '',
+        name: sub.display_name ?? sub.name ?? sub.id ?? '',
+      })
+    );
+
     subscriptions.sort((a, b) => a.name.localeCompare(b.name));
 
     log.debug('request success', { count: subscriptions.length });
     return NextResponse.json({ subscriptions });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    log.error('arm error', { error: message });
+    const isTimeout = message.includes('timeout') || message.includes('abort');
+    log.error('gateway unreachable', { error: message });
     return NextResponse.json(
-      { error: `Failed to list subscriptions: ${message}` },
-      { status: 500 }
+      { error: `Failed to reach API gateway: ${message}`, subscriptions: [] },
+      { status: isTimeout ? 504 : 502 }
     );
   }
 }

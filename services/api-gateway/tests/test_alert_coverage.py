@@ -279,12 +279,12 @@ def _make_alert_client(items=None, credential=None):
     """Return a TestClient with dependency overrides for alert-coverage endpoints."""
     from fastapi import FastAPI
     from services.api_gateway.alert_rule_audit_endpoints import router as alert_router
-    from services.api_gateway.dependencies import get_cosmos_client, get_credential
+    from services.api_gateway.dependencies import get_cosmos_client, get_credential_for_subscriptions
 
     app = FastAPI()
     app.include_router(alert_router)
     app.dependency_overrides[get_cosmos_client] = lambda: _make_cosmos_mock(items)
-    app.dependency_overrides[get_credential] = lambda: credential or MagicMock()
+    app.dependency_overrides[get_credential_for_subscriptions] = lambda: credential or MagicMock()
     return TestClient(app, raise_server_exceptions=False)
 
 
