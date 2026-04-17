@@ -414,6 +414,102 @@ resource "azurerm_cosmosdb_sql_container" "capacity_snapshots" {
 # NOTE: Cosmos DB private endpoint is created by modules/private-endpoints (task 03.07),
 # NOT in this file. This prevents duplicate PE definitions (ISSUE-01).
 
+# ---------------------------------------------------------------------------
+# Phase 68-75: New operational containers
+# ---------------------------------------------------------------------------
+
+resource "azurerm_cosmosdb_sql_container" "simulation_runs" {
+  name                  = "simulation_runs"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/scenario_id"]
+  partition_key_version = 2
+  default_ttl           = 2592000 # 30 days — simulation history for trend analysis
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
+resource "azurerm_cosmosdb_sql_container" "agent_health" {
+  name                  = "agent_health"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/name"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — health records are ephemeral; monitor re-writes each cycle
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
+resource "azurerm_cosmosdb_sql_container" "agent_traces" {
+  name                  = "agent_traces"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/thread_id"]
+  partition_key_version = 2
+  default_ttl           = 604800 # 7 days — run-step traces for debugging and audit
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/steps/[]/content/?" } # large message content — exclude from index
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
+resource "azurerm_cosmosdb_sql_container" "pre_incident_advisories" {
+  name                  = "pre_incident_advisories"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/subscription_id"]
+  partition_key_version = 2
+  default_ttl           = 172800 # 48h — advisories expire after two operator shifts
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
+resource "azurerm_cosmosdb_sql_container" "handover_reports" {
+  name                  = "handover_reports"
+  resource_group_name   = var.resource_group_name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths   = ["/report_id"]
+  partition_key_version = 2
+  default_ttl           = 86400 # 24h — one shift handover per day is sufficient
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
+    excluded_path { path = "/markdown/?" }   # large text field — exclude from index
+    excluded_path { path = "/\"_etag\"/?" }
+  }
+
+  throughput = 400
+}
+
 # Cosmos DB data-plane RBAC — Built-in Data Contributor for all agent MIs
 # local_authentication_disabled = true means all data access requires data-plane RBAC.
 # ARM role "Cosmos DB Operator" (assigned by rbac module) is control-plane only.

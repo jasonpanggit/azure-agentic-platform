@@ -179,6 +179,66 @@ variable "messaging_agent_endpoint" {
   default     = ""
 }
 
+# ---------------------------------------------------------------------------
+# Phase 70: Agent health monitor — HTTP endpoints for each domain agent
+# These are the Container Apps internal FQDN URLs used by api-gateway to
+# probe agent liveness. Defaults to "" (health check skipped if not set).
+# ---------------------------------------------------------------------------
+
+variable "orchestrator_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Orchestrator agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "compute_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Compute agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "network_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Network agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "storage_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Storage agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "security_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Security agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "sre_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the SRE agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "arc_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Arc agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "patch_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the Patch agent Container App"
+  type        = string
+  default     = ""
+}
+
+variable "eol_agent_endpoint" {
+  description = "Internal HTTPS endpoint for the EOL agent Container App"
+  type        = string
+  default     = ""
+}
+
 variable "finops_agent_id" {
   description = "Foundry Agent ID for the FinOps agent"
   type        = string
