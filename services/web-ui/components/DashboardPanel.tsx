@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe, GitCommitHorizontal } from 'lucide-react'
+import { Bell, ClipboardList, Network, Server, Activity, ShieldCheck, Monitor, TrendingDown, Scaling, Container, BookOpen, LayoutDashboard, Settings, DollarSign, FileCheck, BarChart2, Gauge, GitBranch, GitPullRequest, TrendingUp, Building2, BarChart3, FlaskConical, Globe, GitCommitHorizontal, Key, Wrench, DatabaseBackup, Lock } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
 import { AuditLogViewer } from './AuditLogViewer'
@@ -31,9 +31,13 @@ import { QuotaTab } from './QuotaTab'
 import { SimulationTab } from './SimulationTab'
 import { SubscriptionManagementTab } from './SubscriptionManagementTab'
 import { TracesTab } from './TracesTab'
+import { IdentityRiskTab } from './IdentityRiskTab'
+import { MaintenanceTab } from './MaintenanceTab'
+import { BackupComplianceTab } from './BackupComplianceTab'
+import { PrivateEndpointTab } from './PrivateEndpointTab'
 import { useAppState } from '@/lib/app-state-context'
 
-type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces'
+type TabId = 'ops' | 'alerts' | 'audit' | 'topology' | 'resources' | 'vms' | 'vmss' | 'aks' | 'cost' | 'observability' | 'patch' | 'compliance' | 'runbooks' | 'sla' | 'capacity' | 'quotas' | 'security-posture' | 'drift' | 'deployments' | 'quality' | 'simulations' | 'subscriptions' | 'settings' | 'admin' | 'traces' | 'identity-risks' | 'maintenance' | 'backup-compliance' | 'private-endpoints'
 
 interface FilterState {
   severity?: string
@@ -86,6 +90,13 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'deployments',      label: 'Deployments',     Icon: GitPullRequest },
     { id: 'quality',          label: 'Quality',         Icon: TrendingUp },
     { id: 'simulations',      label: 'Simulations',     Icon: FlaskConical },
+  ],
+  // Identity & maintenance
+  [
+    { id: 'identity-risks',    label: 'Identity Risk',   Icon: Key },
+    { id: 'maintenance',       label: 'Maintenance',     Icon: Wrench },
+    { id: 'backup-compliance', label: 'Backup',          Icon: DatabaseBackup },
+    { id: 'private-endpoints', label: 'Private Endpoints', Icon: Lock },
   ],
   // Config
   [
@@ -370,6 +381,22 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
 
         <div id="tabpanel-traces" role="tabpanel" aria-labelledby="tab-traces" hidden={activeTab !== 'traces'}>
           {activeTab === 'traces' && <TracesTab subscriptionId={selectedSubscriptions[0]} />}
+        </div>
+
+        <div id="tabpanel-identity-risks" role="tabpanel" aria-labelledby="tab-identity-risks" hidden={activeTab !== 'identity-risks'}>
+          {activeTab === 'identity-risks' && <IdentityRiskTab />}
+        </div>
+
+        <div id="tabpanel-maintenance" role="tabpanel" aria-labelledby="tab-maintenance" hidden={activeTab !== 'maintenance'}>
+          {activeTab === 'maintenance' && <MaintenanceTab subscriptions={selectedSubscriptions} />}
+        </div>
+
+        <div id="tabpanel-backup-compliance" role="tabpanel" aria-labelledby="tab-backup-compliance" hidden={activeTab !== 'backup-compliance'}>
+          {activeTab === 'backup-compliance' && <BackupComplianceTab subscriptions={selectedSubscriptions} />}
+        </div>
+
+        <div id="tabpanel-private-endpoints" role="tabpanel" aria-labelledby="tab-private-endpoints" hidden={activeTab !== 'private-endpoints'}>
+          {activeTab === 'private-endpoints' && <PrivateEndpointTab subscriptions={selectedSubscriptions} />}
         </div>
 
         <div id="tabpanel-subscriptions" role="tabpanel" aria-labelledby="tab-subscriptions" hidden={activeTab !== 'subscriptions'}>

@@ -165,6 +165,10 @@ from services.api_gateway.simulation_endpoints import router as simulation_route
 from services.api_gateway.agent_health import AgentHealthMonitor
 from services.api_gateway.agent_health_endpoints import router as agent_health_router
 from services.api_gateway.trace_endpoints import router as trace_router
+from services.api_gateway.identity_risk_endpoints import router as identity_risk_router
+from services.api_gateway.maintenance_endpoints import router as maintenance_router
+from services.api_gateway.backup_compliance_endpoints import router as backup_compliance_router
+from services.api_gateway.private_endpoint_endpoints import router as private_endpoint_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -776,6 +780,10 @@ app.include_router(subscription_mgmt_router)
 app.include_router(simulation_router)
 app.include_router(agent_health_router)
 app.include_router(trace_router)
+app.include_router(identity_risk_router)
+app.include_router(maintenance_router)
+app.include_router(backup_compliance_router)
+app.include_router(private_endpoint_router)
 
 
 @app.get("/api/v1/subscriptions", tags=["subscriptions"])
