@@ -27,13 +27,25 @@ def mock_cosmos():
 
 class TestDiscover:
     def test_returns_subscriptions_from_arg(self, mock_credential):
-        """ARG returns enabled subscriptions."""
-        fake_rows = [
-            {"subscriptionId": "sub-abc", "displayName": "Sub ABC"},
-            {"subscriptionId": "sub-xyz", "displayName": "Sub XYZ"},
-        ]
+        """SubscriptionClient returns enabled subscriptions."""
+        fake_sub_abc = MagicMock()
+        fake_sub_abc.subscription_id = "sub-abc"
+        fake_sub_abc.display_name = "Sub ABC"
+        fake_sub_abc.state = "Enabled"
+
+        fake_sub_xyz = MagicMock()
+        fake_sub_xyz.subscription_id = "sub-xyz"
+        fake_sub_xyz.display_name = "Sub XYZ"
+        fake_sub_xyz.state = "Enabled"
+
+        mock_client = MagicMock()
+        mock_client.subscriptions.list.return_value = [fake_sub_abc, fake_sub_xyz]
+
+        mock_sub_module = MagicMock()
+        mock_sub_module.SubscriptionClient.return_value = mock_client
+
         registry = SubscriptionRegistry(credential=mock_credential, cosmos_client=None)
-        with patch.object(registry, "_run_arg_query", return_value=fake_rows):
+        with patch.dict("sys.modules", {"azure.mgmt.subscription": mock_sub_module}):
             result = registry.discover()
         assert result == [
             {"id": "sub-abc", "name": "Sub ABC"},
@@ -41,9 +53,9 @@ class TestDiscover:
         ]
 
     def test_returns_empty_list_when_arg_unavailable(self, mock_credential):
-        """No error when azure-mgmt-resourcegraph not installed."""
+        """No error when azure-mgmt-subscription not installed."""
         registry = SubscriptionRegistry(credential=mock_credential, cosmos_client=None)
-        with patch.object(registry, "_run_arg_query", side_effect=ImportError("no module")):
+        with patch.dict("sys.modules", {"azure.mgmt.subscription": None}):
             result = registry.discover()
         assert result == []
 
