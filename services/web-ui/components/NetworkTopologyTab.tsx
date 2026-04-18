@@ -1834,6 +1834,9 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
 
                 cy.on('tap', 'node', (evt) => {
                   const nodeData = evt.target.data() as Record<string, unknown>
+                  // Clear any issue focus so the panel renders against a clean graph
+                  cy.elements().removeClass('issue-highlighted issue-dimmed')
+                  setFocusedIssueIndex(null)
                   setSelectedNode({
                     id: nodeData.id as string,
                     type: toNodePanelType(nodeData.type as string),
@@ -1846,6 +1849,9 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 })
                 cy.on('tap', 'edge', (evt) => {
                   const edgeData = evt.target.data() as Record<string, unknown>
+                  // Clear any issue focus so the panel renders against a clean graph
+                  cy.elements().removeClass('issue-highlighted issue-dimmed')
+                  setFocusedIssueIndex(null)
                   setSelectedEdge({
                     id: edgeData.id as string,
                     source: edgeData.source as string,
