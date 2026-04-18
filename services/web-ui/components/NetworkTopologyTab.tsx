@@ -146,45 +146,201 @@ function buildCytoscapeElements(
 }
 
 // ---------------------------------------------------------------------------
-// cytoscapeStylesheet
+// cytoscapeStylesheet — n8n-inspired: uniform roundrect, colored left stripe,
+// clean dark backgrounds, crisp thin edges
 // ---------------------------------------------------------------------------
 
-const NODE_W = '130px'
-const NODE_H = '44px'
+// Left-stripe gradient: sharp colored band on left 6%, then dark body
+function stripe(color: string): Record<string, string> {
+  return {
+    'background-gradient-direction': 'to-right',
+    'background-gradient-stop-colors': `${color} ${color} #1a2540 #1a2540`,
+    'background-gradient-stop-positions': '0% 6% 6% 100%',
+    'border-color': color,
+  }
+}
+
+// Azure-style inline SVG icons (white, 16px viewbox, embedded as data URIs)
+// Each icon is placed in the left stripe using background-image
+const svg = (paths: string, vb = '0 0 18 18') =>
+  `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='${vb}' fill='white'>${paths}</svg>`
+
+const AZURE_ICONS: Record<string, string> = {
+  vnet:     svg("<path d='M9 1L1 5v8l8 4 8-4V5L9 1zm0 2.2l5.8 2.9L9 11 3.2 6.1 9 3.2zM2 6.7l6 3v5l-6-3v-5zm7 8v-5l6-3v5l-6 3z'/>"),
+  subnet:   svg("<rect x='2' y='2' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='1.5'/><rect x='5' y='5' width='8' height='8' rx='1'/>"),
+  nsg:      svg("<path d='M9 1l8 4v4c0 4-3.4 7.4-8 8-4.6-.6-8-4-8-8V5l8-4zm0 2.2L3 6v3c0 3 2.4 5.7 6 6.4 3.6-.7 6-3.4 6-6.4V6l-6-2.8z'/>"),
+  vm:       svg("<rect x='1' y='4' width='16' height='11' rx='1.5' fill='none' stroke='white' stroke-width='1.5'/><path d='M5 8h8M5 11h5' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
+  vmss:     svg("<rect x='1' y='5' width='10' height='9' rx='1.5' fill='none' stroke='white' stroke-width='1.5'/><rect x='5' y='3' width='10' height='9' rx='1.5' fill='none' stroke='white' stroke-width='1' opacity='.6'/>"),
+  aks:      svg("<circle cx='9' cy='9' r='3.5' fill='none' stroke='white' stroke-width='1.5'/><circle cx='9' cy='2' r='1.5'/><circle cx='9' cy='16' r='1.5'/><circle cx='2' cy='9' r='1.5'/><circle cx='16' cy='9' r='1.5'/><path d='M9 5.5V6.5M9 11.5V12.5M5.5 9H6.5M11.5 9H12.5' stroke='white' stroke-width='1.2'/>"),
+  lb:       svg("<path d='M9 2v4M5 6h8M3 10h4v3H3zm8 0h4v3h-4z' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/><circle cx='9' cy='6' r='1.2'/>"),
+  appgw:    svg("<path d='M2 13h14M9 13V5M5 9l4-4 4 4' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/><rect x='6' y='13' width='6' height='3' rx='1'/>"),
+  gateway:  svg("<path d='M9 1L1 9h4v7h8V9h4L9 1z' fill='none' stroke='white' stroke-width='1.5' stroke-linejoin='round'/>"),
+  firewall: svg("<path d='M9 1c0 3-4 4-4 8a4 4 0 008 0c0-4-4-5-4-8zm0 4c0 2 2.5 3 2.5 5a2.5 2.5 0 01-5 0c0-2 2.5-3 2.5-5z'/>"),
+  pe:       svg("<circle cx='9' cy='9' r='3' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 1v5M9 12v5M1 9h5M12 9h5' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
+  publicip: svg("<circle cx='9' cy='9' r='6' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 3c-2 2-2 10 0 12M9 3c2 2 2 10 0 12M3 9h12' stroke='white' stroke-width='1.2'/>"),
+  routetable: svg("<path d='M2 4h14v2H2zM2 8h14v2H2zM2 12h8v2H2z'/><path d='M13 11l3 3-3 3' stroke='white' stroke-width='1.4' fill='none' stroke-linecap='round'/>"),
+  localgw:  svg("<path d='M9 1L1 5v8l8 4 8-4V5L9 1z' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 6v6M6 9h6' stroke='white' stroke-width='1.4' stroke-linecap='round'/>"),
+  natgw:    svg("<path d='M2 9h10M8 5l4 4-4 4' stroke='white' stroke-width='1.5' stroke-linecap='round' fill='none'/><path d='M14 4v10' stroke='white' stroke-width='1.5' stroke-linecap='round'/>"),
+  firewallpolicy: svg("<path d='M3 3h12v4H3zM3 11h12v4H3z'/><path d='M7 7v4M11 7v4' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
+  external: svg("<path d='M7 3H3v12h12v-4M10 3h5v5M8 10l7-7' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/>"),
+}
+
+const NODE_W = '164px'
+const NODE_H = '52px'
 
 const cytoscapeStylesheet: CytoscapeStylesheet[] = [
+  // ── Base node ─────────────────────────────────────────────────────────────
   {
     selector: 'node',
     style: {
       label: 'data(label)',
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
+      'font-weight': '500',
       'text-valign': 'center',
       'text-halign': 'center',
       'text-wrap': 'ellipsis',
       'text-max-width': '120px',
+      'text-margin-x': '10px',
       color: '#e2e8f0',
-      'background-color': '#1e293b',
-      'border-width': 1,
-      'border-color': '#334155',
+      'background-color': '#1a2540',
+      'border-width': 1.5,
+      'border-color': '#2d3f5c',
       shape: 'roundrectangle',
       width: NODE_W,
       height: NODE_H,
     },
   },
-  {
-    selector: 'node[type="vnet"]',
-    style: {
-      'background-color': 'rgba(14, 165, 233, 0.12)',
-      'border-color': '#0ea5e9',
-      'border-width': 2,
-      'font-size': '12px',
-      'font-weight': 'bold',
-      width: '150px',
-      height: '48px',
-      shape: 'roundrectangle',
+  // ── Per-type: colored left stripe + matching border ───────────────────────
+  { selector: 'node[type="vnet"]',    style: { ...stripe('#3b82f6'), 'font-weight': '600', width: '174px', height: '56px' } },
+  { selector: 'node[type="subnet"]',  style: { ...stripe('#64748b'), height: '48px', width: '154px' } },
+  { selector: 'node[type="nsg"]',     style: { ...stripe('#f43f5e') } },
+  { selector: 'node[type="vm"]',      style: { ...stripe('#22c55e') } },
+  { selector: 'node[type="vmss"]',    style: { ...stripe('#34d399') } },
+  { selector: 'node[type="aks"]',     style: { ...stripe('#0ea5e9'), 'font-weight': '600' } },
+  { selector: 'node[type="lb"]',      style: { ...stripe('#a78bfa') } },
+  { selector: 'node[type="appgw"]',   style: { ...stripe('#fb923c') } },
+  { selector: 'node[type="gateway"]', style: { ...stripe('#fbbf24'), 'font-weight': '600' } },
+  { selector: 'node[type="firewall"]',style: { ...stripe('#ef4444'), 'font-weight': '600' } },
+  { selector: 'node[type="pe"]',      style: { ...stripe('#818cf8') } },
+  { selector: 'node[type="publicip"]',style: { ...stripe('#38bdf8') } },
+  { selector: 'node[type="routetable"]', style: { ...stripe('#4ade80') } },
+  { selector: 'node[type="localgw"]', style: { ...stripe('#fcd34d') } },
+  { selector: 'node[type="natgw"]',   style: { ...stripe('#2dd4bf') } },
+  { selector: 'node[type="firewallpolicy"]', style: { ...stripe('#f97316') } },
+  { selector: 'node[type="external"]',style: {
+      'background-color': '#111827',
+      'border-color': '#374151',
+      'border-style': 'dashed',
+      color: '#6b7280',
     },
   },
+  // ── Azure icons — 18px icon pinned to the left stripe ────────────────────
+  ...Object.entries(AZURE_ICONS).map(([type, uri]) => ({
+    selector: `node[type="${type}"]`,
+    style: {
+      'background-image': uri,
+      'background-width': '18px',
+      'background-height': '18px',
+      'background-position-x': '4px',
+      'background-position-y': '50%',
+      'background-clip': 'none',
+      'background-image-opacity': 0.9,
+    } as Record<string, unknown>,
+  })),
+  // ── Health overlays ───────────────────────────────────────────────────────
+  { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2.5 } },
+  { selector: 'node[health="red"]',    style: { 'border-color': '#ef4444', 'border-width': 2.5 } },
+  // ── Selected / hovered ────────────────────────────────────────────────────
+  {
+    selector: 'node:selected',
+    style: {
+      'border-width': 2.5,
+      'border-color': '#ffffff',
+      'text-outline-color': '#0f172a',
+      'text-outline-width': 1,
+    },
+  },
+  // ── Edges — default ───────────────────────────────────────────────────────
+  {
+    selector: 'edge',
+    style: {
+      'curve-style': 'bezier',
+      'line-color': '#2d3f5c',
+      width: 1,
+      'target-arrow-color': '#2d3f5c',
+      'target-arrow-shape': 'triangle',
+      'arrow-scale': 0.6,
+      opacity: 0.8,
+    },
+  },
+  // Containment — invisible
+  { selector: 'edge[type="contains"]',
+    style: { 'line-color': '#0f172a', 'target-arrow-shape': 'none', width: 0.5, opacity: 0.3 },
+  },
+  // Subnet member edges — subtle dashes, no arrow
+  { selector: 'edge[type="subnet-vm"]',    style: { 'line-color': '#22c55e',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-vmss"]',  style: { 'line-color': '#34d399',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-nsg"]',   style: { 'line-color': '#f43f5e',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
+  { selector: 'edge[type="subnet-aks"]',   style: { 'line-color': '#0ea5e9',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-lb"]',    style: { 'line-color': '#a78bfa',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-appgw"]', style: { 'line-color': '#fb923c',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-pe"]',    style: { 'line-color': '#818cf8',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-gateway"]',style:{ 'line-color': '#fbbf24',  'line-style': 'dashed', width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-firewall"]',style:{'line-color': '#ef4444',  'line-style': 'dashed', width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-routetable"]', style: { 'line-color': '#4ade80', 'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
+  { selector: 'edge[type="subnet-natgw"]', style: { 'line-color': '#2dd4bf',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  // Traffic edges — solid with arrow
+  { selector: 'edge[type="peering"]',            style: { 'line-color': '#3b82f6', 'target-arrow-color': '#3b82f6', width: 2, opacity: 1 } },
+  { selector: 'edge[type="peering-disconnected"]',style: { 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'line-style': 'dashed', width: 2, opacity: 0.9 } },
+  { selector: 'edge[type="asymmetry"]',          style: { 'line-color': '#f43f5e', 'target-arrow-color': '#f43f5e', 'line-style': 'dashed', width: 2.5, opacity: 1 } },
+  { selector: 'edge[type="vpn-connection"]',     style: { 'line-color': '#fbbf24', 'target-arrow-color': '#fbbf24', width: 2, opacity: 1 } },
+  { selector: 'edge[type="lb-backend"]',         style: { 'line-color': '#a78bfa', 'target-arrow-color': '#a78bfa', width: 1.5, opacity: 0.8 } },
+  { selector: 'edge[type="appgw-backend"]',      style: { 'line-color': '#fb923c', 'target-arrow-color': '#fb923c', 'line-style': 'dashed', width: 1.5, opacity: 0.8 } },
+  { selector: 'edge[type="resource-publicip"]',  style: { 'line-color': '#38bdf8', 'target-arrow-color': '#38bdf8', width: 1.5, opacity: 0.8 } },
+  { selector: 'edge[type="nic-nsg"]',            style: { 'line-color': '#f97316', 'target-arrow-color': '#f97316', 'line-style': 'dashed', width: 1, opacity: 0.7 } },
+  { selector: 'edge[type="pe-target"]',          style: { 'line-color': '#818cf8', 'target-arrow-color': '#818cf8', 'line-style': 'dashed', width: 1.5, opacity: 0.8 } },
+  { selector: 'edge[type="firewall-policy"]',    style: { 'line-color': '#f97316', 'target-arrow-color': '#f97316', width: 1.5, opacity: 0.8 } },
+  { selector: 'edge[type="firewall-mgmt-subnet"]',style:{ 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'line-style': 'dashed', width: 1, opacity: 0.7 } },
+  // ── Path check states ──────────────────────────────────────────────────────
+  {
+    selector: 'edge.path-allowed',
+    style: { 'line-color': '#22c55e', 'target-arrow-color': '#22c55e', width: 2.5, opacity: 1 },
+  },
+  // ── Highlight states ───────────────────────────────────────────────────────
+  {
+    selector: '.chat-highlighted',
+    style: { 'border-color': '#fb923c', 'border-width': 3, 'background-color': 'rgba(251,146,60,0.15)' },
+  },
+  {
+    selector: '.issue-highlighted',
+    style: { 'border-color': '#f43f5e', 'border-width': 3, 'background-color': 'rgba(244,63,94,0.18)', opacity: 1 },
+  },
+  {
+    selector: '.issue-dimmed',
+    style: { opacity: 0.08 },
+  },
+  {
+    selector: '.path-blocked',
+    style: { 'border-color': '#ef4444', 'border-width': 3, 'background-color': 'rgba(239,68,68,0.15)' },
+  },
+  {
+    selector: '.dimmed',
+    style: { opacity: 0.15 },
+  },
+  {
+    selector: '.search-match',
+    style: { 'border-color': '#ffffff', 'border-width': 3, opacity: 1 },
+  },
+  {
+    selector: '.search-dimmed',
+    style: { opacity: 0.12 },
+  },
+]
+// ---------------------------------------------------------------------------
+// Helper: map API node type → NodeDetailPanel type suffix
+// ---------------------------------------------------------------------------
+
   {
     selector: 'node[type="subnet"]',
     style: {
