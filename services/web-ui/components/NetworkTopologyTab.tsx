@@ -211,11 +211,12 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
       'font-weight': '500',
+      // text-halign center + positive margin-x nudges label right of icon area
       'text-valign': 'center',
-      'text-halign': 'right',
+      'text-halign': 'center',
       'text-wrap': 'ellipsis',
-      'text-max-width': '108px',
-      'text-margin-x': '-8px',
+      'text-max-width': '110px',
+      'text-margin-x': '14px',
       color: '#cbd5e1',
       'background-color': '#1e2d45',
       'border-width': 1,
@@ -223,18 +224,17 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       shape: 'roundrectangle',
       width: NODE_W,
       height: NODE_H,
-      // Icon in left slot (24px wide area)
-      'background-image': 'none',
-      'background-width': 20,
-      'background-height': 20,
-      'background-position-x': 14,
+      // Icon sits in left 30px of the card
+      'background-width': '20px',
+      'background-height': '20px',
+      'background-position-x': '12px',
       'background-position-y': '50%',
       'background-fit': 'none',
       'background-clip': 'none',
-      'background-image-opacity': 1,
+      'background-image-opacity': 0.85,
     },
   },
-  // ── Per-type: top border accent color + icon ─────────────────────────────
+  // ── Per-type: accent border + icon ───────────────────────────────────────
   ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
@@ -245,7 +245,7 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   })),
   // VNet is slightly larger and bolder
   { selector: 'node[type="vnet"]',    style: { 'font-weight': '600', width: '178px', height: '52px' } },
-  { selector: 'node[type="subnet"]',  style: { 'background-color': '#1a2535', 'border-width': 1, 'border-style': 'dashed' } },
+  { selector: 'node[type="subnet"]',  style: { 'background-color': '#141d2e', 'border-width': 1, 'border-style': 'dashed' } },
   { selector: 'node[type="external"]',style: { 'background-color': '#111827', 'border-style': 'dashed', color: '#6b7280', 'background-image': AZURE_ICONS.external } as Record<string, unknown> },
   // ── Health overlays ───────────────────────────────────────────────────────
   { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2 } },
