@@ -1734,6 +1734,40 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border)',
                 opacity: 0.9,
+                cursor: 'crosshair',
+              }}
+              onMouseDown={(e) => {
+                const cy = cyRef.current
+                const canvas = miniCanvasRef.current
+                if (!cy || !canvas) return
+
+                const panTo = (clientX: number, clientY: number) => {
+                  const rect = canvas.getBoundingClientRect()
+                  const mx = (clientX - rect.left) * (160 / rect.width)
+                  const my = (clientY - rect.top) * (120 / rect.height)
+                  const ext = cy.extent()
+                  const scaleX = 160 / ((ext.x2 - ext.x1) || 1)
+                  const scaleY = 120 / ((ext.y2 - ext.y1) || 1)
+                  // Convert minimap coords → graph-world coords
+                  const wx = mx / scaleX + ext.x1
+                  const wy = my / scaleY + ext.y1
+                  // Pan so the clicked world point is centered in the viewport
+                  const zoom = cy.zoom()
+                  cy.pan({
+                    x: cy.width() / 2 - wx * zoom,
+                    y: cy.height() / 2 - wy * zoom,
+                  })
+                }
+
+                panTo(e.clientX, e.clientY)
+
+                const onMove = (ev: MouseEvent) => panTo(ev.clientX, ev.clientY)
+                const onUp = () => {
+                  document.removeEventListener('mousemove', onMove)
+                  document.removeEventListener('mouseup', onUp)
+                }
+                document.addEventListener('mousemove', onMove)
+                document.addEventListener('mouseup', onUp)
               }}
             />
 
