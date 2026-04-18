@@ -409,7 +409,39 @@ interface NodeDetailPanelProps {
   onClose: () => void
 }
 
+const MIN_PANEL_WIDTH = 320
+const MAX_PANEL_WIDTH = 800
+const DEFAULT_PANEL_WIDTH = 420
+
 function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
+  const dragging = useRef(false)
+  const startX = useRef(0)
+  const startWidth = useRef(DEFAULT_PANEL_WIDTH)
+
+  const onDragHandleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    startX.current = e.clientX
+    startWidth.current = panelWidth
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragging.current) return
+      const delta = startX.current - ev.clientX
+      const next = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth.current + delta))
+      setPanelWidth(next)
+    }
+
+    const onMouseUp = () => {
+      dragging.current = false
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [panelWidth])
+
   if (!open) return null
 
   const renderNodeContent = () => {
@@ -638,12 +670,20 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-[380px] sm:w-[440px] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-        </SheetHeader>
-        {node && renderNodeContent()}
-        {edge && renderEdgeContent()}
+      <SheetContent side="right" style={{ width: panelWidth }} className="relative overflow-y-auto p-0">
+        {/* Drag handle on the left edge */}
+        <div
+          onMouseDown={onDragHandleMouseDown}
+          className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-10 hover:bg-blue-500/30 transition-colors"
+          title="Drag to resize"
+        />
+        <div className="px-6 py-4 h-full overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{title}</SheetTitle>
+          </SheetHeader>
+          {node && renderNodeContent()}
+          {edge && renderEdgeContent()}
+        </div>
       </SheetContent>
     </Sheet>
   )
