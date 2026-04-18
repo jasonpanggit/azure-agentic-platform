@@ -32,6 +32,8 @@ progress:
 
 > Last activity: 2026-04-11 - Completed quick task 260411-wm8: move chat button from right to left and chat panel as well
 
+> Last activity: 2026-04-18 - Quick task 260418-nxb: Split CostHubTab into Cost (Cost & Advisor, Budgets) and Capacity & Quota (Quota Usage, Capacity, Quota Limits) top-level tabs.
+
 > Last activity: 2026-04-11 - Added Phase 42: SOP Tab Web UI to ROADMAP.md. Live runbook library tab with semantic search, domain filters, step-progress execution tracker, inline HITL approval for REMEDIATION steps, and incident linkage. Depends on Phase 30 (SOP engine) + Phase 31 (34 SOPs). 2 plans (42-1: list+detail viewer; 42-2: live execution tracking+incident integration). Total phases: 42, total plans: 113.
 
 > Last activity: 2026-04-11 - Phase 34 complete. Wired all 20 compute agent tools (15 Phase 32 tools were implemented but unregistered). Fixed AMA status hardcoded "unknown" with ARG extension join. 1,278 tests passing. Phases 35-42 planned (VM world-class AIOps roadmap + VMSS/AKS/SOP tabs). Branch: gsd/phase-34-activate-phase-32-vm-tools.
@@ -427,6 +429,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260414-nw4 | resolve merge conflicts in PR 81 | 2026-04-14 | 1f5b782 | [260414-nw4-resolve-merge-conflicts-in-pr-81](./quick/260414-nw4-resolve-merge-conflicts-in-pr-81/) |
 | 260414-o65 | fix CI failures - missing agent spec files and terraform required variables | 2026-04-14 | 8e782d5 | [260414-o65-fix-ci-failures-missing-agent-spec-files](./quick/260414-o65-fix-ci-failures-missing-agent-spec-files/) |
 | 260418-jz2 | Move current TopologyTab to under Resources tab and rename to Resource Hierarchy | 2026-04-18 | 87c619d | [260418-jz2-move-current-topologytab-to-under-resour](./quick/260418-jz2-move-current-topologytab-to-under-resour/) |
+| 260418-nxb | Restructure web UI tab IA: split Cost tab into Cost (spend/budgets) and Capacity & Quota (resource limits/planning) | 2026-04-18 | b390e0d | [260418-nxb-restructure-web-ui-tab-information-archi](./quick/260418-nxb-restructure-web-ui-tab-information-archi/) |
 
 ---
 

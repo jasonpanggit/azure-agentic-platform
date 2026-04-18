@@ -1,23 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { DollarSign, Wallet } from 'lucide-react'
-import { CostTab } from './CostTab'
-import BudgetAlertTab from './BudgetAlertTab'
+import { BarChart3, Gauge, BarChart2 } from 'lucide-react'
+import QuotaUsageTab from './QuotaUsageTab'
+import { CapacityTab } from './CapacityTab'
+import { QuotaTab } from './QuotaTab'
 
-export interface CostHubTabProps {
+export interface CapacityQuotaHubTabProps {
   subscriptions: string[]
   initialSubTab?: string
 }
 
 const subTabs = [
-  { id: 'finops',  label: 'Cost & Advisor', icon: DollarSign },
-  { id: 'budgets', label: 'Budgets',        icon: Wallet     },
+  { id: 'quota-usage', label: 'Quota Usage',  icon: BarChart3 },
+  { id: 'capacity',    label: 'Capacity',      icon: Gauge     },
+  { id: 'quotas',      label: 'Quota Limits',  icon: BarChart2 },
 ] as const
 
 type SubTabId = typeof subTabs[number]['id']
 
-export function CostHubTab({ subscriptions, initialSubTab }: CostHubTabProps) {
+export function CapacityQuotaHubTab({ subscriptions, initialSubTab }: CapacityQuotaHubTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTabId>(
     (initialSubTab as SubTabId) ?? subTabs[0].id
   )
@@ -46,8 +48,9 @@ export function CostHubTab({ subscriptions, initialSubTab }: CostHubTabProps) {
       </div>
 
       <div className="flex-1 min-h-0">
-        {activeSubTab === 'finops'  && <CostTab subscriptions={subscriptions} />}
-        {activeSubTab === 'budgets' && <BudgetAlertTab />}
+        {activeSubTab === 'quota-usage' && <QuotaUsageTab />}
+        {activeSubTab === 'capacity'    && <CapacityTab subscriptionId={subscriptions[0]} />}
+        {activeSubTab === 'quotas'      && <QuotaTab subscriptionId={subscriptions[0]} />}
       </div>
     </div>
   )

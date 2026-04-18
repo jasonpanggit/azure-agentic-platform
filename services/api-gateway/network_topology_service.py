@@ -111,6 +111,68 @@ Resources
           subnetId, nsgId, privateIp
 """
 
+_VM_QUERY = """
+Resources
+| where type =~ "microsoft.compute/virtualmachines"
+| mv-expand nic = properties.networkProfile.networkInterfaces
+| extend nicId = tolower(tostring(nic.id))
+| join kind=leftouter (
+    Resources
+    | where type =~ "microsoft.network/networkinterfaces"
+    | extend subnetId = tolower(tostring(properties.ipConfigurations[0].properties.subnet.id))
+    | extend privateIp = tostring(properties.ipConfigurations[0].properties.privateIPAddress)
+    | project nicId = tolower(id), subnetId, privateIp
+) on nicId
+| project subscriptionId, resourceGroup, vmName = name, vmId = tolower(id), location,
+          vmSize = tostring(properties.hardwareProfile.vmSize),
+          osType = tostring(properties.storageProfile.osDisk.osType),
+          subnetId, privateIp
+"""
+
+_VMSS_QUERY = """
+Resources
+| where type =~ "microsoft.compute/virtualmachinescalesets"
+| extend subnetId = tolower(tostring(properties.virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].properties.ipConfigurations[0].properties.subnet.id))
+| project subscriptionId, resourceGroup, name, id = tolower(id), location,
+          sku_name = tostring(sku.name), capacity = toint(sku.capacity),
+          subnetId
+"""
+
+_AKS_QUERY = """
+Resources
+| where type =~ "microsoft.containerservice/managedclusters"
+| extend subnetId = tolower(tostring(properties.agentPoolProfiles[0].vnetSubnetID))
+| project subscriptionId, resourceGroup, name, id = tolower(id), location,
+          kubernetesVersion = tostring(properties.kubernetesVersion),
+          nodeCount = toint(properties.agentPoolProfiles[0].count),
+          provisioningState = tostring(properties.provisioningState),
+          subnetId
+"""
+
+_FIREWALL_QUERY = """
+Resources
+| where type =~ "microsoft.network/azurefirewalls"
+| mv-expand ipConfig = properties.ipConfigurations
+| extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
+| extend privateIp = tostring(ipConfig.properties.privateIPAddress)
+| project subscriptionId, resourceGroup, name, id = tolower(id), location,
+          sku_tier = tostring(properties.sku.tier),
+          threatIntelMode = tostring(properties.threatIntelMode),
+          subnetId, privateIp
+"""
+
+_APP_GATEWAY_QUERY = """
+Resources
+| where type =~ "microsoft.network/applicationgateways"
+| mv-expand ipConfig = properties.gatewayIPConfigurations
+| extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
+| project subscriptionId, resourceGroup, name, id = tolower(id), location,
+          sku_name = tostring(properties.sku.name),
+          sku_tier = tostring(properties.sku.tier),
+          capacity = toint(properties.sku.capacity),
+          subnetId
+"""
+
 # ---------------------------------------------------------------------------
 # In-memory TTL Cache
 # ---------------------------------------------------------------------------
@@ -301,6 +363,11 @@ def _assemble_graph(
     gateways: List[Dict[str, Any]],
     public_ips: List[Dict[str, Any]],
     nics: List[Dict[str, Any]],
+    vms: Optional[List[Dict[str, Any]]] = None,
+    vmss_list: Optional[List[Dict[str, Any]]] = None,
+    aks_list: Optional[List[Dict[str, Any]]] = None,
+    firewalls: Optional[List[Dict[str, Any]]] = None,
+    app_gateways: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Build nodes and edges lists from raw ARG query results."""
     nodes: List[Dict[str, Any]] = []
@@ -449,6 +516,106 @@ def _assemble_graph(
                 "data": {},
             })
 
+    # VM nodes
+    for row in (vms or []):
+        vm_id = str(row.get("vmId", "")).lower()
+        if vm_id and vm_id not in seen_nodes:
+            seen_nodes.add(vm_id)
+            nodes.append({
+                "id": vm_id,
+                "type": "vm",
+                "label": row.get("vmName", ""),
+                "data": {
+                    "vmSize": row.get("vmSize", ""),
+                    "osType": row.get("osType", ""),
+                    "privateIp": row.get("privateIp", ""),
+                    "location": row.get("location", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if vm_id and subnet_id:
+            edge_id = f"edge-{subnet_id}-{vm_id}"
+            edges.append({"id": edge_id, "source": subnet_id, "target": vm_id, "type": "subnet-vm", "data": {}})
+
+    # VMSS nodes
+    for row in (vmss_list or []):
+        vmss_id = str(row.get("id", "")).lower()
+        if vmss_id and vmss_id not in seen_nodes:
+            seen_nodes.add(vmss_id)
+            nodes.append({
+                "id": vmss_id,
+                "type": "vmss",
+                "label": row.get("name", ""),
+                "data": {
+                    "sku": row.get("sku_name", ""),
+                    "capacity": row.get("capacity", 0),
+                    "location": row.get("location", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if vmss_id and subnet_id:
+            edges.append({"id": f"edge-{subnet_id}-{vmss_id}", "source": subnet_id, "target": vmss_id, "type": "subnet-vmss", "data": {}})
+
+    # AKS nodes
+    for row in (aks_list or []):
+        aks_id = str(row.get("id", "")).lower()
+        if aks_id and aks_id not in seen_nodes:
+            seen_nodes.add(aks_id)
+            nodes.append({
+                "id": aks_id,
+                "type": "aks",
+                "label": row.get("name", ""),
+                "data": {
+                    "kubernetesVersion": row.get("kubernetesVersion", ""),
+                    "nodeCount": row.get("nodeCount", 0),
+                    "provisioningState": row.get("provisioningState", ""),
+                    "location": row.get("location", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if aks_id and subnet_id:
+            edges.append({"id": f"edge-{subnet_id}-{aks_id}", "source": subnet_id, "target": aks_id, "type": "subnet-aks", "data": {}})
+
+    # Firewall nodes
+    for row in (firewalls or []):
+        fw_id = str(row.get("id", "")).lower()
+        if fw_id and fw_id not in seen_nodes:
+            seen_nodes.add(fw_id)
+            nodes.append({
+                "id": fw_id,
+                "type": "firewall",
+                "label": row.get("name", ""),
+                "data": {
+                    "skuTier": row.get("sku_tier", ""),
+                    "threatIntelMode": row.get("threatIntelMode", ""),
+                    "privateIp": row.get("privateIp", ""),
+                    "location": row.get("location", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if fw_id and subnet_id:
+            edges.append({"id": f"edge-{subnet_id}-{fw_id}", "source": subnet_id, "target": fw_id, "type": "subnet-firewall", "data": {}})
+
+    # App Gateway nodes
+    for row in (app_gateways or []):
+        agw_id = str(row.get("id", "")).lower()
+        if agw_id and agw_id not in seen_nodes:
+            seen_nodes.add(agw_id)
+            nodes.append({
+                "id": agw_id,
+                "type": "appgw",
+                "label": row.get("name", ""),
+                "data": {
+                    "sku": row.get("sku_name", ""),
+                    "skuTier": row.get("sku_tier", ""),
+                    "capacity": row.get("capacity", 0),
+                    "location": row.get("location", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if agw_id and subnet_id:
+            edges.append({"id": f"edge-{subnet_id}-{agw_id}", "source": subnet_id, "target": agw_id, "type": "subnet-appgw", "data": {}})
+
     return nodes, edges
 
 
@@ -491,8 +658,17 @@ def fetch_network_topology(
             gateways = run_arg_query(credential, subscription_ids, _GATEWAY_QUERY)
             public_ips = run_arg_query(credential, subscription_ids, _PUBLIC_IP_QUERY)
             nics = run_arg_query(credential, subscription_ids, _NIC_NSG_QUERY)
+            vms = run_arg_query(credential, subscription_ids, _VM_QUERY)
+            vmss_list = run_arg_query(credential, subscription_ids, _VMSS_QUERY)
+            aks_list = run_arg_query(credential, subscription_ids, _AKS_QUERY)
+            firewalls = run_arg_query(credential, subscription_ids, _FIREWALL_QUERY)
+            app_gateways = run_arg_query(credential, subscription_ids, _APP_GATEWAY_QUERY)
 
-            nodes, edges = _assemble_graph(vnets, nsgs, lbs, pes, gateways, public_ips, nics)
+            nodes, edges = _assemble_graph(
+                vnets, nsgs, lbs, pes, gateways, public_ips, nics,
+                vms=vms, vmss_list=vmss_list, aks_list=aks_list,
+                firewalls=firewalls, app_gateways=app_gateways,
+            )
 
             # Build NSG rules map and subnet-NSG map for health scoring
             nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}

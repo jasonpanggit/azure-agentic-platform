@@ -28,6 +28,11 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Server,
+  Layers,
+  Container,
+  Flame,
+  AppWindow,
 } from 'lucide-react'
 import {
   Sheet,
@@ -45,6 +50,283 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+// ---------------------------------------------------------------------------
+// NodeDetailPanel
+// ---------------------------------------------------------------------------
+
+interface NodeDetailPanelProps {
+  node: Node | null
+  edge: Edge | null
+  open: boolean
+  onClose: () => void
+}
+
+function FieldRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{value}</span>
+    </div>
+  )
+}
+
+function HealthBadge({ health }: { health: string }) {
+  const labels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
+  const accent = `var(--accent-${health})`
+  return (
+    <span
+      className="px-1.5 py-px rounded-full text-[11px] font-semibold uppercase tracking-wide"
+      style={{
+        background: `color-mix(in srgb, ${accent} 15%, transparent)`,
+        color: accent,
+        border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+      }}
+    >
+      {labels[health] ?? health}
+    </span>
+  )
+}
+
+function NsgRulesTable({ rules }: { rules: Array<Record<string, unknown>> }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            {['Priority', 'Name', 'Dir', 'Access', 'Proto', 'Source', 'Dest', 'Ports'].map((h) => (
+              <th key={h} className="text-left pb-1 pr-2 font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.priority as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-primary)' }}>{r.name as string}</td>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.direction as string}</td>
+              <td className="py-1 pr-2">
+                <span style={{ color: (r.access as string)?.toLowerCase() === 'allow' ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                  {r.access as string}
+                </span>
+              </td>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.protocol as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-muted)' }}>{r.source as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-muted)' }}>{r.destination as string}</td>
+              <td className="py-1 font-mono" style={{ color: 'var(--text-muted)' }}>{r.ports as string}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
+  if (!open) return null
+
+  const renderNodeContent = () => {
+    if (!node) return null
+    const d = node.data
+
+    switch (node.type) {
+      case 'nsgNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NSG Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Health" value={<HealthBadge health={(d.health as string) ?? 'green'} />} />
+            {d.ruleCount != null && <FieldRow label="Rule Count" value={String(d.ruleCount)} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+            {Array.isArray(d.rules) && d.rules.length > 0 ? (
+              <>
+                <p className="text-xs font-semibold mt-4 mb-1" style={{ color: 'var(--text-secondary)' }}>Security Rules</p>
+                <NsgRulesTable rules={d.rules as Array<Record<string, unknown>>} />
+              </>
+            ) : (
+              <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
+                Rules are loaded during path check.
+              </p>
+            )}
+          </>
+        )
+
+      case 'vnetNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VNet Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.addressSpace && <FieldRow label="Address Space" value={<span className="font-mono">{d.addressSpace as string}</span>} />}
+            {d.subscription && <FieldRow label="Subscription" value={d.subscription as string} />}
+            {d.peeringCount != null && <FieldRow label="Peering Count" value={String(d.peeringCount)} />}
+          </>
+        )
+
+      case 'subnetNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Subnet Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.cidr && <FieldRow label="CIDR" value={<span className="font-mono">{d.cidr as string}</span>} />}
+            <FieldRow label="NSG" value={(d.nsgId as string) || 'None'} />
+            <FieldRow label="Route Table" value={(d.routeTable as string) || 'None'} />
+          </>
+        )
+
+      case 'lbNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Load Balancer Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            <FieldRow label="Public IP" value={(d.publicIp as string) || 'Internal'} />
+          </>
+        )
+
+      case 'peNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Private Endpoint Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.targetService && <FieldRow label="Target Service" value={d.targetService as string} />}
+            <FieldRow label="Private IP" value={(d.privateIp as string) || '—'} />
+            <FieldRow label="Connection State" value={(d.connectionState as string) || '—'} />
+          </>
+        )
+
+      case 'gatewayNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Gateway Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.gatewayType && <FieldRow label="Type" value={d.gatewayType as string} />}
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            <FieldRow label="BGP" value={(d.bgpEnabled as boolean) ? 'Enabled' : 'Disabled'} />
+          </>
+        )
+
+      case 'vmNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Virtual Machine</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.vmSize && <FieldRow label="Size" value={<span className="font-mono">{d.vmSize as string}</span>} />}
+            {d.osType && <FieldRow label="OS Type" value={d.osType as string} />}
+            {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'vmssNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VM Scale Set</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={<span className="font-mono">{d.sku as string}</span>} />}
+            {d.capacity != null && <FieldRow label="Capacity" value={`${d.capacity} instances`} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'aksNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>AKS Cluster</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.kubernetesVersion && <FieldRow label="Kubernetes Version" value={<span className="font-mono">{d.kubernetesVersion as string}</span>} />}
+            {d.nodeCount != null && <FieldRow label="Node Count" value={String(d.nodeCount)} />}
+            {d.provisioningState && <FieldRow label="State" value={d.provisioningState as string} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'firewallNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Azure Firewall</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.skuTier && <FieldRow label="SKU Tier" value={d.skuTier as string} />}
+            {d.threatIntelMode && <FieldRow label="Threat Intel Mode" value={d.threatIntelMode as string} />}
+            {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'appGatewayNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Application Gateway</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            {d.skuTier && <FieldRow label="Tier" value={d.skuTier as string} />}
+            {d.capacity != null && <FieldRow label="Capacity" value={String(d.capacity)} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      default:
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Node Details</p>
+            {Object.entries(d).map(([k, v]) => (
+              <FieldRow key={k} label={k} value={String(v)} />
+            ))}
+          </>
+        )
+    }
+  }
+
+  const renderEdgeContent = () => {
+    if (!edge) return null
+    return (
+      <>
+        <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>
+          {(edge.label as string) || 'Connection Details'}
+        </p>
+        <FieldRow label="Source" value={<span className="font-mono text-xs">{edge.source}</span>} />
+        <FieldRow label="Target" value={<span className="font-mono text-xs">{edge.target}</span>} />
+        <FieldRow label="Type" value={edge.type ?? '—'} />
+        <FieldRow label="Status" value={edge.animated ? 'Active' : 'Inactive'} />
+        {edge.data?.issue && (
+          <div
+            className="mt-3 rounded p-3 text-xs"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent-red) 25%, transparent)',
+              color: 'var(--accent-red)',
+            }}
+          >
+            <p className="font-semibold mb-1">Issue Detected</p>
+            <p>{String(edge.data.issue)}</p>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  const title = edge
+    ? ((edge.label as string) || 'Connection Details')
+    : node
+    ? (node.data.label as string)
+    : 'Details'
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-[380px] sm:w-[440px] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{title}</SheetTitle>
+        </SheetHeader>
+        {node && renderNodeContent()}
+        {edge && renderEdgeContent()}
+      </SheetContent>
+    </Sheet>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -343,6 +625,205 @@ function GatewayNode({ data }: NodeProps) {
   )
 }
 
+function VMNode({ data }: NodeProps) {
+  const color = 'var(--accent-green)'
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 180,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-surface)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Server size={14} style={{ color }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.vmSize) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.vmSize as string}
+          </span>
+        )}
+        {!!(data.osType) && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-green) 12%, transparent)',
+              color: 'var(--accent-green)',
+            }}
+          >
+            {data.osType as string}
+          </span>
+        )}
+      </div>
+      {!!(data.privateIp) && (
+        <span className="text-[10px] font-mono mt-1 block" style={{ color: 'var(--text-muted)' }}>
+          {data.privateIp as string}
+        </span>
+      )}
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function VMSSNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-surface)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Layers size={14} style={{ color: 'var(--accent-blue)' }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.sku) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.sku as string}
+          </span>
+        )}
+        {data.capacity != null && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
+              color: 'var(--accent-blue)',
+            }}
+          >
+            {data.capacity as number} instances
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function AKSNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--accent-blue)',
+        background: 'color-mix(in srgb, var(--accent-blue) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Container size={14} style={{ color: 'var(--accent-blue)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.kubernetesVersion) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+            k8s {data.kubernetesVersion as string}
+          </span>
+        )}
+        {data.nodeCount != null && (
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            {data.nodeCount as number} nodes
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function FirewallNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 180,
+        border: '1px solid var(--accent-red)',
+        background: 'color-mix(in srgb, var(--accent-red) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Flame size={14} style={{ color: 'var(--accent-red)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.skuTier) && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)',
+              color: 'var(--accent-red)',
+            }}
+          >
+            {data.skuTier as string}
+          </span>
+        )}
+        {!!(data.privateIp) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.privateIp as string}
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function AppGatewayNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--accent-purple)',
+        background: 'color-mix(in srgb, var(--accent-purple) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <AppWindow size={14} style={{ color: 'var(--accent-purple)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.sku) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.sku as string}
+          </span>
+        )}
+        {data.capacity != null && (
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            cap: {data.capacity as number}
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
 const nodeTypes = {
   vnetNode: VNetNode,
   subnetNode: SubnetNode,
@@ -350,6 +831,11 @@ const nodeTypes = {
   lbNode: LBNode,
   peNode: PENode,
   gatewayNode: GatewayNode,
+  vmNode: VMNode,
+  vmssNode: VMSSNode,
+  aksNode: AKSNode,
+  firewallNode: FirewallNode,
+  appGatewayNode: AppGatewayNode,
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +850,11 @@ function mapNodeType(apiType: string): string {
     lb: 'lbNode',
     pe: 'peNode',
     gateway: 'gatewayNode',
+    vm: 'vmNode',
+    vmss: 'vmssNode',
+    aks: 'aksNode',
+    firewall: 'firewallNode',
+    appgw: 'appGatewayNode',
   }
   return mapping[apiType] ?? 'default'
 }
@@ -397,6 +888,11 @@ function getEdgeStyle(edgeType: string, hasIssue: boolean): Partial<Edge> {
     'subnet-lb': { style: { stroke: 'var(--text-muted)', strokeWidth: 1.5 } },
     'subnet-pe': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1, strokeDasharray: '2 4' } },
     'subnet-gateway': { style: { stroke: 'var(--accent-orange)', strokeWidth: 1.5 } },
+    'subnet-vm': { style: { stroke: 'var(--accent-green)', strokeWidth: 1, strokeDasharray: '3 3' } },
+    'subnet-vmss': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1, strokeDasharray: '3 3' } },
+    'subnet-aks': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1.5 } },
+    'subnet-firewall': { style: { stroke: 'var(--accent-red)', strokeWidth: 1.5 } },
+    'subnet-appgw': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1.5 } },
   }
   return styles[edgeType] ?? { style: { stroke: 'var(--border)', strokeWidth: 1 } }
 }
@@ -433,6 +929,11 @@ export default function NetworkTopologyTab() {
   const [error, setError] = useState<string | null>(null)
   const [topologyData, setTopologyData] = useState<TopologyData | null>(null)
 
+  // Drill-down state
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
   // Path checker state
   const [pathSheetOpen, setPathSheetOpen] = useState(false)
   const [pathSource, setPathSource] = useState('')
@@ -456,6 +957,10 @@ export default function NetworkTopologyTab() {
     () => topologyData?.issues.length ?? 0,
     [topologyData]
   )
+
+  const vmCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vm').length ?? 0, [topologyData])
+  const aksCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'aks').length ?? 0, [topologyData])
+  const firewallCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'firewall').length ?? 0, [topologyData])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -772,6 +1277,24 @@ export default function NetworkTopologyTab() {
         >
           Issues: {issueCount}
         </span>
+        {vmCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+            VMs: {vmCount}
+          </span>
+        )}
+        {aksCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+            AKS: {aksCount}
+          </span>
+        )}
+        {firewallCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)', color: 'var(--accent-red)' }}>
+            Firewalls: {firewallCount}
+          </span>
+        )}
+        <span className="text-[11px] ml-2" style={{ color: 'var(--text-muted)' }}>
+          · Click any node or connection to inspect details
+        </span>
       </div>
 
       {/* Error */}
@@ -819,6 +1342,17 @@ export default function NetworkTopologyTab() {
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
+            onNodeClick={(_evt, node) => {
+              setSelectedNode(node)
+              setSelectedEdge(null)
+              setDetailOpen(true)
+            }}
+            onEdgeClick={(_evt, edge) => {
+              setSelectedEdge(edge)
+              setSelectedNode(null)
+              setDetailOpen(true)
+            }}
+            elementsSelectable
           >
             <Controls />
             <MiniMap />
@@ -826,6 +1360,13 @@ export default function NetworkTopologyTab() {
           </ReactFlow>
         </div>
       )}
+
+      <NodeDetailPanel
+        node={selectedNode}
+        edge={selectedEdge}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   )
 }
