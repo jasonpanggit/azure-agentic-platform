@@ -277,9 +277,11 @@ class TestFetchTopology:
         fetch_network_topology(["sub-cache"], credential="cred")
         fetch_network_topology(["sub-cache"], credential="cred")
 
-        # 14 queries per call (vnets, nsgs, lbs, pes, gateways, public_ips, nics, vms, vmss, aks, firewalls, app_gateways, peerings, nic_subnets)
-        # but second call should be cached — so total == 14 not 28
-        assert mock_arg.call_count == 14
+        # 20 queries per call (vnets, nsgs, lbs, pes, gateways, public_ips, nics, vms, vmss, aks,
+        # firewalls, app_gateways, peerings, nic_subnets, lb_backends, route_tables, local_gateways,
+        # vpn_connections, app_gw_backends, nat_gateways)
+        # but second call should be cached — so total == 20 not 40
+        assert mock_arg.call_count == 20
 
 
 class TestPathCheck:
@@ -365,3 +367,187 @@ class TestPathCheck:
         # The function never raises — this verifies fault tolerance
         assert result["verdict"] in ("allowed", "error")
         assert "steps" in result
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3 new tests
+# ---------------------------------------------------------------------------
+
+
+class TestScoreResourceHealth:
+    def test_succeeded_is_green(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Succeeded") == "green"
+
+    def test_running_is_green(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Running") == "green"
+
+    def test_updating_is_yellow(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Updating") == "yellow"
+
+    def test_creating_is_yellow(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Creating") == "yellow"
+
+    def test_scaling_is_yellow(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Scaling") == "yellow"
+
+    def test_failed_is_red(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Failed") == "red"
+
+    def test_empty_is_red(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("") == "red"
+
+    def test_unknown_is_red(self):
+        from services.api_gateway.network_topology_service import _score_resource_health
+
+        assert _score_resource_health("Unknown") == "red"
+
+
+class TestLruCache:
+    def test_cache_put_and_get(self):
+        from services.api_gateway.network_topology_service import _cache_put, _cache_get, _cache
+
+        _cache.clear()
+        _cache_put("k1", ("value1",))
+        result = _cache_get("k1")
+        assert result == ("value1",)
+
+    def test_cache_get_missing_returns_none(self):
+        from services.api_gateway.network_topology_service import _cache_get, _cache
+
+        _cache.clear()
+        assert _cache_get("nonexistent") is None
+
+    def test_lru_eviction_at_max_size(self):
+        from services.api_gateway.network_topology_service import (
+            _cache_put, _cache_get, _cache, _CACHE_MAX_SIZE,
+        )
+
+        _cache.clear()
+        # Fill cache to max
+        for i in range(_CACHE_MAX_SIZE):
+            _cache_put(f"key-{i}", f"val-{i}")
+
+        assert len(_cache) == _CACHE_MAX_SIZE
+
+        # Adding one more should evict the oldest (key-0)
+        _cache_put("key-overflow", "overflow-val")
+        assert len(_cache) == _CACHE_MAX_SIZE
+        assert _cache_get("key-0") is None
+        assert _cache_get("key-overflow") == "overflow-val"
+
+    def test_lru_access_prevents_eviction(self):
+        from services.api_gateway.network_topology_service import (
+            _cache_put, _cache_get, _cache, _CACHE_MAX_SIZE,
+        )
+
+        _cache.clear()
+        # Fill to max
+        for i in range(_CACHE_MAX_SIZE):
+            _cache_put(f"key-{i}", f"val-{i}")
+
+        # Access key-0 to make it recently used
+        _cache_get("key-0")
+
+        # Add two more entries — key-1 and key-2 should be evicted, not key-0
+        _cache_put("key-new-1", "nv1")
+        _cache_put("key-new-2", "nv2")
+
+        assert _cache_get("key-0") is not None
+        assert _cache_get("key-1") is None
+        assert _cache_get("key-2") is None
+
+
+class TestRouteTableNodes:
+    def test_route_table_node_created(self):
+        from services.api_gateway.network_topology_service import _assemble_graph
+
+        rt_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/routetables/rt-1"
+        route_tables = [{"rtId": rt_id, "name": "rt-1", "location": "eastus", "routeCount": 3}]
+
+        nodes, edges = _assemble_graph([], [], [], [], [], [], [], route_tables=route_tables)
+        rt_nodes = [n for n in nodes if n["type"] == "routetable"]
+        assert len(rt_nodes) == 1
+        assert rt_nodes[0]["id"] == rt_id
+        assert rt_nodes[0]["data"]["routeCount"] == 3
+
+    def test_subnet_routetable_edge_emitted(self):
+        from services.api_gateway.network_topology_service import _assemble_graph
+
+        rt_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/routetables/rt-1"
+        vnet_row = _make_vnet_row(subnet_name="sub-rt")
+        vnet_row["subnetRouteTableId"] = rt_id
+        vnet_row["subnetNatGatewayId"] = ""
+
+        nodes, edges = _assemble_graph([vnet_row], [], [], [], [], [], [],
+                                        route_tables=[{"rtId": rt_id, "name": "rt-1", "location": "eastus", "routeCount": 1}])
+        rt_edges = [e for e in edges if e["type"] == "subnet-routetable"]
+        assert len(rt_edges) == 1
+        assert rt_edges[0]["target"] == rt_id
+
+
+class TestLocalGatewayNodes:
+    def test_local_gateway_node_created(self):
+        from services.api_gateway.network_topology_service import _assemble_graph
+
+        lgw_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/localnetworkgateways/lgw-1"
+        local_gateways = [{"lgwId": lgw_id, "name": "lgw-1", "gatewayIp": "203.0.113.1", "addressPrefixes": "10.1.0.0/16"}]
+
+        nodes, edges = _assemble_graph([], [], [], [], [], [], [], local_gateways=local_gateways)
+        lgw_nodes = [n for n in nodes if n["type"] == "localgw"]
+        assert len(lgw_nodes) == 1
+        assert lgw_nodes[0]["id"] == lgw_id
+        assert lgw_nodes[0]["data"]["gatewayIp"] == "203.0.113.1"
+
+
+class TestPeTargetEdge:
+    def test_pe_target_edge_emitted(self):
+        from services.api_gateway.network_topology_service import _assemble_graph
+
+        pe_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/privateendpoints/pe-1"
+        target_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.sql/servers/sql-1"
+        subnet_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-1/subnets/snet-pe"
+        pes = [{
+            "id": pe_id,
+            "name": "pe-1",
+            "subnetId": subnet_id,
+            "targetResourceId": target_id,
+            "connectionState": "Approved",
+        }]
+
+        nodes, edges = _assemble_graph([], [], [], pes, [], [], [])
+        pe_target_edges = [e for e in edges if e.get("type") == "pe-target"]
+        assert len(pe_target_edges) == 1
+        assert pe_target_edges[0]["source"] == pe_id
+        assert pe_target_edges[0]["target"] == target_id
+
+        external_nodes = [n for n in nodes if n["type"] == "external"]
+        assert any(n["id"] == target_id for n in external_nodes)
+
+    def test_pe_unapproved_health_red(self):
+        from services.api_gateway.network_topology_service import _assemble_graph
+
+        pe_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/privateendpoints/pe-2"
+        pes = [{
+            "id": pe_id,
+            "name": "pe-2",
+            "subnetId": "",
+            "targetResourceId": "",
+            "connectionState": "Pending",
+        }]
+        nodes, _ = _assemble_graph([], [], [], pes, [], [], [])
+        pe_node = next(n for n in nodes if n["id"] == pe_id)
+        assert pe_node["data"]["health"] == "red"

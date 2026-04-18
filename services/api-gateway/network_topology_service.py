@@ -1,9 +1,10 @@
 from __future__ import annotations
-"""Network Topology Service — Phase 103.
+"""Network Topology Service — Phase 103 Sprint 3.
 
 Queries Azure Resource Graph for VNets, subnets, NSGs, LBs, private endpoints,
-gateways, and NICs to assemble a graph representation of the network topology.
-Includes NSG health scoring and path-check evaluation.
+gateways, NICs, route tables, NAT gateways, local gateways, VPN connections,
+AppGW backends, and firewall policies to assemble a graph representation of
+the network topology.  Includes NSG health scoring and path-check evaluation.
 
 Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
@@ -12,6 +13,7 @@ results returned to keep the API gateway fault-tolerant.
 import logging
 import threading
 import time
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -33,15 +35,16 @@ Resources
 | extend subnetName = tostring(subnet.name)
 | extend subnetPrefix = tostring(subnet.properties.addressPrefix)
 | extend subnetNsgId = tolower(tostring(subnet.properties.networkSecurityGroup.id))
+| extend subnetRouteTableId = tolower(tostring(subnet.properties.routeTable.id))
+| extend subnetNatGatewayId = tolower(tostring(subnet.properties.natGateway.id))
 | project subscriptionId, resourceGroup, vnetName = name, id,
-          addressSpace, subnetName, subnetPrefix, subnetNsgId, location
+          addressSpace, subnetName, subnetPrefix, subnetNsgId, location,
+          subnetRouteTableId, subnetNatGatewayId
 """
 
 _NSG_RULES_QUERY = """
 Resources
 | where type =~ "microsoft.network/networksecuritygroups"
-| extend subnetIds = properties.subnets
-| extend nicIds = properties.networkInterfaces
 | mv-expand rule = properties.securityRules
 | project subscriptionId, resourceGroup, nsgName = name, nsgId = tolower(id),
           ruleName = tostring(rule.name),
@@ -54,8 +57,7 @@ Resources
           destPrefix = tostring(rule.properties.destinationAddressPrefix),
           destPrefixes = rule.properties.destinationAddressPrefixes,
           destPortRange = tostring(rule.properties.destinationPortRange),
-          destPortRanges = rule.properties.destinationPortRanges,
-          subnetIds, nicIds
+          destPortRanges = rule.properties.destinationPortRanges
 """
 
 _LB_QUERY = """
@@ -68,6 +70,19 @@ Resources
           sku_name = tostring(sku.name), frontendIp, publicIpId
 """
 
+_LB_BACKEND_QUERY = """
+Resources
+| where type == "microsoft.network/loadbalancers"
+| where array_length(properties.backendAddressPools) > 0
+| mv-expand pool = properties.backendAddressPools
+| mv-expand ipc = pool.properties.backendIPConfigurations
+| extend nicIpConfigId = tolower(tostring(ipc.id))
+| extend nicId = tolower(tostring(strcat_array(array_slice(split(nicIpConfigId, "/"), 0, 9), "/")))
+| extend lbId = tolower(id)
+| project lbId, nicId
+| where isnotempty(nicId)
+"""
+
 _PE_QUERY = """
 Resources
 | where type =~ "microsoft.network/privateendpoints"
@@ -75,8 +90,9 @@ Resources
 | mv-expand conn = properties.privateLinkServiceConnections
 | extend targetResourceId = tolower(tostring(conn.properties.privateLinkServiceId))
 | extend groupIds = tostring(conn.properties.groupIds)
+| extend connectionState = tostring(conn.properties.privateLinkServiceConnectionState.status)
 | project subscriptionId, resourceGroup, name, id, location,
-          subnetId, targetResourceId, groupIds
+          subnetId, targetResourceId, groupIds, connectionState
 """
 
 _GATEWAY_QUERY = """
@@ -86,11 +102,13 @@ Resources
 | extend vpnType = tostring(properties.vpnType)
 | extend sku_name = tostring(properties.sku.name)
 | extend bgp_enabled = tobool(properties.enableBgp)
+| extend provisioningState = tostring(properties.provisioningState)
 | mv-expand ipConfig = properties.ipConfigurations
 | extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
 | extend publicIpId = tolower(tostring(ipConfig.properties.publicIPAddress.id))
 | project subscriptionId, resourceGroup, name, id, location,
-          gatewayType, vpnType, sku_name, bgp_enabled, subnetId, publicIpId
+          gatewayType, vpnType, sku_name, bgp_enabled, subnetId, publicIpId,
+          provisioningState
 """
 
 _PUBLIC_IP_QUERY = """
@@ -153,10 +171,14 @@ Resources
 | mv-expand ipConfig = properties.ipConfigurations
 | extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
 | extend privateIp = tostring(ipConfig.properties.privateIPAddress)
+| extend firewallPolicyId = tolower(tostring(properties.firewallPolicy.id))
+| extend mgmtSubnetId = tolower(tostring(properties.managementIpConfiguration.properties.subnet.id))
+| extend threatIntelMode = tostring(properties.threatIntelMode)
+| extend provisioningState = tostring(properties.provisioningState)
 | project subscriptionId, resourceGroup, name, id = tolower(id), location,
           sku_tier = tostring(properties.sku.tier),
-          threatIntelMode = tostring(properties.threatIntelMode),
-          subnetId, privateIp
+          threatIntelMode, subnetId, privateIp,
+          firewallPolicyId, mgmtSubnetId, provisioningState
 """
 
 _APP_GATEWAY_QUERY = """
@@ -164,11 +186,30 @@ Resources
 | where type =~ "microsoft.network/applicationgateways"
 | mv-expand ipConfig = properties.gatewayIPConfigurations
 | extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
+| extend provisioningState = tostring(properties.provisioningState)
+| extend httpListeners = array_length(properties.httpListeners)
+| extend requestRoutingRules = array_length(properties.requestRoutingRules)
+| extend frontendPublicIpId = tolower(tostring(properties.frontendIPConfigurations[0].properties.publicIPAddress.id))
 | project subscriptionId, resourceGroup, name, id = tolower(id), location,
           sku_name = tostring(properties.sku.name),
           sku_tier = tostring(properties.sku.tier),
           capacity = toint(properties.sku.capacity),
-          subnetId
+          subnetId, provisioningState,
+          listenerCount = httpListeners,
+          routeRuleCount = requestRoutingRules,
+          frontendPublicIpId
+"""
+
+_APP_GATEWAY_BACKEND_QUERY = """
+Resources
+| where type =~ "microsoft.network/applicationgateways"
+| mv-expand pool = properties.backendAddressPools
+| mv-expand addr = pool.properties.backendAddresses
+| extend appgwId = tolower(id)
+| extend targetFqdn = tostring(addr.fqdn)
+| extend targetIp = tostring(addr.ipAddress)
+| project appgwId, targetFqdn, targetIp
+| where isnotempty(targetFqdn) or isnotempty(targetIp)
 """
 
 _VNET_PEERING_QUERY = """
@@ -195,13 +236,75 @@ Resources
 | project subscriptionId, resourceGroup, nicId = tolower(id), subnetId, privateIp, nsgId
 """
 
+_ROUTE_TABLE_QUERY = """
+Resources
+| where type == "microsoft.network/routetables"
+| extend rtId = tolower(id)
+| extend name = tostring(name)
+| extend location = tostring(location)
+| extend routeCount = array_length(properties.routes)
+| project rtId, name, location, routeCount
+"""
+
+_LOCAL_NETWORK_GATEWAY_QUERY = """
+Resources
+| where type == "microsoft.network/localnetworkgateways"
+| extend lgwId = tolower(id)
+| extend name = tostring(name)
+| extend gatewayIp = tostring(properties.gatewayIpAddress)
+| extend addressPrefixes = tostring(properties.localNetworkAddressSpace.addressPrefixes)
+| project lgwId, name, gatewayIp, addressPrefixes
+"""
+
+_VPN_CONNECTION_QUERY = """
+Resources
+| where type == "microsoft.network/connections"
+| extend connId = tolower(id)
+| extend name = tostring(name)
+| extend connectionType = tostring(properties.connectionType)
+| extend connectionStatus = tostring(properties.connectionStatus)
+| extend vngId = tolower(tostring(properties.virtualNetworkGateway1.id))
+| extend lngId = tolower(tostring(properties.localNetworkGateway2.id))
+| extend peerId = tolower(tostring(properties.virtualNetworkGateway2.id))
+| project connId, name, connectionType, connectionStatus, vngId, lngId, peerId
+"""
+
+_NAT_GATEWAY_QUERY = """
+Resources
+| where type == "microsoft.network/natgateways"
+| extend natId = tolower(id)
+| extend name = tostring(name)
+| extend idleTimeoutMinutes = toint(properties.idleTimeoutInMinutes)
+| extend provisioningState = tostring(properties.provisioningState)
+| project natId, name, idleTimeoutMinutes, provisioningState
+"""
+
 # ---------------------------------------------------------------------------
-# In-memory TTL Cache
+# In-memory LRU Cache (H-10)
 # ---------------------------------------------------------------------------
 
 _TOPOLOGY_TTL_SECONDS = 900
-_cache: Dict[str, Tuple[float, Any]] = {}
+_CACHE_MAX_SIZE = 50  # max subscription-set combinations cached
+_cache: OrderedDict = OrderedDict()
 _cache_lock = threading.Lock()
+
+
+def _cache_put(key: str, value: Any) -> None:
+    """Insert or update a cache entry with LRU eviction."""
+    with _cache_lock:
+        _cache[key] = value
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_MAX_SIZE:
+            _cache.popitem(last=False)
+
+
+def _cache_get(key: str) -> Any:
+    """Return cached value and move to end (most-recently-used), or None."""
+    with _cache_lock:
+        if key not in _cache:
+            return None
+        _cache.move_to_end(key)
+        return _cache[key]
 
 
 def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
@@ -210,18 +313,16 @@ def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
     Empty topology results (nodes=[]) are cached with a short 60s TTL so a
     transient startup race or a bad query doesn't poison the cache for 15 min.
     """
-    now = time.monotonic()
-    with _cache_lock:
-        if key in _cache:
-            cached_time, cached_value = _cache[key]
-            if now - cached_time < ttl:
-                return cached_value
+    cached_entry = _cache_get(key)
+    if cached_entry is not None:
+        cached_time, cached_value = cached_entry
+        if time.monotonic() - cached_time < ttl:
+            return cached_value
 
     result = fetch_fn()
     # Don't cache empty topology for the full TTL — retry quickly on next request
     effective_ttl = 60 if (isinstance(result, dict) and not result.get("nodes")) else ttl
-    with _cache_lock:
-        _cache[key] = (time.monotonic() - (ttl - effective_ttl), result)
+    _cache_put(key, (time.monotonic() - (ttl - effective_ttl), result))
     return result
 
 
@@ -246,6 +347,21 @@ def _score_nsg_health(nsg_rules: List[Dict[str, Any]]) -> str:
         if access == "allow" and source == "*" and dest_port == "*" and isinstance(priority, int) and priority < 1000:
             return "yellow"
     return "green"
+
+
+def _score_resource_health(provisioning_state: str) -> str:
+    """Score resource health based on provisioning state (H-9).
+
+    - 'Succeeded' or 'Running' → 'green'
+    - 'Updating', 'Creating', 'Scaling' → 'yellow'
+    - Anything else (Failed, Deleting, Unknown, empty) → 'red'
+    """
+    state = provisioning_state.strip().lower()
+    if state in ("succeeded", "running"):
+        return "green"
+    if state in ("updating", "creating", "scaling"):
+        return "yellow"
+    return "red"
 
 
 def _port_in_range(port: int, range_str: str, ranges_list: Any = None) -> bool:
@@ -443,6 +559,13 @@ def _assemble_graph(
     app_gateways: Optional[List[Dict[str, Any]]] = None,
     nic_subnet_map: Optional[Dict[str, Dict[str, str]]] = None,
     nsg_rules_by_id: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    lb_backends: Optional[List[Dict[str, Any]]] = None,
+    route_tables: Optional[List[Dict[str, Any]]] = None,
+    local_gateways: Optional[List[Dict[str, Any]]] = None,
+    vpn_connections: Optional[List[Dict[str, Any]]] = None,
+    app_gw_backends: Optional[List[Dict[str, Any]]] = None,
+    nat_gateways: Optional[List[Dict[str, Any]]] = None,
+    nic_vm_map: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Build nodes and edges lists from raw ARG query results."""
     nodes: List[Dict[str, Any]] = []
@@ -489,8 +612,27 @@ def _assemble_graph(
                 "data": {},
             })
 
-        # Edge: subnet -> NSG (deferred — added after NSG nodes are built)
-        subnet_nsg_id = str(row.get("subnetNsgId", "")).lower()
+        # H-4: Subnet → Route Table edge
+        rt_id = str(row.get("subnetRouteTableId", "")).lower()
+        if subnet_id and rt_id:
+            edges.append({
+                "id": f"edge-rt-{subnet_id}-{rt_id}",
+                "source": subnet_id,
+                "target": rt_id,
+                "type": "subnet-routetable",
+                "data": {},
+            })
+
+        # M-9: Subnet → NAT Gateway edge
+        natgw_id = str(row.get("subnetNatGatewayId", "")).lower()
+        if subnet_id and natgw_id:
+            edges.append({
+                "id": f"edge-natgw-{subnet_id}-{natgw_id}",
+                "source": subnet_id,
+                "target": natgw_id,
+                "type": "subnet-natgw",
+                "data": {},
+            })
 
     # Build per-NSG rule list for embedding in nodes
     _rules_by_id: Dict[str, List[Dict[str, Any]]] = nsg_rules_by_id or {}
@@ -552,6 +694,51 @@ def _assemble_graph(
         if node["type"] == "nsg":
             node["data"]["ruleCount"] = nsg_rule_counts.get(node["id"], 0)
 
+    # H-4: Route Table nodes
+    for row in (route_tables or []):
+        rt_id = str(row.get("rtId", "")).lower()
+        if rt_id and rt_id not in seen_nodes:
+            seen_nodes.add(rt_id)
+            nodes.append({
+                "id": rt_id,
+                "type": "routetable",
+                "label": row.get("name", ""),
+                "data": {
+                    "location": row.get("location", ""),
+                    "routeCount": row.get("routeCount", 0),
+                },
+            })
+
+    # M-9: NAT Gateway nodes
+    for row in (nat_gateways or []):
+        natgw_id = str(row.get("natId", "")).lower()
+        if natgw_id and natgw_id not in seen_nodes:
+            seen_nodes.add(natgw_id)
+            nodes.append({
+                "id": natgw_id,
+                "type": "natgw",
+                "label": row.get("name", ""),
+                "data": {
+                    "idleTimeoutMinutes": row.get("idleTimeoutMinutes", 0),
+                    "provisioningState": row.get("provisioningState", ""),
+                },
+            })
+
+    # H-5: Local Network Gateway nodes
+    for row in (local_gateways or []):
+        lgw_id = str(row.get("lgwId", "")).lower()
+        if lgw_id and lgw_id not in seen_nodes:
+            seen_nodes.add(lgw_id)
+            nodes.append({
+                "id": lgw_id,
+                "type": "localgw",
+                "label": row.get("name", ""),
+                "data": {
+                    "gatewayIp": row.get("gatewayIp", ""),
+                    "addressPrefixes": row.get("addressPrefixes", ""),
+                },
+            })
+
     # LB nodes
     for row in lbs:
         lb_id = str(row.get("id", "")).lower()
@@ -579,13 +766,19 @@ def _assemble_graph(
     # PE nodes
     for row in pes:
         pe_id = str(row.get("id", "")).lower()
+        connection_state = str(row.get("connectionState", "Approved"))
         if pe_id and pe_id not in seen_nodes:
             seen_nodes.add(pe_id)
+            # H-9: PE health based on connection state
+            pe_health = "green" if connection_state.lower() == "approved" else "red"
             nodes.append({
                 "id": pe_id,
                 "type": "pe",
                 "label": row.get("name", ""),
-                "data": {"targetResourceId": row.get("targetResourceId", "")},
+                "data": {
+                    "targetResourceId": row.get("targetResourceId", ""),
+                    "health": pe_health,
+                },
             })
         subnet_id = str(row.get("subnetId", "")).lower()
         if pe_id and subnet_id:
@@ -597,11 +790,31 @@ def _assemble_graph(
                 "data": {},
             })
 
+        # C-2: PE → target service edge
+        target_id = str(row.get("targetResourceId", "")).lower()
+        if pe_id and target_id:
+            if target_id not in seen_nodes:
+                seen_nodes.add(target_id)
+                nodes.append({
+                    "id": target_id,
+                    "type": "external",
+                    "label": target_id.split("/")[-1],
+                    "data": {"resourceId": target_id},
+                })
+            edges.append({
+                "id": f"pe-target-{pe_id}",
+                "type": "pe-target",
+                "source": pe_id,
+                "target": target_id,
+            })
+
     # Gateway nodes
     for row in gateways:
         gw_id = str(row.get("id", "")).lower()
         if gw_id and gw_id not in seen_nodes:
             seen_nodes.add(gw_id)
+            # H-9: Gateway health based on provisioning state
+            gw_health = _score_resource_health(str(row.get("provisioningState", "Succeeded")))
             nodes.append({
                 "id": gw_id,
                 "type": "gateway",
@@ -611,6 +824,7 @@ def _assemble_graph(
                     "vpnType": row.get("vpnType", ""),
                     "sku": row.get("sku_name", ""),
                     "bgpEnabled": row.get("bgp_enabled", False),
+                    "health": gw_health,
                 },
             })
         subnet_id = str(row.get("subnetId", "")).lower()
@@ -632,6 +846,27 @@ def _assemble_graph(
                 "data": {},
             })
 
+    # H-5: VPN Connection edges
+    for row in (vpn_connections or []):
+        vng_id = str(row.get("vngId", "")).lower()
+        lng_id = str(row.get("lngId", "")).lower()
+        peer_id = str(row.get("peerId", "")).lower()
+        conn_id = str(row.get("connId", "")).lower()
+        if not vng_id:
+            continue
+        target = lng_id if lng_id else peer_id
+        if target:
+            edges.append({
+                "id": f"vpn-conn-{conn_id}",
+                "type": "vpn-connection",
+                "source": vng_id,
+                "target": target,
+                "data": {
+                    "connectionType": row.get("connectionType", ""),
+                    "connectionStatus": row.get("connectionStatus", ""),
+                },
+            })
+
     # Public IP nodes (C-1)
     for row in public_ips:
         pip_id = str(row.get("id", "")).lower()
@@ -651,6 +886,11 @@ def _assemble_graph(
 
     # VM nodes — resolve subnet via nic_subnet_map; support multi-NIC (H-1)
     _nic_map: Dict[str, Dict[str, str]] = nic_subnet_map or {}
+    _nic_vm: Dict[str, str] = nic_vm_map or {}
+
+    # Build VM private IP map for AppGW backend matching
+    vm_ip_map: Dict[str, str] = {}  # private_ip → vm_id
+
     for row in (vms or []):
         vm_id = str(row.get("vmId", "")).lower()
         nic_id = str(row.get("nicId", "")).lower()
@@ -672,6 +912,8 @@ def _assemble_graph(
                     "nicId": nic_id,
                 },
             })
+        if private_ip and vm_id:
+            vm_ip_map[private_ip] = vm_id
         # Emit one subnet-vm edge per NIC (H-1)
         if vm_id and subnet_id:
             edge_id = f"edge-{subnet_id}-{vm_id}-{nic_id}"
@@ -702,6 +944,20 @@ def _assemble_graph(
                 "data": {},
             })
 
+    # H-3: LB backend pool edges
+    for row in (lb_backends or []):
+        lb_id = str(row.get("lbId", "")).lower()
+        nic_id = str(row.get("nicId", "")).lower()
+        vm_id = _nic_vm.get(nic_id, "")
+        if lb_id and vm_id:
+            edges.append({
+                "id": f"lb-backend-{lb_id}-{vm_id}",
+                "type": "lb-backend",
+                "source": lb_id,
+                "target": vm_id,
+                "data": {},
+            })
+
     # VMSS nodes
     for row in (vmss_list or []):
         vmss_id = str(row.get("id", "")).lower()
@@ -727,6 +983,8 @@ def _assemble_graph(
         # Deduplicate AKS node — only create once (H-2)
         if aks_id and aks_id not in seen_nodes:
             seen_nodes.add(aks_id)
+            # H-9: AKS health based on provisioning state
+            aks_health = _score_resource_health(str(row.get("provisioningState", "Succeeded")))
             nodes.append({
                 "id": aks_id,
                 "type": "aks",
@@ -736,6 +994,7 @@ def _assemble_graph(
                     "nodeCount": row.get("nodeCount", 0),
                     "provisioningState": row.get("provisioningState", ""),
                     "location": row.get("location", ""),
+                    "health": aks_health,
                 },
             })
         # Emit one subnet-aks edge per pool with a non-empty subnetId (H-2)
@@ -748,19 +1007,56 @@ def _assemble_graph(
     # Firewall nodes
     for row in (firewalls or []):
         fw_id = str(row.get("id", "")).lower()
+        threat_intel = str(row.get("threatIntelMode", ""))
         if fw_id and fw_id not in seen_nodes:
             seen_nodes.add(fw_id)
+            # H-9: Firewall health — base on provisioning state, degrade if ThreatIntel off
+            fw_health = _score_resource_health(str(row.get("provisioningState", "Succeeded")))
+            if fw_health == "green" and threat_intel.lower() == "off":
+                fw_health = "yellow"
+            fw_policy_id = str(row.get("firewallPolicyId", "")).lower()
+            mgmt_subnet_id = str(row.get("mgmtSubnetId", "")).lower()
             nodes.append({
                 "id": fw_id,
                 "type": "firewall",
                 "label": row.get("name", ""),
                 "data": {
                     "skuTier": row.get("sku_tier", ""),
-                    "threatIntelMode": row.get("threatIntelMode", ""),
+                    "threatIntelMode": threat_intel,
                     "privateIp": row.get("privateIp", ""),
                     "location": row.get("location", ""),
+                    "health": fw_health,
+                    "firewallPolicyId": fw_policy_id,
+                    "mgmtSubnetId": mgmt_subnet_id,
                 },
             })
+            # H-7: Firewall policy stub node + edge
+            if fw_policy_id:
+                if fw_policy_id not in seen_nodes:
+                    seen_nodes.add(fw_policy_id)
+                    nodes.append({
+                        "id": fw_policy_id,
+                        "type": "firewallpolicy",
+                        "label": fw_policy_id.split("/")[-1],
+                        "data": {"resourceId": fw_policy_id},
+                    })
+                edges.append({
+                    "id": f"firewall-policy-{fw_id}",
+                    "type": "firewall-policy",
+                    "source": fw_id,
+                    "target": fw_policy_id,
+                    "data": {},
+                })
+            # H-7: Firewall management subnet edge
+            if mgmt_subnet_id:
+                edges.append({
+                    "id": f"firewall-mgmt-subnet-{fw_id}",
+                    "type": "firewall-mgmt-subnet",
+                    "source": fw_id,
+                    "target": mgmt_subnet_id,
+                    "data": {},
+                })
+
         subnet_id = str(row.get("subnetId", "")).lower()
         if fw_id and subnet_id:
             edges.append({"id": f"edge-{subnet_id}-{fw_id}", "source": subnet_id, "target": fw_id, "type": "subnet-firewall", "data": {}})
@@ -779,6 +1075,8 @@ def _assemble_graph(
         agw_id = str(row.get("id", "")).lower()
         if agw_id and agw_id not in seen_nodes:
             seen_nodes.add(agw_id)
+            # H-9: AppGW health
+            agw_health = _score_resource_health(str(row.get("provisioningState", "Succeeded")))
             nodes.append({
                 "id": agw_id,
                 "type": "appgw",
@@ -788,6 +1086,10 @@ def _assemble_graph(
                     "skuTier": row.get("sku_tier", ""),
                     "capacity": row.get("capacity", 0),
                     "location": row.get("location", ""),
+                    "health": agw_health,
+                    "listenerCount": row.get("listenerCount", 0),
+                    "routeRuleCount": row.get("routeRuleCount", 0),
+                    "frontendPublicIpId": row.get("frontendPublicIpId", ""),
                 },
             })
         subnet_id = str(row.get("subnetId", "")).lower()
@@ -802,6 +1104,44 @@ def _assemble_graph(
                 "type": "resource-publicip",
                 "data": {},
             })
+
+    # H-6: AppGW backend address edges
+    for row in (app_gw_backends or []):
+        agw_id = str(row.get("appgwId", "")).lower()
+        target_ip = str(row.get("targetIp", ""))
+        target_fqdn = str(row.get("targetFqdn", ""))
+        if not agw_id:
+            continue
+        # If IP matches a known VM, emit appgw-backend edge to VM
+        vm_target = vm_ip_map.get(target_ip, "") if target_ip else ""
+        if vm_target:
+            edges.append({
+                "id": f"appgw-backend-{agw_id}-{vm_target}",
+                "type": "appgw-backend",
+                "source": agw_id,
+                "target": vm_target,
+                "data": {},
+            })
+        else:
+            # Create stub external node with FQDN or IP as label
+            label = target_fqdn or target_ip
+            stub_id = f"external-appgw-{agw_id}-{label}".lower().replace(".", "-")
+            if stub_id and stub_id not in seen_nodes:
+                seen_nodes.add(stub_id)
+                nodes.append({
+                    "id": stub_id,
+                    "type": "external",
+                    "label": label,
+                    "data": {"fqdn": target_fqdn, "ip": target_ip},
+                })
+            if stub_id:
+                edges.append({
+                    "id": f"appgw-backend-{agw_id}-{stub_id}",
+                    "type": "appgw-backend",
+                    "source": agw_id,
+                    "target": stub_id,
+                    "data": {},
+                })
 
     return nodes, edges
 
@@ -862,6 +1202,12 @@ def fetch_network_topology(
             app_gateways = _safe_query(_APP_GATEWAY_QUERY, "app_gateways")
             peerings = _safe_query(_VNET_PEERING_QUERY, "peerings")
             nic_rows = _safe_query(_NIC_SUBNET_QUERY, "nic_subnets")
+            lb_backends = _safe_query(_LB_BACKEND_QUERY, "lb_backends")
+            route_tables = _safe_query(_ROUTE_TABLE_QUERY, "route_tables")
+            local_gateways = _safe_query(_LOCAL_NETWORK_GATEWAY_QUERY, "local_gateways")
+            vpn_connections = _safe_query(_VPN_CONNECTION_QUERY, "vpn_connections")
+            app_gw_backends = _safe_query(_APP_GATEWAY_BACKEND_QUERY, "app_gw_backends")
+            nat_gateways = _safe_query(_NAT_GATEWAY_QUERY, "nat_gateways")
 
             # Build NSG rules map keyed by nsg_id (lower)
             nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
@@ -881,12 +1227,27 @@ def fetch_network_topology(
                         "nsgId": str(row.get("nsgId", "")).lower(),
                     }
 
+            # H-3: Build NIC → VM map for LB backend wiring
+            nic_vm_map: Dict[str, str] = {}
+            for row in vms:
+                vm_id = str(row.get("vmId", "")).lower()
+                nic_id = str(row.get("nicId", "")).lower()
+                if nic_id and vm_id:
+                    nic_vm_map[nic_id] = vm_id
+
             nodes, edges = _assemble_graph(
                 vnets, nsgs, lbs, pes, gateways, public_ips, nics,
                 vms=vms, vmss_list=vmss_list, aks_list=aks_list,
                 firewalls=firewalls, app_gateways=app_gateways,
                 nic_subnet_map=nic_subnet_map,
                 nsg_rules_by_id=nsg_rules_map,
+                lb_backends=lb_backends,
+                route_tables=route_tables,
+                local_gateways=local_gateways,
+                vpn_connections=vpn_connections,
+                app_gw_backends=app_gw_backends,
+                nat_gateways=nat_gateways,
+                nic_vm_map=nic_vm_map,
             )
 
             # Add VNet peering edges — merge asymmetric state (C-5)
@@ -978,7 +1339,7 @@ def fetch_network_topology(
                 if node["type"] == "vnet":
                     node["data"]["peeringCount"] = vnet_peering_counts.get(node["id"], 0)
 
-            result = {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map}
+            result = {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map, "_nic_subnet_map": nic_subnet_map}
             return result
         except Exception as exc:
             logger.warning("network_topology_service: ARG query failed | error=%s", exc)
@@ -995,7 +1356,7 @@ def fetch_network_topology(
             duration_ms,
         )
         # C-7: strip internal NSG rules map — return shallow copy without it
-        public_result = {k: v for k, v in result.items() if k != "_nsg_rules_map"}
+        public_result = {k: v for k, v in result.items() if not k.startswith("_")}
         return public_result
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
@@ -1029,26 +1390,35 @@ def evaluate_path_check(
         # Rebuild NSG rules map from the cache directly (bypass public API strip)
         # by re-fetching from the internal cache entry which retains _nsg_rules_map
         cache_key_inner = f"topology:{','.join(sorted(subscription_ids))}"
-        with _cache_lock:
-            cached = _cache.get(cache_key_inner)
+        cached_entry = _cache_get(cache_key_inner)
         nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
-        if cached:
-            nsg_rules_map = cached[1].get("_nsg_rules_map", {})
+        nic_subnet_map: Dict[str, Dict[str, str]] = {}
+        if cached_entry is not None:
+            _, cached_data = cached_entry
+            nsg_rules_map = cached_data.get("_nsg_rules_map", {})
+            nic_subnet_map = cached_data.get("_nic_subnet_map", {})
 
         # Resolve source/dest to their subnet's NSG
-        source_subnet_nsg = _resolve_resource_nsg(source_resource_id, nodes, edges)
-        dest_subnet_nsg = _resolve_resource_nsg(destination_resource_id, nodes, edges)
+        source_resource_id_lower = source_resource_id.lower()
+        source_subnet_nsg = _resolve_resource_nsg(source_resource_id_lower, nodes, edges)
+        dest_subnet_nsg = _resolve_resource_nsg(destination_resource_id.lower(), nodes, edges)
 
         steps: List[Dict[str, Any]] = []
         blocking_nsg_id: Optional[str] = None
 
+        # M-7: Try to resolve source IP from nic_subnet_map
         source_ip = "*"
+        for nic_id, nic_info in nic_subnet_map.items():
+            if nic_info.get("vmId") == source_resource_id_lower:
+                source_ip = nic_info.get("privateIp", "*")
+                break
+
         dest_ip = "*"
 
         # Evaluate outbound from source NSG
         if source_subnet_nsg:
             src_rules = nsg_rules_map.get(source_subnet_nsg, [])
-            outbound_result = _evaluate_nsg_rules(src_rules, port, protocol, "*", "*", "Outbound")
+            outbound_result = _evaluate_nsg_rules(src_rules, port, protocol, source_ip, "*", "Outbound")
             src_nsg_node = node_map.get(source_subnet_nsg, {})
             steps.append({
                 "nsg_id": source_subnet_nsg,
@@ -1074,7 +1444,7 @@ def evaluate_path_check(
         # Evaluate inbound at destination NSG
         if dest_subnet_nsg:
             dst_rules = nsg_rules_map.get(dest_subnet_nsg, [])
-            inbound_result = _evaluate_nsg_rules(dst_rules, port, protocol, "*", "*", "Inbound")
+            inbound_result = _evaluate_nsg_rules(dst_rules, port, protocol, source_ip, "*", "Inbound")
             dst_nsg_node = node_map.get(dest_subnet_nsg, {})
             steps.append({
                 "nsg_id": dest_subnet_nsg,
