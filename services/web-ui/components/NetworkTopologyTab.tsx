@@ -47,6 +47,219 @@ import {
 } from '@/components/ui/select'
 
 // ---------------------------------------------------------------------------
+// NodeDetailPanel
+// ---------------------------------------------------------------------------
+
+interface NodeDetailPanelProps {
+  node: Node | null
+  edge: Edge | null
+  open: boolean
+  onClose: () => void
+}
+
+function FieldRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{value}</span>
+    </div>
+  )
+}
+
+function HealthBadge({ health }: { health: string }) {
+  const labels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
+  const accent = `var(--accent-${health})`
+  return (
+    <span
+      className="px-1.5 py-px rounded-full text-[11px] font-semibold uppercase tracking-wide"
+      style={{
+        background: `color-mix(in srgb, ${accent} 15%, transparent)`,
+        color: accent,
+        border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+      }}
+    >
+      {labels[health] ?? health}
+    </span>
+  )
+}
+
+function NsgRulesTable({ rules }: { rules: Array<Record<string, unknown>> }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            {['Priority', 'Name', 'Dir', 'Access', 'Proto', 'Source', 'Dest', 'Ports'].map((h) => (
+              <th key={h} className="text-left pb-1 pr-2 font-medium" style={{ color: 'var(--text-muted)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.priority as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-primary)' }}>{r.name as string}</td>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.direction as string}</td>
+              <td className="py-1 pr-2">
+                <span style={{ color: (r.access as string)?.toLowerCase() === 'allow' ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                  {r.access as string}
+                </span>
+              </td>
+              <td className="py-1 pr-2" style={{ color: 'var(--text-secondary)' }}>{r.protocol as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-muted)' }}>{r.source as string}</td>
+              <td className="py-1 pr-2 font-mono" style={{ color: 'var(--text-muted)' }}>{r.destination as string}</td>
+              <td className="py-1 font-mono" style={{ color: 'var(--text-muted)' }}>{r.ports as string}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
+  if (!open) return null
+
+  const renderNodeContent = () => {
+    if (!node) return null
+    const d = node.data
+
+    switch (node.type) {
+      case 'nsgNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NSG Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Health" value={<HealthBadge health={(d.health as string) ?? 'green'} />} />
+            {d.ruleCount != null && <FieldRow label="Rule Count" value={String(d.ruleCount)} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+            {Array.isArray(d.rules) && d.rules.length > 0 ? (
+              <>
+                <p className="text-xs font-semibold mt-4 mb-1" style={{ color: 'var(--text-secondary)' }}>Security Rules</p>
+                <NsgRulesTable rules={d.rules as Array<Record<string, unknown>>} />
+              </>
+            ) : (
+              <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
+                Rules are loaded during path check.
+              </p>
+            )}
+          </>
+        )
+
+      case 'vnetNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VNet Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.addressSpace && <FieldRow label="Address Space" value={<span className="font-mono">{d.addressSpace as string}</span>} />}
+            {d.subscription && <FieldRow label="Subscription" value={d.subscription as string} />}
+            {d.peeringCount != null && <FieldRow label="Peering Count" value={String(d.peeringCount)} />}
+          </>
+        )
+
+      case 'subnetNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Subnet Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.cidr && <FieldRow label="CIDR" value={<span className="font-mono">{d.cidr as string}</span>} />}
+            <FieldRow label="NSG" value={(d.nsgId as string) || 'None'} />
+            <FieldRow label="Route Table" value={(d.routeTable as string) || 'None'} />
+          </>
+        )
+
+      case 'lbNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Load Balancer Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            <FieldRow label="Public IP" value={(d.publicIp as string) || 'Internal'} />
+          </>
+        )
+
+      case 'peNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Private Endpoint Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.targetService && <FieldRow label="Target Service" value={d.targetService as string} />}
+            <FieldRow label="Private IP" value={(d.privateIp as string) || '—'} />
+            <FieldRow label="Connection State" value={(d.connectionState as string) || '—'} />
+          </>
+        )
+
+      case 'gatewayNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Gateway Details</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.gatewayType && <FieldRow label="Type" value={d.gatewayType as string} />}
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            <FieldRow label="BGP" value={(d.bgpEnabled as boolean) ? 'Enabled' : 'Disabled'} />
+          </>
+        )
+
+      default:
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Node Details</p>
+            {Object.entries(d).map(([k, v]) => (
+              <FieldRow key={k} label={k} value={String(v)} />
+            ))}
+          </>
+        )
+    }
+  }
+
+  const renderEdgeContent = () => {
+    if (!edge) return null
+    return (
+      <>
+        <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>
+          {(edge.label as string) || 'Connection Details'}
+        </p>
+        <FieldRow label="Source" value={<span className="font-mono text-xs">{edge.source}</span>} />
+        <FieldRow label="Target" value={<span className="font-mono text-xs">{edge.target}</span>} />
+        <FieldRow label="Type" value={edge.type ?? '—'} />
+        <FieldRow label="Status" value={edge.animated ? 'Active' : 'Inactive'} />
+        {edge.data?.issue && (
+          <div
+            className="mt-3 rounded p-3 text-xs"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent-red) 25%, transparent)',
+              color: 'var(--accent-red)',
+            }}
+          >
+            <p className="font-semibold mb-1">Issue Detected</p>
+            <p>{String(edge.data.issue)}</p>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  const title = edge
+    ? ((edge.label as string) || 'Connection Details')
+    : node
+    ? (node.data.label as string)
+    : 'Details'
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-[380px] sm:w-[440px] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{title}</SheetTitle>
+        </SheetHeader>
+        {node && renderNodeContent()}
+        {edge && renderEdgeContent()}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -433,6 +646,11 @@ export default function NetworkTopologyTab() {
   const [error, setError] = useState<string | null>(null)
   const [topologyData, setTopologyData] = useState<TopologyData | null>(null)
 
+  // Drill-down state
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
   // Path checker state
   const [pathSheetOpen, setPathSheetOpen] = useState(false)
   const [pathSource, setPathSource] = useState('')
@@ -772,6 +990,9 @@ export default function NetworkTopologyTab() {
         >
           Issues: {issueCount}
         </span>
+        <span className="text-[11px] ml-2" style={{ color: 'var(--text-muted)' }}>
+          · Click any node or connection to inspect details
+        </span>
       </div>
 
       {/* Error */}
@@ -819,6 +1040,17 @@ export default function NetworkTopologyTab() {
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
+            onNodeClick={(_evt, node) => {
+              setSelectedNode(node)
+              setSelectedEdge(null)
+              setDetailOpen(true)
+            }}
+            onEdgeClick={(_evt, edge) => {
+              setSelectedEdge(edge)
+              setSelectedNode(null)
+              setDetailOpen(true)
+            }}
+            elementsSelectable
           >
             <Controls />
             <MiniMap />
@@ -826,6 +1058,13 @@ export default function NetworkTopologyTab() {
           </ReactFlow>
         </div>
       )}
+
+      <NodeDetailPanel
+        node={selectedNode}
+        edge={selectedEdge}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   )
 }
