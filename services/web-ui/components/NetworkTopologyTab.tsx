@@ -1737,55 +1737,6 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               }}
             />
 
-            {/* Focused-issue banner — bottom-center */}
-            {focusedIssueIndex !== null && topologyData?.issues[focusedIssueIndex] && (() => {
-              const issue = topologyData.issues[focusedIssueIndex]
-              const srcName = String(issue.source_nsg_id ?? '').split('/').pop()
-              const dstName = String(issue.dest_nsg_id ?? '').split('/').pop()
-              return (
-                <div
-                  className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-lg px-4 py-2 text-xs shadow-lg"
-                  style={{
-                    background: 'color-mix(in srgb, var(--accent-red) 18%, var(--bg-surface))',
-                    border: '1px solid var(--accent-red)',
-                    color: 'var(--text-primary)',
-                    maxWidth: '520px',
-                  }}
-                >
-                  <span style={{ color: 'var(--accent-red)' }}>🚫</span>
-                  <span>
-                    <strong>Port {String(issue.port)}/TCP blocked</strong>
-                    {' · '}
-                    <span className="font-mono">{srcName}</span>
-                    {' → '}
-                    <span className="font-mono">{dstName}</span>
-                  </span>
-                  <button
-                    onClick={clearIssueFocus}
-                    className="ml-2 shrink-0 text-[10px] px-2 py-0.5 rounded"
-                    style={{
-                      background: 'color-mix(in srgb, var(--accent-red) 25%, transparent)',
-                      color: 'var(--accent-red)',
-                      border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
-                    }}
-                  >
-                    ✕ Clear
-                  </button>
-                  <button
-                    onClick={() => setIssuesOpen(true)}
-                    className="shrink-0 text-[10px] px-2 py-0.5 rounded"
-                    style={{
-                      background: 'var(--bg-subtle)',
-                      color: 'var(--text-secondary)',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    All issues
-                  </button>
-                </div>
-              )
-            })()}
-
             {/* Legend overlay — bottom-left */}
             <LegendOverlay />
 
@@ -1902,6 +1853,56 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
       />
+
+      {/* Focused-issue banner — fixed bottom-center, always above everything */}
+      {focusedIssueIndex !== null && topologyData?.issues[focusedIssueIndex] && (() => {
+        const issue = topologyData.issues[focusedIssueIndex]
+        const srcName = String(issue.source_nsg_id ?? '').split('/').pop()
+        const dstName = String(issue.dest_nsg_id ?? '').split('/').pop()
+        return (
+          <div
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg px-4 py-2.5 text-xs shadow-xl"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 18%, var(--bg-surface))',
+              border: '1px solid var(--accent-red)',
+              color: 'var(--text-primary)',
+              maxWidth: '560px',
+              backdropFilter: 'blur(6px)',
+            }}
+          >
+            <span style={{ color: 'var(--accent-red)' }}>🚫</span>
+            <span className="flex-1">
+              <strong>Port {String(issue.port)}/TCP blocked</strong>
+              {' · '}
+              <span className="font-mono">{srcName}</span>
+              {' → '}
+              <span className="font-mono">{dstName}</span>
+            </span>
+            <button
+              onClick={() => setIssuesOpen(true)}
+              className="shrink-0 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-subtle)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              All issues
+            </button>
+            <button
+              onClick={clearIssueFocus}
+              className="shrink-0 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'color-mix(in srgb, var(--accent-red) 25%, transparent)',
+                color: 'var(--accent-red)',
+                border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
+              }}
+            >
+              ✕ Clear
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Issues drawer */}
       <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
