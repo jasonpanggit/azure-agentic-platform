@@ -875,23 +875,28 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
+      {/* sm:max-w-none overrides sheet.tsx's sm:max-w-sm so panelWidth inline style is respected */}
       <SheetContent
         side="right"
         style={{ width: panelWidth, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
-        className="overflow-y-auto p-0"
+        className="p-0 sm:max-w-none"
       >
-        {/* Drag handle on the left edge */}
-        <div
-          onMouseDown={onDragHandleMouseDown}
-          className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-10 hover:bg-blue-500/30 transition-colors"
-          title="Drag to resize"
-        />
-        <div className="px-6 py-4 h-full overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle style={{ color: 'var(--text-primary)' }}>{title}</SheetTitle>
-          </SheetHeader>
-          {node && renderNodeContent()}
-          {edge && renderEdgeContent()}
+        {/* Relative wrapper needed so the absolute drag handle is positioned inside the panel */}
+        <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Drag handle on the left edge */}
+          <div
+            onMouseDown={onDragHandleMouseDown}
+            style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 10 }}
+            className="hover:bg-blue-500/30 transition-colors"
+            title="Drag to resize panel width"
+          />
+          <div className="px-6 py-4 overflow-y-auto flex-1">
+            <SheetHeader>
+              <SheetTitle style={{ color: 'var(--text-primary)' }}>{title}</SheetTitle>
+            </SheetHeader>
+            {node && renderNodeContent()}
+            {edge && renderEdgeContent()}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
