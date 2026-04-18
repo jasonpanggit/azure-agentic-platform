@@ -146,47 +146,61 @@ function buildCytoscapeElements(
 }
 
 // ---------------------------------------------------------------------------
-// cytoscapeStylesheet — n8n-inspired: uniform roundrect, colored left stripe,
-// clean dark backgrounds, crisp thin edges
+// cytoscapeStylesheet — n8n-inspired: uniform roundrect cards, colored
+// top-border accent per type, clean dark backgrounds, crisp thin edges
 // ---------------------------------------------------------------------------
 
-// Left-stripe gradient: sharp colored band on left 6%, then dark body
-function stripe(color: string): Record<string, string> {
-  return {
-    'background-gradient-direction': 'to-right',
-    'background-gradient-stop-colors': `${color} ${color} #1a2540 #1a2540`,
-    'background-gradient-stop-positions': '0% 6% 6% 100%',
-    'border-color': color,
-  }
+// Encode SVG for use as a Cytoscape background-image data URI
+// Must use encodeURIComponent on the full SVG string for cross-browser compat
+const svgIcon = (inner: string) => {
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none">${inner}</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svgStr)}`
 }
 
-// Azure-style inline SVG icons (white, 16px viewbox, embedded as data URIs)
-// Each icon is placed in the left stripe using background-image
-const svg = (paths: string, vb = '0 0 18 18') =>
-  `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='${vb}' fill='white'>${paths}</svg>`
+// Per-type accent colors (top border + icon tint)
+const TYPE_COLOR: Record<string, string> = {
+  vnet:           '#3b82f6',
+  subnet:         '#64748b',
+  nsg:            '#f43f5e',
+  vm:             '#22c55e',
+  vmss:           '#34d399',
+  aks:            '#0ea5e9',
+  lb:             '#a78bfa',
+  appgw:          '#fb923c',
+  gateway:        '#fbbf24',
+  firewall:       '#ef4444',
+  pe:             '#818cf8',
+  publicip:       '#38bdf8',
+  routetable:     '#4ade80',
+  localgw:        '#fcd34d',
+  natgw:          '#2dd4bf',
+  firewallpolicy: '#f97316',
+  external:       '#475569',
+}
 
+// Azure-inspired SVG icons per node type
 const AZURE_ICONS: Record<string, string> = {
-  vnet:     svg("<path d='M9 1L1 5v8l8 4 8-4V5L9 1zm0 2.2l5.8 2.9L9 11 3.2 6.1 9 3.2zM2 6.7l6 3v5l-6-3v-5zm7 8v-5l6-3v5l-6 3z'/>"),
-  subnet:   svg("<rect x='2' y='2' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='1.5'/><rect x='5' y='5' width='8' height='8' rx='1'/>"),
-  nsg:      svg("<path d='M9 1l8 4v4c0 4-3.4 7.4-8 8-4.6-.6-8-4-8-8V5l8-4zm0 2.2L3 6v3c0 3 2.4 5.7 6 6.4 3.6-.7 6-3.4 6-6.4V6l-6-2.8z'/>"),
-  vm:       svg("<rect x='1' y='4' width='16' height='11' rx='1.5' fill='none' stroke='white' stroke-width='1.5'/><path d='M5 8h8M5 11h5' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
-  vmss:     svg("<rect x='1' y='5' width='10' height='9' rx='1.5' fill='none' stroke='white' stroke-width='1.5'/><rect x='5' y='3' width='10' height='9' rx='1.5' fill='none' stroke='white' stroke-width='1' opacity='.6'/>"),
-  aks:      svg("<circle cx='9' cy='9' r='3.5' fill='none' stroke='white' stroke-width='1.5'/><circle cx='9' cy='2' r='1.5'/><circle cx='9' cy='16' r='1.5'/><circle cx='2' cy='9' r='1.5'/><circle cx='16' cy='9' r='1.5'/><path d='M9 5.5V6.5M9 11.5V12.5M5.5 9H6.5M11.5 9H12.5' stroke='white' stroke-width='1.2'/>"),
-  lb:       svg("<path d='M9 2v4M5 6h8M3 10h4v3H3zm8 0h4v3h-4z' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/><circle cx='9' cy='6' r='1.2'/>"),
-  appgw:    svg("<path d='M2 13h14M9 13V5M5 9l4-4 4 4' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/><rect x='6' y='13' width='6' height='3' rx='1'/>"),
-  gateway:  svg("<path d='M9 1L1 9h4v7h8V9h4L9 1z' fill='none' stroke='white' stroke-width='1.5' stroke-linejoin='round'/>"),
-  firewall: svg("<path d='M9 1c0 3-4 4-4 8a4 4 0 008 0c0-4-4-5-4-8zm0 4c0 2 2.5 3 2.5 5a2.5 2.5 0 01-5 0c0-2 2.5-3 2.5-5z'/>"),
-  pe:       svg("<circle cx='9' cy='9' r='3' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 1v5M9 12v5M1 9h5M12 9h5' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
-  publicip: svg("<circle cx='9' cy='9' r='6' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 3c-2 2-2 10 0 12M9 3c2 2 2 10 0 12M3 9h12' stroke='white' stroke-width='1.2'/>"),
-  routetable: svg("<path d='M2 4h14v2H2zM2 8h14v2H2zM2 12h8v2H2z'/><path d='M13 11l3 3-3 3' stroke='white' stroke-width='1.4' fill='none' stroke-linecap='round'/>"),
-  localgw:  svg("<path d='M9 1L1 5v8l8 4 8-4V5L9 1z' fill='none' stroke='white' stroke-width='1.5'/><path d='M9 6v6M6 9h6' stroke='white' stroke-width='1.4' stroke-linecap='round'/>"),
-  natgw:    svg("<path d='M2 9h10M8 5l4 4-4 4' stroke='white' stroke-width='1.5' stroke-linecap='round' fill='none'/><path d='M14 4v10' stroke='white' stroke-width='1.5' stroke-linecap='round'/>"),
-  firewallpolicy: svg("<path d='M3 3h12v4H3zM3 11h12v4H3z'/><path d='M7 7v4M11 7v4' stroke='white' stroke-width='1.2' stroke-linecap='round'/>"),
-  external: svg("<path d='M7 3H3v12h12v-4M10 3h5v5M8 10l7-7' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/>"),
+  vnet:     svgIcon('<path stroke="white" stroke-width="1.5" stroke-linejoin="round" d="M10 2L2 6v8l8 4 8-4V6L10 2z"/><path stroke="white" stroke-width="1" d="M10 2v12M2 6l8 4 8-4"/>'),
+  subnet:   svgIcon('<rect x="3" y="3" width="14" height="14" rx="2" stroke="white" stroke-width="1.5"/><rect x="6" y="6" width="8" height="8" rx="1" fill="white" opacity=".4"/>'),
+  nsg:      svgIcon('<path stroke="white" stroke-width="1.5" d="M10 2l8 4v4c0 4.4-3.6 7.7-8 8-4.4-.3-8-3.6-8-8V6l8-4z"/>'),
+  vm:       svgIcon('<rect x="2" y="5" width="16" height="11" rx="1.5" stroke="white" stroke-width="1.5"/><path stroke="white" stroke-width="1.2" stroke-linecap="round" d="M6 9h8M6 12h5"/>'),
+  vmss:     svgIcon('<rect x="2" y="6" width="11" height="10" rx="1.5" stroke="white" stroke-width="1.5"/><rect x="7" y="4" width="11" height="10" rx="1.5" stroke="white" stroke-width="1" opacity=".5"/>'),
+  aks:      svgIcon('<circle cx="10" cy="10" r="4" stroke="white" stroke-width="1.5"/><circle cx="10" cy="3" r="1.5" fill="white"/><circle cx="10" cy="17" r="1.5" fill="white"/><circle cx="3" cy="10" r="1.5" fill="white"/><circle cx="17" cy="10" r="1.5" fill="white"/>'),
+  lb:       svgIcon('<path stroke="white" stroke-width="1.5" stroke-linecap="round" d="M10 3v5M6 8h8M4 12h4v4H4zm8 0h4v4h-4z"/>'),
+  appgw:    svgIcon('<path stroke="white" stroke-width="1.5" stroke-linecap="round" d="M3 14h14M10 14V6M6 10l4-4 4 4"/><rect x="7" y="14" width="6" height="3" rx="1" fill="white" opacity=".5"/>'),
+  gateway:  svgIcon('<path stroke="white" stroke-width="1.5" stroke-linejoin="round" d="M10 2L2 10h4v7h8v-7h4L10 2z"/>'),
+  firewall: svgIcon('<path fill="white" d="M10 2c0 3.5-4.5 4.5-4.5 8.5a4.5 4.5 0 009 0C14.5 6.5 10 5.5 10 2zm0 4.5c0 2 2.5 3 2.5 5a2.5 2.5 0 01-5 0c0-2 2.5-3 2.5-5z"/>'),
+  pe:       svgIcon('<circle cx="10" cy="10" r="3.5" stroke="white" stroke-width="1.5"/><path stroke="white" stroke-width="1.2" stroke-linecap="round" d="M10 2v5M10 13v5M2 10h5M13 10h5"/>'),
+  publicip: svgIcon('<circle cx="10" cy="10" r="7" stroke="white" stroke-width="1.5"/><path stroke="white" stroke-width="1.2" d="M10 3c-2 2-2 12 0 14M10 3c2 2 2 12 0 14M3 10h14"/>'),
+  routetable: svgIcon('<path fill="white" d="M3 5h14v2H3zm0 4h14v2H3zm0 4h8v2H3z"/><path stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M15 12l3 3-3 3"/>'),
+  localgw:  svgIcon('<path stroke="white" stroke-width="1.5" stroke-linejoin="round" d="M10 2L2 6v8l8 4 8-4V6L10 2z"/><path stroke="white" stroke-width="1.4" stroke-linecap="round" d="M10 7v6M7 10h6"/>'),
+  natgw:    svgIcon('<path stroke="white" stroke-width="1.5" stroke-linecap="round" d="M3 10h11M10 6l4 4-4 4"/><line x1="16" y1="5" x2="16" y2="15" stroke="white" stroke-width="1.5" stroke-linecap="round"/>'),
+  firewallpolicy: svgIcon('<rect x="3" y="3" width="14" height="5" rx="1" stroke="white" stroke-width="1.5"/><rect x="3" y="12" width="14" height="5" rx="1" stroke="white" stroke-width="1.5"/>'),
+  external: svgIcon('<path stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 4H4v12h12v-4M11 4h5v5M9 11l7-7"/>'),
 }
 
-const NODE_W = '164px'
-const NODE_H = '52px'
+const NODE_W = '168px'
+const NODE_H = '48px'
 
 const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   // ── Base node ─────────────────────────────────────────────────────────────
@@ -198,68 +212,48 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'font-size': '11px',
       'font-weight': '500',
       'text-valign': 'center',
-      'text-halign': 'center',
+      'text-halign': 'right',
       'text-wrap': 'ellipsis',
-      'text-max-width': '120px',
-      'text-margin-x': '10px',
-      color: '#e2e8f0',
-      'background-color': '#1a2540',
-      'border-width': 1.5,
+      'text-max-width': '108px',
+      'text-margin-x': '-8px',
+      color: '#cbd5e1',
+      'background-color': '#1e2d45',
+      'border-width': 1,
       'border-color': '#2d3f5c',
       shape: 'roundrectangle',
       width: NODE_W,
       height: NODE_H,
+      // Icon in left slot (24px wide area)
+      'background-image': 'none',
+      'background-width': 20,
+      'background-height': 20,
+      'background-position-x': 14,
+      'background-position-y': '50%',
+      'background-fit': 'none',
+      'background-clip': 'none',
+      'background-image-opacity': 1,
     },
   },
-  // ── Per-type: colored left stripe + matching border ───────────────────────
-  { selector: 'node[type="vnet"]',    style: { ...stripe('#3b82f6'), 'font-weight': '600', width: '174px', height: '56px' } },
-  { selector: 'node[type="subnet"]',  style: { ...stripe('#64748b'), height: '48px', width: '154px' } },
-  { selector: 'node[type="nsg"]',     style: { ...stripe('#f43f5e') } },
-  { selector: 'node[type="vm"]',      style: { ...stripe('#22c55e') } },
-  { selector: 'node[type="vmss"]',    style: { ...stripe('#34d399') } },
-  { selector: 'node[type="aks"]',     style: { ...stripe('#0ea5e9'), 'font-weight': '600' } },
-  { selector: 'node[type="lb"]',      style: { ...stripe('#a78bfa') } },
-  { selector: 'node[type="appgw"]',   style: { ...stripe('#fb923c') } },
-  { selector: 'node[type="gateway"]', style: { ...stripe('#fbbf24'), 'font-weight': '600' } },
-  { selector: 'node[type="firewall"]',style: { ...stripe('#ef4444'), 'font-weight': '600' } },
-  { selector: 'node[type="pe"]',      style: { ...stripe('#818cf8') } },
-  { selector: 'node[type="publicip"]',style: { ...stripe('#38bdf8') } },
-  { selector: 'node[type="routetable"]', style: { ...stripe('#4ade80') } },
-  { selector: 'node[type="localgw"]', style: { ...stripe('#fcd34d') } },
-  { selector: 'node[type="natgw"]',   style: { ...stripe('#2dd4bf') } },
-  { selector: 'node[type="firewallpolicy"]', style: { ...stripe('#f97316') } },
-  { selector: 'node[type="external"]',style: {
-      'background-color': '#111827',
-      'border-color': '#374151',
-      'border-style': 'dashed',
-      color: '#6b7280',
-    },
-  },
-  // ── Azure icons — 18px icon pinned to the left stripe ────────────────────
-  ...Object.entries(AZURE_ICONS).map(([type, uri]) => ({
+  // ── Per-type: top border accent color + icon ─────────────────────────────
+  ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
-      'background-image': uri,
-      'background-width': '18px',
-      'background-height': '18px',
-      'background-position-x': '4px',
-      'background-position-y': '50%',
-      'background-clip': 'none',
-      'background-image-opacity': 0.9,
+      'border-color': color,
+      'border-width': 2,
+      'background-image': AZURE_ICONS[type] ?? 'none',
     } as Record<string, unknown>,
   })),
+  // VNet is slightly larger and bolder
+  { selector: 'node[type="vnet"]',    style: { 'font-weight': '600', width: '178px', height: '52px' } },
+  { selector: 'node[type="subnet"]',  style: { 'background-color': '#1a2535', 'border-width': 1, 'border-style': 'dashed' } },
+  { selector: 'node[type="external"]',style: { 'background-color': '#111827', 'border-style': 'dashed', color: '#6b7280', 'background-image': AZURE_ICONS.external } as Record<string, unknown> },
   // ── Health overlays ───────────────────────────────────────────────────────
-  { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2.5 } },
+  { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2 } },
   { selector: 'node[health="red"]',    style: { 'border-color': '#ef4444', 'border-width': 2.5 } },
-  // ── Selected / hovered ────────────────────────────────────────────────────
+  // ── Selected ──────────────────────────────────────────────────────────────
   {
     selector: 'node:selected',
-    style: {
-      'border-width': 2.5,
-      'border-color': '#ffffff',
-      'text-outline-color': '#0f172a',
-      'text-outline-width': 1,
-    },
+    style: { 'border-width': 3, 'border-color': '#ffffff', color: '#ffffff' },
   },
   // ── Edges — default ───────────────────────────────────────────────────────
   {
@@ -862,7 +856,11 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" style={{ width: panelWidth }} className="relative overflow-y-auto p-0">
+      <SheetContent
+        side="right"
+        style={{ width: panelWidth, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
+        className="relative overflow-y-auto p-0"
+      >
         {/* Drag handle on the left edge */}
         <div
           onMouseDown={onDragHandleMouseDown}
@@ -871,7 +869,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         />
         <div className="px-6 py-4 h-full overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>{title}</SheetTitle>
+            <SheetTitle style={{ color: 'var(--text-primary)' }}>{title}</SheetTitle>
           </SheetHeader>
           {node && renderNodeContent()}
           {edge && renderEdgeContent()}
@@ -1215,9 +1213,9 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 Path Checker
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}>
               <SheetHeader>
-                <SheetTitle>NSG Path Check</SheetTitle>
+                <SheetTitle style={{ color: 'var(--text-primary)' }}>NSG Path Check</SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-4 mt-4">
                 <div>
@@ -1749,9 +1747,13 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
 
       {/* Issues drawer */}
       <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
-        <SheetContent side="right" className="w-[480px] overflow-y-auto">
+        <SheetContent
+          side="right"
+          className="w-[480px] overflow-y-auto"
+          style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
+        >
           <SheetHeader>
-            <SheetTitle>Network Issues ({issueCount})</SheetTitle>
+            <SheetTitle style={{ color: 'var(--text-primary)' }}>Network Issues ({issueCount})</SheetTitle>
           </SheetHeader>
           <p className="text-xs mt-2 mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             An NSG asymmetry occurs when one subnet&apos;s NSG allows outbound traffic on a port, but the destination
