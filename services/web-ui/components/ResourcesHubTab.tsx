@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Server, Monitor, Layers, Box, HardDrive, Globe } from 'lucide-react'
+import { Server, Monitor, Layers, Box, HardDrive, Globe, GitBranch } from 'lucide-react'
 import { ResourcesTab } from './ResourcesTab'
+import { ResourceHierarchyTab } from './ResourceHierarchyTab'
 import { VMTab } from './VMTab'
 import { VMSSTab } from './VMSSTab'
 import { AKSTab } from './AKSTab'
@@ -23,7 +24,8 @@ const subTabs = [
   { id: 'vmss',          label: 'Scale Sets', icon: Layers },
   { id: 'aks',           label: 'Kubernetes', icon: Box },
   { id: 'disks',         label: 'Disks', icon: HardDrive },
-  { id: 'az-coverage',   label: 'AZ Coverage', icon: Globe },
+  { id: 'az-coverage',         label: 'AZ Coverage',        icon: Globe },
+  { id: 'resource-hierarchy',  label: 'Resource Hierarchy', icon: GitBranch },
 ]
 
 export function ResourcesHubTab({
@@ -72,6 +74,7 @@ export function ResourcesHubTab({
       )}
       {activeSubTab === 'disks' && <DiskAuditTab />}
       {activeSubTab === 'az-coverage' && <AZCoverageTab />}
+      {activeSubTab === 'resource-hierarchy' && <ResourceHierarchyTab subscriptions={subscriptions} />}
     </div>
   )
 }

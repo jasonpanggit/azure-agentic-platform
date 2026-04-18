@@ -1,0 +1,693 @@
+from __future__ import annotations
+"""Network Topology Service — Phase 103.
+
+Queries Azure Resource Graph for VNets, subnets, NSGs, LBs, private endpoints,
+gateways, and NICs to assemble a graph representation of the network topology.
+Includes NSG health scoring and path-check evaluation.
+
+Never raises from public functions — errors are logged and empty/partial
+results returned to keep the API gateway fault-tolerant.
+"""
+
+import logging
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+try:
+    from services.api_gateway.arg_helper import run_arg_query
+except ImportError:
+    run_arg_query = None  # type: ignore[assignment,misc]
+
+# ---------------------------------------------------------------------------
+# ARG Query Constants
+# ---------------------------------------------------------------------------
+
+_VNET_SUBNET_QUERY = """
+Resources
+| where type =~ "microsoft.network/virtualnetworks"
+| extend addressSpace = tostring(properties.addressSpace.addressPrefixes)
+| mv-expand subnet = properties.subnets
+| extend subnetName = tostring(subnet.name)
+| extend subnetPrefix = tostring(subnet.properties.addressPrefix)
+| extend subnetNsgId = tolower(tostring(subnet.properties.networkSecurityGroup.id))
+| project subscriptionId, resourceGroup, vnetName = name, id,
+          addressSpace, subnetName, subnetPrefix, subnetNsgId, location
+"""
+
+_NSG_RULES_QUERY = """
+Resources
+| where type =~ "microsoft.network/networksecuritygroups"
+| extend subnetIds = properties.subnets
+| extend nicIds = properties.networkInterfaces
+| mv-expand rule = properties.securityRules
+| project subscriptionId, resourceGroup, nsgName = name, nsgId = tolower(id),
+          ruleName = tostring(rule.name),
+          priority = toint(rule.properties.priority),
+          direction = tostring(rule.properties.direction),
+          access = tostring(rule.properties.access),
+          protocol = tostring(rule.properties.protocol),
+          sourcePrefix = tostring(rule.properties.sourceAddressPrefix),
+          sourcePrefixes = rule.properties.sourceAddressPrefixes,
+          destPrefix = tostring(rule.properties.destinationAddressPrefix),
+          destPrefixes = rule.properties.destinationAddressPrefixes,
+          destPortRange = tostring(rule.properties.destinationPortRange),
+          destPortRanges = rule.properties.destinationPortRanges,
+          subnetIds, nicIds
+"""
+
+_LB_QUERY = """
+Resources
+| where type =~ "microsoft.network/loadbalancers"
+| mv-expand fip = properties.frontendIPConfigurations
+| extend frontendIp = tostring(fip.properties.privateIPAddress)
+| extend publicIpId = tolower(tostring(fip.properties.publicIPAddress.id))
+| project subscriptionId, resourceGroup, name, id, location,
+          sku_name = tostring(sku.name), frontendIp, publicIpId
+"""
+
+_PE_QUERY = """
+Resources
+| where type =~ "microsoft.network/privateendpoints"
+| extend subnetId = tolower(tostring(properties.subnet.id))
+| mv-expand conn = properties.privateLinkServiceConnections
+| extend targetResourceId = tolower(tostring(conn.properties.privateLinkServiceId))
+| extend groupIds = tostring(conn.properties.groupIds)
+| project subscriptionId, resourceGroup, name, id, location,
+          subnetId, targetResourceId, groupIds
+"""
+
+_GATEWAY_QUERY = """
+Resources
+| where type =~ "microsoft.network/virtualnetworkgateways"
+| extend gatewayType = tostring(properties.gatewayType)
+| extend vpnType = tostring(properties.vpnType)
+| extend sku_name = tostring(properties.sku.name)
+| mv-expand ipConfig = properties.ipConfigurations
+| extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
+| extend publicIpId = tolower(tostring(ipConfig.properties.publicIPAddress.id))
+| project subscriptionId, resourceGroup, name, id, location,
+          gatewayType, vpnType, sku_name, subnetId, publicIpId
+"""
+
+_PUBLIC_IP_QUERY = """
+Resources
+| where type =~ "microsoft.network/publicipaddresses"
+| extend ipAddress = tostring(properties.ipAddress)
+| extend allocationMethod = tostring(properties.publicIPAllocationMethod)
+| project subscriptionId, name, id = tolower(id), ipAddress, allocationMethod
+"""
+
+_NIC_NSG_QUERY = """
+Resources
+| where type =~ "microsoft.network/networkinterfaces"
+| extend subnetId = tolower(tostring(properties.ipConfigurations[0].properties.subnet.id))
+| extend nsgId = tolower(tostring(properties.networkSecurityGroup.id))
+| extend privateIp = tostring(properties.ipConfigurations[0].properties.privateIPAddress)
+| where isnotempty(nsgId)
+| project subscriptionId, resourceGroup, name, id = tolower(id),
+          subnetId, nsgId, privateIp
+"""
+
+# ---------------------------------------------------------------------------
+# In-memory TTL Cache
+# ---------------------------------------------------------------------------
+
+_TOPOLOGY_TTL_SECONDS = 900
+_cache: Dict[str, Tuple[float, Any]] = {}
+_cache_lock = threading.Lock()
+
+
+def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
+    """Return cached value if within TTL, otherwise call fetch_fn and cache."""
+    now = time.monotonic()
+    with _cache_lock:
+        if key in _cache:
+            cached_time, cached_value = _cache[key]
+            if now - cached_time < ttl:
+                return cached_value
+
+    result = fetch_fn()
+    with _cache_lock:
+        _cache[key] = (time.monotonic(), result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------------
+
+_COMMON_PORTS = [22, 80, 443, 3389]
+
+
+def _score_nsg_health(nsg_rules: List[Dict[str, Any]]) -> str:
+    """Score NSG health: 'green', 'yellow', or 'red'.
+
+    Yellow if any rule has source='*', destPortRange='*', access='Allow', priority < 1000.
+    Green otherwise. Red is set externally by _detect_asymmetries.
+    """
+    for rule in nsg_rules:
+        access = str(rule.get("access", "")).lower()
+        source = str(rule.get("sourcePrefix", ""))
+        dest_port = str(rule.get("destPortRange", ""))
+        priority = rule.get("priority", 65500)
+        if access == "allow" and source == "*" and dest_port == "*" and isinstance(priority, int) and priority < 1000:
+            return "yellow"
+    return "green"
+
+
+def _port_in_range(port: int, range_str: str, ranges_list: Any = None) -> bool:
+    """Check if port matches a port range specification."""
+    if range_str == "*":
+        return True
+    # Check single range_str
+    if _check_single_range(port, range_str):
+        return True
+    # Check ranges_list (comma-separated or list)
+    if ranges_list:
+        if isinstance(ranges_list, str):
+            for part in ranges_list.split(","):
+                if _check_single_range(port, part.strip()):
+                    return True
+        elif isinstance(ranges_list, list):
+            for part in ranges_list:
+                if _check_single_range(port, str(part).strip()):
+                    return True
+    return False
+
+
+def _check_single_range(port: int, range_str: str) -> bool:
+    """Check if port is in a single range like '80', '1024-65535', or '*'."""
+    if not range_str:
+        return False
+    if range_str == "*":
+        return True
+    if "-" in range_str:
+        parts = range_str.split("-", 1)
+        try:
+            return int(parts[0]) <= port <= int(parts[1])
+        except (ValueError, IndexError):
+            return False
+    try:
+        return int(range_str) == port
+    except ValueError:
+        return False
+
+
+def _matches_rule(rule: Dict[str, Any], port: int, protocol: str, src_prefix: str, dst_prefix: str) -> bool:
+    """Check if a single NSG rule matches the given traffic parameters."""
+    # Protocol match
+    rule_protocol = str(rule.get("protocol", "*"))
+    if rule_protocol != "*" and rule_protocol.upper() != protocol.upper():
+        return False
+
+    # Port match
+    dest_port_range = str(rule.get("destPortRange", ""))
+    dest_port_ranges = rule.get("destPortRanges")
+    if not _port_in_range(port, dest_port_range, dest_port_ranges):
+        return False
+
+    # Source prefix match (simplified: * matches all, or exact match)
+    rule_source = str(rule.get("sourcePrefix", "*"))
+    if rule_source != "*" and rule_source != src_prefix and src_prefix != "*":
+        # Check sourcePrefixes list
+        source_prefixes = rule.get("sourcePrefixes") or []
+        if isinstance(source_prefixes, list) and src_prefix not in source_prefixes and "*" not in source_prefixes:
+            return False
+        elif not isinstance(source_prefixes, list):
+            return False
+
+    # Dest prefix match
+    rule_dest = str(rule.get("destPrefix", "*"))
+    if rule_dest != "*" and rule_dest != dst_prefix and dst_prefix != "*":
+        dest_prefixes = rule.get("destPrefixes") or []
+        if isinstance(dest_prefixes, list) and dst_prefix not in dest_prefixes and "*" not in dest_prefixes:
+            return False
+        elif not isinstance(dest_prefixes, list):
+            return False
+
+    return True
+
+
+def _evaluate_nsg_rules(
+    rules: List[Dict[str, Any]],
+    port: int,
+    protocol: str,
+    src_prefix: str,
+    dst_prefix: str,
+    direction: str,
+) -> Dict[str, Any]:
+    """Evaluate NSG rules sorted by priority. Return first match or default deny."""
+    filtered = [r for r in rules if str(r.get("direction", "")).lower() == direction.lower()]
+    filtered.sort(key=lambda r: r.get("priority", 65500))
+
+    for rule in filtered:
+        if _matches_rule(rule, port, protocol, src_prefix, dst_prefix):
+            return {
+                "result": str(rule.get("access", "Deny")),
+                "matching_rule": str(rule.get("ruleName", "")),
+                "priority": rule.get("priority", 65500),
+            }
+
+    # Default deny
+    return {"result": "Deny", "matching_rule": "DenyAll (default)", "priority": 65500}
+
+
+def _detect_asymmetries(
+    nsg_rules_map: Dict[str, List[Dict[str, Any]]],
+    subnet_nsg_map: Dict[str, str],
+    vnet_subnets: Dict[str, List[str]],
+) -> List[Dict[str, Any]]:
+    """Detect NSG asymmetries: source allows outbound but dest denies inbound on common ports."""
+    issues: List[Dict[str, Any]] = []
+    subnet_ids = list(subnet_nsg_map.keys())
+
+    for i, src_subnet_id in enumerate(subnet_ids):
+        src_nsg_id = subnet_nsg_map[src_subnet_id]
+        src_rules = nsg_rules_map.get(src_nsg_id, [])
+        if not src_rules:
+            continue
+
+        for dst_subnet_id in subnet_ids[i + 1:]:
+            dst_nsg_id = subnet_nsg_map[dst_subnet_id]
+            if src_nsg_id == dst_nsg_id:
+                continue
+            dst_rules = nsg_rules_map.get(dst_nsg_id, [])
+            if not dst_rules:
+                continue
+
+            for port in _COMMON_PORTS:
+                outbound = _evaluate_nsg_rules(src_rules, port, "TCP", "*", "*", "Outbound")
+                inbound = _evaluate_nsg_rules(dst_rules, port, "TCP", "*", "*", "Inbound")
+
+                if outbound["result"] == "Allow" and inbound["result"] == "Deny":
+                    issues.append({
+                        "source_nsg_id": src_nsg_id,
+                        "dest_nsg_id": dst_nsg_id,
+                        "port": port,
+                        "description": f"Port {port}/TCP: source NSG allows outbound but destination NSG denies inbound",
+                    })
+
+    return issues
+
+
+def _assemble_graph(
+    vnets: List[Dict[str, Any]],
+    nsgs: List[Dict[str, Any]],
+    lbs: List[Dict[str, Any]],
+    pes: List[Dict[str, Any]],
+    gateways: List[Dict[str, Any]],
+    public_ips: List[Dict[str, Any]],
+    nics: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Build nodes and edges lists from raw ARG query results."""
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    seen_nodes: set = set()
+
+    # VNet and subnet nodes
+    for row in vnets:
+        vnet_id = str(row.get("id", "")).lower()
+        if vnet_id and vnet_id not in seen_nodes:
+            seen_nodes.add(vnet_id)
+            nodes.append({
+                "id": vnet_id,
+                "type": "vnet",
+                "label": row.get("vnetName", ""),
+                "data": {
+                    "addressSpace": row.get("addressSpace", ""),
+                    "subscriptionId": row.get("subscriptionId", ""),
+                    "location": row.get("location", ""),
+                },
+            })
+
+        subnet_name = row.get("subnetName", "")
+        subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower() if subnet_name else ""
+        if subnet_id and subnet_id not in seen_nodes:
+            seen_nodes.add(subnet_id)
+            nodes.append({
+                "id": subnet_id,
+                "type": "subnet",
+                "label": subnet_name,
+                "data": {
+                    "prefix": row.get("subnetPrefix", ""),
+                    "nsgId": row.get("subnetNsgId", ""),
+                    "vnetId": vnet_id,
+                },
+            })
+            # Edge: vnet -> subnet (implicit containment)
+            edges.append({
+                "id": f"edge-{vnet_id}-{subnet_id}",
+                "source": vnet_id,
+                "target": subnet_id,
+                "type": "contains",
+                "data": {},
+            })
+
+        # Edge: subnet -> NSG
+        subnet_nsg_id = str(row.get("subnetNsgId", "")).lower()
+        if subnet_id and subnet_nsg_id:
+            edges.append({
+                "id": f"edge-{subnet_id}-{subnet_nsg_id}",
+                "source": subnet_id,
+                "target": subnet_nsg_id,
+                "type": "subnet-nsg",
+                "data": {},
+            })
+
+    # NSG nodes
+    nsg_seen: set = set()
+    for row in nsgs:
+        nsg_id = str(row.get("nsgId", "")).lower()
+        if nsg_id and nsg_id not in seen_nodes:
+            seen_nodes.add(nsg_id)
+            nsg_seen.add(nsg_id)
+            nodes.append({
+                "id": nsg_id,
+                "type": "nsg",
+                "label": row.get("nsgName", ""),
+                "data": {"health": "green"},
+            })
+
+    # LB nodes
+    for row in lbs:
+        lb_id = str(row.get("id", "")).lower()
+        if lb_id and lb_id not in seen_nodes:
+            seen_nodes.add(lb_id)
+            nodes.append({
+                "id": lb_id,
+                "type": "lb",
+                "label": row.get("name", ""),
+                "data": {
+                    "sku": row.get("sku_name", ""),
+                    "frontendIp": row.get("frontendIp", ""),
+                },
+            })
+
+    # PE nodes
+    for row in pes:
+        pe_id = str(row.get("id", "")).lower()
+        if pe_id and pe_id not in seen_nodes:
+            seen_nodes.add(pe_id)
+            nodes.append({
+                "id": pe_id,
+                "type": "pe",
+                "label": row.get("name", ""),
+                "data": {"targetResourceId": row.get("targetResourceId", "")},
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if pe_id and subnet_id:
+            edges.append({
+                "id": f"edge-{subnet_id}-{pe_id}",
+                "source": subnet_id,
+                "target": pe_id,
+                "type": "subnet-pe",
+                "data": {},
+            })
+
+    # Gateway nodes
+    for row in gateways:
+        gw_id = str(row.get("id", "")).lower()
+        if gw_id and gw_id not in seen_nodes:
+            seen_nodes.add(gw_id)
+            nodes.append({
+                "id": gw_id,
+                "type": "gateway",
+                "label": row.get("name", ""),
+                "data": {
+                    "gatewayType": row.get("gatewayType", ""),
+                    "vpnType": row.get("vpnType", ""),
+                },
+            })
+        subnet_id = str(row.get("subnetId", "")).lower()
+        if gw_id and subnet_id:
+            edges.append({
+                "id": f"edge-{subnet_id}-{gw_id}",
+                "source": subnet_id,
+                "target": gw_id,
+                "type": "subnet-gateway",
+                "data": {},
+            })
+
+    return nodes, edges
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def fetch_network_topology(
+    subscription_ids: List[str],
+    credential: Any = None,
+) -> Dict[str, Any]:
+    """Return network topology graph queried live from ARG (15m TTL cache).
+
+    Returns {"nodes": [...], "edges": [...], "issues": [...]}.
+    Never raises.
+    """
+    start_time = time.monotonic()
+
+    if not subscription_ids:
+        logger.warning("network_topology_service: called with empty subscription list")
+        return {"nodes": [], "edges": [], "issues": []}
+
+    if credential is None:
+        logger.warning("network_topology_service: no credential provided")
+        return {"nodes": [], "edges": [], "issues": []}
+
+    if run_arg_query is None:
+        logger.warning("network_topology_service: arg_helper not available")
+        return {"nodes": [], "edges": [], "issues": []}
+
+    cache_key = f"topology:{','.join(sorted(subscription_ids))}"
+
+    def _fetch() -> Dict[str, Any]:
+        try:
+            vnets = run_arg_query(credential, subscription_ids, _VNET_SUBNET_QUERY)
+            nsgs = run_arg_query(credential, subscription_ids, _NSG_RULES_QUERY)
+            lbs = run_arg_query(credential, subscription_ids, _LB_QUERY)
+            pes = run_arg_query(credential, subscription_ids, _PE_QUERY)
+            gateways = run_arg_query(credential, subscription_ids, _GATEWAY_QUERY)
+            public_ips = run_arg_query(credential, subscription_ids, _PUBLIC_IP_QUERY)
+            nics = run_arg_query(credential, subscription_ids, _NIC_NSG_QUERY)
+
+            nodes, edges = _assemble_graph(vnets, nsgs, lbs, pes, gateways, public_ips, nics)
+
+            # Build NSG rules map and subnet-NSG map for health scoring
+            nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
+            for row in nsgs:
+                nsg_id = str(row.get("nsgId", "")).lower()
+                if nsg_id:
+                    nsg_rules_map.setdefault(nsg_id, []).append(row)
+
+            subnet_nsg_map: Dict[str, str] = {}
+            for row in vnets:
+                subnet_name = row.get("subnetName", "")
+                vnet_id = str(row.get("id", "")).lower()
+                subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower() if subnet_name else ""
+                nsg_id = str(row.get("subnetNsgId", "")).lower()
+                if subnet_id and nsg_id:
+                    subnet_nsg_map[subnet_id] = nsg_id
+
+            vnet_subnets: Dict[str, List[str]] = {}
+            for row in vnets:
+                vnet_id = str(row.get("id", "")).lower()
+                subnet_name = row.get("subnetName", "")
+                subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower() if subnet_name else ""
+                if vnet_id and subnet_id:
+                    vnet_subnets.setdefault(vnet_id, []).append(subnet_id)
+
+            # Score NSG health
+            for node in nodes:
+                if node["type"] == "nsg":
+                    rules = nsg_rules_map.get(node["id"], [])
+                    node["data"]["health"] = _score_nsg_health(rules)
+
+            # Detect asymmetries
+            issues = _detect_asymmetries(nsg_rules_map, subnet_nsg_map, vnet_subnets)
+
+            # Mark affected NSGs as red and add asymmetry edges
+            red_nsgs = set()
+            for issue in issues:
+                red_nsgs.add(issue["source_nsg_id"])
+                red_nsgs.add(issue["dest_nsg_id"])
+                edges.append({
+                    "id": f"edge-asymmetry-{issue['source_nsg_id']}-{issue['dest_nsg_id']}-{issue['port']}",
+                    "source": issue["source_nsg_id"],
+                    "target": issue["dest_nsg_id"],
+                    "type": "asymmetry",
+                    "data": {"port": issue["port"], "description": issue["description"]},
+                })
+
+            for node in nodes:
+                if node["type"] == "nsg" and node["id"] in red_nsgs:
+                    node["data"]["health"] = "red"
+
+            return {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map}
+        except Exception as exc:
+            logger.warning("network_topology_service: ARG query failed | error=%s", exc)
+            return {"nodes": [], "edges": [], "issues": [], "_nsg_rules_map": {}}
+
+    try:
+        result = _get_cached_or_fetch(cache_key, _TOPOLOGY_TTL_SECONDS, _fetch)
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info(
+            "network_topology_service: fetch complete | nodes=%d edges=%d issues=%d (%.0fms)",
+            len(result.get("nodes", [])),
+            len(result.get("edges", [])),
+            len(result.get("issues", [])),
+            duration_ms,
+        )
+        return result
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.warning("network_topology_service: unexpected error | error=%s (%.0fms)", exc, duration_ms)
+        return {"nodes": [], "edges": [], "issues": []}
+
+
+def evaluate_path_check(
+    source_resource_id: str,
+    destination_resource_id: str,
+    port: int,
+    protocol: str,
+    subscription_ids: List[str],
+    credential: Any = None,
+) -> Dict[str, Any]:
+    """Evaluate NSG rule chain for source->destination traffic. On-demand, not cached.
+
+    Returns {"verdict": "allowed"|"blocked"|"error", "steps": [...], "blocking_nsg_id": str|None, ...}.
+    Never raises.
+    """
+    start_time = time.monotonic()
+
+    try:
+        topology = fetch_network_topology(subscription_ids, credential)
+        nodes = topology.get("nodes", [])
+        edges = topology.get("edges", [])
+
+        # Build lookup maps
+        node_map = {n["id"]: n for n in nodes}
+
+        # Find source and destination subnets via edges or resource ID matching
+        # Resolve source/dest to their subnet's NSG
+        source_subnet_nsg = _resolve_resource_nsg(source_resource_id, nodes, edges)
+        dest_subnet_nsg = _resolve_resource_nsg(destination_resource_id, nodes, edges)
+
+        steps: List[Dict[str, Any]] = []
+        blocking_nsg_id: Optional[str] = None
+
+        # Use the NSG rules already cached inside the topology result
+        nsg_rules_map: Dict[str, List[Dict[str, Any]]] = topology.get("_nsg_rules_map", {})
+
+        source_ip = "*"
+        dest_ip = "*"
+
+        # Evaluate outbound from source NSG
+        if source_subnet_nsg:
+            src_rules = nsg_rules_map.get(source_subnet_nsg, [])
+            outbound_result = _evaluate_nsg_rules(src_rules, port, protocol, "*", "*", "Outbound")
+            src_nsg_node = node_map.get(source_subnet_nsg, {})
+            steps.append({
+                "nsg_id": source_subnet_nsg,
+                "nsg_name": src_nsg_node.get("label", ""),
+                "direction": "Outbound",
+                "level": "subnet",
+                "result": outbound_result["result"],
+                "matching_rule": outbound_result["matching_rule"],
+                "priority": outbound_result["priority"],
+            })
+            if outbound_result["result"] == "Deny":
+                blocking_nsg_id = source_subnet_nsg
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.info("network_topology_service: path_check verdict=blocked (%.0fms)", duration_ms)
+                return {
+                    "verdict": "blocked",
+                    "steps": steps,
+                    "blocking_nsg_id": blocking_nsg_id,
+                    "source_ip": source_ip,
+                    "destination_ip": dest_ip,
+                }
+
+        # Evaluate inbound at destination NSG
+        if dest_subnet_nsg:
+            dst_rules = nsg_rules_map.get(dest_subnet_nsg, [])
+            inbound_result = _evaluate_nsg_rules(dst_rules, port, protocol, "*", "*", "Inbound")
+            dst_nsg_node = node_map.get(dest_subnet_nsg, {})
+            steps.append({
+                "nsg_id": dest_subnet_nsg,
+                "nsg_name": dst_nsg_node.get("label", ""),
+                "direction": "Inbound",
+                "level": "subnet",
+                "result": inbound_result["result"],
+                "matching_rule": inbound_result["matching_rule"],
+                "priority": inbound_result["priority"],
+            })
+            if inbound_result["result"] == "Deny":
+                blocking_nsg_id = dest_subnet_nsg
+                duration_ms = (time.monotonic() - start_time) * 1000
+                logger.info("network_topology_service: path_check verdict=blocked (%.0fms)", duration_ms)
+                return {
+                    "verdict": "blocked",
+                    "steps": steps,
+                    "blocking_nsg_id": blocking_nsg_id,
+                    "source_ip": source_ip,
+                    "destination_ip": dest_ip,
+                }
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.info("network_topology_service: path_check verdict=allowed (%.0fms)", duration_ms)
+        return {
+            "verdict": "allowed",
+            "steps": steps,
+            "blocking_nsg_id": None,
+            "source_ip": source_ip,
+            "destination_ip": dest_ip,
+        }
+
+    except Exception as exc:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.warning("network_topology_service: path_check error | error=%s (%.0fms)", exc, duration_ms)
+        return {
+            "verdict": "error",
+            "steps": [],
+            "blocking_nsg_id": None,
+            "source_ip": "",
+            "destination_ip": "",
+        }
+
+
+def _resolve_resource_nsg(
+    resource_id: str,
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Resolve a resource ID to its associated subnet NSG ID."""
+    resource_id_lower = resource_id.lower()
+
+    # Check if the resource is directly a subnet
+    for node in nodes:
+        if node["type"] == "subnet" and resource_id_lower in node["id"]:
+            nsg_id = node.get("data", {}).get("nsgId", "")
+            if nsg_id:
+                return nsg_id
+
+    # Check edges for subnet-nsg associations where the subnet contains the resource
+    # Try to find subnet from resource ID pattern (extract VNet/subnet from ARM path)
+    parts = resource_id_lower.split("/")
+    # Look for any subnet that might contain this resource
+    for node in nodes:
+        if node["type"] == "subnet":
+            # Match by subscription and resource group at minimum
+            if node.get("data", {}).get("nsgId"):
+                # Simple heuristic: same VNet
+                node_vnet = node.get("data", {}).get("vnetId", "")
+                if node_vnet:
+                    # Check if resource is in same subscription/rg
+                    for edge in edges:
+                        if edge["type"] == "subnet-nsg" and edge["source"] == node["id"]:
+                            return edge["target"]
+
+    return None

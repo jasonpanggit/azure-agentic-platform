@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Network, GitMerge, Activity, Lock } from 'lucide-react'
-import { TopologyTab } from './TopologyTab'
+import { GitMerge, Activity, Lock, Network } from 'lucide-react'
 import VNetPeeringTab from './VNetPeeringTab'
 import { LBHealthTab } from './LBHealthTab'
 import { PrivateEndpointTab } from './PrivateEndpointTab'
+import NetworkTopologyTab from './NetworkTopologyTab'
 
 interface NetworkHubTabProps {
   subscriptions: string[]
@@ -13,7 +13,7 @@ interface NetworkHubTabProps {
 }
 
 const subTabs = [
-  { id: 'topology',          label: 'Topology',          icon: Network  },
+  { id: 'topology',          label: 'Topology Map',      icon: Network  },
   { id: 'vnet-peerings',     label: 'VNet Peerings',     icon: GitMerge },
   { id: 'load-balancers',    label: 'Load Balancers',    icon: Activity },
   { id: 'private-endpoints', label: 'Private Endpoints', icon: Lock     },
@@ -48,9 +48,7 @@ export function NetworkHubTab({
         ))}
       </div>
 
-      {activeSubTab === 'topology' && (
-        <TopologyTab subscriptions={subscriptions} />
-      )}
+      {activeSubTab === 'topology' && <NetworkTopologyTab />}
       {activeSubTab === 'vnet-peerings' && <VNetPeeringTab />}
       {activeSubTab === 'load-balancers' && <LBHealthTab />}
       {activeSubTab === 'private-endpoints' && (

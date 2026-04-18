@@ -2,17 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
-status: In Progress
-last_updated: "2026-04-17T09:44:00Z"
+status: Milestone complete
+last_updated: "2026-04-18T07:58:48.387Z"
 progress:
-  total_phases: 75
-  completed_phases: 70
-  total_plans: 177
-  completed_plans: 175
+  total_phases: 35
+  completed_phases: 34
+  total_plans: 103
+  completed_plans: 104
   percent: 100
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last activity: 2026-04-18 - Completed quick task 260418-jz2: Move TopologyTab to Resources hub as Resource Hierarchy sub-tab — TopologyTab.tsx renamed to ResourceHierarchyTab.tsx, added to ResourcesHubTab, removed from NetworkHubTab.
 
 > Last activity: 2026-04-14 - Completed quick task 260414-o65: fix CI failures — 4 missing agent spec files (appservice, containerapps, database, messaging) + Terraform default empty strings for client_id, client_secret, fabric_admin_email.
 
@@ -424,6 +426,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260413-v9x | Remove VM filter from Cost tab — show all Azure Advisor Cost recommendations | 2026-04-13 | 8c2fccf | [260413-v9x-remove-vm-filter-from-cost-tab-show-all-](./quick/260413-v9x-remove-vm-filter-from-cost-tab-show-all-/) |
 | 260414-nw4 | resolve merge conflicts in PR 81 | 2026-04-14 | 1f5b782 | [260414-nw4-resolve-merge-conflicts-in-pr-81](./quick/260414-nw4-resolve-merge-conflicts-in-pr-81/) |
 | 260414-o65 | fix CI failures - missing agent spec files and terraform required variables | 2026-04-14 | 8e782d5 | [260414-o65-fix-ci-failures-missing-agent-spec-files](./quick/260414-o65-fix-ci-failures-missing-agent-spec-files/) |
+| 260418-jz2 | Move current TopologyTab to under Resources tab and rename to Resource Hierarchy | 2026-04-18 | 87c619d | [260418-jz2-move-current-topologytab-to-under-resour](./quick/260418-jz2-move-current-topologytab-to-under-resour/) |
 
 ---
 
