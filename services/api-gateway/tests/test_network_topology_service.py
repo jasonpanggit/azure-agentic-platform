@@ -207,7 +207,9 @@ class TestFetchTopology:
         from services.api_gateway.network_topology_service import fetch_network_topology
 
         result = fetch_network_topology(["sub-1"], credential=None)
-        assert result == {"nodes": [], "edges": [], "issues": []}
+        assert result["nodes"] == []
+        assert result["edges"] == []
+        assert result["issues"] == []
 
     @patch("services.api_gateway.network_topology_service.run_arg_query")
     def test_fetch_topology_arg_error_returns_empty(self, mock_arg):
@@ -218,7 +220,9 @@ class TestFetchTopology:
         _cache.clear()
 
         result = fetch_network_topology(["sub-err"], credential="cred")
-        assert result == {"nodes": [], "edges": [], "issues": []}
+        assert result["nodes"] == []
+        assert result["edges"] == []
+        assert result["issues"] == []
 
     @patch("services.api_gateway.network_topology_service.run_arg_query")
     def test_fetch_topology_assembles_vnet_nodes(self, mock_arg):
@@ -285,7 +289,10 @@ class TestPathCheck:
         _cache.clear()
         nsg_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networksecuritygroups/nsg-allow"
         vnets = [_make_vnet_row(subnet_nsg_id=nsg_id)]
-        nsgs = [_make_nsg_row(nsg_id=nsg_id, direction="Inbound", access="Allow", dest_port_range="443", priority=100)]
+        nsgs = [
+            _make_nsg_row(nsg_id=nsg_id, direction="Inbound", access="Allow", dest_port_range="443", priority=100),
+            _make_nsg_row(nsg_id=nsg_id, direction="Outbound", access="Allow", dest_port_range="443", priority=100),
+        ]
 
         def side_effect(cred, subs, query):
             if "virtualnetworks" in query.lower():
@@ -304,7 +311,7 @@ class TestPathCheck:
             subscription_ids=["sub-path-allow"],
             credential="cred",
         )
-        assert result["verdict"] in ("allowed", "blocked")
+        assert result["verdict"] == "allowed"
 
     @patch("services.api_gateway.network_topology_service.run_arg_query")
     def test_path_check_blocked_by_dest_nsg(self, mock_arg):
@@ -332,8 +339,8 @@ class TestPathCheck:
             subscription_ids=["sub-path-block"],
             credential="cred",
         )
-        # Should not error
-        assert result["verdict"] in ("allowed", "blocked", "error")
+        # Inbound Deny rule at destination should block traffic
+        assert result["verdict"] == "blocked"
 
     @patch("services.api_gateway.network_topology_service.run_arg_query")
     def test_path_check_error_returns_error_verdict(self, mock_arg):

@@ -13,7 +13,7 @@ import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from services.api_gateway.auth import verify_token
 from services.api_gateway.dependencies import get_credential_for_subscriptions
@@ -33,7 +33,7 @@ class PathCheckRequest(BaseModel):
 
     source_resource_id: str
     destination_resource_id: str
-    port: int
+    port: int = Field(ge=1, le=65535)
     protocol: str = "TCP"
 
 

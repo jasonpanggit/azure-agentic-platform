@@ -526,10 +526,10 @@ def fetch_network_topology(
                 if node["type"] == "nsg" and node["id"] in red_nsgs:
                     node["data"]["health"] = "red"
 
-            return {"nodes": nodes, "edges": edges, "issues": issues}
+            return {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map}
         except Exception as exc:
             logger.warning("network_topology_service: ARG query failed | error=%s", exc)
-            return {"nodes": [], "edges": [], "issues": []}
+            return {"nodes": [], "edges": [], "issues": [], "_nsg_rules_map": {}}
 
     try:
         result = _get_cached_or_fetch(cache_key, _TOPOLOGY_TTL_SECONDS, _fetch)
@@ -579,24 +579,8 @@ def evaluate_path_check(
         steps: List[Dict[str, Any]] = []
         blocking_nsg_id: Optional[str] = None
 
-        # Get NSG rules from topology cache (re-fetch from nodes)
-        # We need the raw rules - fetch from cache key
-        cache_key = f"topology:{','.join(sorted(subscription_ids))}"
-        with _cache_lock:
-            cached = _cache.get(cache_key)
-
-        # For path check, we need raw NSG rules - re-query if not in nodes
-        # Use the topology data we already have
-        nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
-        if run_arg_query and credential:
-            try:
-                nsgs = run_arg_query(credential, subscription_ids, _NSG_RULES_QUERY)
-                for row in nsgs:
-                    nsg_id = str(row.get("nsgId", "")).lower()
-                    if nsg_id:
-                        nsg_rules_map.setdefault(nsg_id, []).append(row)
-            except Exception:
-                pass
+        # Use the NSG rules already cached inside the topology result
+        nsg_rules_map: Dict[str, List[Dict[str, Any]]] = topology.get("_nsg_rules_map", {})
 
         source_ip = "*"
         dest_ip = "*"

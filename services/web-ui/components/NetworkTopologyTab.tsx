@@ -200,7 +200,7 @@ function SubnetNode({ data }: NodeProps) {
 }
 
 function NsgNode({ data }: NodeProps) {
-  const healthStatus = (data.healthStatus as string) ?? 'green'
+  const healthStatus = (data.health as string) ?? 'green'
   const highlighted = data.highlighted as boolean
 
   const badgeLabels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
@@ -441,6 +441,7 @@ export default function NetworkTopologyTab() {
   const [pathProtocol, setPathProtocol] = useState('TCP')
   const [pathResult, setPathResult] = useState<PathCheckResult | null>(null)
   const [pathLoading, setPathLoading] = useState(false)
+  const [pathError, setPathError] = useState<string | null>(null)
 
   // Summary counts
   const vnetCount = useMemo(
@@ -490,6 +491,7 @@ export default function NetworkTopologyTab() {
     if (!pathSource || !pathDest) return
     setPathLoading(true)
     setPathResult(null)
+    setPathError(null)
     try {
       const res = await fetch('/api/proxy/network/topology/path-check', {
         method: 'POST',
@@ -528,8 +530,8 @@ export default function NetworkTopologyTab() {
           }))
         )
       }
-    } catch {
-      // path check error handled silently
+    } catch (err) {
+      setPathError(err instanceof Error ? err.message : 'Path check failed')
     } finally {
       setPathLoading(false)
     }
@@ -659,6 +661,19 @@ export default function NetworkTopologyTab() {
                 </Button>
 
                 {/* Verdict display */}
+                {pathError && (
+                  <div
+                    className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-yellow) 10%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--accent-yellow) 30%, transparent)',
+                      color: 'var(--accent-yellow)',
+                    }}
+                  >
+                    <XCircle size={14} />
+                    {pathError}
+                  </div>
+                )}
                 {pathResult && pathResult.verdict === 'allowed' && (
                   <div
                     className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
