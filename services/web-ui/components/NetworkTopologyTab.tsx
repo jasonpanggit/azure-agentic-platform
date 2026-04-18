@@ -478,6 +478,21 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     },
   },
   {
+    // Nodes/edges directly involved in the focused issue
+    selector: '.issue-highlighted',
+    style: {
+      'border-color': '#ef4444',
+      'border-width': 3,
+      'background-color': 'rgba(239, 68, 68, 0.18)',
+      opacity: 1,
+    },
+  },
+  {
+    // Nodes/edges not involved in the focused issue
+    selector: '.issue-dimmed',
+    style: { opacity: 0.1 },
+  },
+  {
     selector: '.path-blocked',
     style: {
       'border-color': '#ef4444',
@@ -1092,6 +1107,64 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
   const [chatOpen, setChatOpen] = useState(false)
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
   const [issuesOpen, setIssuesOpen] = useState(false)
+  const [focusedIssueIndex, setFocusedIssueIndex] = useState<number | null>(null)
+
+  // Focus a specific issue — highlight its NSGs, their subnets, and connected resources
+  const focusIssue = useCallback((issue: Record<string, unknown>, index: number) => {
+    const cy = cyRef.current
+    if (!cy) return
+    const srcNsgId = String(issue.source_nsg_id ?? '')
+    const dstNsgId = String(issue.dest_nsg_id ?? '')
+
+    // Collect relevant node IDs: the two NSGs, their subnets, and everything connected to those subnets
+    const relevantIds = new Set<string>()
+    relevantIds.add(srcNsgId)
+    relevantIds.add(dstNsgId)
+
+    // Find subnets linked to these NSGs via subnet-nsg edges
+    cy.edges('[type="subnet-nsg"]').forEach((e) => {
+      if (e.target().id() === srcNsgId || e.target().id() === dstNsgId) {
+        const subnetId = e.source().id()
+        relevantIds.add(subnetId)
+        // Add all nodes connected to those subnets
+        cy.edges().filter((edge) => edge.source().id() === subnetId || edge.target().id() === subnetId).forEach((edge) => {
+          relevantIds.add(edge.source().id())
+          relevantIds.add(edge.target().id())
+        })
+      }
+    })
+
+    // Also find edges between NSGs (asymmetry edges)
+    const relevantEdgeIds = new Set<string>()
+    cy.edges().forEach((e) => {
+      if (relevantIds.has(e.source().id()) && relevantIds.has(e.target().id())) {
+        relevantEdgeIds.add(e.id())
+      }
+    })
+
+    // Apply classes
+    cy.elements().removeClass('issue-highlighted issue-dimmed')
+    cy.nodes().forEach((n) => {
+      if (relevantIds.has(n.id())) n.addClass('issue-highlighted')
+      else n.addClass('issue-dimmed')
+    })
+    cy.edges().forEach((e) => {
+      if (relevantEdgeIds.has(e.id())) e.addClass('issue-highlighted')
+      else e.addClass('issue-dimmed')
+    })
+
+    // Fit view to the highlighted nodes
+    const highlighted = cy.nodes('.issue-highlighted')
+    if (highlighted.length > 0) cy.fit(highlighted, 80)
+
+    setFocusedIssueIndex(index)
+    setIssuesOpen(false) // close drawer so graph is fully visible
+  }, [])
+
+  const clearIssueFocus = useCallback(() => {
+    cyRef.current?.elements().removeClass('issue-highlighted issue-dimmed')
+    setFocusedIssueIndex(null)
+  }, [])
 
   // Search + filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -1664,6 +1737,55 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               }}
             />
 
+            {/* Focused-issue banner — bottom-center */}
+            {focusedIssueIndex !== null && topologyData?.issues[focusedIssueIndex] && (() => {
+              const issue = topologyData.issues[focusedIssueIndex]
+              const srcName = String(issue.source_nsg_id ?? '').split('/').pop()
+              const dstName = String(issue.dest_nsg_id ?? '').split('/').pop()
+              return (
+                <div
+                  className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-lg px-4 py-2 text-xs shadow-lg"
+                  style={{
+                    background: 'color-mix(in srgb, var(--accent-red) 18%, var(--bg-surface))',
+                    border: '1px solid var(--accent-red)',
+                    color: 'var(--text-primary)',
+                    maxWidth: '520px',
+                  }}
+                >
+                  <span style={{ color: 'var(--accent-red)' }}>🚫</span>
+                  <span>
+                    <strong>Port {String(issue.port)}/TCP blocked</strong>
+                    {' · '}
+                    <span className="font-mono">{srcName}</span>
+                    {' → '}
+                    <span className="font-mono">{dstName}</span>
+                  </span>
+                  <button
+                    onClick={clearIssueFocus}
+                    className="ml-2 shrink-0 text-[10px] px-2 py-0.5 rounded"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-red) 25%, transparent)',
+                      color: 'var(--accent-red)',
+                      border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
+                  <button
+                    onClick={() => setIssuesOpen(true)}
+                    className="shrink-0 text-[10px] px-2 py-0.5 rounded"
+                    style={{
+                      background: 'var(--bg-subtle)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    All issues
+                  </button>
+                </div>
+              )
+            })()}
+
             {/* Legend overlay — bottom-left */}
             <LegendOverlay />
 
@@ -1791,22 +1913,42 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               {topologyData.issues.map((issue, i) => {
                 const srcName = String(issue.source_nsg_id ?? '').split('/').pop() ?? String(issue.source_nsg_id)
                 const dstName = String(issue.dest_nsg_id ?? '').split('/').pop() ?? String(issue.dest_nsg_id)
+                const isFocused = focusedIssueIndex === i
                 return (
                   <div
                     key={i}
                     className="rounded p-3 text-xs"
                     style={{
-                      background: 'color-mix(in srgb, var(--accent-red) 8%, transparent)',
-                      border: '1px solid color-mix(in srgb, var(--accent-red) 20%, transparent)',
+                      background: isFocused
+                        ? 'color-mix(in srgb, var(--accent-red) 18%, transparent)'
+                        : 'color-mix(in srgb, var(--accent-red) 8%, transparent)',
+                      border: isFocused
+                        ? '1px solid var(--accent-red)'
+                        : '1px solid color-mix(in srgb, var(--accent-red) 20%, transparent)',
                     }}
                   >
-                    <p className="font-semibold mb-1" style={{ color: 'var(--accent-red)' }}>
-                      Port {String(issue.port)}/TCP blocked
-                    </p>
-                    <p className="mb-1" style={{ color: 'var(--text-primary)' }}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold" style={{ color: 'var(--accent-red)' }}>
+                        Port {String(issue.port)}/TCP blocked
+                      </p>
+                      <button
+                        onClick={() => isFocused ? clearIssueFocus() : focusIssue(issue, i)}
+                        className="shrink-0 text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
+                        style={{
+                          background: isFocused
+                            ? 'var(--accent-red)'
+                            : 'color-mix(in srgb, var(--accent-red) 20%, transparent)',
+                          color: isFocused ? '#fff' : 'var(--accent-red)',
+                          border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
+                        }}
+                      >
+                        {isFocused ? '✕ Clear focus' : '🔍 Focus in graph'}
+                      </button>
+                    </div>
+                    <p className="mb-2" style={{ color: 'var(--text-primary)' }}>
                       {String(issue.description)}
                     </p>
-                    <div className="mt-2 flex flex-col gap-0.5" style={{ color: 'var(--text-muted)' }}>
+                    <div className="flex flex-col gap-0.5" style={{ color: 'var(--text-muted)' }}>
                       <span><strong>Source NSG:</strong> <span className="font-mono">{srcName}</span></span>
                       <span><strong>Dest NSG:</strong> <span className="font-mono">{dstName}</span></span>
                     </div>
