@@ -43,7 +43,7 @@ interface TopologyData {
   error?: string;
 }
 
-interface TopologyTabProps {
+interface ResourceHierarchyTabProps {
   subscriptions: string[];
 }
 
@@ -163,7 +163,7 @@ function SubscriptionNode({
   );
 }
 
-export function TopologyTab({ subscriptions }: TopologyTabProps) {
+export function ResourceHierarchyTab({ subscriptions }: ResourceHierarchyTabProps) {
   const [nodes, setNodes] = useState<TopologyNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
