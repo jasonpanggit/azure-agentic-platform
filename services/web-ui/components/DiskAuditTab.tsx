@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { HardDrive, RefreshCw, AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { HardDrive, AlertTriangle } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -135,7 +134,6 @@ export default function DiskAuditTab() {
   const [findings, setFindings] = useState<DiskFinding[]>([])
   const [summary, setSummary] = useState<DiskSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState('')
 
@@ -179,55 +177,18 @@ export default function DiskAuditTab() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      const res = await fetch('/api/proxy/compute/disks/scan', { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d?.error ?? `HTTP ${res.status}`)
-      }
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   return (
     <div className="space-y-4 p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <HardDrive
-            size={20}
-            style={{ color: 'var(--accent-yellow)' }}
-            aria-label="Disk audit icon"
-          />
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Orphaned Disk & Snapshot Audit
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchData}
-            disabled={loading}
-            className="flex items-center gap-1"
-          >
-            <RefreshCw
-              size={14}
-              aria-label="Refresh"
-              className={loading ? 'animate-spin' : ''}
-            />
-            Refresh
-          </Button>
-          <Button size="sm" onClick={handleScan} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan Now'}
-          </Button>
-        </div>
+      <div className="flex items-center gap-2">
+        <HardDrive
+          size={20}
+          style={{ color: 'var(--accent-yellow)' }}
+          aria-label="Disk audit icon"
+        />
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Orphaned Disk & Snapshot Audit
+        </h2>
       </div>
 
       {error && (
@@ -321,7 +282,7 @@ export default function DiskAuditTab() {
                   className="text-center py-8"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  No orphaned resources found. Run a scan to populate data.
+                  No orphaned disks or old snapshots found.
                 </TableCell>
               </TableRow>
             ) : (

@@ -417,6 +417,59 @@ Foundry Agent Service manages thread state. Chat endpoints are non-blocking (sin
 SSE (Server-Sent Events) via `ReadableStream` in Next.js Route Handlers for real-time token streaming and agent trace events. No WebSocket or SignalR required.
 <!-- GSD:architecture-end -->
 
+## Dashboard Tab Implementation Rules
+
+These rules are MANDATORY for every new dashboard tab phase. Violations require a refactor phase.
+
+### Data Loading Pattern
+
+**ARG-backed tabs MUST query live on page load — no scan button, no Cosmos intermediary.**
+
+The only correct pattern is the one used by `VNetPeeringTab` and `LBHealthTab`:
+- `useEffect` calls `fetchData()` on mount
+- `setInterval` polls on `REFRESH_INTERVAL_MS` (10 min)
+- The API endpoint calls the service directly and returns live ARG results
+- Backend uses `arg_cache.get_cached(key, subscription_ids, ttl_seconds, fetch_fn)` for latency
+
+**NEVER implement:**
+- A `POST /scan` endpoint that writes to Cosmos, with a separate `GET` that reads from Cosmos
+- A "Scan Now" button in the UI
+- Empty state messages that say "Run a scan to populate data"
+
+**Exception — scan-then-persist IS acceptable only when:**
+- The data source is NOT ARG (e.g. Azure Cost Management REST API, per-subscription management.azure.com calls)
+- AND the API calls are rate-limited or significantly slower than ARG (~500ms+)
+- Current justified exceptions: Phase 95 (Quota — management API), Phase 96 (Budget — Cost Management API)
+
+### TTL Cache Values
+
+Use `arg_cache.get_cached()` with these TTLs based on data volatility:
+
+| Data type | TTL |
+|-----------|-----|
+| Config/security state (certs, storage settings, identity) | 3600s (1 hour) |
+| Resource inventory (disks, VMs, VMSS, peerings, LBs) | 900s (15 min) |
+| Alerts / active incidents | 300s (5 min) or no cache |
+
+### Frontend Checklist for Every New Tab
+
+Before marking a tab phase complete, verify:
+- [ ] No `scanning` state variable
+- [ ] No `handleScan` function
+- [ ] No `POST` to a `/scan` proxy route
+- [ ] No "Run a scan" in empty state messages
+- [ ] `useEffect` fires `fetchData()` immediately on mount
+- [ ] Empty state says "No [items] found" not "Run a scan to check"
+- [ ] Corresponding `POST /scan` proxy route does NOT exist in `app/api/proxy/`
+
+### Backend Checklist for Every New Endpoint
+
+- [ ] `GET` endpoint calls service directly (not reads from Cosmos)
+- [ ] Service is wrapped in `arg_cache.get_cached()` with appropriate TTL
+- [ ] No `POST /scan` route (unless justified exception above)
+- [ ] No `persist_*` call in the GET path
+- [ ] Docstring states: "queried live from ARG (Xm TTL cache)"
+
 <!-- GSD:workflow-start source:GSD defaults -->
 ## GSD Workflow Enforcement
 
