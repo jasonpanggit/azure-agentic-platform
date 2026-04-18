@@ -33,6 +33,7 @@ import {
   Container,
   Flame,
   AppWindow,
+  MessageSquare,
 } from 'lucide-react'
 import {
   Sheet,
@@ -50,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import NetworkTopologyChatPanel from '@/components/NetworkTopologyChatPanel'
 
 // ---------------------------------------------------------------------------
 // NodeDetailPanel
@@ -484,6 +486,7 @@ function SubnetNode({ data }: NodeProps) {
 function NsgNode({ data }: NodeProps) {
   const healthStatus = (data.health as string) ?? 'green'
   const highlighted = data.highlighted as boolean
+  const chatHighlighted = data.chatHighlighted as boolean
 
   const badgeLabels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
   const accentVar = `var(--accent-${healthStatus})`
@@ -493,11 +496,15 @@ function NsgNode({ data }: NodeProps) {
       className="rounded-lg p-3 relative"
       style={{
         width: 160,
-        border: highlighted
+        border: chatHighlighted
+          ? '2px solid var(--accent-orange)'
+          : highlighted
           ? '2px solid var(--accent-red)'
           : '1px solid var(--border)',
         background: 'var(--bg-surface)',
-        boxShadow: highlighted
+        boxShadow: chatHighlighted
+          ? '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)'
+          : highlighted
           ? '0 0 0 4px color-mix(in srgb, var(--accent-red) 20%, transparent)'
           : undefined,
       }}
@@ -859,13 +866,25 @@ function mapNodeType(apiType: string): string {
   return mapping[apiType] ?? 'default'
 }
 
-function transformToReactFlowNodes(apiNodes: TopologyNode[]): Node[] {
+function transformToReactFlowNodes(apiNodes: TopologyNode[], chatHighlightedIds?: Set<string>): Node[] {
   return apiNodes.map((n) => ({
     id: n.id,
     type: mapNodeType(n.type),
-    data: { label: n.label, ...n.data },
+    data: {
+      label: n.label,
+      ...n.data,
+      chatHighlighted: chatHighlightedIds?.has(n.id) ?? false,
+    },
     position: { x: 0, y: 0 },
     ...(n.data.parentId ? { parentId: n.data.parentId as string } : {}),
+    style: chatHighlightedIds?.has(n.id)
+      ? {
+          outline: '2px solid var(--accent-orange)',
+          outlineOffset: '2px',
+          boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)',
+          borderRadius: '8px',
+        }
+      : undefined,
   }))
 }
 
@@ -944,6 +963,10 @@ export default function NetworkTopologyTab() {
   const [pathLoading, setPathLoading] = useState(false)
   const [pathError, setPathError] = useState<string | null>(null)
 
+  // Chat panel state
+  const [chatOpen, setChatOpen] = useState(false)
+  const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
+
   // Summary counts
   const vnetCount = useMemo(
     () => topologyData?.nodes.filter((n) => n.type === 'vnet').length ?? 0,
@@ -962,6 +985,23 @@ export default function NetworkTopologyTab() {
   const aksCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'aks').length ?? 0, [topologyData])
   const firewallCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'firewall').length ?? 0, [topologyData])
 
+  // nodeIndex: resourceId (lowercased) and short name (lowercased) → node id
+  const nodeIndex = useMemo(() => {
+    const m = new Map<string, string>()
+    topologyData?.nodes.forEach((n) => {
+      m.set(n.id.toLowerCase(), n.id)
+      m.set(n.label.toLowerCase(), n.id)
+    })
+    return m
+  }, [topologyData])
+
+  // topologyContext for the chat panel
+  const topologyContext = useMemo(() => ({
+    nodeCount: topologyData?.nodes.length ?? 0,
+    edgeCount: topologyData?.edges.length ?? 0,
+    selectedNodeId: selectedNode?.id,
+  }), [topologyData, selectedNode])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -974,7 +1014,7 @@ export default function NetworkTopologyTab() {
       const data: TopologyData = await res.json()
       setTopologyData(data)
 
-      const rfNodes = transformToReactFlowNodes(data.nodes)
+      const rfNodes = transformToReactFlowNodes(data.nodes, highlightedNodeIds)
       const rfEdges = transformToReactFlowEdges(data.edges, data.issues)
       const layout = await computeLayout(rfNodes, rfEdges)
       setNodes(layout.nodes)
@@ -1046,14 +1086,14 @@ export default function NetworkTopologyTab() {
     setPathResult(null)
     // Restore nodes/edges from topology data
     if (topologyData) {
-      const rfNodes = transformToReactFlowNodes(topologyData.nodes)
+      const rfNodes = transformToReactFlowNodes(topologyData.nodes, highlightedNodeIds)
       const rfEdges = transformToReactFlowEdges(topologyData.edges, topologyData.issues)
       computeLayout(rfNodes, rfEdges).then((layout) => {
         setNodes(layout.nodes)
         setEdges(layout.edges)
       })
     }
-  }, [topologyData, setNodes, setEdges])
+  }, [topologyData, setNodes, setEdges, highlightedNodeIds])
 
   // Resource options for path checker selects
   const resourceOptions = useMemo(
@@ -1079,6 +1119,14 @@ export default function NetworkTopologyTab() {
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={chatOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setChatOpen((v) => !v)}
+          >
+            <MessageSquare size={14} />
+            Ask AI
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1334,7 +1382,8 @@ export default function NetworkTopologyTab() {
       )}
 
       {topologyData && topologyData.nodes.length > 0 && (
-        <div style={{ height: 'calc(100vh - 220px)', background: 'var(--bg-canvas)' }}>
+        <div className="flex" style={{ height: 'calc(100vh - 220px)' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, background: 'var(--bg-canvas)' }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1358,6 +1407,35 @@ export default function NetworkTopologyTab() {
             <MiniMap />
             <Background variant={BackgroundVariant.Dots} />
           </ReactFlow>
+          </div>
+          {chatOpen && (
+            <div style={{ width: 360, flexShrink: 0 }}>
+              <NetworkTopologyChatPanel
+                subscriptionIds={[]}
+                topologyContext={topologyContext}
+                nodeIndex={nodeIndex}
+                onHighlight={(ids) => {
+                  setHighlightedNodeIds(ids)
+                  // Update node data/style in-place — no layout recalculation
+                  setNodes((nds) =>
+                    nds.map((n) => ({
+                      ...n,
+                      data: { ...n.data, chatHighlighted: ids.has(n.id) },
+                      style: ids.has(n.id)
+                        ? {
+                            outline: '2px solid var(--accent-orange)',
+                            outlineOffset: '2px',
+                            boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)',
+                            borderRadius: '8px',
+                          }
+                        : { outline: undefined, boxShadow: undefined },
+                    }))
+                  )
+                }}
+                onClose={() => setChatOpen(false)}
+              />
+            </div>
+          )}
         </div>
       )}
 
