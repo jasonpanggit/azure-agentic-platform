@@ -679,13 +679,28 @@ export default function NetworkTopologyTab() {
   const [chatOpen, setChatOpen] = useState(false)
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
 
-  // Summary counts
-  const vnetCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vnet').length ?? 0, [topologyData])
-  const nsgCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'nsg').length ?? 0, [topologyData])
+  // Summary counts — all node types
   const issueCount = useMemo(() => topologyData?.issues.length ?? 0, [topologyData])
-  const vmCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vm').length ?? 0, [topologyData])
-  const aksCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'aks').length ?? 0, [topologyData])
-  const firewallCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'firewall').length ?? 0, [topologyData])
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    topologyData?.nodes.forEach((n) => { counts[n.type] = (counts[n.type] ?? 0) + 1 })
+    return counts
+  }, [topologyData])
+
+  // Display order and labels for summary pills
+  const PILL_TYPES: { type: string; label: string; accent?: string }[] = [
+    { type: 'vnet',     label: 'VNets' },
+    { type: 'subnet',   label: 'Subnets' },
+    { type: 'nsg',      label: 'NSGs' },
+    { type: 'vm',       label: 'VMs' },
+    { type: 'vmss',     label: 'VMSS' },
+    { type: 'aks',      label: 'AKS' },
+    { type: 'lb',       label: 'LBs' },
+    { type: 'appgw',    label: 'App GWs' },
+    { type: 'gateway',  label: 'VPN/ER GWs' },
+    { type: 'firewall', label: 'Firewalls', accent: 'var(--accent-red)' },
+    { type: 'pe',       label: 'Private EPs' },
+  ]
 
   // nodeIndex: resourceId (lowercased) and short name (lowercased) → node id
   const nodeIndex = useMemo(() => {
@@ -1005,46 +1020,29 @@ export default function NetworkTopologyTab() {
       </div>
 
       {/* Summary pills */}
-      <div className="flex items-center gap-3">
-        <span
-          className="text-xs px-2 py-1 rounded"
-          style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
-        >
-          VNets: {vnetCount}
-        </span>
-        <span
-          className="text-xs px-2 py-1 rounded"
-          style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
-        >
-          NSGs: {nsgCount}
-        </span>
+      <div className="flex flex-wrap items-center gap-2">
+        {PILL_TYPES.filter(({ type }) => (typeCounts[type] ?? 0) > 0).map(({ type, label, accent }) => (
+          <span
+            key={type}
+            className="text-xs px-2 py-1 rounded"
+            style={{
+              background: accent ? `color-mix(in srgb, ${accent} 12%, transparent)` : 'var(--bg-subtle)',
+              color: accent ?? 'var(--text-secondary)',
+            }}
+          >
+            {label}: {typeCounts[type]}
+          </span>
+        ))}
         <span
           className="text-xs px-2 py-1 rounded"
           style={{
-            background: issueCount > 0
-              ? 'color-mix(in srgb, var(--accent-red) 15%, transparent)'
-              : 'var(--bg-subtle)',
+            background: issueCount > 0 ? 'color-mix(in srgb, var(--accent-red) 15%, transparent)' : 'var(--bg-subtle)',
             color: issueCount > 0 ? 'var(--accent-red)' : 'var(--text-secondary)',
           }}
         >
           Issues: {issueCount}
         </span>
-        {vmCount > 0 && (
-          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
-            VMs: {vmCount}
-          </span>
-        )}
-        {aksCount > 0 && (
-          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
-            AKS: {aksCount}
-          </span>
-        )}
-        {firewallCount > 0 && (
-          <span className="text-xs px-2 py-1 rounded" style={{ background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)', color: 'var(--accent-red)' }}>
-            Firewalls: {firewallCount}
-          </span>
-        )}
-        <span className="text-[11px] ml-2" style={{ color: 'var(--text-muted)' }}>
+        <span className="text-[11px] ml-1" style={{ color: 'var(--text-muted)' }}>
           · Click any node or connection to inspect details
         </span>
       </div>
