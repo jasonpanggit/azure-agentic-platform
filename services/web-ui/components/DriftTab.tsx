@@ -40,12 +40,6 @@ interface FindingsResponse {
   error?: string
 }
 
-interface ScanResponse {
-  job_id?: string
-  status?: string
-  error?: string
-}
-
 // ---------------------------------------------------------------------------
 // SeverityBadge — CSS semantic tokens only, never hardcoded Tailwind colors
 // ---------------------------------------------------------------------------
@@ -110,9 +104,7 @@ export function DriftTab({ subscriptionId }: DriftTabProps) {
   const [findings, setFindings] = useState<DriftFinding[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [fixDiffs, setFixDiffs] = useState<Record<string, string>>({})
   const [loadingFix, setLoadingFix] = useState<Record<string, boolean>>({})
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -149,25 +141,6 @@ export function DriftTab({ subscriptionId }: DriftTabProps) {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
     }
   }, [fetchFindings])
-
-  async function handleTriggerScan() {
-    setScanning(true)
-    setScanMessage(null)
-    try {
-      const res = await fetch('/api/proxy/drift/scan', { method: 'POST' })
-      const data: ScanResponse = await res.json()
-      if (!res.ok || data.error) {
-        setScanMessage(`Scan failed: ${data.error ?? res.status}`)
-      } else {
-        setScanMessage(`Scan queued (job: ${data.job_id ?? 'unknown'}). Refreshing in 10s…`)
-        setTimeout(() => void fetchFindings(), 10000)
-      }
-    } catch (err) {
-      setScanMessage(err instanceof Error ? err.message : 'Failed to trigger scan')
-    } finally {
-      setScanning(false)
-    }
-  }
 
   async function handleProposeFix(findingId: string) {
     setLoadingFix((prev) => ({ ...prev, [findingId]: true }))
@@ -237,30 +210,8 @@ export function DriftTab({ subscriptionId }: DriftTabProps) {
             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button
-            size="sm"
-            onClick={() => void handleTriggerScan()}
-            disabled={scanning}
-            style={{ background: 'var(--accent-blue)', color: '#fff' }}
-          >
-            {scanning ? 'Scanning…' : 'Trigger Scan'}
-          </Button>
         </div>
       </div>
-
-      {/* Scan message */}
-      {scanMessage && (
-        <div
-          className="px-4 py-2 rounded text-sm"
-          style={{
-            background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
-            color: 'var(--accent-blue)',
-            border: '1px solid color-mix(in srgb, var(--accent-blue) 20%, transparent)',
-          }}
-        >
-          {scanMessage}
-        </div>
-      )}
 
       {/* Error */}
       {error && (

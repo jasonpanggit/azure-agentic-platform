@@ -93,7 +93,6 @@ export function CostAnomalyTab({ subscriptions = [] }: CostAnomalyTabProps) {
   const [anomalies, setAnomalies] = useState<CostAnomaly[]>([])
   const [summary, setSummary] = useState<CostSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -138,21 +137,6 @@ export function CostAnomalyTab({ subscriptions = [] }: CostAnomalyTabProps) {
     const interval = setInterval(fetchData, 10 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchData])
-
-  const handleRunScan = async () => {
-    setScanning(true)
-    try {
-      const res = await fetch('/api/proxy/cost/scan', { method: 'POST' })
-      if (res.ok) {
-        // Poll after a short delay to pick up fresh results
-        setTimeout(fetchData, 3000)
-      }
-    } catch {
-      // Non-fatal — user can retry
-    } finally {
-      setScanning(false)
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Skeleton
@@ -227,17 +211,6 @@ export function CostAnomalyTab({ subscriptions = [] }: CostAnomalyTabProps) {
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={handleRunScan}
-            disabled={scanning}
-            className="h-8 text-xs gap-1"
-            style={{ background: 'var(--accent-blue)', color: '#fff', border: 'none' }}
-          >
-            <TrendingUp className="h-3.5 w-3.5" />
-            {scanning ? 'Scanning…' : 'Run Scan'}
           </Button>
         </div>
       </div>

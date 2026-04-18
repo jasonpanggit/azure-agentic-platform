@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle, Database } from 'lucide-react'
+import { ShieldCheck, RefreshCw, AlertTriangle } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -110,7 +110,6 @@ export function BackupComplianceTab({ subscriptions = [] }: BackupComplianceTabP
   const [findings, setFindings] = useState<BackupFinding[]>([])
   const [summary, setSummary] = useState<BackupSummary | null>(null)
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Filters
@@ -152,21 +151,6 @@ export function BackupComplianceTab({ subscriptions = [] }: BackupComplianceTabP
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      const params = new URLSearchParams()
-      if (filterSubscription) params.set('subscription_id', filterSubscription)
-      await fetch(`/api/proxy/backup/scan${params.toString() ? `?${params}` : ''}`, { method: 'POST' })
-      // Refresh after a short delay to let the scan start
-      setTimeout(fetchData, 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const protectionRate = summary?.protection_rate ?? 0
 
   return (
@@ -189,15 +173,6 @@ export function BackupComplianceTab({ subscriptions = [] }: BackupComplianceTabP
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleScan}
-            disabled={scanning}
-            className="flex items-center gap-1.5"
-          >
-            <Database className="h-3.5 w-3.5" />
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -324,7 +299,7 @@ export function BackupComplianceTab({ subscriptions = [] }: BackupComplianceTabP
             ) : findings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>
-                  No findings. Run a scan to populate data.
+                  No backup findings found.
                 </TableCell>
               </TableRow>
             ) : (

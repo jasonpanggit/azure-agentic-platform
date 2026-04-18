@@ -81,7 +81,6 @@ export function AlertCoverageTab({ subscriptionId }: { subscriptionId?: string }
   const [summary, setSummary] = useState<AlertCoverageSummary | null>(null)
   const [gaps, setGaps] = useState<AlertCoverageGap[]>([])
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')
 
@@ -118,20 +117,6 @@ export function AlertCoverageTab({ subscriptionId }: { subscriptionId?: string }
     return () => clearInterval(id)
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      const params = new URLSearchParams()
-      if (subscriptionId) params.set('subscription_id', subscriptionId)
-      await fetch(`/api/proxy/alert-coverage/scan?${params}`, { method: 'POST' })
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const grouped = groupBySubscription(gaps)
 
   return (
@@ -151,9 +136,6 @@ export function AlertCoverageTab({ subscriptionId }: { subscriptionId?: string }
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button size="sm" onClick={() => void handleScan()} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -233,7 +215,7 @@ export function AlertCoverageTab({ subscriptionId }: { subscriptionId?: string }
       )}
       {!loading && gaps.length === 0 && (
         <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-          No coverage gaps found. Run a scan to populate data.
+          No coverage gaps found.
         </div>
       )}
 

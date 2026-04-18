@@ -90,7 +90,6 @@ export function IdentityRiskTab() {
   const [risks, setRisks] = useState<CredentialRisk[]>([])
   const [summary, setSummary] = useState<IdentitySummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [graphUnavailable, setGraphUnavailable] = useState(false)
   const [severityFilter, setSeverityFilter] = useState<string>('')
 
@@ -125,22 +124,6 @@ export function IdentityRiskTab() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      const res = await fetch('/api/proxy/identity-risks/scan', { method: 'POST' })
-      const data = await res.json()
-      if (data.risks_found === 0 && !res.ok) {
-        setGraphUnavailable(true)
-      }
-      await fetchData()
-    } catch {
-      setGraphUnavailable(true)
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const filteredRisks = severityFilter
     ? risks.filter((r) => r.severity.toLowerCase() === severityFilter.toLowerCase())
     : risks
@@ -174,12 +157,12 @@ export function IdentityRiskTab() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleScan}
-            disabled={scanning}
+            onClick={() => void fetchData()}
+            disabled={loading}
             className="gap-1.5 text-[12px]"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning…' : 'Scan Now'}
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
         </div>
       </div>
@@ -224,7 +207,7 @@ export function IdentityRiskTab() {
           </div>
         ) : filteredRisks.length === 0 ? (
           <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-            No credential risks found. Run a scan to check for expiring credentials.
+            No identity risk findings found.
           </div>
         ) : (
           <Table>

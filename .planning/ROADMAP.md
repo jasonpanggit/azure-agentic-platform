@@ -1974,6 +1974,16 @@ Plans:
 Plans:
 - [x] 82-1: incident_report_service.py + incident_report_endpoints.py + IncidentReportButton.tsx
 
+### Phase 104: add azure firewall tab under resources tab. besides rules management, audit rules to show which are overlapped and can be consolidated, which are too wide and should be tightened up
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 103
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 104 to break down)
+
 ---
 
 ## World-Class v3.0 Success Criteria

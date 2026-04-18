@@ -180,7 +180,6 @@ export function AppServiceHealthTab({ subscriptions = [] }: AppServiceHealthTabP
   const [apps, setApps] = useState<AppServiceApp[]>([])
   const [summary, setSummary] = useState<AppServiceSummary | null>(null)
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [healthFilter, setHealthFilter] = useState('')
   const [appTypeFilter, setAppTypeFilter] = useState('')
@@ -242,21 +241,6 @@ export function AppServiceHealthTab({ subscriptions = [] }: AppServiceHealthTabP
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      const token = await getAccessToken()
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      await fetch('/api/proxy/app-services/scan', { method: 'POST', headers })
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const filtered = apps
 
   return (
@@ -295,13 +279,13 @@ export function AppServiceHealthTab({ subscriptions = [] }: AppServiceHealthTabP
             <option value="misconfigured">Misconfigured</option>
           </select>
           <button
-            onClick={handleScan}
-            disabled={scanning}
+            onClick={() => void fetchData()}
+            disabled={loading}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded font-medium disabled:opacity-50"
             style={{ background: 'var(--accent-blue)', color: '#fff' }}
           >
-            <RefreshCw className={`w-3 h-3 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning…' : 'Scan'}
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
         </div>
       </div>
@@ -324,7 +308,7 @@ export function AppServiceHealthTab({ subscriptions = [] }: AppServiceHealthTabP
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>
-            No app services found. Run a scan to populate data.
+            No app service findings found.
           </div>
         ) : (
           <table className="w-full text-sm border-collapse">

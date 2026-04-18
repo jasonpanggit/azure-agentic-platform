@@ -233,7 +233,7 @@ function ClusterCard({ cluster }: { cluster: AKSCluster }) {
 
         {expanded && cluster.node_pools.length === 0 && (
           <div className="ml-6 mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            No node pool data available. Run a scan to refresh.
+            No node pool data available.
           </div>
         )}
       </CardContent>
@@ -245,7 +245,6 @@ export function AKSHealthTab({ subscriptions = [] }: AKSHealthTabProps) {
   const [clusters, setClusters] = useState<AKSCluster[]>([])
   const [summary, setSummary] = useState<AKSSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [filterSub, setFilterSub] = useState<string>('all')
   const [filterHealth, setFilterHealth] = useState<string>('all')
 
@@ -281,17 +280,6 @@ export function AKSHealthTab({ subscriptions = [] }: AKSHealthTabProps) {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/aks-health/scan', { method: 'POST' })
-      // Wait a moment then refresh
-      setTimeout(() => { void fetchData() }, 3000)
-    } finally {
-      setTimeout(() => setScanning(false), 3000)
-    }
-  }
-
   const uniqueSubs = Array.from(new Set(clusters.map((c) => c.subscription_id)))
 
   return (
@@ -316,14 +304,6 @@ export function AKSHealthTab({ subscriptions = [] }: AKSHealthTabProps) {
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void handleScan()}
-            disabled={scanning}
-            style={{ background: 'var(--accent-blue)', color: '#fff' }}
-          >
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -373,7 +353,7 @@ export function AKSHealthTab({ subscriptions = [] }: AKSHealthTabProps) {
           className="rounded-lg p-8 text-center text-sm"
           style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
         >
-          No AKS clusters found. Run a scan to populate data.
+          No AKS findings found.
         </div>
       ) : (
         <div className="space-y-3">

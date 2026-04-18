@@ -120,7 +120,6 @@ export function MaintenanceTab({ subscriptions }: { subscriptions?: string[] }) 
   const [events, setEvents] = useState<MaintenanceEvent[]>([])
   const [summary, setSummary] = useState<MaintenanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('')
   const [subscriptionFilter, setSubscriptionFilter] = useState<string>('')
 
@@ -157,16 +156,6 @@ export function MaintenanceTab({ subscriptions }: { subscriptions?: string[] }) 
     const interval = setInterval(fetchData, REFRESH_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [fetchData])
-
-  async function handleScan() {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/maintenance/scan', { method: 'POST' })
-      await fetchData()
-    } finally {
-      setScanning(false)
-    }
-  }
 
   const allSubscriptions = Array.from(
     new Set([...(subscriptions ?? []), ...events.map((e) => e.subscription_id).filter(Boolean)])
@@ -220,12 +209,12 @@ export function MaintenanceTab({ subscriptions }: { subscriptions?: string[] }) 
           <Button
             variant="outline"
             size="sm"
-            onClick={handleScan}
-            disabled={scanning}
+            onClick={() => void fetchData()}
+            disabled={loading}
             className="gap-1.5 text-[12px]"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning…' : 'Scan Now'}
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
         </div>
       </div>

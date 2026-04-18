@@ -18,7 +18,7 @@ export function AuthenticatedApp() {
 
   if (DEV_MODE) {
     return (
-      <DesktopOnlyGate minWidth={1200}>
+      <DesktopOnlyGate minWidth={800}>
         <AppLayout />
       </DesktopOnlyGate>
     );
@@ -33,7 +33,7 @@ export function AuthenticatedApp() {
   return (
     <>
       <AuthenticatedTemplate>
-        <DesktopOnlyGate minWidth={1200}>
+        <DesktopOnlyGate minWidth={800}>
           <AppLayout />
         </DesktopOnlyGate>
       </AuthenticatedTemplate>

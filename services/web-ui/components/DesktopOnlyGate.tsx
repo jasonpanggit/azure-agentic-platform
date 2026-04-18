@@ -26,7 +26,7 @@ export function DesktopOnlyGate({ minWidth, children }: DesktopOnlyGateProps) {
           <Monitor className="h-4 w-4" />
           <AlertTitle className="text-xl font-semibold mb-2">Desktop Required</AlertTitle>
           <AlertDescription className="text-sm text-muted-foreground">
-            This application requires a desktop browser (minimum 1200px width).
+            This application requires a desktop browser (minimum 800px width).
           </AlertDescription>
         </Alert>
       </div>

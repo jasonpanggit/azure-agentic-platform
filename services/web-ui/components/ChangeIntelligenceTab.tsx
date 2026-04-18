@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { GitCommitHorizontal, RefreshCw, ScanSearch } from 'lucide-react'
+import { GitCommitHorizontal, RefreshCw } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,7 +150,6 @@ export function ChangeIntelligenceTab({ subscriptions = [] }: Props) {
   const [summary, setSummary] = useState<ChangeSummary | null>(null)
   const [changes, setChanges] = useState<ChangeRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Filters
@@ -210,16 +209,6 @@ export function ChangeIntelligenceTab({ subscriptions = [] }: Props) {
     }
   }, [refresh])
 
-  async function triggerScan() {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/changes/scan', { method: 'POST' })
-      setTimeout(refresh, 2000)
-    } finally {
-      setScanning(false)
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -250,16 +239,6 @@ export function ChangeIntelligenceTab({ subscriptions = [] }: Props) {
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={triggerScan}
-            disabled={scanning}
-            className="gap-1.5"
-          >
-            <ScanSearch className="h-3.5 w-3.5" />
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -383,7 +362,7 @@ export function ChangeIntelligenceTab({ subscriptions = [] }: Props) {
           </div>
         ) : changes.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-            No changes found for current filters. Run a scan to populate data.
+            No changes found for current filters.
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>

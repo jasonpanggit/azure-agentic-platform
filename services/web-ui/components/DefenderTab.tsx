@@ -369,7 +369,6 @@ export function DefenderTab() {
   const [loadingAlerts, setLoadingAlerts] = useState(false)
   const [loadingRecs, setLoadingRecs] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchSummary = useCallback(async () => {
@@ -416,23 +415,6 @@ export function DefenderTab() {
     }
   }, [])
 
-  const triggerScan = useCallback(async () => {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/defender/scan', { method: 'POST' })
-      // After scan queued, re-fetch after a short delay
-      setTimeout(() => {
-        fetchAlerts()
-        fetchRecommendations()
-        fetchSummary()
-      }, 3000)
-    } catch {
-      // non-fatal
-    } finally {
-      setScanning(false)
-    }
-  }, [fetchAlerts, fetchRecommendations, fetchSummary])
-
   // Initial load
   useEffect(() => {
     fetchAlerts()
@@ -468,12 +450,12 @@ export function DefenderTab() {
         <Button
           variant="outline"
           size="sm"
-          onClick={triggerScan}
-          disabled={scanning}
+          onClick={() => { fetchAlerts(); fetchRecommendations(); fetchSummary() }}
+          disabled={loadingAlerts}
           className="flex items-center gap-1"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${scanning ? 'animate-spin' : ''}`} />
-          {scanning ? 'Scanning…' : 'Refresh'}
+          <RefreshCw className={`w-3.5 h-3.5 ${loadingAlerts ? 'animate-spin' : ''}`} />
+          Refresh
         </Button>
       </div>
 

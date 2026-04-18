@@ -177,7 +177,6 @@ export function NsgAuditTab({ subscriptions = [] }: NsgAuditTabProps) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loadingFindings, setLoadingFindings] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [subscriptionFilter, setSubscriptionFilter] = useState<string>('all')
@@ -235,26 +234,6 @@ export function NsgAuditTab({ subscriptions = [] }: NsgAuditTabProps) {
     return () => clearInterval(id)
   }, [fetchFindings, fetchSummary])
 
-  async function handleRunScan() {
-    setScanning(true)
-    try {
-      const res = await fetch('/api/proxy/nsg/scan', { method: 'POST', cache: 'no-store' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
-      }
-      // Give the background task a moment then refresh
-      setTimeout(() => {
-        fetchFindings()
-        fetchSummary()
-        setScanning(false)
-      }, 3000)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Scan request failed')
-      setScanning(false)
-    }
-  }
-
   // Unique subscriptions from loaded findings for filter dropdown
   const uniqueSubscriptions = Array.from(
     new Set(findings.map((f) => f.subscription_id).filter(Boolean))
@@ -281,15 +260,6 @@ export function NsgAuditTab({ subscriptions = [] }: NsgAuditTabProps) {
             >
               <RefreshCw size={14} className={loadingFindings ? 'animate-spin' : ''} style={{ marginRight: 4 }} />
               Refresh
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleRunScan}
-              disabled={scanning}
-              style={{ background: 'var(--accent-blue)', color: '#fff', border: 'none' }}
-            >
-              <Shield size={14} style={{ marginRight: 4 }} />
-              {scanning ? 'Scanning…' : 'Run Scan'}
             </Button>
           </div>
         </div>
@@ -389,7 +359,7 @@ export function NsgAuditTab({ subscriptions = [] }: NsgAuditTabProps) {
               }}
             >
               <Shield size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-              {error ? 'Unable to load findings.' : 'No NSG findings match the current filters.'}
+              {error ? 'Unable to load findings.' : 'No NSG findings found.'}
             </div>
           ) : (
             <Table>

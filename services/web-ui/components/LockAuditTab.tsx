@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Lock, RefreshCw, Download, ScanSearch } from 'lucide-react'
+import { Lock, RefreshCw, Download } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -162,7 +162,6 @@ export function LockAuditTab({ subscriptions }: LockAuditTabProps) {
   const [findings, setFindings] = useState<LockFinding[]>([])
   const [summary, setSummary] = useState<LockSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -217,17 +216,6 @@ export function LockAuditTab({ subscriptions }: LockAuditTabProps) {
     }
   }, [fetchData])
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/locks/scan', { method: 'POST' })
-      // Brief delay then refresh
-      setTimeout(() => fetchData(), 2000)
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const handleDownloadScript = async () => {
     setDownloading(true)
     try {
@@ -265,16 +253,6 @@ export function LockAuditTab({ subscriptions }: LockAuditTabProps) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleScan}
-            disabled={scanning}
-            className="flex items-center gap-1.5 text-xs"
-          >
-            <ScanSearch className="h-3.5 w-3.5" />
-            {scanning ? 'Scanning…' : 'Run Scan'}
-          </Button>
           <Button
             variant="outline"
             size="sm"

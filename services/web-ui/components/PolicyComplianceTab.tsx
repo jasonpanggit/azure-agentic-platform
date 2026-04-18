@@ -170,7 +170,6 @@ export function PolicyComplianceTab({ subscriptions = [] }: PolicyComplianceTabP
   const [violations, setViolations] = useState<PolicyViolation[]>([])
   const [summary, setSummary] = useState<PolicySummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [groupBy, setGroupBy] = useState<GroupBy>('resource')
   const [filterSub, setFilterSub] = useState<string>('all')
   const [filterSeverity, setFilterSeverity] = useState<string>('all')
@@ -210,16 +209,6 @@ export function PolicyComplianceTab({ subscriptions = [] }: PolicyComplianceTabP
     return () => clearInterval(interval)
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/policy/scan', { method: 'POST' })
-      setTimeout(() => { void fetchData() }, 3000)
-    } finally {
-      setTimeout(() => setScanning(false), 3000)
-    }
-  }
-
   const uniqueSubs = Array.from(new Set(violations.map((v) => v.subscription_id)))
   const grouped = groupBy === 'policy' ? groupByPolicy(violations) : null
 
@@ -255,14 +244,6 @@ export function PolicyComplianceTab({ subscriptions = [] }: PolicyComplianceTabP
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void handleScan()}
-            disabled={scanning}
-            style={{ background: 'var(--accent-blue)', color: '#fff' }}
-          >
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -338,7 +319,7 @@ export function PolicyComplianceTab({ subscriptions = [] }: PolicyComplianceTabP
           className="rounded-lg p-8 text-center text-sm"
           style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
         >
-          No policy violations found. Run a scan to populate data.
+          No policy violations found.
         </div>
       ) : groupBy === 'policy' && grouped ? (
         <div className="space-y-4">

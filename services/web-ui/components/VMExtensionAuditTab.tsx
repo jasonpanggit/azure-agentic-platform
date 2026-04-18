@@ -82,7 +82,6 @@ export function VMExtensionAuditTab({ subscriptionId }: { subscriptionId?: strin
   const [summary, setSummary] = useState<ExtensionSummary | null>(null)
   const [findings, setFindings] = useState<ExtensionFinding[]>([])
   const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [osFilter, setOsFilter] = useState<string>('ALL')
   const [severityFilter, setSeverityFilter] = useState<string>('ALL')
@@ -120,20 +119,6 @@ export function VMExtensionAuditTab({ subscriptionId }: { subscriptionId?: strin
     return () => clearInterval(id)
   }, [fetchData])
 
-  async function handleScan() {
-    setScanning(true)
-    try {
-      const params = new URLSearchParams()
-      if (subscriptionId) params.set('subscription_id', subscriptionId)
-      await fetch(`/api/proxy/vm-extensions/scan?${params}`, { method: 'POST' })
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
   const filteredFindings = findings.filter((f) => {
     const osMatch = osFilter === 'ALL' || f.os_type.toLowerCase() === osFilter.toLowerCase()
     return osMatch
@@ -156,9 +141,6 @@ export function VMExtensionAuditTab({ subscriptionId }: { subscriptionId?: strin
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button size="sm" onClick={() => void handleScan()} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>
@@ -263,7 +245,7 @@ export function VMExtensionAuditTab({ subscriptionId }: { subscriptionId?: strin
             {!loading && filteredFindings.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-                  No findings found. Run a scan to populate data.
+                  No findings found.
                 </TableCell>
               </TableRow>
             )}
