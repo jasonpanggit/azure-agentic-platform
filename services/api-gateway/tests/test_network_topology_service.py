@@ -320,7 +320,8 @@ class TestPathCheck:
 
         _cache.clear()
         nsg_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networksecuritygroups/nsg-block"
-        vnets = [_make_vnet_row(subnet_nsg_id=nsg_id)]
+        vnet_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-1"
+        vnets = [_make_vnet_row(vnet_id=vnet_id, subnet_nsg_id=nsg_id)]
         nsgs = [_make_nsg_row(nsg_id=nsg_id, direction="Inbound", access="Deny", dest_port_range="443", priority=100)]
 
         def side_effect(cred, subs, query):
@@ -332,9 +333,11 @@ class TestPathCheck:
 
         mock_arg.side_effect = side_effect
 
+        # Use the subnet ID directly so _resolve_resource_nsg can find it via the subnet node
+        subnet_id = f"{vnet_id}/subnets/subnet-1".lower()
         result = evaluate_path_check(
-            source_resource_id="/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm1",
-            destination_resource_id="/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Compute/virtualMachines/vm2",
+            source_resource_id=subnet_id,
+            destination_resource_id=subnet_id,
             port=443,
             protocol="TCP",
             subscription_ids=["sub-path-block"],

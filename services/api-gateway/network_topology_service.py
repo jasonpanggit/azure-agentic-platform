@@ -85,11 +85,12 @@ Resources
 | extend gatewayType = tostring(properties.gatewayType)
 | extend vpnType = tostring(properties.vpnType)
 | extend sku_name = tostring(properties.sku.name)
+| extend bgp_enabled = tobool(properties.enableBgp)
 | mv-expand ipConfig = properties.ipConfigurations
 | extend subnetId = tolower(tostring(ipConfig.properties.subnet.id))
 | extend publicIpId = tolower(tostring(ipConfig.properties.publicIPAddress.id))
 | project subscriptionId, resourceGroup, name, id, location,
-          gatewayType, vpnType, sku_name, subnetId, publicIpId
+          gatewayType, vpnType, sku_name, bgp_enabled, subnetId, publicIpId
 """
 
 _PUBLIC_IP_QUERY = """
@@ -97,7 +98,10 @@ Resources
 | where type =~ "microsoft.network/publicipaddresses"
 | extend ipAddress = tostring(properties.ipAddress)
 | extend allocationMethod = tostring(properties.publicIPAllocationMethod)
-| project subscriptionId, name, id = tolower(id), ipAddress, allocationMethod
+| extend sku_name = tostring(sku.name)
+| extend domainNameLabel = tostring(properties.dnsSettings.domainNameLabel)
+| project subscriptionId, name, id = tolower(id), ipAddress, allocationMethod,
+          sku_name, domainNameLabel
 """
 
 _NIC_NSG_QUERY = """
@@ -114,7 +118,8 @@ Resources
 _VM_QUERY = """
 Resources
 | where type =~ "microsoft.compute/virtualmachines"
-| extend nicId = tolower(tostring(properties.networkProfile.networkInterfaces[0].id))
+| mv-expand nicRef = properties.networkProfile.networkInterfaces
+| extend nicId = tolower(tostring(nicRef.id))
 | project subscriptionId, resourceGroup, vmName = name, vmId = tolower(id), location,
           vmSize = tostring(properties.hardwareProfile.vmSize),
           osType = tostring(properties.storageProfile.osDisk.osType),
@@ -133,12 +138,13 @@ Resources
 _AKS_QUERY = """
 Resources
 | where type =~ "microsoft.containerservice/managedclusters"
-| extend subnetId = tolower(tostring(properties.agentPoolProfiles[0].vnetSubnetID))
+| mv-expand pool = properties.agentPoolProfiles
+| extend subnetId = tolower(tostring(pool.properties.vnetSubnetID)), poolName = tostring(pool.name)
 | project subscriptionId, resourceGroup, name, id = tolower(id), location,
           kubernetesVersion = tostring(properties.kubernetesVersion),
-          nodeCount = toint(properties.agentPoolProfiles[0].count),
+          nodeCount = toint(pool.count),
           provisioningState = tostring(properties.provisioningState),
-          subnetId
+          subnetId, poolName
 """
 
 _FIREWALL_QUERY = """
@@ -435,7 +441,6 @@ def _assemble_graph(
     aks_list: Optional[List[Dict[str, Any]]] = None,
     firewalls: Optional[List[Dict[str, Any]]] = None,
     app_gateways: Optional[List[Dict[str, Any]]] = None,
-    peerings: Optional[List[Dict[str, Any]]] = None,
     nic_subnet_map: Optional[Dict[str, Dict[str, str]]] = None,
     nsg_rules_by_id: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -457,6 +462,7 @@ def _assemble_graph(
                     "addressSpace": _clean_address_space(str(row.get("addressSpace", ""))),
                     "subscriptionId": row.get("subscriptionId", ""),
                     "location": row.get("location", ""),
+                    "peeringCount": 0,
                 },
             })
 
@@ -560,6 +566,15 @@ def _assemble_graph(
                     "frontendIp": row.get("frontendIp", ""),
                 },
             })
+        pub_ip_id = str(row.get("publicIpId", "")).lower()
+        if lb_id and pub_ip_id:
+            edges.append({
+                "id": f"resource-publicip-{lb_id}",
+                "source": lb_id,
+                "target": pub_ip_id,
+                "type": "resource-publicip",
+                "data": {},
+            })
 
     # PE nodes
     for row in pes:
@@ -594,6 +609,8 @@ def _assemble_graph(
                 "data": {
                     "gatewayType": row.get("gatewayType", ""),
                     "vpnType": row.get("vpnType", ""),
+                    "sku": row.get("sku_name", ""),
+                    "bgpEnabled": row.get("bgp_enabled", False),
                 },
             })
         subnet_id = str(row.get("subnetId", "")).lower()
@@ -605,8 +622,34 @@ def _assemble_graph(
                 "type": "subnet-gateway",
                 "data": {},
             })
+        pub_ip_id = str(row.get("publicIpId", "")).lower()
+        if gw_id and pub_ip_id:
+            edges.append({
+                "id": f"resource-publicip-{gw_id}",
+                "source": gw_id,
+                "target": pub_ip_id,
+                "type": "resource-publicip",
+                "data": {},
+            })
 
-    # VM nodes — resolve subnet via nic_subnet_map
+    # Public IP nodes (C-1)
+    for row in public_ips:
+        pip_id = str(row.get("id", "")).lower()
+        if pip_id and pip_id not in seen_nodes:
+            seen_nodes.add(pip_id)
+            nodes.append({
+                "id": pip_id,
+                "type": "publicip",
+                "label": row.get("name", ""),
+                "data": {
+                    "ipAddress": row.get("ipAddress", ""),
+                    "allocationMethod": row.get("allocationMethod", ""),
+                    "sku": row.get("sku_name", ""),
+                    "domainNameLabel": row.get("domainNameLabel", ""),
+                },
+            })
+
+    # VM nodes — resolve subnet via nic_subnet_map; support multi-NIC (H-1)
     _nic_map: Dict[str, Dict[str, str]] = nic_subnet_map or {}
     for row in (vms or []):
         vm_id = str(row.get("vmId", "")).lower()
@@ -614,6 +657,7 @@ def _assemble_graph(
         nic_info = _nic_map.get(nic_id, {})
         private_ip = nic_info.get("privateIp", row.get("privateIp", ""))
         subnet_id = nic_info.get("subnetId", "")
+        # Deduplicate VM node — only create once (H-1)
         if vm_id and vm_id not in seen_nodes:
             seen_nodes.add(vm_id)
             nodes.append({
@@ -628,9 +672,35 @@ def _assemble_graph(
                     "nicId": nic_id,
                 },
             })
+        # Emit one subnet-vm edge per NIC (H-1)
         if vm_id and subnet_id:
-            edge_id = f"edge-{subnet_id}-{vm_id}"
+            edge_id = f"edge-{subnet_id}-{vm_id}-{nic_id}"
             edges.append({"id": edge_id, "source": subnet_id, "target": vm_id, "type": "subnet-vm", "data": {}})
+        # NIC-level NSG edge (C-4)
+        nsg_id = nic_info.get("nsgId", "")
+        if vm_id and nsg_id:
+            # Ensure NSG node exists
+            if nsg_id not in seen_nodes:
+                seen_nodes.add(nsg_id)
+                nsg_label = nsg_id.rsplit("/", 1)[-1]
+                rules_for_node = _build_rules_for_panel(_rules_by_id.get(nsg_id, []))
+                nodes.append({
+                    "id": nsg_id,
+                    "type": "nsg",
+                    "label": nsg_label,
+                    "data": {
+                        "health": "green",
+                        "rules": rules_for_node,
+                        "ruleCount": nsg_rule_counts.get(nsg_id, 0),
+                    },
+                })
+            edges.append({
+                "id": f"nic-nsg-{vm_id}-{nic_id}",
+                "source": vm_id,
+                "target": nsg_id,
+                "type": "nic-nsg",
+                "data": {},
+            })
 
     # VMSS nodes
     for row in (vmss_list or []):
@@ -651,9 +721,10 @@ def _assemble_graph(
         if vmss_id and subnet_id:
             edges.append({"id": f"edge-{subnet_id}-{vmss_id}", "source": subnet_id, "target": vmss_id, "type": "subnet-vmss", "data": {}})
 
-    # AKS nodes
+    # AKS nodes — support multi-pool (H-2)
     for row in (aks_list or []):
         aks_id = str(row.get("id", "")).lower()
+        # Deduplicate AKS node — only create once (H-2)
         if aks_id and aks_id not in seen_nodes:
             seen_nodes.add(aks_id)
             nodes.append({
@@ -667,9 +738,12 @@ def _assemble_graph(
                     "location": row.get("location", ""),
                 },
             })
+        # Emit one subnet-aks edge per pool with a non-empty subnetId (H-2)
         subnet_id = str(row.get("subnetId", "")).lower()
         if aks_id and subnet_id:
-            edges.append({"id": f"edge-{subnet_id}-{aks_id}", "source": subnet_id, "target": aks_id, "type": "subnet-aks", "data": {}})
+            pool_name = str(row.get("poolName", ""))
+            edge_id = f"edge-{subnet_id}-{aks_id}-{pool_name}" if pool_name else f"edge-{subnet_id}-{aks_id}"
+            edges.append({"id": edge_id, "source": subnet_id, "target": aks_id, "type": "subnet-aks", "data": {}})
 
     # Firewall nodes
     for row in (firewalls or []):
@@ -690,6 +764,15 @@ def _assemble_graph(
         subnet_id = str(row.get("subnetId", "")).lower()
         if fw_id and subnet_id:
             edges.append({"id": f"edge-{subnet_id}-{fw_id}", "source": subnet_id, "target": fw_id, "type": "subnet-firewall", "data": {}})
+        pub_ip_id = str(row.get("publicIpId", "")).lower()
+        if fw_id and pub_ip_id:
+            edges.append({
+                "id": f"resource-publicip-{fw_id}",
+                "source": fw_id,
+                "target": pub_ip_id,
+                "type": "resource-publicip",
+                "data": {},
+            })
 
     # App Gateway nodes
     for row in (app_gateways or []):
@@ -710,6 +793,15 @@ def _assemble_graph(
         subnet_id = str(row.get("subnetId", "")).lower()
         if agw_id and subnet_id:
             edges.append({"id": f"edge-{subnet_id}-{agw_id}", "source": subnet_id, "target": agw_id, "type": "subnet-appgw", "data": {}})
+        pub_ip_id = str(row.get("publicIpId", "")).lower()
+        if agw_id and pub_ip_id:
+            edges.append({
+                "id": f"resource-publicip-{agw_id}",
+                "source": agw_id,
+                "target": pub_ip_id,
+                "type": "resource-publicip",
+                "data": {},
+            })
 
     return nodes, edges
 
@@ -793,35 +885,44 @@ def fetch_network_topology(
                 vnets, nsgs, lbs, pes, gateways, public_ips, nics,
                 vms=vms, vmss_list=vmss_list, aks_list=aks_list,
                 firewalls=firewalls, app_gateways=app_gateways,
-                peerings=peerings,
                 nic_subnet_map=nic_subnet_map,
                 nsg_rules_by_id=nsg_rules_map,
             )
 
-            # Add VNet peering edges
-            seen_peering_edges: set = set()
+            # Add VNet peering edges — merge asymmetric state (C-5)
+            seen_peering_edges: Dict[tuple, Dict[str, Any]] = {}
             for row in peerings:
                 vnet_id = str(row.get("vnetId", "")).lower()
                 remote_vnet_id = str(row.get("remoteVnetId", "")).lower()
                 if not vnet_id or not remote_vnet_id:
                     continue
-                peering_state = str(row.get("peeringState", "")).lower()
+                peering_state = str(row.get("peeringState", ""))
                 edge_key = tuple(sorted([vnet_id, remote_vnet_id]))
                 if edge_key in seen_peering_edges:
+                    # Merge second side's state (C-5)
+                    existing_edge = seen_peering_edges[edge_key]
+                    existing_state = existing_edge["data"]["peeringState"]
+                    if existing_state != peering_state:
+                        merged_state = f"{existing_state}/{peering_state}"
+                        existing_edge["data"]["peeringState"] = merged_state
+                        # If either side is not Connected, mark as disconnected
+                        if existing_state.lower() != "connected" or peering_state.lower() != "connected":
+                            existing_edge["type"] = "peering-disconnected"
                     continue
-                seen_peering_edges.add(edge_key)
-                edge_type = "peering" if peering_state == "connected" else "peering-disconnected"
-                edges.append({
+                edge_type = "peering" if peering_state.lower() == "connected" else "peering-disconnected"
+                new_edge = {
                     "id": f"edge-peering-{vnet_id}-{remote_vnet_id}",
                     "source": vnet_id,
                     "target": remote_vnet_id,
                     "type": edge_type,
                     "data": {
-                        "peeringState": row.get("peeringState", ""),
+                        "peeringState": peering_state,
                         "allowForwardedTraffic": row.get("allowForwardedTraffic", False),
                         "allowGatewayTransit": row.get("allowGatewayTransit", False),
                     },
-                })
+                }
+                seen_peering_edges[edge_key] = new_edge
+                edges.append(new_edge)
 
             # Build subnet-NSG map for health scoring and asymmetry detection
             subnet_nsg_map: Dict[str, str] = {}
@@ -867,10 +968,21 @@ def fetch_network_topology(
                 if node["type"] == "nsg" and node["id"] in red_nsgs:
                     node["data"]["health"] = "red"
 
-            return {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map}
+            # Update peeringCount on VNet nodes (M-6)
+            vnet_peering_counts: Dict[str, int] = {}
+            for edge in edges:
+                if edge["type"] in ("peering", "peering-disconnected"):
+                    vnet_peering_counts[edge["source"]] = vnet_peering_counts.get(edge["source"], 0) + 1
+                    vnet_peering_counts[edge["target"]] = vnet_peering_counts.get(edge["target"], 0) + 1
+            for node in nodes:
+                if node["type"] == "vnet":
+                    node["data"]["peeringCount"] = vnet_peering_counts.get(node["id"], 0)
+
+            result = {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map}
+            return result
         except Exception as exc:
             logger.warning("network_topology_service: ARG query failed | error=%s", exc)
-            return {"nodes": [], "edges": [], "issues": [], "_nsg_rules_map": {}}
+            return {"nodes": [], "edges": [], "issues": []}
 
     try:
         result = _get_cached_or_fetch(cache_key, _TOPOLOGY_TTL_SECONDS, _fetch)
@@ -882,7 +994,9 @@ def fetch_network_topology(
             len(result.get("issues", [])),
             duration_ms,
         )
-        return result
+        # C-7: strip internal NSG rules map — return shallow copy without it
+        public_result = {k: v for k, v in result.items() if k != "_nsg_rules_map"}
+        return public_result
     except Exception as exc:
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.warning("network_topology_service: unexpected error | error=%s (%.0fms)", exc, duration_ms)
@@ -912,16 +1026,21 @@ def evaluate_path_check(
         # Build lookup maps
         node_map = {n["id"]: n for n in nodes}
 
-        # Find source and destination subnets via edges or resource ID matching
+        # Rebuild NSG rules map from the cache directly (bypass public API strip)
+        # by re-fetching from the internal cache entry which retains _nsg_rules_map
+        cache_key_inner = f"topology:{','.join(sorted(subscription_ids))}"
+        with _cache_lock:
+            cached = _cache.get(cache_key_inner)
+        nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
+        if cached:
+            nsg_rules_map = cached[1].get("_nsg_rules_map", {})
+
         # Resolve source/dest to their subnet's NSG
         source_subnet_nsg = _resolve_resource_nsg(source_resource_id, nodes, edges)
         dest_subnet_nsg = _resolve_resource_nsg(destination_resource_id, nodes, edges)
 
         steps: List[Dict[str, Any]] = []
         blocking_nsg_id: Optional[str] = None
-
-        # Use the NSG rules already cached inside the topology result
-        nsg_rules_map: Dict[str, List[Dict[str, Any]]] = topology.get("_nsg_rules_map", {})
 
         source_ip = "*"
         dest_ip = "*"
@@ -1015,20 +1134,21 @@ def _resolve_resource_nsg(
             if nsg_id:
                 return nsg_id
 
-    # Check edges for subnet-nsg associations where the subnet contains the resource
-    # Try to find subnet from resource ID pattern (extract VNet/subnet from ARM path)
-    parts = resource_id_lower.split("/")
-    # Look for any subnet that might contain this resource
-    for node in nodes:
-        if node["type"] == "subnet":
-            # Match by subscription and resource group at minimum
-            if node.get("data", {}).get("nsgId"):
-                # Simple heuristic: same VNet
-                node_vnet = node.get("data", {}).get("vnetId", "")
-                if node_vnet:
-                    # Check if resource is in same subscription/rg
-                    for edge in edges:
-                        if edge["type"] == "subnet-nsg" and edge["source"] == node["id"]:
-                            return edge["target"]
+    # C-3: Find the subnet that contains this resource via a subnet-* edge,
+    # then find the NSG attached to that subnet via a subnet-nsg edge.
+    _SUBNET_RESOURCE_EDGE_TYPES = {
+        "subnet-vm", "subnet-vmss", "subnet-aks", "subnet-pe",
+        "subnet-appgw", "subnet-firewall", "subnet-gateway", "subnet-lb",
+    }
+    subnet_id: Optional[str] = None
+    for edge in edges:
+        if edge.get("type") in _SUBNET_RESOURCE_EDGE_TYPES and edge.get("target") == resource_id_lower:
+            subnet_id = edge.get("source")
+            break
+
+    if subnet_id:
+        for edge in edges:
+            if edge.get("type") == "subnet-nsg" and edge.get("source") == subnet_id:
+                return edge.get("target")
 
     return None
