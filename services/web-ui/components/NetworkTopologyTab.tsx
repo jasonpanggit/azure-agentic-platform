@@ -1019,6 +1019,27 @@ export default function NetworkTopologyTab() {
       const layout = await computeLayout(rfNodes, rfEdges)
       setNodes(layout.nodes)
       setEdges(layout.edges)
+
+      // If the backend returned zero nodes it may still be warming up (subscription
+      // registry not yet populated).  Schedule one automatic retry after 8 seconds so
+      // the map appears without the user having to click Refresh manually.
+      if (data.nodes.length === 0) {
+        setTimeout(() => {
+          setLoading(true)
+          fetch('/api/proxy/network/topology')
+            .then((r) => r.json())
+            .then((retryData: TopologyData) => {
+              if (retryData.nodes && retryData.nodes.length > 0) {
+                setTopologyData(retryData)
+                const rn = transformToReactFlowNodes(retryData.nodes, new Set())
+                const re = transformToReactFlowEdges(retryData.edges, retryData.issues)
+                computeLayout(rn, re).then((l) => { setNodes(l.nodes); setEdges(l.edges) })
+              }
+            })
+            .catch(() => { /* silent — next interval will retry */ })
+            .finally(() => setLoading(false))
+        }, 8000)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
