@@ -352,7 +352,7 @@ function FieldRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function HealthBadge({ health }: { health: string }) {
-  const labels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
+  const labels: Record<string, string> = { green: 'OK', yellow: 'Overly Permissive', red: 'Asymmetry Detected' }
   const accent = `var(--accent-${health})`
   return (
     <span
@@ -366,6 +366,19 @@ function HealthBadge({ health }: { health: string }) {
       {labels[health] ?? health}
     </span>
   )
+}
+
+const NSG_HEALTH_EXPLANATIONS: Record<string, React.ReactNode> = {
+  yellow: (
+    <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--accent-yellow)' }}>
+      ⚠️ This NSG has a rule with <strong>source = * and port = *</strong> at priority &lt; 1000 — it allows traffic from any source to any port. Consider tightening the source range or restricting the port.
+    </p>
+  ),
+  red: (
+    <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--accent-red)' }}>
+      🚫 <strong>NSG Asymmetry Detected.</strong> Another NSG in your topology allows outbound traffic on a port where this NSG (or vice-versa) denies the matching inbound traffic. This causes silent packet drops — traffic appears to leave the source but never arrives at the destination. See the Issues pill above the graph for specific ports and subnet pairs affected.
+    </p>
+  ),
 }
 
 function NsgRulesTable({ rules }: { rules: Array<Record<string, unknown>> }) {
@@ -455,11 +468,15 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NSG Details</p>
             <FieldRow label="Name" value={d.label as string} />
             <FieldRow label="Health" value={<HealthBadge health={(d.health as string) ?? 'green'} />} />
+            {NSG_HEALTH_EXPLANATIONS[(d.health as string)]}
             {d.ruleCount != null && <FieldRow label="Rule Count" value={String(d.ruleCount)} />}
             <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
             {Array.isArray(d.rules) && d.rules.length > 0 ? (
               <>
-                <p className="text-xs font-semibold mt-4 mb-1" style={{ color: 'var(--text-secondary)' }}>Security Rules</p>
+                <p className="text-xs font-semibold mt-4 mb-0.5" style={{ color: 'var(--text-secondary)' }}>This NSG&apos;s Rules</p>
+                <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Custom rules defined on this NSG. Azure evaluates these in priority order; lower number = higher priority. Default Azure rules (65000–65500) are not shown.
+                </p>
                 <NsgRulesTable rules={d.rules as Array<Record<string, unknown>>} />
               </>
             ) : (
@@ -718,6 +735,7 @@ export default function NetworkTopologyTab() {
   // Chat panel state
   const [chatOpen, setChatOpen] = useState(false)
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
+  const [issuesOpen, setIssuesOpen] = useState(false)
 
   // Summary counts — all node types
   const issueCount = useMemo(() => topologyData?.issues.length ?? 0, [topologyData])
@@ -1073,15 +1091,26 @@ export default function NetworkTopologyTab() {
             {label}: {typeCounts[type]}
           </span>
         ))}
-        <span
-          className="text-xs px-2 py-1 rounded"
-          style={{
-            background: issueCount > 0 ? 'color-mix(in srgb, var(--accent-red) 15%, transparent)' : 'var(--bg-subtle)',
-            color: issueCount > 0 ? 'var(--accent-red)' : 'var(--text-secondary)',
-          }}
-        >
-          Issues: {issueCount}
-        </span>
+        {issueCount > 0 ? (
+          <button
+            onClick={() => setIssuesOpen(true)}
+            className="text-xs px-2 py-1 rounded cursor-pointer transition-opacity hover:opacity-80"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
+              color: 'var(--accent-red)',
+              border: '1px solid color-mix(in srgb, var(--accent-red) 25%, transparent)',
+            }}
+          >
+            🚫 Issues: {issueCount} — click to view
+          </button>
+        ) : (
+          <span
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
+          >
+            Issues: 0
+          </span>
+        )}
         <span className="text-[11px] ml-1" style={{ color: 'var(--text-muted)' }}>
           · Click any node or connection to inspect details
         </span>
@@ -1202,6 +1231,51 @@ export default function NetworkTopologyTab() {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
       />
+
+      {/* Issues drawer */}
+      <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
+        <SheetContent side="right" className="w-[480px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>NSG Asymmetry Issues ({issueCount})</SheetTitle>
+          </SheetHeader>
+          <p className="text-xs mt-2 mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            An NSG asymmetry occurs when one subnet&apos;s NSG allows outbound traffic on a port, but the destination
+            subnet&apos;s NSG has no matching inbound allow rule — causing silent packet drops. Each issue below
+            identifies the two NSGs and the port affected.
+          </p>
+          {topologyData?.issues.length ? (
+            <div className="flex flex-col gap-3">
+              {topologyData.issues.map((issue, i) => {
+                const srcName = String(issue.source_nsg_id ?? '').split('/').pop() ?? String(issue.source_nsg_id)
+                const dstName = String(issue.dest_nsg_id ?? '').split('/').pop() ?? String(issue.dest_nsg_id)
+                return (
+                  <div
+                    key={i}
+                    className="rounded p-3 text-xs"
+                    style={{
+                      background: 'color-mix(in srgb, var(--accent-red) 8%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent-red) 20%, transparent)',
+                    }}
+                  >
+                    <p className="font-semibold mb-1" style={{ color: 'var(--accent-red)' }}>
+                      Port {String(issue.port)}/TCP blocked
+                    </p>
+                    <p className="mb-1" style={{ color: 'var(--text-primary)' }}>
+                      {String(issue.description)}
+                    </p>
+                    <div className="mt-2 flex flex-col gap-0.5" style={{ color: 'var(--text-muted)' }}>
+                      <span><strong>Source NSG:</strong> <span className="font-mono">{srcName}</span></span>
+                      <span><strong>Dest NSG:</strong> <span className="font-mono">{dstName}</span></span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No issues found.</p>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
