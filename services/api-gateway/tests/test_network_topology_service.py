@@ -277,9 +277,9 @@ class TestFetchTopology:
         fetch_network_topology(["sub-cache"], credential="cred")
         fetch_network_topology(["sub-cache"], credential="cred")
 
-        # 12 queries per call (vnets, nsgs, lbs, pes, gateways, public_ips, nics, vms, vmss, aks, firewalls, app_gateways)
-        # but second call should be cached — so total == 12 not 24
-        assert mock_arg.call_count == 12
+        # 14 queries per call (vnets, nsgs, lbs, pes, gateways, public_ips, nics, vms, vmss, aks, firewalls, app_gateways, peerings, nic_subnets)
+        # but second call should be cached — so total == 14 not 28
+        assert mock_arg.call_count == 14
 
 
 class TestPathCheck:

@@ -147,7 +147,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
               </>
             ) : (
               <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
-                Rules are loaded during path check.
+                No custom security rules — only Azure default rules apply.
               </p>
             )}
           </>
@@ -159,7 +159,8 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VNet Details</p>
             <FieldRow label="Name" value={d.label as string} />
             {d.addressSpace && <FieldRow label="Address Space" value={<span className="font-mono">{d.addressSpace as string}</span>} />}
-            {d.subscription && <FieldRow label="Subscription" value={d.subscription as string} />}
+            {(d.subscriptionId || d.subscription) && <FieldRow label="Subscription" value={(d.subscriptionId || d.subscription) as string} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
             {d.peeringCount != null && <FieldRow label="Peering Count" value={String(d.peeringCount)} />}
           </>
         )
@@ -285,16 +286,49 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 
   const renderEdgeContent = () => {
     if (!edge) return null
+    const isPeering = edge.type === 'peering' || edge.type === 'peering-disconnected'
+    const isAsymmetry = edge.type === 'asymmetry'
     return (
       <>
         <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>
-          {(edge.label as string) || 'Connection Details'}
+          {isPeering ? 'VNet Peering' : isAsymmetry ? 'NSG Asymmetry' : (edge.label as string) || 'Connection Details'}
         </p>
         <FieldRow label="Source" value={<span className="font-mono text-xs">{edge.source}</span>} />
         <FieldRow label="Target" value={<span className="font-mono text-xs">{edge.target}</span>} />
         <FieldRow label="Type" value={edge.type ?? '—'} />
-        <FieldRow label="Status" value={edge.animated ? 'Active' : 'Inactive'} />
-        {edge.data?.issue && (
+        {isPeering && edge.data?.peeringState && (
+          <FieldRow
+            label="Peering State"
+            value={
+              <span style={{ color: String(edge.data.peeringState).toLowerCase() === 'connected' ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                {String(edge.data.peeringState)}
+              </span>
+            }
+          />
+        )}
+        {isPeering && (
+          <>
+            <FieldRow label="Forwarded Traffic" value={edge.data?.allowForwardedTraffic ? 'Allowed' : 'Blocked'} />
+            <FieldRow label="Gateway Transit" value={edge.data?.allowGatewayTransit ? 'Allowed' : 'Blocked'} />
+          </>
+        )}
+        {isAsymmetry && edge.data?.description && (
+          <div
+            className="mt-3 rounded p-3 text-xs"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent-red) 25%, transparent)',
+              color: 'var(--accent-red)',
+            }}
+          >
+            <p className="font-semibold mb-1">Asymmetric NSG Rule</p>
+            <p>{String(edge.data.description)}</p>
+            <p className="mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              The source NSG allows outbound on port {String(edge.data.port ?? '')}/TCP, but the destination NSG has no matching inbound allow rule. Traffic will be silently dropped at the destination.
+            </p>
+          </div>
+        )}
+        {!isPeering && !isAsymmetry && edge.data?.issue && (
           <div
             className="mt-3 rounded p-3 text-xs"
             style={{
@@ -1116,12 +1150,12 @@ export default function NetworkTopologyTab() {
     }
   }, [topologyData, setNodes, setEdges, highlightedNodeIds])
 
-  // Resource options for path checker selects
+  // Resource options for path checker selects — include VMs and subnets/NSGs/VNets
   const resourceOptions = useMemo(
     () =>
       topologyData?.nodes
-        .filter((n) => ['subnet', 'nsg', 'vnet'].includes(n.type))
-        .map((n) => ({ id: n.id, label: n.label })) ?? [],
+        .filter((n) => ['subnet', 'nsg', 'vnet', 'vm'].includes(n.type))
+        .map((n) => ({ id: n.id, label: `${n.label} (${n.type.toUpperCase()})` })) ?? [],
     [topologyData]
   )
 
@@ -1263,15 +1297,22 @@ export default function NetworkTopologyTab() {
                 )}
                 {pathResult && pathResult.verdict === 'blocked' && (
                   <div
-                    className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
+                    className="rounded border px-3 py-2 text-sm"
                     style={{
                       background: 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
                       borderColor: 'color-mix(in srgb, var(--accent-red) 30%, transparent)',
                       color: 'var(--accent-red)',
                     }}
                   >
-                    <XCircle size={14} />
-                    Traffic Blocked
+                    <div className="flex items-center gap-2 font-semibold mb-1">
+                      <XCircle size={14} />
+                      Traffic Blocked
+                    </div>
+                    {pathResult.steps.filter(s => s.result === 'Deny').map((step, idx) => (
+                      <p key={idx} className="text-xs mt-1" style={{ color: 'var(--accent-red)' }}>
+                        Blocked by <span className="font-semibold">{step.nsg_name || pathResult.blocking_nsg_id}</span> ({step.direction} rule &quot;{step.matching_rule}&quot;, priority {step.priority}) — this rule explicitly denies port {pathPort}/{pathProtocol} traffic.
+                      </p>
+                    ))}
                   </div>
                 )}
 

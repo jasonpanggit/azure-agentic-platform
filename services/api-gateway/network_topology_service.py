@@ -165,6 +165,30 @@ Resources
           subnetId
 """
 
+_VNET_PEERING_QUERY = """
+Resources
+| where type =~ "microsoft.network/virtualnetworks"
+| mv-expand peering = properties.virtualNetworkPeerings
+| where isnotnull(peering)
+| extend peeringName = tostring(peering.name)
+| extend remoteVnetId = tolower(tostring(peering.properties.remoteVirtualNetwork.id))
+| extend peeringState = tostring(peering.properties.peeringState)
+| extend allowForwardedTraffic = tobool(peering.properties.allowForwardedTraffic)
+| extend allowGatewayTransit = tobool(peering.properties.allowGatewayTransit)
+| project subscriptionId, resourceGroup, vnetId = tolower(id), vnetName = name,
+          peeringName, remoteVnetId, peeringState,
+          allowForwardedTraffic, allowGatewayTransit
+"""
+
+_NIC_SUBNET_QUERY = """
+Resources
+| where type =~ "microsoft.network/networkinterfaces"
+| extend subnetId = tolower(tostring(properties.ipConfigurations[0].properties.subnet.id))
+| extend privateIp = tostring(properties.ipConfigurations[0].properties.privateIPAddress)
+| extend nsgId = tolower(tostring(properties.networkSecurityGroup.id))
+| project subscriptionId, resourceGroup, nicId = tolower(id), subnetId, privateIp, nsgId
+"""
+
 # ---------------------------------------------------------------------------
 # In-memory TTL Cache
 # ---------------------------------------------------------------------------
@@ -353,6 +377,51 @@ def _detect_asymmetries(
     return issues
 
 
+def _build_rules_for_panel(nsg_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert raw NSG rule rows into compact dicts for the frontend panel."""
+    result = []
+    for row in nsg_rows:
+        dest_port = str(row.get("destPortRange", ""))
+        dest_ranges = row.get("destPortRanges")
+        if dest_ranges and isinstance(dest_ranges, list) and not dest_port:
+            dest_port = ", ".join(str(p) for p in dest_ranges)
+        src = str(row.get("sourcePrefix", ""))
+        src_list = row.get("sourcePrefixes")
+        if src_list and isinstance(src_list, list) and not src:
+            src = ", ".join(str(p) for p in src_list)
+        dst = str(row.get("destPrefix", ""))
+        result.append({
+            "name": str(row.get("ruleName", "")),
+            "priority": row.get("priority", 65500),
+            "direction": str(row.get("direction", "")),
+            "access": str(row.get("access", "")),
+            "protocol": str(row.get("protocol", "*")),
+            "source": src or "*",
+            "destination": dst or "*",
+            "ports": dest_port or "*",
+        })
+    # Sort by direction then priority
+    result.sort(key=lambda r: (r["direction"], r["priority"]))
+    return result
+
+
+def _clean_address_space(raw: str) -> str:
+    """Clean ARG addressSpace which comes back as '["10.0.0.0/16"]' JSON."""
+    if not raw:
+        return raw
+    cleaned = raw.strip()
+    if cleaned.startswith("["):
+        try:
+            import json
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                return ", ".join(str(x) for x in parsed)
+        except Exception:
+            pass
+        cleaned = cleaned.strip("[]").replace('"', "").replace("'", "")
+    return cleaned
+
+
 def _assemble_graph(
     vnets: List[Dict[str, Any]],
     nsgs: List[Dict[str, Any]],
@@ -366,6 +435,9 @@ def _assemble_graph(
     aks_list: Optional[List[Dict[str, Any]]] = None,
     firewalls: Optional[List[Dict[str, Any]]] = None,
     app_gateways: Optional[List[Dict[str, Any]]] = None,
+    peerings: Optional[List[Dict[str, Any]]] = None,
+    nic_subnet_map: Optional[Dict[str, Dict[str, str]]] = None,
+    nsg_rules_by_id: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Build nodes and edges lists from raw ARG query results."""
     nodes: List[Dict[str, Any]] = []
@@ -382,7 +454,7 @@ def _assemble_graph(
                 "type": "vnet",
                 "label": row.get("vnetName", ""),
                 "data": {
-                    "addressSpace": row.get("addressSpace", ""),
+                    "addressSpace": _clean_address_space(str(row.get("addressSpace", ""))),
                     "subscriptionId": row.get("subscriptionId", ""),
                     "location": row.get("location", ""),
                 },
@@ -414,18 +486,29 @@ def _assemble_graph(
         # Edge: subnet -> NSG (deferred — added after NSG nodes are built)
         subnet_nsg_id = str(row.get("subnetNsgId", "")).lower()
 
+    # Build per-NSG rule list for embedding in nodes
+    _rules_by_id: Dict[str, List[Dict[str, Any]]] = nsg_rules_by_id or {}
+
     # NSG nodes — first from the rules query
     nsg_seen: set = set()
+    nsg_rule_counts: Dict[str, int] = {}
     for row in nsgs:
         nsg_id = str(row.get("nsgId", "")).lower()
+        if nsg_id:
+            nsg_rule_counts[nsg_id] = nsg_rule_counts.get(nsg_id, 0) + 1
         if nsg_id and nsg_id not in seen_nodes:
             seen_nodes.add(nsg_id)
             nsg_seen.add(nsg_id)
+            rules_for_node = _build_rules_for_panel(_rules_by_id.get(nsg_id, []))
             nodes.append({
                 "id": nsg_id,
                 "type": "nsg",
                 "label": row.get("nsgName", ""),
-                "data": {"health": "green"},
+                "data": {
+                    "health": "green",
+                    "rules": rules_for_node,
+                    "ruleCount": 0,  # updated below after counting
+                },
             })
 
     # Ensure every NSG referenced by a subnet edge has a node (handles NSGs with no rules)
@@ -437,13 +520,17 @@ def _assemble_graph(
         if subnet_nsg_id and subnet_nsg_id not in seen_nodes:
             seen_nodes.add(subnet_nsg_id)
             nsg_seen.add(subnet_nsg_id)
-            # Derive a human-readable name from the resource ID path
             nsg_label = subnet_nsg_id.rsplit("/", 1)[-1]
+            rules_for_node = _build_rules_for_panel(_rules_by_id.get(subnet_nsg_id, []))
             nodes.append({
                 "id": subnet_nsg_id,
                 "type": "nsg",
                 "label": nsg_label,
-                "data": {"health": "green"},
+                "data": {
+                    "health": "green",
+                    "rules": rules_for_node,
+                    "ruleCount": 0,
+                },
             })
         if subnet_id and subnet_nsg_id:
             edges.append({
@@ -453,6 +540,11 @@ def _assemble_graph(
                 "type": "subnet-nsg",
                 "data": {},
             })
+
+    # Stamp ruleCount on NSG nodes now that we've counted all rows
+    for node in nodes:
+        if node["type"] == "nsg":
+            node["data"]["ruleCount"] = nsg_rule_counts.get(node["id"], 0)
 
     # LB nodes
     for row in lbs:
@@ -514,9 +606,14 @@ def _assemble_graph(
                 "data": {},
             })
 
-    # VM nodes
+    # VM nodes — resolve subnet via nic_subnet_map
+    _nic_map: Dict[str, Dict[str, str]] = nic_subnet_map or {}
     for row in (vms or []):
         vm_id = str(row.get("vmId", "")).lower()
+        nic_id = str(row.get("nicId", "")).lower()
+        nic_info = _nic_map.get(nic_id, {})
+        private_ip = nic_info.get("privateIp", row.get("privateIp", ""))
+        subnet_id = nic_info.get("subnetId", "")
         if vm_id and vm_id not in seen_nodes:
             seen_nodes.add(vm_id)
             nodes.append({
@@ -526,11 +623,11 @@ def _assemble_graph(
                 "data": {
                     "vmSize": row.get("vmSize", ""),
                     "osType": row.get("osType", ""),
-                    "privateIp": row.get("privateIp", ""),
+                    "privateIp": private_ip,
                     "location": row.get("location", ""),
+                    "nicId": nic_id,
                 },
             })
-        subnet_id = str(row.get("subnetId", "")).lower()
         if vm_id and subnet_id:
             edge_id = f"edge-{subnet_id}-{vm_id}"
             edges.append({"id": edge_id, "source": subnet_id, "target": vm_id, "type": "subnet-vm", "data": {}})
@@ -671,20 +768,62 @@ def fetch_network_topology(
             aks_list = _safe_query(_AKS_QUERY, "aks")
             firewalls = _safe_query(_FIREWALL_QUERY, "firewalls")
             app_gateways = _safe_query(_APP_GATEWAY_QUERY, "app_gateways")
+            peerings = _safe_query(_VNET_PEERING_QUERY, "peerings")
+            nic_rows = _safe_query(_NIC_SUBNET_QUERY, "nic_subnets")
 
-            nodes, edges = _assemble_graph(
-                vnets, nsgs, lbs, pes, gateways, public_ips, nics,
-                vms=vms, vmss_list=vmss_list, aks_list=aks_list,
-                firewalls=firewalls, app_gateways=app_gateways,
-            )
-
-            # Build NSG rules map and subnet-NSG map for health scoring
+            # Build NSG rules map keyed by nsg_id (lower)
             nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
             for row in nsgs:
                 nsg_id = str(row.get("nsgId", "")).lower()
                 if nsg_id:
                     nsg_rules_map.setdefault(nsg_id, []).append(row)
 
+            # Build NIC→subnet lookup for VM wiring
+            nic_subnet_map: Dict[str, Dict[str, str]] = {}
+            for row in nic_rows:
+                nic_id = str(row.get("nicId", "")).lower()
+                if nic_id:
+                    nic_subnet_map[nic_id] = {
+                        "subnetId": str(row.get("subnetId", "")).lower(),
+                        "privateIp": str(row.get("privateIp", "")),
+                        "nsgId": str(row.get("nsgId", "")).lower(),
+                    }
+
+            nodes, edges = _assemble_graph(
+                vnets, nsgs, lbs, pes, gateways, public_ips, nics,
+                vms=vms, vmss_list=vmss_list, aks_list=aks_list,
+                firewalls=firewalls, app_gateways=app_gateways,
+                peerings=peerings,
+                nic_subnet_map=nic_subnet_map,
+                nsg_rules_by_id=nsg_rules_map,
+            )
+
+            # Add VNet peering edges
+            seen_peering_edges: set = set()
+            for row in peerings:
+                vnet_id = str(row.get("vnetId", "")).lower()
+                remote_vnet_id = str(row.get("remoteVnetId", "")).lower()
+                if not vnet_id or not remote_vnet_id:
+                    continue
+                peering_state = str(row.get("peeringState", "")).lower()
+                edge_key = tuple(sorted([vnet_id, remote_vnet_id]))
+                if edge_key in seen_peering_edges:
+                    continue
+                seen_peering_edges.add(edge_key)
+                edge_type = "peering" if peering_state == "connected" else "peering-disconnected"
+                edges.append({
+                    "id": f"edge-peering-{vnet_id}-{remote_vnet_id}",
+                    "source": vnet_id,
+                    "target": remote_vnet_id,
+                    "type": edge_type,
+                    "data": {
+                        "peeringState": row.get("peeringState", ""),
+                        "allowForwardedTraffic": row.get("allowForwardedTraffic", False),
+                        "allowGatewayTransit": row.get("allowGatewayTransit", False),
+                    },
+                })
+
+            # Build subnet-NSG map for health scoring and asymmetry detection
             subnet_nsg_map: Dict[str, str] = {}
             for row in vnets:
                 subnet_name = row.get("subnetName", "")
