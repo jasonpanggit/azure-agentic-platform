@@ -1,38 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import cytoscape, { type Core, type ElementDefinition } from 'cytoscape'
+type CytoscapeStylesheet = cytoscape.StylesheetStyle | cytoscape.StylesheetCSS
+import CytoscapeComponent from 'react-cytoscapejs'
+// @ts-expect-error no types
+import coseBilkent from 'cytoscape-cose-bilkent'
 import {
-  ReactFlow,
-  Handle,
-  Position,
-  Controls,
-  MiniMap,
-  Background,
-  BackgroundVariant,
-  type Node,
-  type Edge,
-  type NodeProps,
-  useNodesState,
-  useEdgesState,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
-import ELK from 'elkjs/lib/elk.bundled.js'
-import {
-  Shield,
   Network,
-  Scale,
-  Lock,
-  Globe,
-  Waypoints,
   AlertTriangle,
   CheckCircle,
   XCircle,
   RefreshCw,
-  Server,
-  Layers,
-  Container,
-  Flame,
-  AppWindow,
   MessageSquare,
 } from 'lucide-react'
 import {
@@ -54,15 +33,382 @@ import {
 import NetworkTopologyChatPanel from '@/components/NetworkTopologyChatPanel'
 
 // ---------------------------------------------------------------------------
-// NodeDetailPanel
+// Register Cytoscape extensions (module-level, safe for SSR)
 // ---------------------------------------------------------------------------
 
-interface NodeDetailPanelProps {
-  node: Node | null
-  edge: Edge | null
-  open: boolean
-  onClose: () => void
+try {
+  cytoscape.use(coseBilkent)
+} catch { /* already registered */ }
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface TopologyNode {
+  id: string
+  type: string
+  label: string
+  data: Record<string, unknown>
 }
+
+interface TopologyEdge {
+  id: string
+  source: string
+  target: string
+  type: string
+  data: Record<string, unknown>
+}
+
+interface TopologyData {
+  nodes: TopologyNode[]
+  edges: TopologyEdge[]
+  issues: Array<Record<string, unknown>>
+}
+
+interface PathStep {
+  nsg_id: string
+  nsg_name: string
+  direction: string
+  level: string
+  result: string
+  matching_rule: string
+  priority: number
+}
+
+interface PathCheckResult {
+  verdict: string
+  steps: PathStep[]
+  blocking_nsg_id: string | null
+  source_ip: string
+  destination_ip: string
+}
+
+// Minimal node/edge shapes used by NodeDetailPanel
+interface SimpleNode {
+  id: string
+  type: string
+  data: Record<string, unknown>
+  position: { x: number; y: number }
+}
+
+interface SimpleEdge {
+  id: string
+  source: string
+  target: string
+  type?: string
+  label?: string
+  data?: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 min
+
+// ---------------------------------------------------------------------------
+// buildCytoscapeElements
+// ---------------------------------------------------------------------------
+
+function buildCytoscapeElements(
+  apiNodes: TopologyNode[],
+  apiEdges: TopologyEdge[]
+): ElementDefinition[] {
+  const elements: ElementDefinition[] = []
+
+  // Build subnet→vnet parent map from 'contains' edges
+  const subnetParent = new Map<string, string>()
+  for (const e of apiEdges) {
+    if (e.type === 'contains') subnetParent.set(e.target, e.source)
+  }
+
+  // Build resource→subnet parent map from 'subnet-*' edges
+  const resourceParent = new Map<string, string>()
+  for (const e of apiEdges) {
+    if (e.type.startsWith('subnet-')) resourceParent.set(e.target, e.source)
+  }
+
+  // Add nodes
+  for (const n of apiNodes) {
+    let parent: string | undefined
+    if (n.type === 'subnet') parent = subnetParent.get(n.id)
+    else if (n.type !== 'vnet') parent = resourceParent.get(n.id)
+
+    elements.push({
+      data: {
+        id: n.id,
+        label: n.label,
+        type: n.type,
+        parent,
+        ...n.data,
+      },
+    })
+  }
+
+  // Add edges — skip 'contains' (replaced by compound nesting)
+  for (const e of apiEdges) {
+    if (e.type === 'contains') continue
+    elements.push({
+      data: {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: e.type,
+        ...e.data,
+      },
+    })
+  }
+
+  return elements
+}
+
+// ---------------------------------------------------------------------------
+// cytoscapeStylesheet
+// ---------------------------------------------------------------------------
+
+const cytoscapeStylesheet: CytoscapeStylesheet[] = [
+  {
+    selector: 'node',
+    style: {
+      'font-family': 'Inter, system-ui, sans-serif',
+      'font-size': '11px',
+      'text-valign': 'center',
+      'text-halign': 'center',
+      'text-wrap': 'wrap',
+      'text-max-width': '120px',
+      color: '#e2e8f0',
+      'background-color': '#1e293b',
+      'border-width': 1,
+      'border-color': '#334155',
+    },
+  },
+  {
+    selector: 'node[type="vnet"]',
+    style: {
+      'background-color': 'rgba(14, 165, 233, 0.05)',
+      'border-color': '#0ea5e9',
+      'border-width': 2,
+      'font-size': '13px',
+      'font-weight': 'bold',
+      'text-valign': 'top',
+      padding: '25px',
+      shape: 'roundrectangle',
+    },
+  },
+  {
+    selector: 'node[type="subnet"]',
+    style: {
+      'background-color': 'rgba(51, 65, 85, 0.6)',
+      'border-color': '#475569',
+      'border-width': 1,
+      'font-size': '11px',
+      'text-valign': 'top',
+      padding: '20px',
+      shape: 'roundrectangle',
+    },
+  },
+  {
+    selector: 'node[type="nsg"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': '#1e293b',
+      'border-color': '#64748b',
+      width: '110px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="nsg"][health="yellow"]',
+    style: { 'border-color': '#f59e0b', 'border-width': 2 },
+  },
+  {
+    selector: 'node[type="nsg"][health="red"]',
+    style: { 'border-color': '#ef4444', 'border-width': 2 },
+  },
+  {
+    selector: 'node[type="vm"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(16, 185, 129, 0.08)',
+      'border-color': '#10b981',
+      width: '110px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="lb"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(139, 92, 246, 0.08)',
+      'border-color': '#8b5cf6',
+      width: '110px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="pe"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(139, 92, 246, 0.06)',
+      'border-color': '#a78bfa',
+      width: '110px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="gateway"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(245, 158, 11, 0.08)',
+      'border-color': '#f59e0b',
+      width: '120px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="firewall"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(239, 68, 68, 0.08)',
+      'border-color': '#ef4444',
+      width: '110px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="appgw"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(139, 92, 246, 0.08)',
+      'border-color': '#c084fc',
+      width: '120px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="vmss"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(14, 165, 233, 0.06)',
+      'border-color': '#38bdf8',
+      width: '120px',
+      height: '44px',
+    },
+  },
+  {
+    selector: 'node[type="aks"]',
+    style: {
+      shape: 'roundrectangle',
+      'background-color': 'rgba(14, 165, 233, 0.08)',
+      'border-color': '#0ea5e9',
+      'border-width': 2,
+      width: '120px',
+      height: '44px',
+    },
+  },
+  // Edges
+  {
+    selector: 'edge',
+    style: {
+      'curve-style': 'bezier',
+      'line-color': '#475569',
+      width: 1,
+      'target-arrow-color': '#475569',
+      'target-arrow-shape': 'triangle',
+      'arrow-scale': 0.7,
+      'font-size': '10px',
+      color: '#94a3b8',
+    },
+  },
+  {
+    selector: 'edge[type="peering"]',
+    style: {
+      'line-color': '#0ea5e9',
+      'target-arrow-color': '#0ea5e9',
+      width: 2,
+      'line-style': 'solid',
+    },
+  },
+  {
+    selector: 'edge[type="peering-disconnected"]',
+    style: {
+      'line-color': '#ef4444',
+      'target-arrow-color': '#ef4444',
+      width: 2,
+      'line-style': 'dashed',
+    },
+  },
+  {
+    selector: 'edge[type="asymmetry"]',
+    style: {
+      'line-color': '#ef4444',
+      'target-arrow-color': '#ef4444',
+      width: 2.5,
+      'line-style': 'dashed',
+    },
+  },
+  {
+    selector: 'edge[type="subnet-vm"]',
+    style: { 'line-color': '#10b981', 'line-style': 'dashed', width: 1 },
+  },
+  {
+    selector: 'edge[type="subnet-nsg"]',
+    style: { 'line-color': '#64748b', 'line-style': 'dotted', width: 1 },
+  },
+  // Highlight states
+  {
+    selector: '.chat-highlighted',
+    style: {
+      'border-color': '#f97316',
+      'border-width': 3,
+      'background-color': 'rgba(249, 115, 22, 0.12)',
+    },
+  },
+  {
+    selector: '.path-blocked',
+    style: {
+      'border-color': '#ef4444',
+      'border-width': 3,
+      'background-color': 'rgba(239, 68, 68, 0.15)',
+    },
+  },
+  {
+    selector: '.dimmed',
+    style: { opacity: 0.2 },
+  },
+  {
+    selector: ':selected',
+    style: {
+      'border-color': '#60a5fa',
+      'border-width': 2,
+    },
+  },
+]
+
+// ---------------------------------------------------------------------------
+// Helper: map API node type → NodeDetailPanel type suffix
+// ---------------------------------------------------------------------------
+
+function toNodePanelType(apiType: string): string {
+  const mapping: Record<string, string> = {
+    vnet: 'vnetNode',
+    subnet: 'subnetNode',
+    nsg: 'nsgNode',
+    lb: 'lbNode',
+    pe: 'peNode',
+    gateway: 'gatewayNode',
+    vm: 'vmNode',
+    vmss: 'vmssNode',
+    aks: 'aksNode',
+    firewall: 'firewallNode',
+    appgw: 'appGatewayNode',
+  }
+  return mapping[apiType] ?? apiType
+}
+
+// ---------------------------------------------------------------------------
+// NodeDetailPanel components
+// ---------------------------------------------------------------------------
 
 function FieldRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -122,6 +468,13 @@ function NsgRulesTable({ rules }: { rules: Array<Record<string, unknown>> }) {
       </table>
     </div>
   )
+}
+
+interface NodeDetailPanelProps {
+  node: SimpleNode | null
+  edge: SimpleEdge | null
+  open: boolean
+  onClose: () => void
 }
 
 function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
@@ -365,626 +718,19 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 min
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface TopologyNode {
-  id: string
-  type: string
-  label: string
-  data: Record<string, unknown>
-}
-
-interface TopologyEdge {
-  id: string
-  source: string
-  target: string
-  type: string
-  data: Record<string, unknown>
-}
-
-interface TopologyData {
-  nodes: TopologyNode[]
-  edges: TopologyEdge[]
-  issues: Array<Record<string, unknown>>
-}
-
-interface PathStep {
-  nsg_id: string
-  nsg_name: string
-  direction: string
-  level: string
-  result: string
-  matching_rule: string
-  priority: number
-}
-
-interface PathCheckResult {
-  verdict: string
-  steps: PathStep[]
-  blocking_nsg_id: string | null
-  source_ip: string
-  destination_ip: string
-}
-
-// ---------------------------------------------------------------------------
-// ELK Layout
-// ---------------------------------------------------------------------------
-
-const elk = new ELK()
-
-async function computeLayout(
-  rfNodes: Node[],
-  rfEdges: Edge[]
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const graph = {
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': 'RIGHT',
-      'elk.spacing.nodeNode': '40',
-      'elk.layered.spacing.baseValue': '60',
-    },
-    children: rfNodes.map((n) => ({
-      id: n.id,
-      width: (n.width as number) ?? 200,
-      height: (n.height as number) ?? 80,
-    })),
-    edges: rfEdges.map((e) => ({
-      id: e.id,
-      sources: [e.source],
-      targets: [e.target],
-    })),
-  }
-  const layout = await elk.layout(graph)
-  const positionedNodes = rfNodes.map((n) => {
-    const elkNode = layout.children?.find((c) => c.id === n.id)
-    return elkNode
-      ? { ...n, position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 } }
-      : n
-  })
-  return { nodes: positionedNodes, edges: rfEdges }
-}
-
-// ---------------------------------------------------------------------------
-// Custom Node Components
-// ---------------------------------------------------------------------------
-
-function VNetNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-4 min-w-[280px]"
-      style={{
-        border: '2px solid var(--accent-blue)',
-        background: 'color-mix(in srgb, var(--accent-blue) 5%, var(--bg-surface))',
-      }}
-    >
-      <Handle type="target" position={Position.Left} />
-      <div className="flex items-center gap-2 mb-1">
-        <Network size={16} style={{ color: 'var(--accent-blue)' }} />
-        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      {!!(data.addressSpace) && (
-        <span
-          className="text-xs font-mono"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          {data.addressSpace as string}
-        </span>
-      )}
-      {!!(data.subscription) && (
-        <span
-          className="block text-[10px] mt-1"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          {data.subscription as string}
-        </span>
-      )}
-      <Handle type="source" position={Position.Right} />
-    </div>
-  )
-}
-
-function SubnetNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-md p-2"
-      style={{
-        width: 180,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <span className="text-xs font-medium block" style={{ color: 'var(--text-primary)' }}>
-        {data.label as string}
-      </span>
-      {!!(data.cidr) && (
-        <span className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-          {data.cidr as string}
-        </span>
-      )}
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function NsgNode({ data }: NodeProps) {
-  const healthStatus = (data.health as string) ?? 'green'
-  const highlighted = data.highlighted as boolean
-  const chatHighlighted = data.chatHighlighted as boolean
-
-  const badgeLabels: Record<string, string> = { green: 'OK', yellow: 'WARN', red: 'BLOCK' }
-  const accentVar = `var(--accent-${healthStatus})`
-
-  return (
-    <div
-      className="rounded-lg p-3 relative"
-      style={{
-        width: 160,
-        border: chatHighlighted
-          ? '2px solid var(--accent-orange)'
-          : highlighted
-          ? '2px solid var(--accent-red)'
-          : '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-        boxShadow: chatHighlighted
-          ? '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)'
-          : highlighted
-          ? '0 0 0 4px color-mix(in srgb, var(--accent-red) 20%, transparent)'
-          : undefined,
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Shield size={14} style={{ color: 'var(--text-secondary)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      {data.ruleCount != null && (
-        <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-          {data.ruleCount as number}{' rules'}
-        </span>
-      )}
-      {/* Health badge */}
-      <span
-        className="absolute -top-1 -right-1 px-1.5 py-px rounded-full text-[10px] font-semibold uppercase tracking-wide"
-        style={{
-          background: `color-mix(in srgb, ${accentVar} 15%, transparent)`,
-          color: accentVar,
-          border: `1px solid color-mix(in srgb, ${accentVar} 30%, transparent)`,
-        }}
-      >
-        {badgeLabels[healthStatus] ?? 'OK'}
-      </span>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function LBNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3"
-      style={{
-        width: 180,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Scale size={14} style={{ color: 'var(--accent-purple)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-1 mt-1">
-        {!!(data.sku) && (
-          <span
-            className="text-[11px] px-1.5 py-px rounded-full"
-            style={{
-              background: 'color-mix(in srgb, var(--accent-purple) 15%, transparent)',
-              color: 'var(--accent-purple)',
-            }}
-          >
-            {data.sku as string}
-          </span>
-        )}
-        {!!(data.publicIp) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {data.publicIp as string}
-          </span>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function PENode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3"
-      style={{
-        width: 170,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Lock size={14} style={{ color: 'var(--accent-purple)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      {!!(data.targetService) && (
-        <span className="text-[11px] mt-1 block" style={{ color: 'var(--text-muted)' }}>
-          {data.targetService as string}
-        </span>
-      )}
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function GatewayNode({ data }: NodeProps) {
-  const isExpressRoute = (data.gatewayType as string) === 'ExpressRoute'
-  const Icon = isExpressRoute ? Globe : Waypoints
-
-  return (
-    <div
-      className="rounded-lg p-3"
-      style={{
-        width: 180,
-        border: '1px solid var(--accent-orange)',
-        background: 'color-mix(in srgb, var(--accent-orange) 5%, var(--bg-surface))',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Icon size={14} style={{ color: 'var(--accent-orange)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <span className="text-[11px] mt-1 block" style={{ color: 'var(--text-secondary)' }}>
-        {data.gatewayType as string} &middot; {data.sku as string}
-      </span>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function VMNode({ data }: NodeProps) {
-  const color = 'var(--accent-green)'
-  return (
-    <div
-      className="rounded-lg p-3 cursor-pointer"
-      style={{
-        width: 180,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Server size={14} style={{ color }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        {!!(data.vmSize) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {data.vmSize as string}
-          </span>
-        )}
-        {!!(data.osType) && (
-          <span
-            className="text-[10px] px-1 py-px rounded"
-            style={{
-              background: 'color-mix(in srgb, var(--accent-green) 12%, transparent)',
-              color: 'var(--accent-green)',
-            }}
-          >
-            {data.osType as string}
-          </span>
-        )}
-      </div>
-      {!!(data.privateIp) && (
-        <span className="text-[10px] font-mono mt-1 block" style={{ color: 'var(--text-muted)' }}>
-          {data.privateIp as string}
-        </span>
-      )}
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function VMSSNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3 cursor-pointer"
-      style={{
-        width: 190,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-surface)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Layers size={14} style={{ color: 'var(--accent-blue)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        {!!(data.sku) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {data.sku as string}
-          </span>
-        )}
-        {data.capacity != null && (
-          <span
-            className="text-[10px] px-1 py-px rounded"
-            style={{
-              background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
-              color: 'var(--accent-blue)',
-            }}
-          >
-            {data.capacity as number} instances
-          </span>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function AKSNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3 cursor-pointer"
-      style={{
-        width: 190,
-        border: '1px solid var(--accent-blue)',
-        background: 'color-mix(in srgb, var(--accent-blue) 4%, var(--bg-surface))',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Container size={14} style={{ color: 'var(--accent-blue)' }} />
-        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        {!!(data.kubernetesVersion) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-            k8s {data.kubernetesVersion as string}
-          </span>
-        )}
-        {data.nodeCount != null && (
-          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            {data.nodeCount as number} nodes
-          </span>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function FirewallNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3 cursor-pointer"
-      style={{
-        width: 180,
-        border: '1px solid var(--accent-red)',
-        background: 'color-mix(in srgb, var(--accent-red) 4%, var(--bg-surface))',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <Flame size={14} style={{ color: 'var(--accent-red)' }} />
-        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        {!!(data.skuTier) && (
-          <span
-            className="text-[10px] px-1 py-px rounded"
-            style={{
-              background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)',
-              color: 'var(--accent-red)',
-            }}
-          >
-            {data.skuTier as string}
-          </span>
-        )}
-        {!!(data.privateIp) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {data.privateIp as string}
-          </span>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function AppGatewayNode({ data }: NodeProps) {
-  return (
-    <div
-      className="rounded-lg p-3 cursor-pointer"
-      style={{
-        width: 190,
-        border: '1px solid var(--accent-purple)',
-        background: 'color-mix(in srgb, var(--accent-purple) 4%, var(--bg-surface))',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      <Handle type="target" position={Position.Top} />
-      <div className="flex items-center gap-2">
-        <AppWindow size={14} style={{ color: 'var(--accent-purple)' }} />
-        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {data.label as string}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        {!!(data.sku) && (
-          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {data.sku as string}
-          </span>
-        )}
-        {data.capacity != null && (
-          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            cap: {data.capacity as number}
-          </span>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-const nodeTypes = {
-  vnetNode: VNetNode,
-  subnetNode: SubnetNode,
-  nsgNode: NsgNode,
-  lbNode: LBNode,
-  peNode: PENode,
-  gatewayNode: GatewayNode,
-  vmNode: VMNode,
-  vmssNode: VMSSNode,
-  aksNode: AKSNode,
-  firewallNode: FirewallNode,
-  appGatewayNode: AppGatewayNode,
-}
-
-// ---------------------------------------------------------------------------
-// Transform Functions
-// ---------------------------------------------------------------------------
-
-function mapNodeType(apiType: string): string {
-  const mapping: Record<string, string> = {
-    vnet: 'vnetNode',
-    subnet: 'subnetNode',
-    nsg: 'nsgNode',
-    lb: 'lbNode',
-    pe: 'peNode',
-    gateway: 'gatewayNode',
-    vm: 'vmNode',
-    vmss: 'vmssNode',
-    aks: 'aksNode',
-    firewall: 'firewallNode',
-    appgw: 'appGatewayNode',
-  }
-  return mapping[apiType] ?? 'default'
-}
-
-function transformToReactFlowNodes(apiNodes: TopologyNode[], chatHighlightedIds?: Set<string>): Node[] {
-  return apiNodes.map((n) => ({
-    id: n.id,
-    type: mapNodeType(n.type),
-    data: {
-      label: n.label,
-      ...n.data,
-      chatHighlighted: chatHighlightedIds?.has(n.id) ?? false,
-    },
-    position: { x: 0, y: 0 },
-    ...(n.data.parentId ? { parentId: n.data.parentId as string } : {}),
-    style: chatHighlightedIds?.has(n.id)
-      ? {
-          outline: '2px solid var(--accent-orange)',
-          outlineOffset: '2px',
-          boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)',
-          borderRadius: '8px',
-        }
-      : undefined,
-  }))
-}
-
-function getEdgeStyle(edgeType: string, hasIssue: boolean): Partial<Edge> {
-  if (hasIssue) {
-    return {
-      style: { stroke: 'var(--accent-red)', strokeWidth: 2.5, strokeDasharray: '6 4' },
-      animated: true,
-      label: 'Asymmetric block',
-      labelStyle: { fontSize: 10, fill: 'var(--accent-red)' },
-    }
-  }
-  const styles: Record<string, Partial<Edge>> = {
-    peering: { style: { stroke: 'var(--accent-blue)', strokeWidth: 2 }, animated: true },
-    'peering-disconnected': {
-      style: { stroke: 'var(--accent-red)', strokeWidth: 2, strokeDasharray: '5 5' },
-      animated: false,
-    },
-    'subnet-nsg': { style: { stroke: 'var(--border)', strokeWidth: 1, strokeDasharray: '4 4' } },
-    'subnet-lb': { style: { stroke: 'var(--text-muted)', strokeWidth: 1.5 } },
-    'subnet-pe': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1, strokeDasharray: '2 4' } },
-    'subnet-gateway': { style: { stroke: 'var(--accent-orange)', strokeWidth: 1.5 } },
-    'subnet-vm': { style: { stroke: 'var(--accent-green)', strokeWidth: 1, strokeDasharray: '3 3' } },
-    'subnet-vmss': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1, strokeDasharray: '3 3' } },
-    'subnet-aks': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1.5 } },
-    'subnet-firewall': { style: { stroke: 'var(--accent-red)', strokeWidth: 1.5 } },
-    'subnet-appgw': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1.5 } },
-  }
-  return styles[edgeType] ?? { style: { stroke: 'var(--border)', strokeWidth: 1 } }
-}
-
-function transformToReactFlowEdges(
-  apiEdges: TopologyEdge[],
-  issues: Array<Record<string, unknown>>
-): Edge[] {
-  const issueEdgeIds = new Set(
-    issues.map((i) => `${i.source_nsg_id}-${i.dest_nsg_id}`)
-  )
-
-  return apiEdges.map((e) => {
-    const hasIssue = issueEdgeIds.has(`${e.source}-${e.target}`)
-    const edgeStyle = getEdgeStyle(e.type, hasIssue)
-    return {
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: 'smoothstep',
-      ...edgeStyle,
-    } as Edge
-  })
-}
-
-// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
 export default function NetworkTopologyTab() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const cyRef = useRef<Core | null>(null)
+  const [elements, setElements] = useState<ElementDefinition[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [topologyData, setTopologyData] = useState<TopologyData | null>(null)
 
   // Drill-down state
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
-  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [selectedNode, setSelectedNode] = useState<SimpleNode | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<SimpleEdge | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
   // Path checker state
@@ -1002,19 +748,9 @@ export default function NetworkTopologyTab() {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
 
   // Summary counts
-  const vnetCount = useMemo(
-    () => topologyData?.nodes.filter((n) => n.type === 'vnet').length ?? 0,
-    [topologyData]
-  )
-  const nsgCount = useMemo(
-    () => topologyData?.nodes.filter((n) => n.type === 'nsg').length ?? 0,
-    [topologyData]
-  )
-  const issueCount = useMemo(
-    () => topologyData?.issues.length ?? 0,
-    [topologyData]
-  )
-
+  const vnetCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vnet').length ?? 0, [topologyData])
+  const nsgCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'nsg').length ?? 0, [topologyData])
+  const issueCount = useMemo(() => topologyData?.issues.length ?? 0, [topologyData])
   const vmCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vm').length ?? 0, [topologyData])
   const aksCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'aks').length ?? 0, [topologyData])
   const firewallCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'firewall').length ?? 0, [topologyData])
@@ -1047,16 +783,10 @@ export default function NetworkTopologyTab() {
       }
       const data: TopologyData = await res.json()
       setTopologyData(data)
+      setElements(buildCytoscapeElements(data.nodes, data.edges))
 
-      const rfNodes = transformToReactFlowNodes(data.nodes, highlightedNodeIds)
-      const rfEdges = transformToReactFlowEdges(data.edges, data.issues)
-      const layout = await computeLayout(rfNodes, rfEdges)
-      setNodes(layout.nodes)
-      setEdges(layout.edges)
-
-      // If the backend returned zero nodes it may still be warming up (subscription
-      // registry not yet populated).  Schedule one automatic retry after 8 seconds so
-      // the map appears without the user having to click Refresh manually.
+      // If the backend returned zero nodes it may still be warming up.
+      // Schedule one automatic retry after 8 seconds.
       if (data.nodes.length === 0) {
         setTimeout(() => {
           setLoading(true)
@@ -1065,9 +795,7 @@ export default function NetworkTopologyTab() {
             .then((retryData: TopologyData) => {
               if (retryData.nodes && retryData.nodes.length > 0) {
                 setTopologyData(retryData)
-                const rn = transformToReactFlowNodes(retryData.nodes, new Set())
-                const re = transformToReactFlowEdges(retryData.edges, retryData.issues)
-                computeLayout(rn, re).then((l) => { setNodes(l.nodes); setEdges(l.edges) })
+                setElements(buildCytoscapeElements(retryData.nodes, retryData.edges))
               }
             })
             .catch(() => { /* silent — next interval will retry */ })
@@ -1079,7 +807,7 @@ export default function NetworkTopologyTab() {
     } finally {
       setLoading(false)
     }
-  }, [setNodes, setEdges])
+  }, [])
 
   useEffect(() => {
     fetchData()
@@ -1106,51 +834,33 @@ export default function NetworkTopologyTab() {
       const data: PathCheckResult = await res.json()
       setPathResult(data)
 
-      // Highlight blocking NSG and dim non-path nodes
-      if (data.blocking_nsg_id) {
-        setNodes((nds) =>
-          nds.map((n) => ({
-            ...n,
-            data: {
-              ...n.data,
-              highlighted: n.id === data.blocking_nsg_id,
-            },
-            style: {
-              ...n.style,
-              opacity: n.id === data.blocking_nsg_id ? 1 : 0.3,
-            },
-          }))
-        )
-      } else if (data.verdict === 'allowed') {
-        setEdges((eds) =>
-          eds.map((e) => ({
-            ...e,
-            style: { ...e.style, stroke: 'var(--accent-green)', strokeWidth: 2.5 },
-            animated: true,
-          }))
-        )
+      const cy = cyRef.current
+      if (cy && data.blocking_nsg_id) {
+        cy.elements().addClass('dimmed')
+        cy.getElementById(data.blocking_nsg_id).removeClass('dimmed').addClass('path-blocked')
+      } else if (cy && data.verdict === 'allowed') {
+        cy.edges().style({ 'line-color': '#10b981', width: 2 })
       }
     } catch (err) {
       setPathError(err instanceof Error ? err.message : 'Path check failed')
     } finally {
       setPathLoading(false)
     }
-  }, [pathSource, pathDest, pathPort, pathProtocol, setNodes, setEdges])
+  }, [pathSource, pathDest, pathPort, pathProtocol])
 
   const handleClearPathCheck = useCallback(() => {
     setPathResult(null)
-    // Restore nodes/edges from topology data
-    if (topologyData) {
-      const rfNodes = transformToReactFlowNodes(topologyData.nodes, highlightedNodeIds)
-      const rfEdges = transformToReactFlowEdges(topologyData.edges, topologyData.issues)
-      computeLayout(rfNodes, rfEdges).then((layout) => {
-        setNodes(layout.nodes)
-        setEdges(layout.edges)
-      })
+    const cy = cyRef.current
+    if (cy) {
+      cy.elements().removeClass('dimmed path-blocked')
+      cy.edges().removeStyle('line-color width')
     }
-  }, [topologyData, setNodes, setEdges, highlightedNodeIds])
+    if (topologyData) {
+      setElements(buildCytoscapeElements(topologyData.nodes, topologyData.edges))
+    }
+  }, [topologyData])
 
-  // Resource options for path checker selects — include VMs and subnets/NSGs/VNets
+  // Resource options for path checker selects
   const resourceOptions = useMemo(
     () =>
       topologyData?.nodes
@@ -1446,29 +1156,49 @@ export default function NetworkTopologyTab() {
       {topologyData && topologyData.nodes.length > 0 && (
         <div className="flex" style={{ height: 'calc(100vh - 220px)' }}>
           <div style={{ flex: '1 1 0', minWidth: 0, background: 'var(--bg-canvas)' }}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            nodeTypes={nodeTypes}
-            fitView
-            onNodeClick={(_evt, node) => {
-              setSelectedNode(node)
-              setSelectedEdge(null)
-              setDetailOpen(true)
-            }}
-            onEdgeClick={(_evt, edge) => {
-              setSelectedEdge(edge)
-              setSelectedNode(null)
-              setDetailOpen(true)
-            }}
-            elementsSelectable
-          >
-            <Controls />
-            <MiniMap />
-            <Background variant={BackgroundVariant.Dots} />
-          </ReactFlow>
+            <CytoscapeComponent
+              elements={elements}
+              stylesheet={cytoscapeStylesheet}
+              layout={{
+                name: 'cose-bilkent',
+                animate: false,
+                nodeDimensionsIncludeLabels: true,
+                randomize: false,
+                idealEdgeLength: 80,
+                nodeRepulsion: 8000,
+                padding: 30,
+              } as cytoscape.LayoutOptions}
+              cy={(cy: Core) => {
+                cyRef.current = cy
+                cy.on('tap', 'node', (evt) => {
+                  const nodeData = evt.target.data() as Record<string, unknown>
+                  setSelectedNode({
+                    id: nodeData.id as string,
+                    type: toNodePanelType(nodeData.type as string),
+                    data: nodeData,
+                    position: { x: 0, y: 0 },
+                  })
+                  setSelectedEdge(null)
+                  setDetailOpen(true)
+                })
+                cy.on('tap', 'edge', (evt) => {
+                  const edgeData = evt.target.data() as Record<string, unknown>
+                  setSelectedEdge({
+                    id: edgeData.id as string,
+                    source: edgeData.source as string,
+                    target: edgeData.target as string,
+                    type: edgeData.type as string,
+                    data: edgeData,
+                  })
+                  setSelectedNode(null)
+                  setDetailOpen(true)
+                })
+                cy.on('tap', (evt) => {
+                  if (evt.target === cy) setDetailOpen(false)
+                })
+              }}
+              style={{ width: '100%', height: '100%', background: 'var(--bg-canvas)' }}
+            />
           </div>
           {chatOpen && (
             <div style={{ width: 360, flexShrink: 0 }}>
@@ -1478,21 +1208,12 @@ export default function NetworkTopologyTab() {
                 nodeIndex={nodeIndex}
                 onHighlight={(ids) => {
                   setHighlightedNodeIds(ids)
-                  // Update node data/style in-place — no layout recalculation
-                  setNodes((nds) =>
-                    nds.map((n) => ({
-                      ...n,
-                      data: { ...n.data, chatHighlighted: ids.has(n.id) },
-                      style: ids.has(n.id)
-                        ? {
-                            outline: '2px solid var(--accent-orange)',
-                            outlineOffset: '2px',
-                            boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent-orange) 20%, transparent)',
-                            borderRadius: '8px',
-                          }
-                        : { outline: undefined, boxShadow: undefined },
-                    }))
-                  )
+                  const cy = cyRef.current
+                  if (!cy) return
+                  cy.nodes().removeClass('chat-highlighted')
+                  if (ids.size > 0) {
+                    cy.nodes().filter((n) => ids.has(n.id())).addClass('chat-highlighted')
+                  }
                 }}
                 onClose={() => setChatOpen(false)}
               />
