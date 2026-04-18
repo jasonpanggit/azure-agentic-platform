@@ -116,38 +116,19 @@ function buildCytoscapeElements(
 ): ElementDefinition[] {
   const elements: ElementDefinition[] = []
 
-  // Build subnet→vnet parent map from 'contains' edges
-  const subnetParent = new Map<string, string>()
-  for (const e of apiEdges) {
-    if (e.type === 'contains') subnetParent.set(e.target, e.source)
-  }
-
-  // Build resource→subnet parent map from 'subnet-*' edges
-  const resourceParent = new Map<string, string>()
-  for (const e of apiEdges) {
-    if (e.type.startsWith('subnet-')) resourceParent.set(e.target, e.source)
-  }
-
-  // Add nodes
+  // Flat graph — no compound nesting. Every relationship is an edge.
   for (const n of apiNodes) {
-    let parent: string | undefined
-    if (n.type === 'subnet') parent = subnetParent.get(n.id)
-    else if (n.type !== 'vnet') parent = resourceParent.get(n.id)
-
     elements.push({
       data: {
         id: n.id,
         label: n.label,
         type: n.type,
-        parent,
         ...n.data,
       },
     })
   }
 
-  // Add edges — skip 'contains' (replaced by compound nesting)
   for (const e of apiEdges) {
-    if (e.type === 'contains') continue
     elements.push({
       data: {
         id: e.id,
@@ -166,55 +147,55 @@ function buildCytoscapeElements(
 // cytoscapeStylesheet
 // ---------------------------------------------------------------------------
 
+const NODE_W = '130px'
+const NODE_H = '44px'
+
 const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   {
     selector: 'node',
     style: {
+      label: 'data(label)',
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
       'text-valign': 'center',
       'text-halign': 'center',
-      'text-wrap': 'wrap',
+      'text-wrap': 'ellipsis',
       'text-max-width': '120px',
       color: '#e2e8f0',
       'background-color': '#1e293b',
       'border-width': 1,
       'border-color': '#334155',
+      shape: 'roundrectangle',
+      width: NODE_W,
+      height: NODE_H,
     },
   },
   {
     selector: 'node[type="vnet"]',
     style: {
-      'background-color': 'rgba(14, 165, 233, 0.05)',
+      'background-color': 'rgba(14, 165, 233, 0.12)',
       'border-color': '#0ea5e9',
       'border-width': 2,
-      'font-size': '13px',
+      'font-size': '12px',
       'font-weight': 'bold',
-      'text-valign': 'top',
-      padding: '25px',
-      shape: 'roundrectangle',
+      width: '150px',
+      height: '48px',
     },
   },
   {
     selector: 'node[type="subnet"]',
     style: {
-      'background-color': 'rgba(51, 65, 85, 0.6)',
+      'background-color': 'rgba(51, 65, 85, 0.7)',
       'border-color': '#475569',
       'border-width': 1,
       'font-size': '11px',
-      'text-valign': 'top',
-      padding: '20px',
-      shape: 'roundrectangle',
     },
   },
   {
     selector: 'node[type="nsg"]',
     style: {
-      shape: 'roundrectangle',
       'background-color': '#1e293b',
       'border-color': '#64748b',
-      width: '110px',
-      height: '44px',
     },
   },
   {
@@ -227,84 +208,35 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   },
   {
     selector: 'node[type="vm"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(16, 185, 129, 0.08)',
-      'border-color': '#10b981',
-      width: '110px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(16, 185, 129, 0.08)', 'border-color': '#10b981' },
   },
   {
     selector: 'node[type="lb"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(139, 92, 246, 0.08)',
-      'border-color': '#8b5cf6',
-      width: '110px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(139, 92, 246, 0.08)', 'border-color': '#8b5cf6' },
   },
   {
     selector: 'node[type="pe"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(139, 92, 246, 0.06)',
-      'border-color': '#a78bfa',
-      width: '110px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(139, 92, 246, 0.06)', 'border-color': '#a78bfa' },
   },
   {
     selector: 'node[type="gateway"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(245, 158, 11, 0.08)',
-      'border-color': '#f59e0b',
-      width: '120px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(245, 158, 11, 0.08)', 'border-color': '#f59e0b' },
   },
   {
     selector: 'node[type="firewall"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(239, 68, 68, 0.08)',
-      'border-color': '#ef4444',
-      width: '110px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(239, 68, 68, 0.08)', 'border-color': '#ef4444' },
   },
   {
     selector: 'node[type="appgw"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(139, 92, 246, 0.08)',
-      'border-color': '#c084fc',
-      width: '120px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(139, 92, 246, 0.08)', 'border-color': '#c084fc' },
   },
   {
     selector: 'node[type="vmss"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(14, 165, 233, 0.06)',
-      'border-color': '#38bdf8',
-      width: '120px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(14, 165, 233, 0.06)', 'border-color': '#38bdf8' },
   },
   {
     selector: 'node[type="aks"]',
-    style: {
-      shape: 'roundrectangle',
-      'background-color': 'rgba(14, 165, 233, 0.08)',
-      'border-color': '#0ea5e9',
-      'border-width': 2,
-      width: '120px',
-      height: '44px',
-    },
+    style: { 'background-color': 'rgba(14, 165, 233, 0.08)', 'border-color': '#0ea5e9', 'border-width': 2 },
   },
   // Edges
   {
@@ -1164,9 +1096,13 @@ export default function NetworkTopologyTab() {
                 animate: false,
                 nodeDimensionsIncludeLabels: true,
                 randomize: false,
-                idealEdgeLength: 80,
-                nodeRepulsion: 8000,
-                padding: 30,
+                idealEdgeLength: 120,
+                nodeRepulsion: 12000,
+                nodeOverlap: 20,
+                padding: 40,
+                gravityRangeCompound: 1.5,
+                gravityCompound: 1.0,
+                gravity: 0.25,
               } as cytoscape.LayoutOptions}
               cy={(cy: Core) => {
                 cyRef.current = cy
