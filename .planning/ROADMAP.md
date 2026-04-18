@@ -1815,7 +1815,7 @@ When all phases 70–75 complete:
 
 **Goal:** Let operators add, remove, and toggle subscriptions directly from the Web UI — replacing manual environment variable edits.
 **Status:** ✅ COMPLETE (PR #96)
-**Plans:** 1/1 complete
+**Plans:** 1/2 plans executed
 
 Plans:
 - [x] 68-1: Subscription registry CRUD endpoints + Management tab UI
