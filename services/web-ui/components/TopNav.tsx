@@ -34,7 +34,10 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
   return (
     <nav
       className="flex items-center justify-between px-4 h-12 w-full sticky top-0 z-50 flex-shrink-0"
-      style={{ background: 'var(--bg-nav)' }}
+      style={{
+        background: 'linear-gradient(to bottom, #0D1117, #111827)',
+        borderBottom: '1px solid rgba(56,139,253,0.2)',
+      }}
       aria-label="Main navigation"
     >
       {/* Left: logo + separator + breadcrumb */}
@@ -42,14 +45,14 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
         <div className="flex items-center gap-2">
           <div
             className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: 'var(--accent-blue)' }}
+            style={{ background: 'var(--accent-blue)', boxShadow: '0 0 0 1px rgba(56,139,253,0.3)' }}
             aria-hidden="true"
           >
             A
           </div>
-          <span className="text-sm font-semibold text-white">Azure Agentic Platform</span>
+          <span className="text-sm font-medium text-white">Azure Agentic Platform</span>
         </div>
-        <div className="w-px h-5" style={{ background: 'var(--border-nav)' }} aria-hidden="true" />
+        <span className="text-sm" style={{ color: 'var(--border-nav)' }} aria-hidden="true">/</span>
         <span className="text-sm" style={{ color: 'var(--text-muted)' }} aria-current="page">
           {activeTab}
         </span>
@@ -63,7 +66,7 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
         <button
           onClick={onRefresh}
           disabled={isRefreshing || !onRefresh}
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="w-8 h-8 flex items-center justify-center rounded-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { if (!isRefreshing) e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
@@ -74,7 +77,7 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
 
         <button
           onClick={toggleTheme}
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
+          className="w-8 h-8 flex items-center justify-center rounded-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
@@ -85,7 +88,7 @@ export function TopNav({ activeTab, isRefreshing = false, onRefresh, onAlertsCli
 
         <button
           onClick={onAlertsClick}
-          className="w-8 h-8 flex items-center justify-center rounded relative transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
+          className="w-8 h-8 flex items-center justify-center rounded-md relative transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 cursor-pointer"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-nav)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}

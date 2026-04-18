@@ -161,6 +161,7 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         style={{
           background: 'var(--bg-surface)',
           borderBottom: '1px solid var(--border)',
+          boxShadow: '0 1px 0 0 var(--border)',
           scrollbarWidth: 'none',
         }}
       >
@@ -178,18 +179,19 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
                   aria-controls={`tabpanel-${id}`}
                   onClick={() => handleTabChange(id)}
                   onKeyDown={(e) => handleTabKeyDown(e, index)}
-                  className="flex items-center gap-1.5 px-4 py-3 text-[13px] transition-colors outline-none relative whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-3.5 text-[13px] transition-colors outline-none relative whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60 cursor-pointer"
                   style={{
-                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    color: isActive ? 'var(--accent-blue)' : 'var(--text-secondary)',
                     fontWeight: isActive ? 600 : 500,
+                    letterSpacing: '-0.01em',
                     borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
                     marginBottom: '-1px',
-                    background: 'transparent',
+                    background: isActive ? 'color-mix(in srgb, var(--accent-blue) 6%, var(--bg-surface))' : 'transparent',
                   }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-subtle)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-blue) 5%, var(--bg-surface))' }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" />
                   {label}
                 </button>
               )
