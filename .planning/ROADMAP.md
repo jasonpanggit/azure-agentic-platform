@@ -1660,6 +1660,142 @@ Plans:
 
 ---
 
+### Phase 95: Quota Usage ✅ Complete (PR #105)
+
+**Goal:** Surface subscription-level quota usage and headroom across Compute, Network, and Storage resource types so operators can proactively identify capacity constraints before they cause deployment failures.
+
+**What was built:**
+- `quota_usage_service.py`: queries Azure Quota API across subscriptions; computes usage%, headroom, and criticality (critical ≥90%, warning ≥75%)
+- `quota_usage_endpoints.py`: `GET /api/v1/quota-usage`
+- `QuotaUsageTab.tsx`: dashboard tab with colour-coded usage bars and filter by resource type
+- 368 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 94
+
+---
+
+### Phase 96: Budget Alerts ✅ Complete (PR #105)
+
+**Goal:** Integrate Azure Cost Management budget alerts into the platform so operators see budget burn-rate warnings alongside infrastructure health alerts.
+
+**What was built:**
+- `budget_alert_service.py`: queries Azure Cost Management for budget alert rules and current spend vs thresholds
+- `budget_alert_endpoints.py`: `GET /api/v1/budget-alerts`
+- `BudgetAlertTab.tsx`: dashboard tab showing budget name, scope, threshold, current spend, % consumed
+- 341 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 95
+
+---
+
+### Phase 97: Cert Expiry ✅ Complete (PR #105)
+
+**Goal:** Detect TLS/SSL certificate expiry across Key Vault certificates and App Service custom domains so operators can renew before outages occur.
+
+**What was built:**
+- `cert_expiry_service.py`: scans Key Vault certificates and App Service bindings for expiry dates; classifies as critical (<7d), warning (<30d), or ok
+- `cert_expiry_endpoints.py`: `GET /api/v1/cert-expiry`
+- `CertExpiryTab.tsx`: dashboard tab with expiry timeline and renewal action links
+- 344 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 96
+
+---
+
+### Phase 98: Storage Security ✅ Complete (PR #105)
+
+**Goal:** Audit storage account security posture — public blob access, HTTPS enforcement, key expiry, and network ACLs — and surface violations in the security dashboard.
+
+**What was built:**
+- `storage_security_service.py`: evaluates storage accounts against 6 security controls (public access, HTTPS-only, minimum TLS, network ACLs, key rotation, blob versioning)
+- `storage_security_endpoints.py`: `GET /api/v1/storage-security`
+- `StorageSecurityTab.tsx`: dashboard tab with per-account compliance scorecard
+- 338 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 97
+
+---
+
+### Phase 99: VNet Peerings ✅ Complete (PR #106)
+
+**Goal:** Map and audit VNet peering topology across subscriptions — detect misconfigured, disconnected, or asymmetric peering links that cause silent connectivity failures.
+
+**What was built:**
+- `vnet_peering_service.py`: enumerates VNet peerings via ARM; evaluates peering state (Connected/Disconnected/Initiated) and flags asymmetric or misconfigured pairs
+- `vnet_peering_endpoints.py`: `GET /api/v1/vnet-peerings`
+- `VNetPeeringTab.tsx`: topology view with peering state badges and cross-subscription link map
+- 320 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 98
+
+---
+
+### Phase 100: Disk Audit ✅ Complete (PR #106)
+
+**Goal:** Audit managed disk health, encryption status, and orphaned disks (unattached) to reduce cost and security exposure.
+
+**What was built:**
+- `disk_audit_service.py`: queries ARG for all managed disks; classifies by state (Attached/Unattached), encryption type (PME/CMK/None), disk tier, and age
+- `disk_audit_endpoints.py`: `GET /api/v1/disk-audit`
+- `DiskAuditTab.tsx`: dashboard tab with orphan detection, encryption compliance, and cost-saving estimates
+- 398 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 99
+
+---
+
+### Phase 101: LB Health ✅ Complete (PR #106)
+
+**Goal:** Monitor Load Balancer and Application Gateway health — backend pool membership, probe failures, and unhealthy instance counts.
+
+**What was built:**
+- `lb_health_service.py`: queries Azure Load Balancer and Application Gateway backend health; surfaces unhealthy backend instances and failed health probe rules
+- `lb_health_endpoints.py`: `GET /api/v1/lb-health`
+- `LBHealthTab.tsx`: dashboard tab showing backend pool health per LB/AGW with drill-down to failed instances
+- 313 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 100
+
+---
+
+### Phase 102: AZ Coverage ✅ Complete (PR #106)
+
+**Goal:** Assess Availability Zone coverage across VMs, VMSS, AKS, and databases — flag single-AZ resources that represent availability risk.
+
+**What was built:**
+- `az_coverage_service.py`: scans resources for AZ pinning via ARG; computes per-resource-type AZ distribution and flags single-zone or zone-unaware deployments
+- `az_coverage_endpoints.py`: `GET /api/v1/az-coverage`
+- `AZCoverageTab.tsx`: dashboard tab with AZ distribution heatmap and risk-ranked single-zone resource list
+- 328 unit tests
+
+**Complexity:** M
+**Depends on:** Phase 101
+
+---
+
+### Phase 103: Network Topology Map
+
+**Goal:** Replace the current resource-hierarchy TopologyTab with an interactive, visual network topology map using React Flow. The map renders VNets, peerings, NSGs, load balancers, private endpoints, and ExpressRoute/VPN as a live graph. NSG health badges highlight blocks automatically (green/yellow/red). An interactive path checker lets the user select source + destination resource and port/protocol to trace exactly where traffic is blocked.
+
+**What to build:**
+- `network_topology_service.py`: ARG queries for VNets, peerings, NSGs (rules), LBs, public IPs, private endpoints, ExpressRoute/VPN gateways
+- `network_topology_endpoints.py`: `GET /api/v1/network-topology` (live ARG, 15m TTL cache) + `POST /api/v1/network-topology/path-check` (src→dst+port NSG rule evaluation)
+- `NetworkTopologyTab.tsx`: React Flow canvas — custom nodes (VNet, NSG, LB, PE, VPN/ER), animated edge peerings, NSG health badge overlay, side-panel path checker
+- Move existing `TopologyTab.tsx` (resource hierarchy) to live under the Resources main tab
+- 80%+ unit test coverage on NSG rule evaluation logic
+
+**Complexity:** L
+**Depends on:** Phase 22 (topology graph backend exists; reuse ARG patterns)
+
+---
+
 ## World-Class v4.0 Success Criteria
 
 When all phases 70–75 complete:
