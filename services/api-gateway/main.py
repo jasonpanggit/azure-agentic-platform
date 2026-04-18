@@ -133,7 +133,7 @@ from services.api_gateway.vm_cost import router as vm_cost_router
 from services.api_gateway.finops_endpoints import router as finops_router
 from services.api_gateway.vmss_endpoints import router as vmss_router
 from services.api_gateway.aks_endpoints import router as aks_router
-from services.api_gateway.subscription_registry import SubscriptionRegistry
+from services.api_gateway.subscription_registry import SubscriptionRegistry, set_registry
 from services.api_gateway.admin_endpoints import router as admin_router
 from services.api_gateway.compliance_endpoints import router as compliance_router
 from services.api_gateway.capacity_endpoints import router as capacity_router
@@ -180,6 +180,7 @@ from services.api_gateway.budget_alert_endpoints import router as budget_alert_r
 from services.api_gateway.vnet_peering_endpoints import router as vnet_peering_router
 from services.api_gateway.disk_audit_endpoints import router as disk_audit_router
 from services.api_gateway.lb_health_endpoints import router as lb_health_router
+from services.api_gateway.network_topology_endpoints import router as network_topology_router
 from services.api_gateway.az_coverage_endpoints import router as az_coverage_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
@@ -526,6 +527,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(
         app.state.subscription_registry.run_refresh_loop(interval_seconds=6 * 3600)
     )
+    set_registry(app.state.subscription_registry)
     logger.info(
         "startup: subscription_registry initialized | subscriptions=%d",
         len(app.state.subscription_registry.get_all_ids()),
@@ -850,6 +852,7 @@ app.include_router(budget_alert_router)
 app.include_router(vnet_peering_router)
 app.include_router(disk_audit_router)
 app.include_router(lb_health_router)
+app.include_router(network_topology_router)
 app.include_router(az_coverage_router)
 app.include_router(subscription_credential_router)
 
