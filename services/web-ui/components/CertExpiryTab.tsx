@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { ShieldCheck, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ShieldCheck } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -139,7 +138,6 @@ export function CertExpiryTab() {
   const [findings, setFindings] = useState<CertFinding[]>([])
   const [summary, setSummary] = useState<CertSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('')
 
@@ -176,18 +174,6 @@ export function CertExpiryTab() {
     const interval = setInterval(fetchData, REFRESH_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [fetchData])
-
-  async function handleScan() {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/certs/scan', { method: 'POST' })
-      await fetchData()
-    } catch {
-      // Scan errors are non-fatal; table will show stale data
-    } finally {
-      setScanning(false)
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -237,16 +223,6 @@ export function CertExpiryTab() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleScan}
-            disabled={scanning}
-            className="gap-1.5 text-[12px]"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning…' : 'Scan Now'}
-          </Button>
         </div>
       </div>
 
@@ -304,7 +280,7 @@ export function CertExpiryTab() {
             className="p-8 text-center text-[13px]"
             style={{ color: 'var(--text-secondary)' }}
           >
-            No expiring certificates found within 90 days. Run a scan to check.
+            No expiring certificates found within 90 days.
           </div>
         ) : (
           <Table>

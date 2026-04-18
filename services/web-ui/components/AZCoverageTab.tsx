@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -129,7 +127,6 @@ export function AZCoverageTab() {
   const [findings, setFindings] = useState<AZFinding[]>([])
   const [summary, setSummary] = useState<AZSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [resourceTypeFilter, setResourceTypeFilter] = useState<string>('')
   const [redundancyFilter, setRedundancyFilter] = useState<string>('')
 
@@ -163,18 +160,6 @@ export function AZCoverageTab() {
   useEffect(() => {
     void fetchData()
   }, [fetchData])
-
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      await fetch('/api/proxy/compute/az-coverage/scan', { method: 'POST' })
-      await fetchData()
-    } catch {
-      // Scan errors handled silently
-    } finally {
-      setScanning(false)
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -214,16 +199,6 @@ export function AZCoverageTab() {
           <option value="true">Zone-Redundant</option>
           <option value="false">Non-Redundant</option>
         </select>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleScan}
-          disabled={scanning || loading}
-          className="flex items-center gap-1.5"
-        >
-          <RefreshCw className="h-3.5 w-3.5" aria-label="Scan" />
-          {scanning ? 'Scanning…' : 'Scan Now'}
-        </Button>
       </div>
 
       {/* Table */}
@@ -233,7 +208,7 @@ export function AZCoverageTab() {
         </div>
       ) : findings.length === 0 ? (
         <div style={{ color: 'var(--text-secondary)' }} className="text-sm py-8 text-center">
-          No AZ coverage data. Run a scan to populate.
+          No AZ coverage data available.
         </div>
       ) : (
         <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
