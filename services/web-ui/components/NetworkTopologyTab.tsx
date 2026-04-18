@@ -28,6 +28,11 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Server,
+  Layers,
+  Container,
+  Flame,
+  AppWindow,
 } from 'lucide-react'
 import {
   Sheet,
@@ -197,6 +202,70 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
             {d.gatewayType && <FieldRow label="Type" value={d.gatewayType as string} />}
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
             <FieldRow label="BGP" value={(d.bgpEnabled as boolean) ? 'Enabled' : 'Disabled'} />
+          </>
+        )
+
+      case 'vmNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Virtual Machine</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.vmSize && <FieldRow label="Size" value={<span className="font-mono">{d.vmSize as string}</span>} />}
+            {d.osType && <FieldRow label="OS Type" value={d.osType as string} />}
+            {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'vmssNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VM Scale Set</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={<span className="font-mono">{d.sku as string}</span>} />}
+            {d.capacity != null && <FieldRow label="Capacity" value={`${d.capacity} instances`} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'aksNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>AKS Cluster</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.kubernetesVersion && <FieldRow label="Kubernetes Version" value={<span className="font-mono">{d.kubernetesVersion as string}</span>} />}
+            {d.nodeCount != null && <FieldRow label="Node Count" value={String(d.nodeCount)} />}
+            {d.provisioningState && <FieldRow label="State" value={d.provisioningState as string} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'firewallNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Azure Firewall</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.skuTier && <FieldRow label="SKU Tier" value={d.skuTier as string} />}
+            {d.threatIntelMode && <FieldRow label="Threat Intel Mode" value={d.threatIntelMode as string} />}
+            {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'appGatewayNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Application Gateway</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
+            {d.skuTier && <FieldRow label="Tier" value={d.skuTier as string} />}
+            {d.capacity != null && <FieldRow label="Capacity" value={String(d.capacity)} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
           </>
         )
 
@@ -556,6 +625,205 @@ function GatewayNode({ data }: NodeProps) {
   )
 }
 
+function VMNode({ data }: NodeProps) {
+  const color = 'var(--accent-green)'
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 180,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-surface)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Server size={14} style={{ color }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.vmSize) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.vmSize as string}
+          </span>
+        )}
+        {!!(data.osType) && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-green) 12%, transparent)',
+              color: 'var(--accent-green)',
+            }}
+          >
+            {data.osType as string}
+          </span>
+        )}
+      </div>
+      {!!(data.privateIp) && (
+        <span className="text-[10px] font-mono mt-1 block" style={{ color: 'var(--text-muted)' }}>
+          {data.privateIp as string}
+        </span>
+      )}
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function VMSSNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-surface)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Layers size={14} style={{ color: 'var(--accent-blue)' }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.sku) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.sku as string}
+          </span>
+        )}
+        {data.capacity != null && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-blue) 12%, transparent)',
+              color: 'var(--accent-blue)',
+            }}
+          >
+            {data.capacity as number} instances
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function AKSNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--accent-blue)',
+        background: 'color-mix(in srgb, var(--accent-blue) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Container size={14} style={{ color: 'var(--accent-blue)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.kubernetesVersion) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+            k8s {data.kubernetesVersion as string}
+          </span>
+        )}
+        {data.nodeCount != null && (
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            {data.nodeCount as number} nodes
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function FirewallNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 180,
+        border: '1px solid var(--accent-red)',
+        background: 'color-mix(in srgb, var(--accent-red) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Flame size={14} style={{ color: 'var(--accent-red)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.skuTier) && (
+          <span
+            className="text-[10px] px-1 py-px rounded"
+            style={{
+              background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)',
+              color: 'var(--accent-red)',
+            }}
+          >
+            {data.skuTier as string}
+          </span>
+        )}
+        {!!(data.privateIp) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.privateIp as string}
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
+function AppGatewayNode({ data }: NodeProps) {
+  return (
+    <div
+      className="rounded-lg p-3 cursor-pointer"
+      style={{
+        width: 190,
+        border: '1px solid var(--accent-purple)',
+        background: 'color-mix(in srgb, var(--accent-purple) 4%, var(--bg-surface))',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <AppWindow size={14} style={{ color: 'var(--accent-purple)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {data.label as string}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        {!!(data.sku) && (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {data.sku as string}
+          </span>
+        )}
+        {data.capacity != null && (
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            cap: {data.capacity as number}
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
+
 const nodeTypes = {
   vnetNode: VNetNode,
   subnetNode: SubnetNode,
@@ -563,6 +831,11 @@ const nodeTypes = {
   lbNode: LBNode,
   peNode: PENode,
   gatewayNode: GatewayNode,
+  vmNode: VMNode,
+  vmssNode: VMSSNode,
+  aksNode: AKSNode,
+  firewallNode: FirewallNode,
+  appGatewayNode: AppGatewayNode,
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +850,11 @@ function mapNodeType(apiType: string): string {
     lb: 'lbNode',
     pe: 'peNode',
     gateway: 'gatewayNode',
+    vm: 'vmNode',
+    vmss: 'vmssNode',
+    aks: 'aksNode',
+    firewall: 'firewallNode',
+    appgw: 'appGatewayNode',
   }
   return mapping[apiType] ?? 'default'
 }
@@ -610,6 +888,11 @@ function getEdgeStyle(edgeType: string, hasIssue: boolean): Partial<Edge> {
     'subnet-lb': { style: { stroke: 'var(--text-muted)', strokeWidth: 1.5 } },
     'subnet-pe': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1, strokeDasharray: '2 4' } },
     'subnet-gateway': { style: { stroke: 'var(--accent-orange)', strokeWidth: 1.5 } },
+    'subnet-vm': { style: { stroke: 'var(--accent-green)', strokeWidth: 1, strokeDasharray: '3 3' } },
+    'subnet-vmss': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1, strokeDasharray: '3 3' } },
+    'subnet-aks': { style: { stroke: 'var(--accent-blue)', strokeWidth: 1.5 } },
+    'subnet-firewall': { style: { stroke: 'var(--accent-red)', strokeWidth: 1.5 } },
+    'subnet-appgw': { style: { stroke: 'var(--accent-purple)', strokeWidth: 1.5 } },
   }
   return styles[edgeType] ?? { style: { stroke: 'var(--border)', strokeWidth: 1 } }
 }
@@ -674,6 +957,10 @@ export default function NetworkTopologyTab() {
     () => topologyData?.issues.length ?? 0,
     [topologyData]
   )
+
+  const vmCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'vm').length ?? 0, [topologyData])
+  const aksCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'aks').length ?? 0, [topologyData])
+  const firewallCount = useMemo(() => topologyData?.nodes.filter((n) => n.type === 'firewall').length ?? 0, [topologyData])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -990,6 +1277,21 @@ export default function NetworkTopologyTab() {
         >
           Issues: {issueCount}
         </span>
+        {vmCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+            VMs: {vmCount}
+          </span>
+        )}
+        {aksCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+            AKS: {aksCount}
+          </span>
+        )}
+        {firewallCount > 0 && (
+          <span className="text-xs px-2 py-1 rounded" style={{ background: 'color-mix(in srgb, var(--accent-red) 12%, transparent)', color: 'var(--accent-red)' }}>
+            Firewalls: {firewallCount}
+          </span>
+        )}
         <span className="text-[11px] ml-2" style={{ color: 'var(--text-muted)' }}>
           · Click any node or connection to inspect details
         </span>
