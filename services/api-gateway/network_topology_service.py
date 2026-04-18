@@ -346,18 +346,10 @@ def _assemble_graph(
                 "data": {},
             })
 
-        # Edge: subnet -> NSG
+        # Edge: subnet -> NSG (deferred — added after NSG nodes are built)
         subnet_nsg_id = str(row.get("subnetNsgId", "")).lower()
-        if subnet_id and subnet_nsg_id:
-            edges.append({
-                "id": f"edge-{subnet_id}-{subnet_nsg_id}",
-                "source": subnet_id,
-                "target": subnet_nsg_id,
-                "type": "subnet-nsg",
-                "data": {},
-            })
 
-    # NSG nodes
+    # NSG nodes — first from the rules query
     nsg_seen: set = set()
     for row in nsgs:
         nsg_id = str(row.get("nsgId", "")).lower()
@@ -369,6 +361,32 @@ def _assemble_graph(
                 "type": "nsg",
                 "label": row.get("nsgName", ""),
                 "data": {"health": "green"},
+            })
+
+    # Ensure every NSG referenced by a subnet edge has a node (handles NSGs with no rules)
+    for row in vnets:
+        vnet_id = str(row.get("id", "")).lower()
+        subnet_name = row.get("subnetName", "")
+        subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower() if subnet_name else ""
+        subnet_nsg_id = str(row.get("subnetNsgId", "")).lower()
+        if subnet_nsg_id and subnet_nsg_id not in seen_nodes:
+            seen_nodes.add(subnet_nsg_id)
+            nsg_seen.add(subnet_nsg_id)
+            # Derive a human-readable name from the resource ID path
+            nsg_label = subnet_nsg_id.rsplit("/", 1)[-1]
+            nodes.append({
+                "id": subnet_nsg_id,
+                "type": "nsg",
+                "label": nsg_label,
+                "data": {"health": "green"},
+            })
+        if subnet_id and subnet_nsg_id:
+            edges.append({
+                "id": f"edge-{subnet_id}-{subnet_nsg_id}",
+                "source": subnet_id,
+                "target": subnet_nsg_id,
+                "type": "subnet-nsg",
+                "data": {},
             })
 
     # LB nodes
