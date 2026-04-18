@@ -18,6 +18,27 @@ logger = logging.getLogger(__name__)
 
 COSMOS_DATABASE_NAME_DEFAULT = "aap"
 
+# Module-level singleton set by main.py during startup.
+# Endpoints that cannot access request.app.state use get_managed_subscription_ids().
+_registry: Optional["SubscriptionRegistry"] = None
+
+
+def set_registry(registry: "SubscriptionRegistry") -> None:
+    """Register the singleton instance. Called once at application startup."""
+    global _registry
+    _registry = registry
+
+
+async def get_managed_subscription_ids() -> List[str]:
+    """Return subscription IDs from the in-memory registry cache.
+
+    Returns an empty list (non-fatal) if the registry has not been initialised yet.
+    """
+    if _registry is None:
+        logger.warning("subscription_registry: singleton not set — returning empty list")
+        return []
+    return _registry.get_all_ids()
+
 
 class SubscriptionRegistry:
     """Discovers and caches all Azure subscriptions the managed identity can Reader."""
