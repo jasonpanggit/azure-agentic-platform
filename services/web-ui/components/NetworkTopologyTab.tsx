@@ -154,7 +154,7 @@ function VNetNode({ data }: NodeProps) {
           {data.label as string}
         </span>
       </div>
-      {data.addressSpace && (
+      {!!(data.addressSpace) && (
         <span
           className="text-xs font-mono"
           style={{ color: 'var(--text-secondary)' }}
@@ -162,7 +162,7 @@ function VNetNode({ data }: NodeProps) {
           {data.addressSpace as string}
         </span>
       )}
-      {data.subscription && (
+      {!!(data.subscription) && (
         <span
           className="block text-[10px] mt-1"
           style={{ color: 'var(--text-muted)' }}
@@ -189,7 +189,7 @@ function SubnetNode({ data }: NodeProps) {
       <span className="text-xs font-medium block" style={{ color: 'var(--text-primary)' }}>
         {data.label as string}
       </span>
-      {data.cidr && (
+      {!!(data.cidr) && (
         <span className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
           {data.cidr as string}
         </span>
@@ -229,7 +229,7 @@ function NsgNode({ data }: NodeProps) {
       </div>
       {data.ruleCount != null && (
         <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-          {data.ruleCount as number} rules
+          {data.ruleCount as number}{' rules'}
         </span>
       )}
       {/* Health badge */}
@@ -266,7 +266,7 @@ function LBNode({ data }: NodeProps) {
         </span>
       </div>
       <div className="flex items-center gap-1 mt-1">
-        {data.sku && (
+        {!!(data.sku) && (
           <span
             className="text-[11px] px-1.5 py-px rounded-full"
             style={{
@@ -277,7 +277,7 @@ function LBNode({ data }: NodeProps) {
             {data.sku as string}
           </span>
         )}
-        {data.publicIp && (
+        {!!(data.publicIp) && (
           <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
             {data.publicIp as string}
           </span>
@@ -305,7 +305,7 @@ function PENode({ data }: NodeProps) {
           {data.label as string}
         </span>
       </div>
-      {data.targetService && (
+      {!!(data.targetService) && (
         <span className="text-[11px] mt-1 block" style={{ color: 'var(--text-muted)' }}>
           {data.targetService as string}
         </span>
@@ -427,8 +427,8 @@ function transformToReactFlowEdges(
 // ---------------------------------------------------------------------------
 
 export default function NetworkTopologyTab() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [topologyData, setTopologyData] = useState<TopologyData | null>(null)
