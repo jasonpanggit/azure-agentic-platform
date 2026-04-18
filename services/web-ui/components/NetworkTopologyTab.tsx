@@ -238,6 +238,10 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     selector: 'node[type="aks"]',
     style: { 'background-color': 'rgba(14, 165, 233, 0.08)', 'border-color': '#0ea5e9', 'border-width': 2 },
   },
+  {
+    selector: 'node[type="publicip"]',
+    style: { 'background-color': '#0ea5e9', 'border-color': '#0284c7', label: 'data(label)', shape: 'ellipse' },
+  },
   // Edges
   {
     selector: 'edge',
@@ -287,6 +291,22 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     selector: 'edge[type="subnet-nsg"]',
     style: { 'line-color': '#64748b', 'line-style': 'dotted', width: 1 },
   },
+  {
+    selector: 'edge[type="resource-publicip"]',
+    style: { 'line-color': '#0ea5e9', 'line-style': 'solid', width: 1, 'target-arrow-color': '#0ea5e9' },
+  },
+  {
+    selector: 'edge[type="nic-nsg"]',
+    style: { 'line-color': '#f97316', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#f97316' },
+  },
+  {
+    selector: 'edge.path-allowed',
+    style: {
+      'line-color': '#10b981',
+      'target-arrow-color': '#10b981',
+      width: 2,
+    },
+  },
   // Highlight states
   {
     selector: '.chat-highlighted',
@@ -334,6 +354,7 @@ function toNodePanelType(apiType: string): string {
     aks: 'aksNode',
     firewall: 'firewallNode',
     appgw: 'appGatewayNode',
+    publicip: 'publicIpNode',
   }
   return mapping[apiType] ?? apiType
 }
@@ -504,9 +525,9 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Subnet Details</p>
             <FieldRow label="Name" value={d.label as string} />
-            {d.cidr && <FieldRow label="CIDR" value={<span className="font-mono">{d.cidr as string}</span>} />}
+            {d.prefix && <FieldRow label="CIDR" value={<span className="font-mono">{d.prefix as string}</span>} />}
             <FieldRow label="NSG" value={(d.nsgId as string) || 'None'} />
-            <FieldRow label="Route Table" value={(d.routeTable as string) || 'None'} />
+            {d.routeTable && <FieldRow label="Route Table" value={d.routeTable as string} />}
           </>
         )
 
@@ -516,7 +537,9 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Load Balancer Details</p>
             <FieldRow label="Name" value={d.label as string} />
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
-            <FieldRow label="Public IP" value={(d.publicIp as string) || 'Internal'} />
+            {d.publicIpId
+              ? <FieldRow label="Public IP" value={<span className="font-mono text-xs break-all">{d.publicIpId as string}</span>} />
+              : <FieldRow label="Public IP" value="Internal" />}
           </>
         )
 
@@ -525,9 +548,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Private Endpoint Details</p>
             <FieldRow label="Name" value={d.label as string} />
-            {d.targetService && <FieldRow label="Target Service" value={d.targetService as string} />}
-            <FieldRow label="Private IP" value={(d.privateIp as string) || '—'} />
-            <FieldRow label="Connection State" value={(d.connectionState as string) || '—'} />
+            {d.targetResourceId && <FieldRow label="Target Resource" value={<span className="font-mono text-xs break-all">{d.targetResourceId as string}</span>} />}
           </>
         )
 
@@ -603,6 +624,17 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
             {d.capacity != null && <FieldRow label="Capacity" value={String(d.capacity)} />}
             {d.location && <FieldRow label="Location" value={d.location as string} />}
             <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'publicIpNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Public IP Address</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.ipAddress && <FieldRow label="IP Address" value={<span className="font-mono">{d.ipAddress as string}</span>} />}
+            {d.allocationMethod && <FieldRow label="Allocation" value={d.allocationMethod as string} />}
+            {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
           </>
         )
 
@@ -844,7 +876,7 @@ export default function NetworkTopologyTab() {
         cy.elements().addClass('dimmed')
         cy.getElementById(data.blocking_nsg_id).removeClass('dimmed').addClass('path-blocked')
       } else if (cy && data.verdict === 'allowed') {
-        cy.edges().style({ 'line-color': '#10b981', width: 2 })
+        cy.edges().addClass('path-allowed')
       }
     } catch (err) {
       setPathError(err instanceof Error ? err.message : 'Path check failed')
@@ -858,18 +890,15 @@ export default function NetworkTopologyTab() {
     const cy = cyRef.current
     if (cy) {
       cy.elements().removeClass('dimmed path-blocked')
-      cy.edges().removeStyle('line-color width')
+      cy.edges().removeClass('path-allowed')
     }
-    if (topologyData) {
-      setElements(buildCytoscapeElements(topologyData.nodes, topologyData.edges))
-    }
-  }, [topologyData])
+  }, [])
 
   // Resource options for path checker selects
   const resourceOptions = useMemo(
     () =>
       topologyData?.nodes
-        .filter((n) => ['subnet', 'nsg', 'vnet', 'vm'].includes(n.type))
+        .filter((n) => ['subnet', 'nsg', 'vnet', 'vm', 'vmss', 'aks', 'appgw', 'firewall', 'lb', 'gateway'].includes(n.type))
         .map((n) => ({ id: n.id, label: `${n.label} (${n.type.toUpperCase()})` })) ?? [],
     [topologyData]
   )
@@ -906,7 +935,7 @@ export default function NetworkTopologyTab() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
           </Button>
-          <Sheet open={pathSheetOpen} onOpenChange={setPathSheetOpen}>
+          <Sheet open={pathSheetOpen} onOpenChange={(open) => { setPathSheetOpen(open); if (open) setDetailOpen(false) }}>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm">
                 Path Checker
@@ -998,17 +1027,31 @@ export default function NetworkTopologyTab() {
                   </div>
                 )}
                 {pathResult && pathResult.verdict === 'allowed' && (
-                  <div
-                    className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
-                    style={{
-                      background: 'color-mix(in srgb, var(--accent-green) 10%, transparent)',
-                      borderColor: 'color-mix(in srgb, var(--accent-green) 30%, transparent)',
-                      color: 'var(--accent-green)',
-                    }}
-                  >
-                    <CheckCircle size={14} />
-                    Traffic Allowed
-                  </div>
+                  <>
+                    <div
+                      className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
+                      style={{
+                        background: 'color-mix(in srgb, var(--accent-green) 10%, transparent)',
+                        borderColor: 'color-mix(in srgb, var(--accent-green) 30%, transparent)',
+                        color: 'var(--accent-green)',
+                      }}
+                    >
+                      <CheckCircle size={14} />
+                      Traffic Allowed
+                    </div>
+                    {pathResult.steps.length === 0 && (
+                      <div
+                        className="flex items-start gap-2 rounded border px-3 py-2 text-xs"
+                        style={{
+                          background: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+                          borderColor: 'color-mix(in srgb, var(--accent-blue) 30%, transparent)',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        ℹ️ No NSGs found on either endpoint — the path was not evaluated. This does not confirm traffic is allowed.
+                      </div>
+                    )}
+                  </>
                 )}
                 {pathResult && pathResult.verdict === 'blocked' && (
                   <div
@@ -1154,7 +1197,38 @@ export default function NetworkTopologyTab() {
 
       {topologyData && topologyData.nodes.length > 0 && (
         <div className="flex" style={{ height: 'calc(100vh - 220px)' }}>
-          <div style={{ flex: '1 1 0', minWidth: 0, background: 'var(--bg-canvas)' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, background: 'var(--bg-canvas)', position: 'relative' }}>
+            {/* Refreshing indicator */}
+            {loading && topologyData && (
+              <div
+                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 rounded px-2 py-1 text-xs"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+              >
+                <RefreshCw size={11} className="animate-spin" />
+                Refreshing…
+              </div>
+            )}
+            {/* Zoom/Fit controls */}
+            <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
+              <button
+                onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)}
+                className="flex items-center justify-center w-8 h-8 rounded text-sm font-semibold"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                title="Zoom in"
+              >+</button>
+              <button
+                onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 0.8)}
+                className="flex items-center justify-center w-8 h-8 rounded text-sm font-semibold"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                title="Zoom out"
+              >−</button>
+              <button
+                onClick={() => cyRef.current?.fit(undefined, 30)}
+                className="flex items-center justify-center w-8 h-8 rounded text-sm"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                title="Fit to screen"
+              >⊞</button>
+            </div>
             <CytoscapeComponent
               elements={elements}
               stylesheet={cytoscapeStylesheet}
@@ -1182,6 +1256,7 @@ export default function NetworkTopologyTab() {
                     position: { x: 0, y: 0 },
                   })
                   setSelectedEdge(null)
+                  setPathSheetOpen(false)
                   setDetailOpen(true)
                 })
                 cy.on('tap', 'edge', (evt) => {
@@ -1194,6 +1269,7 @@ export default function NetworkTopologyTab() {
                     data: edgeData,
                   })
                   setSelectedNode(null)
+                  setPathSheetOpen(false)
                   setDetailOpen(true)
                 })
                 cy.on('tap', (evt) => {
@@ -1218,7 +1294,11 @@ export default function NetworkTopologyTab() {
                     cy.nodes().filter((n) => ids.has(n.id())).addClass('chat-highlighted')
                   }
                 }}
-                onClose={() => setChatOpen(false)}
+                onClose={() => {
+                  setChatOpen(false)
+                  setHighlightedNodeIds(new Set())
+                  cyRef.current?.nodes().removeClass('chat-highlighted')
+                }}
               />
             </div>
           )}
@@ -1236,7 +1316,7 @@ export default function NetworkTopologyTab() {
       <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
         <SheetContent side="right" className="w-[480px] overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>NSG Asymmetry Issues ({issueCount})</SheetTitle>
+            <SheetTitle>Network Issues ({issueCount})</SheetTitle>
           </SheetHeader>
           <p className="text-xs mt-2 mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             An NSG asymmetry occurs when one subnet&apos;s NSG allows outbound traffic on a port, but the destination
