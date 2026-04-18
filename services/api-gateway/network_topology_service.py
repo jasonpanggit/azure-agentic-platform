@@ -114,19 +114,11 @@ Resources
 _VM_QUERY = """
 Resources
 | where type =~ "microsoft.compute/virtualmachines"
-| mv-expand nic = properties.networkProfile.networkInterfaces
-| extend nicId = tolower(tostring(nic.id))
-| join kind=leftouter (
-    Resources
-    | where type =~ "microsoft.network/networkinterfaces"
-    | extend subnetId = tolower(tostring(properties.ipConfigurations[0].properties.subnet.id))
-    | extend privateIp = tostring(properties.ipConfigurations[0].properties.privateIPAddress)
-    | project nicId = tolower(id), subnetId, privateIp
-) on nicId
+| extend nicId = tolower(tostring(properties.networkProfile.networkInterfaces[0].id))
 | project subscriptionId, resourceGroup, vmName = name, vmId = tolower(id), location,
           vmSize = tostring(properties.hardwareProfile.vmSize),
           osType = tostring(properties.storageProfile.osDisk.osType),
-          subnetId, privateIp
+          nicId
 """
 
 _VMSS_QUERY = """
@@ -183,7 +175,11 @@ _cache_lock = threading.Lock()
 
 
 def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
-    """Return cached value if within TTL, otherwise call fetch_fn and cache."""
+    """Return cached value if within TTL, otherwise call fetch_fn and cache.
+
+    Empty topology results (nodes=[]) are cached with a short 60s TTL so a
+    transient startup race or a bad query doesn't poison the cache for 15 min.
+    """
     now = time.monotonic()
     with _cache_lock:
         if key in _cache:
@@ -192,8 +188,10 @@ def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
                 return cached_value
 
     result = fetch_fn()
+    # Don't cache empty topology for the full TTL — retry quickly on next request
+    effective_ttl = 60 if (isinstance(result, dict) and not result.get("nodes")) else ttl
     with _cache_lock:
-        _cache[key] = (time.monotonic(), result)
+        _cache[key] = (time.monotonic() - (ttl - effective_ttl), result)
     return result
 
 
@@ -649,20 +647,30 @@ def fetch_network_topology(
 
     cache_key = f"topology:{','.join(sorted(subscription_ids))}"
 
+    def _safe_query(query: str, name: str) -> List[Dict[str, Any]]:
+        """Run a single ARG query, returning [] on failure instead of raising."""
+        try:
+            return run_arg_query(credential, subscription_ids, query)
+        except Exception as exc:
+            logger.warning(
+                "network_topology_service: ARG query '%s' failed | error=%s", name, exc
+            )
+            return []
+
     def _fetch() -> Dict[str, Any]:
         try:
-            vnets = run_arg_query(credential, subscription_ids, _VNET_SUBNET_QUERY)
-            nsgs = run_arg_query(credential, subscription_ids, _NSG_RULES_QUERY)
-            lbs = run_arg_query(credential, subscription_ids, _LB_QUERY)
-            pes = run_arg_query(credential, subscription_ids, _PE_QUERY)
-            gateways = run_arg_query(credential, subscription_ids, _GATEWAY_QUERY)
-            public_ips = run_arg_query(credential, subscription_ids, _PUBLIC_IP_QUERY)
-            nics = run_arg_query(credential, subscription_ids, _NIC_NSG_QUERY)
-            vms = run_arg_query(credential, subscription_ids, _VM_QUERY)
-            vmss_list = run_arg_query(credential, subscription_ids, _VMSS_QUERY)
-            aks_list = run_arg_query(credential, subscription_ids, _AKS_QUERY)
-            firewalls = run_arg_query(credential, subscription_ids, _FIREWALL_QUERY)
-            app_gateways = run_arg_query(credential, subscription_ids, _APP_GATEWAY_QUERY)
+            vnets = _safe_query(_VNET_SUBNET_QUERY, "vnets")
+            nsgs = _safe_query(_NSG_RULES_QUERY, "nsgs")
+            lbs = _safe_query(_LB_QUERY, "lbs")
+            pes = _safe_query(_PE_QUERY, "pes")
+            gateways = _safe_query(_GATEWAY_QUERY, "gateways")
+            public_ips = _safe_query(_PUBLIC_IP_QUERY, "public_ips")
+            nics = _safe_query(_NIC_NSG_QUERY, "nics")
+            vms = _safe_query(_VM_QUERY, "vms")
+            vmss_list = _safe_query(_VMSS_QUERY, "vmss")
+            aks_list = _safe_query(_AKS_QUERY, "aks")
+            firewalls = _safe_query(_FIREWALL_QUERY, "firewalls")
+            app_gateways = _safe_query(_APP_GATEWAY_QUERY, "app_gateways")
 
             nodes, edges = _assemble_graph(
                 vnets, nsgs, lbs, pes, gateways, public_ips, nics,
