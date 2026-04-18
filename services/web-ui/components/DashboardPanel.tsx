@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Bell, Network, Server, ShieldCheck,
   DollarSign, GitBranch, Wrench, ClipboardList, Settings,
-  Building2,
+  Building2, Layers,
 } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
@@ -16,6 +16,7 @@ import { ResourcesHubTab } from './ResourcesHubTab'
 import { NetworkHubTab } from './NetworkHubTab'
 import { SecurityHubTab } from './SecurityHubTab'
 import { CostHubTab } from './CostHubTab'
+import { CapacityQuotaHubTab } from './CapacityQuotaHubTab'
 import { ChangeHubTab } from './ChangeHubTab'
 import { OperationsHubTab } from './OperationsHubTab'
 import { AuditHubTab } from './AuditHubTab'
@@ -31,6 +32,7 @@ type TabId =
   | 'network'
   | 'security'
   | 'cost'
+  | 'capacity'
   | 'change'
   | 'operations'
   | 'audit'
@@ -61,10 +63,11 @@ const TAB_GROUPS: TabDef[][] = [
   ],
   // Security / cost / change
   [
-    { id: 'security',   label: 'Security',   Icon: ShieldCheck },
-    { id: 'cost',       label: 'Cost',       Icon: DollarSign },
-    { id: 'change',     label: 'Change',     Icon: GitBranch },
-    { id: 'operations', label: 'Operations', Icon: Wrench },
+    { id: 'security',   label: 'Security',         Icon: ShieldCheck },
+    { id: 'cost',       label: 'Cost',             Icon: DollarSign  },
+    { id: 'capacity',   label: 'Capacity & Quota', Icon: Layers      },
+    { id: 'change',     label: 'Change',           Icon: GitBranch   },
+    { id: 'operations', label: 'Operations',       Icon: Wrench      },
   ],
   // Audit / admin
   [
@@ -259,10 +262,17 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
           </div>
         )}
 
-        {/* Cost hub — FinOps · Budgets · Quota Usage · Capacity · Quota Limits */}
+        {/* Cost hub — FinOps · Budgets */}
         {activeTab === 'cost' && (
           <div id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost">
             <CostHubTab subscriptions={selectedSubscriptions} />
+          </div>
+        )}
+
+        {/* Capacity & Quota hub — Quota Usage · Capacity · Quota Limits */}
+        {activeTab === 'capacity' && (
+          <div id="tabpanel-capacity" role="tabpanel" aria-labelledby="tab-capacity">
+            <CapacityQuotaHubTab subscriptions={selectedSubscriptions} />
           </div>
         )}
 
