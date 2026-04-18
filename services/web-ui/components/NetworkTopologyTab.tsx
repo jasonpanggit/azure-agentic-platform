@@ -13,6 +13,8 @@ import {
   XCircle,
   RefreshCw,
   MessageSquare,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import {
   Sheet,
@@ -180,6 +182,7 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'font-weight': 'bold',
       width: '150px',
       height: '48px',
+      shape: 'roundrectangle',
     },
   },
   {
@@ -189,6 +192,7 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'border-color': '#475569',
       'border-width': 1,
       'font-size': '11px',
+      shape: 'roundrectangle',
     },
   },
   {
@@ -196,6 +200,7 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     style: {
       'background-color': '#1e293b',
       'border-color': '#64748b',
+      shape: 'hexagon',
     },
   },
   {
@@ -208,41 +213,133 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   },
   {
     selector: 'node[type="vm"]',
-    style: { 'background-color': 'rgba(16, 185, 129, 0.08)', 'border-color': '#10b981' },
-  },
-  {
-    selector: 'node[type="lb"]',
-    style: { 'background-color': 'rgba(139, 92, 246, 0.08)', 'border-color': '#8b5cf6' },
-  },
-  {
-    selector: 'node[type="pe"]',
-    style: { 'background-color': 'rgba(139, 92, 246, 0.06)', 'border-color': '#a78bfa' },
-  },
-  {
-    selector: 'node[type="gateway"]',
-    style: { 'background-color': 'rgba(245, 158, 11, 0.08)', 'border-color': '#f59e0b' },
-  },
-  {
-    selector: 'node[type="firewall"]',
-    style: { 'background-color': 'rgba(239, 68, 68, 0.08)', 'border-color': '#ef4444' },
-  },
-  {
-    selector: 'node[type="appgw"]',
-    style: { 'background-color': 'rgba(139, 92, 246, 0.08)', 'border-color': '#c084fc' },
+    style: {
+      'background-color': 'rgba(16, 185, 129, 0.08)',
+      'border-color': '#10b981',
+      shape: 'ellipse',
+    },
   },
   {
     selector: 'node[type="vmss"]',
-    style: { 'background-color': 'rgba(14, 165, 233, 0.06)', 'border-color': '#38bdf8' },
+    style: {
+      'background-color': 'rgba(14, 165, 233, 0.06)',
+      'border-color': '#38bdf8',
+      'border-width': 2,
+      shape: 'ellipse',
+    },
   },
   {
     selector: 'node[type="aks"]',
-    style: { 'background-color': 'rgba(14, 165, 233, 0.08)', 'border-color': '#0ea5e9', 'border-width': 2 },
+    style: {
+      'background-color': 'rgba(14, 165, 233, 0.08)',
+      'border-color': '#0ea5e9',
+      'border-width': 2,
+      shape: 'barrel',
+    },
+  },
+  {
+    selector: 'node[type="aks"][health="red"]',
+    style: { 'border-color': '#ef4444', 'border-width': 3 },
+  },
+  {
+    selector: 'node[type="lb"]',
+    style: {
+      'background-color': 'rgba(139, 92, 246, 0.08)',
+      'border-color': '#8b5cf6',
+      shape: 'rhomboid',
+    },
+  },
+  {
+    selector: 'node[type="appgw"]',
+    style: {
+      'background-color': 'rgba(139, 92, 246, 0.08)',
+      'border-color': '#c084fc',
+      shape: 'rhomboid',
+    },
+  },
+  {
+    selector: 'node[type="gateway"]',
+    style: {
+      'background-color': 'rgba(245, 158, 11, 0.08)',
+      'border-color': '#f59e0b',
+      shape: 'diamond',
+    },
+  },
+  {
+    selector: 'node[type="gateway"][health="red"]',
+    style: { 'border-color': '#ef4444', 'border-width': 3 },
+  },
+  {
+    selector: 'node[type="firewall"]',
+    style: {
+      'background-color': 'rgba(239, 68, 68, 0.08)',
+      'border-color': '#ef4444',
+      shape: 'octagon',
+    },
+  },
+  {
+    selector: 'node[type="firewall"][health="yellow"]',
+    style: { 'border-color': '#f59e0b', 'border-width': 2 },
+  },
+  {
+    selector: 'node[type="pe"]',
+    style: {
+      'background-color': 'rgba(139, 92, 246, 0.06)',
+      'border-color': '#a78bfa',
+      shape: 'cut-rectangle',
+    },
   },
   {
     selector: 'node[type="publicip"]',
-    style: { 'background-color': '#0ea5e9', 'border-color': '#0284c7', label: 'data(label)', shape: 'ellipse' },
+    style: {
+      'background-color': '#0ea5e9',
+      'border-color': '#0284c7',
+      label: 'data(label)',
+      shape: 'ellipse',
+    },
   },
-  // Edges
+  {
+    selector: 'node[type="routetable"]',
+    style: {
+      'background-color': 'rgba(110, 231, 183, 0.08)',
+      'border-color': '#6ee7b7',
+      shape: 'rectangle',
+    },
+  },
+  {
+    selector: 'node[type="localgw"]',
+    style: {
+      'background-color': 'rgba(245, 158, 11, 0.08)',
+      'border-color': '#f59e0b',
+      shape: 'diamond',
+    },
+  },
+  {
+    selector: 'node[type="natgw"]',
+    style: {
+      'background-color': 'rgba(20, 184, 166, 0.08)',
+      'border-color': '#14b8a6',
+      shape: 'roundrectangle',
+    },
+  },
+  {
+    selector: 'node[type="external"]',
+    style: {
+      'background-color': 'rgba(71, 85, 105, 0.08)',
+      'border-color': '#475569',
+      'border-style': 'dashed',
+      shape: 'ellipse',
+    },
+  },
+  {
+    selector: 'node[type="firewallpolicy"]',
+    style: {
+      'background-color': 'rgba(249, 115, 22, 0.08)',
+      'border-color': '#f97316',
+      shape: 'hexagon',
+    },
+  },
+  // Edges — default
   {
     selector: 'edge',
     style: {
@@ -285,11 +382,11 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   },
   {
     selector: 'edge[type="subnet-vm"]',
-    style: { 'line-color': '#10b981', 'line-style': 'dashed', width: 1 },
+    style: { 'line-color': '#10b981', 'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none' },
   },
   {
     selector: 'edge[type="subnet-nsg"]',
-    style: { 'line-color': '#64748b', 'line-style': 'dotted', width: 1 },
+    style: { 'line-color': '#64748b', 'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none' },
   },
   {
     selector: 'edge[type="resource-publicip"]',
@@ -298,6 +395,70 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   {
     selector: 'edge[type="nic-nsg"]',
     style: { 'line-color': '#f97316', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#f97316' },
+  },
+  {
+    selector: 'edge[type="contains"]',
+    style: { 'line-color': '#1e3a5f', 'target-arrow-shape': 'none', width: 0.5 },
+  },
+  {
+    selector: 'edge[type="subnet-gateway"]',
+    style: { 'line-color': '#f59e0b', width: 1.5, 'target-arrow-color': '#f59e0b' },
+  },
+  {
+    selector: 'edge[type="subnet-firewall"]',
+    style: { 'line-color': '#ef4444', width: 1.5, 'target-arrow-color': '#ef4444' },
+  },
+  {
+    selector: 'edge[type="subnet-appgw"]',
+    style: { 'line-color': '#c084fc', width: 1, 'target-arrow-color': '#c084fc' },
+  },
+  {
+    selector: 'edge[type="subnet-aks"]',
+    style: { 'line-color': '#0ea5e9', width: 1, 'target-arrow-color': '#0ea5e9' },
+  },
+  {
+    selector: 'edge[type="subnet-vmss"]',
+    style: { 'line-color': '#38bdf8', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#38bdf8' },
+  },
+  {
+    selector: 'edge[type="subnet-pe"]',
+    style: { 'line-color': '#a78bfa', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#a78bfa' },
+  },
+  {
+    selector: 'edge[type="subnet-lb"]',
+    style: { 'line-color': '#8b5cf6', width: 1, 'target-arrow-color': '#8b5cf6' },
+  },
+  {
+    selector: 'edge[type="lb-backend"]',
+    style: { 'line-color': '#8b5cf6', 'line-style': 'solid', width: 1, 'target-arrow-color': '#8b5cf6' },
+  },
+  {
+    selector: 'edge[type="subnet-routetable"]',
+    style: { 'line-color': '#6ee7b7', 'line-style': 'solid', width: 1, 'target-arrow-color': '#6ee7b7' },
+  },
+  {
+    selector: 'edge[type="vpn-connection"]',
+    style: { 'line-color': '#f59e0b', 'line-style': 'solid', width: 2, 'target-arrow-color': '#f59e0b' },
+  },
+  {
+    selector: 'edge[type="pe-target"]',
+    style: { 'line-color': '#f59e0b', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#f59e0b' },
+  },
+  {
+    selector: 'edge[type="firewall-policy"]',
+    style: { 'line-color': '#f97316', 'line-style': 'solid', width: 1, 'target-arrow-color': '#f97316' },
+  },
+  {
+    selector: 'edge[type="subnet-natgw"]',
+    style: { 'line-color': '#14b8a6', 'line-style': 'solid', width: 1, 'target-arrow-color': '#14b8a6' },
+  },
+  {
+    selector: 'edge[type="appgw-backend"]',
+    style: { 'line-color': '#c084fc', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#c084fc' },
+  },
+  {
+    selector: 'edge[type="firewall-mgmt-subnet"]',
+    style: { 'line-color': '#ef4444', 'line-style': 'dashed', width: 1, 'target-arrow-color': '#ef4444' },
   },
   {
     selector: 'edge.path-allowed',
@@ -329,6 +490,21 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     style: { opacity: 0.2 },
   },
   {
+    selector: '.search-match',
+    style: {
+      'border-color': '#ffffff',
+      'border-width': 3,
+    },
+  },
+  {
+    selector: '.search-dimmed',
+    style: { opacity: 0.3 },
+  },
+  {
+    selector: '.type-filtered',
+    style: { opacity: 0.2 },
+  },
+  {
     selector: ':selected',
     style: {
       'border-color': '#60a5fa',
@@ -355,8 +531,113 @@ function toNodePanelType(apiType: string): string {
     firewall: 'firewallNode',
     appgw: 'appGatewayNode',
     publicip: 'publicIpNode',
+    routetable: 'routetableNode',
+    localgw: 'localgwNode',
+    natgw: 'natgwNode',
+    external: 'externalNode',
   }
   return mapping[apiType] ?? apiType
+}
+
+// ---------------------------------------------------------------------------
+// Legend overlay
+// ---------------------------------------------------------------------------
+
+const LEGEND_NODES: { label: string; color: string; shape: string }[] = [
+  { label: 'VNet',            color: '#0ea5e9', shape: 'roundrect' },
+  { label: 'Subnet',          color: '#475569', shape: 'roundrect' },
+  { label: 'NSG',             color: '#64748b', shape: 'hex' },
+  { label: 'VM',              color: '#10b981', shape: 'circle' },
+  { label: 'VMSS',            color: '#38bdf8', shape: 'circle' },
+  { label: 'AKS',             color: '#0ea5e9', shape: 'rect' },
+  { label: 'Load Balancer',   color: '#8b5cf6', shape: 'para' },
+  { label: 'App Gateway',     color: '#c084fc', shape: 'para' },
+  { label: 'VPN/ER Gateway',  color: '#f59e0b', shape: 'diamond' },
+  { label: 'Firewall',        color: '#ef4444', shape: 'oct' },
+  { label: 'Private Endpoint',color: '#a78bfa', shape: 'cutrect' },
+  { label: 'Public IP',       color: '#0ea5e9', shape: 'circle' },
+  { label: 'Route Table',     color: '#6ee7b7', shape: 'rect' },
+  { label: 'Local Gateway',   color: '#f59e0b', shape: 'diamond' },
+  { label: 'NAT Gateway',     color: '#14b8a6', shape: 'roundrect' },
+  { label: 'External',        color: '#475569', shape: 'circle' },
+]
+
+const LEGEND_EDGES: { label: string; color: string; dashed?: boolean }[] = [
+  { label: 'VNet Peering',          color: '#0ea5e9' },
+  { label: 'Peering Disconnected',  color: '#ef4444', dashed: true },
+  { label: 'NSG Asymmetry',         color: '#ef4444', dashed: true },
+  { label: 'Subnet → VM',           color: '#10b981' },
+  { label: 'NIC NSG',               color: '#f97316', dashed: true },
+  { label: 'LB Backend',            color: '#8b5cf6' },
+  { label: 'Route Table',           color: '#6ee7b7' },
+  { label: 'VPN Connection',        color: '#f59e0b' },
+  { label: 'PE → Target',           color: '#f59e0b', dashed: true },
+  { label: 'Firewall Policy',       color: '#f97316' },
+]
+
+function LegendOverlay() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1"
+    >
+      {open && (
+        <div
+          className="rounded overflow-y-auto"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontSize: 12,
+            maxHeight: 300,
+            width: 200,
+            padding: '8px 10px',
+          }}
+        >
+          <p style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nodes</p>
+          {LEGEND_NODES.map(({ label, color }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: `color-mix(in srgb, ${color} 20%, #1e293b)`, border: `2px solid ${color}`, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+            </div>
+          ))}
+          <p style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, marginTop: 8, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Edges</p>
+          {LEGEND_EDGES.map(({ label, color, dashed }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <svg width="18" height="10" style={{ flexShrink: 0 }}>
+                <line
+                  x1="0" y1="5" x2="18" y2="5"
+                  stroke={color}
+                  strokeWidth={dashed ? 1.5 : 2}
+                  strokeDasharray={dashed ? '3 2' : undefined}
+                />
+              </svg>
+              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          color: 'var(--text-primary)',
+          borderRadius: 6,
+          padding: '4px 8px',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          cursor: 'pointer',
+        }}
+      >
+        {open ? <EyeOff size={12} /> : <Eye size={12} />}
+        Legend
+      </button>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -638,6 +919,44 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
           </>
         )
 
+      case 'routetableNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Route Table</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.routeCount != null && <FieldRow label="Route Count" value={String(d.routeCount)} />}
+            {d.location && <FieldRow label="Location" value={d.location as string} />}
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
+      case 'localgwNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Local Network Gateway</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.gatewayIp && <FieldRow label="Gateway IP" value={<span className="font-mono">{d.gatewayIp as string}</span>} />}
+            {d.addressPrefixes && <FieldRow label="Address Prefixes" value={d.addressPrefixes as string} />}
+          </>
+        )
+
+      case 'natgwNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NAT Gateway</p>
+            <FieldRow label="Name" value={d.label as string} />
+            {d.idleTimeoutMinutes != null && <FieldRow label="Idle Timeout" value={`${d.idleTimeoutMinutes} min`} />}
+          </>
+        )
+
+      case 'externalNode':
+        return (
+          <>
+            <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>External Resource</p>
+            <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
+          </>
+        )
+
       default:
         return (
           <>
@@ -742,8 +1061,13 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function NetworkTopologyTab() {
+interface NetworkTopologyTabProps {
+  subscriptionIds?: string[]
+}
+
+export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopologyTabProps) {
   const cyRef = useRef<Core | null>(null)
+  const miniCanvasRef = useRef<HTMLCanvasElement>(null)
   const [elements, setElements] = useState<ElementDefinition[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -768,6 +1092,10 @@ export default function NetworkTopologyTab() {
   const [chatOpen, setChatOpen] = useState(false)
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
   const [issuesOpen, setIssuesOpen] = useState(false)
+
+  // Search + filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set())
 
   // Summary counts — all node types
   const issueCount = useMemo(() => topologyData?.issues.length ?? 0, [topologyData])
@@ -852,6 +1180,39 @@ export default function NetworkTopologyTab() {
     return () => clearInterval(interval)
   }, [fetchData])
 
+  // Apply search highlighting / dimming
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.nodes().removeClass('search-match search-dimmed')
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      cy.nodes().forEach((node) => {
+        const label = String(node.data('label') ?? '').toLowerCase()
+        if (label.includes(q)) {
+          node.addClass('search-match')
+        } else {
+          node.addClass('search-dimmed')
+        }
+      })
+    }
+  }, [searchQuery])
+
+  // Apply type filter
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.nodes().removeClass('type-filtered')
+    if (filterTypes.size > 0) {
+      cy.nodes().forEach((node) => {
+        const t = String(node.data('type') ?? '')
+        if (!filterTypes.has(t)) {
+          node.addClass('type-filtered')
+        }
+      })
+    }
+  }, [filterTypes])
+
   const handlePathCheck = useCallback(async () => {
     if (!pathSource || !pathDest) return
     setPathLoading(true)
@@ -902,6 +1263,37 @@ export default function NetworkTopologyTab() {
         .map((n) => ({ id: n.id, label: `${n.label} (${n.type.toUpperCase()})` })) ?? [],
     [topologyData]
   )
+
+  // Minimap render helper — called via cy.on('render')
+  const renderMinimap = useCallback((cy: Core) => {
+    const miniCanvas = miniCanvasRef.current
+    if (!miniCanvas) return
+    const ctx = miniCanvas.getContext('2d')
+    if (!ctx) return
+    const ext = cy.extent()
+    const w = 160
+    const h = 120
+    const scaleX = w / ((ext.x2 - ext.x1) || 1)
+    const scaleY = h / ((ext.y2 - ext.y1) || 1)
+    ctx.clearRect(0, 0, w, h)
+    cy.nodes().forEach((node) => {
+      const pos = node.position()
+      const x = (pos.x - ext.x1) * scaleX
+      const y = (pos.y - ext.y1) * scaleY
+      ctx.fillStyle = '#334155'
+      ctx.fillRect(x - 2, y - 2, 4, 4)
+    })
+    // Viewport rectangle
+    const pan = cy.pan()
+    const zoom = cy.zoom()
+    const vx = (-pan.x / zoom - ext.x1) * scaleX
+    const vy = (-pan.y / zoom - ext.y1) * scaleY
+    const vw = (cy.width() / zoom) * scaleX
+    const vh = (cy.height() / zoom) * scaleY
+    ctx.strokeStyle = '#0ea5e9'
+    ctx.lineWidth = 1
+    ctx.strokeRect(vx, vy, vw, vh)
+  }, [])
 
   // -------------------------------------------------------------------------
   // Render
@@ -1122,18 +1514,37 @@ export default function NetworkTopologyTab() {
 
       {/* Summary pills */}
       <div className="flex flex-wrap items-center gap-2">
-        {PILL_TYPES.filter(({ type }) => (typeCounts[type] ?? 0) > 0).map(({ type, label, accent }) => (
-          <span
-            key={type}
-            className="text-xs px-2 py-1 rounded"
-            style={{
-              background: accent ? `color-mix(in srgb, ${accent} 12%, transparent)` : 'var(--bg-subtle)',
-              color: accent ?? 'var(--text-secondary)',
-            }}
-          >
-            {label}: {typeCounts[type]}
-          </span>
-        ))}
+        {PILL_TYPES.filter(({ type }) => (typeCounts[type] ?? 0) > 0).map(({ type, label, accent }) => {
+          const isActive = filterTypes.has(type)
+          return (
+            <button
+              key={type}
+              onClick={() => {
+                setFilterTypes((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(type)) {
+                    next.delete(type)
+                  } else {
+                    next.add(type)
+                  }
+                  return next
+                })
+              }}
+              className="text-xs px-2 py-1 rounded transition-all cursor-pointer"
+              style={{
+                background: isActive
+                  ? (accent ?? 'var(--accent-blue)')
+                  : accent
+                  ? `color-mix(in srgb, ${accent} 12%, transparent)`
+                  : 'var(--bg-subtle)',
+                color: isActive ? '#fff' : (accent ?? 'var(--text-secondary)'),
+                border: isActive ? `1px solid ${accent ?? 'var(--accent-blue)'}` : '1px solid transparent',
+              }}
+            >
+              {label}: {typeCounts[type]}
+            </button>
+          )
+        })}
         {issueCount > 0 ? (
           <button
             onClick={() => setIssuesOpen(true)}
@@ -1154,10 +1565,40 @@ export default function NetworkTopologyTab() {
             Issues: 0
           </span>
         )}
+        {filterTypes.size > 0 && (
+          <button
+            onClick={() => setFilterTypes(new Set())}
+            className="text-xs px-2 py-1 rounded"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-subtle)' }}
+          >
+            ✕ Clear filter
+          </button>
+        )}
         <span className="text-[11px] ml-1" style={{ color: 'var(--text-muted)' }}>
           · Click any node or connection to inspect details
         </span>
       </div>
+
+      {/* Search bar */}
+      {topologyData && topologyData.nodes.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search nodes by name…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-xs text-sm h-8"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-xs"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              ✕ Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -1208,7 +1649,25 @@ export default function NetworkTopologyTab() {
                 Refreshing…
               </div>
             )}
-            {/* Zoom/Fit controls */}
+
+            {/* Minimap — top-right */}
+            <canvas
+              ref={miniCanvasRef}
+              width={160}
+              height={120}
+              className="absolute top-3 z-10 rounded"
+              style={{
+                right: loading && topologyData ? 120 : 10,
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                opacity: 0.9,
+              }}
+            />
+
+            {/* Legend overlay — bottom-left */}
+            <LegendOverlay />
+
+            {/* Zoom/Fit controls — bottom-right */}
             <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
               <button
                 onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)}
@@ -1247,6 +1706,10 @@ export default function NetworkTopologyTab() {
               } as cytoscape.LayoutOptions}
               cy={(cy: Core) => {
                 cyRef.current = cy
+
+                // Minimap
+                cy.on('render', () => renderMinimap(cy))
+
                 cy.on('tap', 'node', (evt) => {
                   const nodeData = evt.target.data() as Record<string, unknown>
                   setSelectedNode({
@@ -1282,7 +1745,7 @@ export default function NetworkTopologyTab() {
           {chatOpen && (
             <div style={{ width: 360, flexShrink: 0 }}>
               <NetworkTopologyChatPanel
-                subscriptionIds={[]}
+                subscriptionIds={subscriptionIds}
                 topologyContext={topologyContext}
                 nodeIndex={nodeIndex}
                 onHighlight={(ids) => {
@@ -1356,6 +1819,9 @@ export default function NetworkTopologyTab() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Suppress unused variable warning for highlightedNodeIds */}
+      {highlightedNodeIds.size > 0 && null}
     </div>
   )
 }
