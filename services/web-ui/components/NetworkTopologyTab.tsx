@@ -150,9 +150,12 @@ function buildCytoscapeElements(
 // top-border accent per type, clean dark backgrounds, crisp thin edges
 // ---------------------------------------------------------------------------
 
-// Encode SVG for use as a Cytoscape background-image data URI
+// Encode SVG for use as a Cytoscape background-image data URI.
+// width/height="400" forces the browser to rasterize the SVG at 400×400px.
+// Cytoscape then scales that high-res bitmap down to background-width/height
+// for display — giving ~16x resolution headroom before zooming causes blur.
 const svgIcon = (inner: string) => {
-  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${inner}</svg>`
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="400" height="400">${inner}</svg>`
   return `data:image/svg+xml,${encodeURIComponent(svgStr)}`
 }
 
