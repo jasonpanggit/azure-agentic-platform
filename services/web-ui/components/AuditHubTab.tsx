@@ -1,8 +1,10 @@
 'use client'
 import { useState } from 'react'
-import { ClipboardList, GitCommitHorizontal } from 'lucide-react'
+import { ClipboardList, GitCommitHorizontal, Lock, Tag } from 'lucide-react'
 import { AuditLogViewer } from './AuditLogViewer'
 import { TracesTab } from './TracesTab'
+import { LockAuditTab } from './LockAuditTab'
+import { TaggingComplianceTab } from './TaggingComplianceTab'
 
 interface AuditHubTabProps {
   subscriptions: string[]
@@ -11,8 +13,10 @@ interface AuditHubTabProps {
 }
 
 const subTabs = [
-  { id: 'audit-log', label: 'Audit Log', icon: ClipboardList },
-  { id: 'traces', label: 'Agent Traces', icon: GitCommitHorizontal },
+  { id: 'audit-log', label: 'Audit Log',    icon: ClipboardList       },
+  { id: 'traces',    label: 'Agent Traces', icon: GitCommitHorizontal },
+  { id: 'locks',     label: 'Lock Audit',   icon: Lock                },
+  { id: 'tagging',   label: 'Tagging',      icon: Tag                 },
 ]
 
 export function AuditHubTab({ subscriptions, incidentId, initialSubTab }: AuditHubTabProps) {
@@ -42,7 +46,9 @@ export function AuditHubTab({ subscriptions, incidentId, initialSubTab }: AuditH
       </div>
 
       {activeSubTab === 'audit-log' && <AuditLogViewer incidentId={incidentId} />}
-      {activeSubTab === 'traces' && <TracesTab subscriptionId={subscriptions[0]} />}
+      {activeSubTab === 'traces'    && <TracesTab subscriptionId={subscriptions[0]} />}
+      {activeSubTab === 'locks'     && <LockAuditTab subscriptions={subscriptions} />}
+      {activeSubTab === 'tagging'   && <TaggingComplianceTab subscriptionId={subscriptions[0]} />}
     </div>
   )
 }
