@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Bell, Network, Server, ShieldCheck,
   DollarSign, GitBranch, Wrench, ClipboardList, Settings,
-  Building2, Layers,
+  Building2, Layers, Database,
 } from 'lucide-react'
 import { AlertFeed } from './AlertFeed'
 import { AlertFilters } from './AlertFilters'
@@ -21,6 +21,7 @@ import { ChangeHubTab } from './ChangeHubTab'
 import { OperationsHubTab } from './OperationsHubTab'
 import { AuditHubTab } from './AuditHubTab'
 import { AdminHubTab } from './AdminHubTab'
+import { DatabaseHubTab } from './DatabaseHubTab'
 import { useAppState } from '@/lib/app-state-context'
 
 // ─── Tab types ───────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ type TabId =
   | 'cost'
   | 'capacity'
   | 'change'
+  | 'database'
   | 'operations'
   | 'audit'
   | 'admin'
@@ -67,6 +69,7 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'cost',       label: 'Cost',             Icon: DollarSign  },
     { id: 'capacity',   label: 'Capacity & Quota', Icon: Layers      },
     { id: 'change',     label: 'Change',           Icon: GitBranch   },
+    { id: 'database',   label: 'Databases',        Icon: Database    },
     { id: 'operations', label: 'Operations',       Icon: Wrench      },
   ],
   // Audit / admin
@@ -282,6 +285,13 @@ export function DashboardPanel({ onTabChange, onRegisterNavToAlerts }: Dashboard
         {activeTab === 'change' && (
           <div id="tabpanel-change" role="tabpanel" aria-labelledby="tab-change">
             <ChangeHubTab subscriptions={selectedSubscriptions} />
+          </div>
+        )}
+
+        {/* Database hub — Health Overview · Slow Queries · Throughput */}
+        {activeTab === 'database' && (
+          <div id="tabpanel-database" role="tabpanel" aria-labelledby="tab-database">
+            <DatabaseHubTab subscriptions={selectedSubscriptions} />
           </div>
         )}
 
