@@ -29,8 +29,7 @@ class TestApprovalLifecycle:
             "status": "pending",
         }
 
-        result = asyncio.get_event_loop().run_until_complete(
-            create_approval_record(
+        result = create_approval_record(
                 container=mock_cosmos_approvals,
                 thread_id="thread-test-001",
                 incident_id="inc-test-001",
@@ -39,7 +38,6 @@ class TestApprovalLifecycle:
                 resource_snapshot=sample_approval_record["resource_snapshot"],
                 risk_level="high",
             )
-        )
 
         mock_cosmos_approvals.create_item.assert_called_once()
         assert result["status"] == "pending"
@@ -182,8 +180,7 @@ class TestApprovalLifecycle:
             "thread_id": "thread-test-001",
         }
 
-        asyncio.get_event_loop().run_until_complete(
-            create_approval_record(
+        create_approval_record(
                 container=mock_container,
                 thread_id="thread-test-001",
                 incident_id="inc-001",
@@ -192,7 +189,6 @@ class TestApprovalLifecycle:
                 resource_snapshot=snapshot,
                 risk_level="high",
             )
-        )
 
         # write-then-return: runs.create must NOT have been called during parking
         mock_foundry_client.runs.create.assert_not_called()
