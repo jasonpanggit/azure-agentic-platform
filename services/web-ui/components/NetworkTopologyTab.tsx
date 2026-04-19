@@ -886,7 +886,7 @@ function LegendOverlay() {
 
   return (
     <div
-      className="absolute bottom-16 left-3 z-10 flex flex-col items-start gap-1"
+      className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1"
     >
       {open && (
         <div
