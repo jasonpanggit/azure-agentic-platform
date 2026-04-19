@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Server, Monitor, Layers, Box, HardDrive, Globe, GitBranch, AppWindow, MessageSquare } from 'lucide-react'
+import { Server, Monitor, Layers, Box, HardDrive, Globe, GitBranch, AppWindow, MessageSquare, Flame } from 'lucide-react'
 import { ResourcesTab } from './ResourcesTab'
 import { ResourceHierarchyTab } from './ResourceHierarchyTab'
 import { VMTab } from './VMTab'
@@ -11,6 +11,7 @@ import DiskAuditTab from './DiskAuditTab'
 import { AZCoverageTab } from './AZCoverageTab'
 import { AppServiceHealthTab } from './AppServiceHealthTab'
 import { QueueDepthTab } from './QueueDepthTab'
+import FirewallTab from './FirewallTab'
 
 interface ResourcesHubTabProps {
   subscriptions: string[]
@@ -30,6 +31,7 @@ const subTabs = [
   { id: 'resource-hierarchy', label: 'Resource Hierarchy', icon: GitBranch    },
   { id: 'app-services',       label: 'App Services',       icon: AppWindow    },
   { id: 'messaging',          label: 'Messaging',          icon: MessageSquare },
+  { id: 'firewall',           label: 'Firewall',           icon: Flame         },
 ]
 
 export function ResourcesHubTab({
@@ -81,6 +83,7 @@ export function ResourcesHubTab({
       {activeSubTab === 'resource-hierarchy' && <ResourceHierarchyTab subscriptions={subscriptions} />}
       {activeSubTab === 'app-services'       && <AppServiceHealthTab subscriptions={subscriptions} />}
       {activeSubTab === 'messaging'          && <QueueDepthTab subscriptions={subscriptions} />}
+      {activeSubTab === 'firewall'           && <FirewallTab subscriptions={subscriptions} />}
     </div>
   )
 }
