@@ -1978,10 +1978,10 @@ Plans:
 
 **Goal:** Add Azure Firewall sub-tab to Resources hub with Rules Management view (all firewall instances + policy rules via ARG) and Rule Audit view (overlap detection + too-wide rule classification with severity badges and remediation hints).
 **Depends on:** Phase 103
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 104-1: firewall_service.py + firewall_endpoints.py + FirewallTab.tsx + ResourcesHubTab wiring
+- [x] 104-1: firewall_service.py + firewall_endpoints.py + FirewallTab.tsx + ResourcesHubTab wiring
 
 ### Phase 105: Database Hub UI — surface Database agent's 12 tools (Cosmos, PostgreSQL, SQL) in a new DatabaseHubTab with Health Overview, Slow Queries, and Throughput sub-tabs; wire into main navigation
 
