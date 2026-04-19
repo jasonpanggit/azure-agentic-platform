@@ -35,7 +35,7 @@ _MAX_ISSUES_IN_PROMPT = 30     # existing rule issues summarised (not full objec
 # ---------------------------------------------------------------------------
 
 def _cache_key(subscription_ids: List[str]) -> str:
-    return "ai:" + hashlib.md5(",".join(sorted(subscription_ids)).encode()).hexdigest()[:16]
+    return "ai:" + hashlib.md5(",".join(sorted(subscription_ids)).encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +244,7 @@ def _parse_and_validate(raw_text: str) -> List[Dict[str, Any]]:
             severity = "medium"
 
         affected_id = str(item.get("affected_resource_id", ""))
-        issue_id = f"ai-{hashlib.md5(f'{issue_type}:{affected_id}'.encode()).hexdigest()[:12]}"
+        issue_id = f"ai-{hashlib.md5(f'{issue_type}:{affected_id}'.encode(), usedforsecurity=False).hexdigest()[:12]}"
         if issue_id in seen_ids:
             continue
         seen_ids.add(issue_id)
