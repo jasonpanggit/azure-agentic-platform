@@ -2028,6 +2028,19 @@ Plans:
 
 ---
 
+### Phase 109: AI-Powered Network Issue Detection (LLM Analysis Layer)
+
+**Goal:** Augment the 17 rule-based detectors with an async LLM analysis layer that calls the existing Network agent (Azure AI Foundry) to reason over the raw topology JSON and surface issues the rules miss — novel patterns, cross-resource reasoning, and architectural anti-patterns. LLM issues are merged into the unified `NetworkIssue` schema with `source: "ai"` and displayed alongside rule-based issues in the existing issues drawer. Runs async after rule detection so the UI loads instantly.
+
+**Requirements**: TBD
+**Depends on:** Phase 108
+**Plans:** 0/0 plans (run /gsd-plan-phase 109 to break down)
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 109 to break down)
+
+---
+
 ## World-Class v3.0 Success Criteria
 
 When all phases 44–64 complete:
