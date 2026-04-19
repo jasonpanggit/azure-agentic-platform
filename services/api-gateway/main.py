@@ -139,7 +139,6 @@ from services.api_gateway.compliance_endpoints import router as compliance_route
 from services.api_gateway.capacity_endpoints import router as capacity_router
 from services.api_gateway.security_posture_endpoints import router as security_posture_router
 from services.api_gateway.cve_endpoints import router as cve_router
-from services.api_gateway.cve_fleet_endpoints import router as cve_fleet_router
 from services.api_gateway.sla_endpoints import sla_router, admin_sla_router
 from services.api_gateway.subscription_credential_endpoints import router as subscription_credential_router
 from services.api_gateway.war_room import (
@@ -181,7 +180,6 @@ from services.api_gateway.budget_alert_endpoints import router as budget_alert_r
 from services.api_gateway.vnet_peering_endpoints import router as vnet_peering_router
 from services.api_gateway.disk_audit_endpoints import router as disk_audit_router
 from services.api_gateway.lb_health_endpoints import router as lb_health_router
-from services.api_gateway.database_health_endpoints import router as database_health_router
 from services.api_gateway.network_topology_endpoints import router as network_topology_router
 from services.api_gateway.az_coverage_endpoints import router as az_coverage_router
 from services.api_gateway.firewall_endpoints import router as firewall_router
@@ -830,7 +828,6 @@ app.include_router(compliance_router)
 app.include_router(capacity_router)
 app.include_router(security_posture_router)
 app.include_router(cve_router)
-app.include_router(cve_fleet_router)
 app.include_router(sla_router)
 app.include_router(admin_sla_router)
 app.include_router(push_router)
@@ -856,7 +853,6 @@ app.include_router(budget_alert_router)
 app.include_router(vnet_peering_router)
 app.include_router(disk_audit_router)
 app.include_router(lb_health_router)
-app.include_router(database_health_router)
 app.include_router(network_topology_router)
 app.include_router(az_coverage_router)
 app.include_router(firewall_router)
