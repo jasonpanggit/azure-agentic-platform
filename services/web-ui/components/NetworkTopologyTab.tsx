@@ -6,6 +6,8 @@ type CytoscapeStylesheet = cytoscape.StylesheetStyle | cytoscape.StylesheetCSS
 import CytoscapeComponent from 'react-cytoscapejs'
 // @ts-expect-error no types
 import coseBilkent from 'cytoscape-cose-bilkent'
+// @ts-expect-error no types
+import nodeHtmlLabel from 'cytoscape-node-html-label'
 import {
   Network,
   AlertTriangle,
@@ -40,6 +42,9 @@ import NetworkTopologyChatPanel from '@/components/NetworkTopologyChatPanel'
 
 try {
   cytoscape.use(coseBilkent)
+} catch { /* already registered */ }
+try {
+  cytoscape.use(nodeHtmlLabel)
 } catch { /* already registered */ }
 
 // ---------------------------------------------------------------------------
@@ -148,16 +153,11 @@ function buildCytoscapeElements(
 // ---------------------------------------------------------------------------
 // cytoscapeStylesheet — n8n-inspired: uniform roundrect cards, colored
 // top-border accent per type, clean dark backgrounds, crisp thin edges
+//
+// Icons are rendered as real DOM <img> elements via cytoscape-node-html-label
+// (see applyNodeHtmlLabels). This keeps them in the browser's vector pipeline
+// rather than the Cytoscape canvas, so they stay crisp at any zoom level.
 // ---------------------------------------------------------------------------
-
-// Encode SVG for use as a Cytoscape background-image data URI.
-// width/height="400" forces the browser to rasterize the SVG at 400×400px.
-// Cytoscape then scales that high-res bitmap down to background-width/height
-// for display — giving ~16x resolution headroom before zooming causes blur.
-const svgIcon = (inner: string) => {
-  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="400" height="400">${inner}</svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svgStr)}`
-}
 
 // Per-type accent colors
 const TYPE_COLOR: Record<string, string> = {
@@ -180,44 +180,6 @@ const TYPE_COLOR: Record<string, string> = {
   external:       '#475569',
 }
 
-// Filled, bold SVG icons — hold up at any zoom level
-const AZURE_ICONS: Record<string, string> = {
-  // VNet: filled hexagon / network hub
-  vnet: svgIcon('<path fill="white" d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.3L19 8v8l-7 3.9L5 16V8l7-3.7zM12 8a4 4 0 100 8 4 4 0 000-8z"/>'),
-  // Subnet: filled square with inner square
-  subnet: svgIcon('<rect x="3" y="3" width="18" height="18" rx="3" fill="white" opacity=".9"/><rect x="7" y="7" width="10" height="10" rx="1.5" fill="#1e2d45"/>'),
-  // NSG: filled shield
-  nsg: svgIcon('<path fill="white" d="M12 2L4 5.5V11c0 5 3.6 9.3 8 10.5C16.4 20.3 20 16 20 11V5.5L12 2zm0 2.4l6 2.6V11c0 3.8-2.7 7-6 8.4-3.3-1.4-6-4.6-6-8.4V7l6-2.6z"/>'),
-  // VM: filled monitor screen
-  vm: svgIcon('<path fill="white" d="M20 3H4a2 2 0 00-2 2v11a2 2 0 002 2h6v2H8v2h8v-2h-2v-2h6a2 2 0 002-2V5a2 2 0 00-2-2zm0 13H4V5h16v11z"/><rect x="7" y="8" width="10" height="1.5" rx=".75" fill="white"/><rect x="7" y="11" width="7" height="1.5" rx=".75" fill="white"/>'),
-  // VMSS: stacked monitors
-  vmss: svgIcon('<path fill="white" d="M17 4H5a2 2 0 00-2 2v8a2 2 0 002 2h5v2H8v2h8v-2h-2v-2h3a2 2 0 002-2V6a2 2 0 00-2-2zm0 10H5V6h12v8z"/><path fill="white" opacity=".5" d="M19 2h-1v12h1a1 1 0 001-1V3a1 1 0 00-1-1z"/>'),
-  // AKS: filled kubernetes wheel — hub + 3 spokes + circles
-  aks: svgIcon('<circle cx="12" cy="12" r="3" fill="white"/><circle cx="12" cy="4" r="2" fill="white"/><circle cx="12" cy="20" r="2" fill="white"/><circle cx="4.5" cy="16" r="2" fill="white"/><circle cx="19.5" cy="16" r="2" fill="white"/><line x1="12" y1="7" x2="12" y2="9" stroke="white" stroke-width="2"/><line x1="12" y1="15" x2="12" y2="18" stroke="white" stroke-width="2"/><line x1="6.2" y1="14.5" x2="10" y2="13.2" stroke="white" stroke-width="2"/><line x1="14" y1="10.8" x2="17.8" y2="14.5" stroke="white" stroke-width="2"/>'),
-  // LB: filled balance / distribution symbol
-  lb: svgIcon('<rect x="11" y="3" width="2" height="5" rx="1" fill="white"/><rect x="5" y="8" width="14" height="2" rx="1" fill="white"/><rect x="4" y="14" width="6" height="5" rx="1" fill="white"/><rect x="14" y="14" width="6" height="5" rx="1" fill="white"/><rect x="7" y="10" width="2" height="4" rx="1" fill="white"/><rect x="15" y="10" width="2" height="4" rx="1" fill="white"/>'),
-  // AppGW: filled gateway / funnel shape
-  appgw: svgIcon('<path fill="white" d="M4 5h16l-6 7v6l-4-2v-4L4 5z"/>'),
-  // VPN/ER Gateway: filled house/arrow-up
-  gateway: svgIcon('<path fill="white" d="M12 2L2 12h4v8h5v-5h2v5h5v-8h4L12 2z"/>'),
-  // Firewall: filled flame
-  firewall: svgIcon('<path fill="white" d="M12 2C9 6 7 8 8 12c.5 2 2 3.5 2 3.5S8.5 14 8 12C6 16 9 22 12 22s6-6 4-10c0 0-.5 2.5-2 3 1-4-1-9-2-13z"/>'),
-  // Private Endpoint: filled plug / connector
-  pe: svgIcon('<circle cx="12" cy="12" r="4" fill="white"/><path fill="white" d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="white" stroke-width="2" stroke-linecap="round"/><path stroke="white" stroke-width="2" stroke-linecap="round" d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'),
-  // Public IP: filled globe
-  publicip: svgIcon('<path fill="white" d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 2c.8 0 2 1.7 2.7 4H9.3C10 5.7 11.2 4 12 4zm-4.7 4h9.4c.2.6.3 1.3.3 2H7c0-.7.1-1.4.3-2zM4 12h16a8 8 0 01-.3 2H4.3A8 8 0 014 12zm.7 4h14.6C17.6 19 15 21.5 12 21.9 9 21.5 6.4 19 4.7 16z"/>'),
-  // Route Table: filled list with arrow
-  routetable: svgIcon('<rect x="3" y="4" width="18" height="3" rx="1" fill="white"/><rect x="3" y="9" width="18" height="3" rx="1" fill="white"/><rect x="3" y="14" width="11" height="3" rx="1" fill="white"/><path fill="white" d="M17 17l4-4-4-4v3h-3v2h3v3z"/>'),
-  // Local Gateway: filled building / on-premise
-  localgw: svgIcon('<path fill="white" d="M3 9l9-7 9 7v11H3V9zm2 1v9h14V10l-7-5.4L5 10zm4 9v-5h6v5H9z"/>'),
-  // NAT Gateway: filled arrow through barrier
-  natgw: svgIcon('<rect x="13" y="5" width="2.5" height="14" rx="1.25" fill="white"/><path fill="white" d="M2 11h10v2H2zm8-4l5 5-5 5V7z"/>'),
-  // Firewall Policy: filled stacked layers
-  firewallpolicy: svgIcon('<rect x="3" y="4" width="18" height="5" rx="1.5" fill="white"/><rect x="3" y="11" width="18" height="5" rx="1.5" fill="white" opacity=".7"/><rect x="3" y="17" width="11" height="4" rx="1.5" fill="white" opacity=".4"/>'),
-  // External: filled external link
-  external: svgIcon('<path fill="white" d="M5 5h6v2H7v10h10v-4h2v6H5V5zm9 0h5v5h-2V8.4l-6.3 6.3-1.4-1.4L15.6 7H14V5z"/>'),
-}
-
 const NODE_W = '168px'
 const NODE_H = '48px'
 
@@ -230,7 +192,7 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
       'font-weight': '500',
-      // text-halign center + positive margin-x nudges label right of icon area
+      // Label nudged right to leave room for the HTML icon overlay on the left
       'text-valign': 'center',
       'text-halign': 'center',
       'text-wrap': 'ellipsis',
@@ -243,29 +205,20 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       shape: 'roundrectangle',
       width: NODE_W,
       height: NODE_H,
-      // Icon sits in left 30px of the card
-      'background-width': '20px',
-      'background-height': '20px',
-      'background-position-x': '12px',
-      'background-position-y': '50%',
-      'background-fit': 'none',
-      'background-clip': 'none',
-      'background-image-opacity': 0.85,
     },
   },
-  // ── Per-type: accent border + icon ───────────────────────────────────────
+  // ── Per-type: accent border only (icon rendered via nodeHtmlLabel) ────────
   ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
       'border-color': color,
       'border-width': 2,
-      'background-image': AZURE_ICONS[type] ?? 'none',
     } as Record<string, unknown>,
   })),
   // VNet is slightly larger and bolder
   { selector: 'node[type="vnet"]',    style: { 'font-weight': '600', width: '178px', height: '52px' } },
   { selector: 'node[type="subnet"]',  style: { 'background-color': '#141d2e', 'border-width': 1, 'border-style': 'dashed' } },
-  { selector: 'node[type="external"]',style: { 'background-color': '#111827', 'border-style': 'dashed', color: '#6b7280', 'background-image': AZURE_ICONS.external } as Record<string, unknown> },
+  { selector: 'node[type="external"]',style: { 'background-color': '#111827', 'border-style': 'dashed', color: '#6b7280' } as Record<string, unknown> },
   // ── Health overlays ───────────────────────────────────────────────────────
   { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2 } },
   { selector: 'node[health="red"]',    style: { 'border-color': '#ef4444', 'border-width': 2.5 } },
@@ -1654,6 +1607,24 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               } as cytoscape.LayoutOptions}
               cy={(cy: Core) => {
                 cyRef.current = cy
+
+                // ── Azure icon overlays (DOM-rendered, stays crisp at any zoom) ─
+                // cytoscape-node-html-label places a real <img> element on each
+                // node via an absolutely-positioned div over the canvas. The browser
+                // renders the SVG in its own vector pipeline — no canvas rasterisation,
+                // so icons stay sharp no matter how far you zoom in.
+                ;(cy as Core & { nodeHtmlLabel: (cfg: unknown[]) => void }).nodeHtmlLabel([{
+                  query: 'node[type]',
+                  valign: 'center',
+                  halign: 'left',
+                  valignBox: 'center',
+                  halignBox: 'left',
+                  tpl: (data: Record<string, unknown>) => {
+                    const type = (data.type as string) ?? ''
+                    const src = `/icons/azure/${type}.svg`
+                    return `<img src="${src}" width="22" height="22" style="margin-left:10px;display:block;pointer-events:none;" onerror="this.style.display='none'">`
+                  },
+                }])
 
                 // ── Edge animation loop ──────────────────────────────────────
                 // Tier 1: marching-ants on dashed membership edges (line-dash-offset)
