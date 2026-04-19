@@ -6,8 +6,6 @@ type CytoscapeStylesheet = cytoscape.StylesheetStyle | cytoscape.StylesheetCSS
 import CytoscapeComponent from 'react-cytoscapejs'
 // @ts-expect-error no types
 import coseBilkent from 'cytoscape-cose-bilkent'
-// @ts-expect-error no types
-import nodeHtmlLabel from 'cytoscape-node-html-label'
 import {
   Network,
   AlertTriangle,
@@ -42,9 +40,6 @@ import NetworkTopologyChatPanel from '@/components/NetworkTopologyChatPanel'
 
 try {
   cytoscape.use(coseBilkent)
-} catch { /* already registered */ }
-try {
-  cytoscape.use(nodeHtmlLabel)
 } catch { /* already registered */ }
 
 // ---------------------------------------------------------------------------
@@ -215,16 +210,23 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'outline-width': 0,
     },
   },
-  // ── Per-type: 3px colored left-border accent (background gradient trick) ──
-  // We use background-gradient to paint a sharp left accent band:
-  //   stop 0 = accent color, stop at ~3px from left = accent, then white
-  // Cytoscape supports background-gradient-stop-colors + background-gradient-direction
+  // ── Per-type: colored border accent + background icon (native Cytoscape background-image) ──
+  // Icons are rendered as Cytoscape background images, always inside the node boundary.
+  // background-position-x: 8px places the icon 8px from the node's left edge.
   ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
       'border-color': color,
       'border-width': 2,
       'border-opacity': 0.8,
+      'background-image': `url(/icons/azure/${type}.svg)`,
+      'background-fit': 'none',
+      'background-width': '20px',
+      'background-height': '20px',
+      'background-position-x': '8px',
+      'background-position-y': '50%',
+      'background-image-opacity': 1,
+      'background-clip': 'none',
     } as Record<string, unknown>,
   })),
   // VNet — light blue fill, more prominent
@@ -1655,27 +1657,6 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               } as cytoscape.LayoutOptions}
               cy={(cy: Core) => {
                 cyRef.current = cy
-
-                // ── Azure icon overlays (DOM-rendered, stays crisp at any zoom) ─
-                // cytoscape-node-html-label places a real <img> element on each
-                // node via an absolutely-positioned div over the canvas. The browser
-                // renders the SVG in its own vector pipeline — no canvas rasterisation,
-                // so icons stay sharp no matter how far you zoom in.
-                ;(cy as Core & { nodeHtmlLabel: (cfg: unknown[]) => void }).nodeHtmlLabel([{
-                  query: 'node[type]',
-                  // Anchor the HTML container to the node's left-center edge.
-                  // halignBox:'left' means the left edge of the element aligns to
-                  // that anchor, so margin-left places the icon inside the card.
-                  valign: 'center',
-                  halign: 'left',
-                  valignBox: 'center',
-                  halignBox: 'left',
-                  tpl: (data: Record<string, unknown>) => {
-                    const type = (data.type as string) ?? ''
-                    const src = `/icons/azure/${type}.svg`
-                    return `<div style="width:22px;height:22px;margin-left:8px;pointer-events:none;display:flex;align-items:center;justify-content:center;"><img src="${src}" width="20" height="20" style="display:block;pointer-events:none;" onerror="this.style.display='none'"></div>`
-                  },
-                }])
 
                 // ── Edge animation loop ──────────────────────────────────────
                 // Tier 1: marching-ants on dashed membership edges (line-dash-offset)
