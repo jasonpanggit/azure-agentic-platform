@@ -1663,14 +1663,18 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 // so icons stay sharp no matter how far you zoom in.
                 ;(cy as Core & { nodeHtmlLabel: (cfg: unknown[]) => void }).nodeHtmlLabel([{
                   query: 'node[type]',
+                  // center the label container on the node, then offset the icon
+                  // left via a wrapper so it sits inside the card at the left edge
                   valign: 'center',
                   halign: 'left',
                   valignBox: 'center',
-                  halignBox: 'left',
+                  halignBox: 'center',
                   tpl: (data: Record<string, unknown>) => {
                     const type = (data.type as string) ?? ''
                     const src = `/icons/azure/${type}.svg`
-                    return `<img src="${src}" width="22" height="22" style="margin-left:10px;display:block;pointer-events:none;" onerror="this.style.display='none'">`
+                    // The container is centered on the node. We offset it to the left
+                    // so the icon lands at roughly x=8px from the node's left edge.
+                    return `<div style="width:22px;height:22px;transform:translateX(-72px);pointer-events:none;display:flex;align-items:center;justify-content:center;"><img src="${src}" width="20" height="20" style="display:block;pointer-events:none;" onerror="this.style.display='none'"></div>`
                   },
                 }])
 
