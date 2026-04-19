@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-19 - Completed quick task 260419-ikw: Animate edges in network topology map tab — marching-ants on dashed membership edges, width-pulse on solid traffic edges, all via RAF loop with cleanup on unmount.
+
 > Last activity: 2026-04-19 - Completed quick task 260419-c09: Fix Storage agent stub tools — query_storage_metrics, query_blob_diagnostics, query_file_sync_health now make real Azure SDK calls (MonitorManagementClient, LogsQueryClient, StorageSyncManagementClient).
 
 > Last activity: 2026-04-19 - Completed quick task 260419-bx5: Wire 9 orphaned tabs into hub navigation — NsgAuditTab→NetworkHub, PolicyComplianceTab+AlertCoverageTab+VMExtensionAuditTab→SecurityHub, CostAnomalyTab→CostHub, LockAuditTab+TaggingComplianceTab→AuditHub, AppServiceHealthTab+QueueDepthTab→ResourcesHub.
@@ -433,6 +435,9 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260414-nw4 | resolve merge conflicts in PR 81 | 2026-04-14 | 1f5b782 | [260414-nw4-resolve-merge-conflicts-in-pr-81](./quick/260414-nw4-resolve-merge-conflicts-in-pr-81/) |
 | 260414-o65 | fix CI failures - missing agent spec files and terraform required variables | 2026-04-14 | 8e782d5 | [260414-o65-fix-ci-failures-missing-agent-spec-files](./quick/260414-o65-fix-ci-failures-missing-agent-spec-files/) |
 | 260418-jz2 | Move current TopologyTab to under Resources tab and rename to Resource Hierarchy | 2026-04-18 | 87c619d | [260418-jz2-move-current-topologytab-to-under-resour](./quick/260418-jz2-move-current-topologytab-to-under-resour/) |
+| 260419-bx5 | Wire 9 orphaned tabs into hub navigation | 2026-04-19 | e181100 | [260419-bx5-wire-9-orphaned-tabs-into-hub-navigation](./quick/260419-bx5-wire-9-orphaned-tabs-into-hub-navigation/) |
+| 260419-c09 | Fix Storage agent stub tools (query_storage_metrics, query_blob_diagnostics, query_file_sync_health) | 2026-04-19 | a955c90 | [260419-c09-fix-storage-agent-stub-tools](./quick/260419-c09-fix-storage-agent-stub-tools/) |
+| 260419-ikw | Animate edges in network topology map tab | 2026-04-19 | e749ba7 | [260419-ikw-animate-the-edges-in-network-topology-ma](./quick/260419-ikw-animate-the-edges-in-network-topology-ma/) |
 | 260418-nxb | Restructure web UI tab IA: split Cost tab into Cost (spend/budgets) and Capacity & Quota (resource limits/planning) | 2026-04-18 | b390e0d | [260418-nxb-restructure-web-ui-tab-information-archi](./quick/260418-nxb-restructure-web-ui-tab-information-archi/) |
 
 ---
