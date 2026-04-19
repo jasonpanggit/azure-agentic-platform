@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ShieldCheck, FileCheck, Key, BadgeCheck, DatabaseBackup, HardDrive, FileText, BellRing, Puzzle } from 'lucide-react'
+import { ShieldCheck, FileCheck, Key, BadgeCheck, DatabaseBackup, HardDrive, FileText, BellRing, Puzzle, Bug } from 'lucide-react'
 import { SecurityPostureTab } from './SecurityPostureTab'
 import { ComplianceTab } from './ComplianceTab'
 import { IdentityRiskTab } from './IdentityRiskTab'
@@ -11,6 +11,7 @@ import { StorageSecurityTab } from './StorageSecurityTab'
 import { PolicyComplianceTab } from './PolicyComplianceTab'
 import { AlertCoverageTab } from './AlertCoverageTab'
 import { VMExtensionAuditTab } from './VMExtensionAuditTab'
+import { CVEFleetTab } from './CVEFleetTab'
 
 export interface SecurityHubTabProps {
   subscriptions: string[]
@@ -27,6 +28,7 @@ const subTabs = [
   { id: 'policy',           label: 'Policy',            icon: FileText       },
   { id: 'alert-coverage',   label: 'Alert Coverage',    icon: BellRing       },
   { id: 'vm-extensions',    label: 'VM Extensions',     icon: Puzzle         },
+  { id: 'cve-exposure',     label: 'CVE Exposure',       icon: Bug            },
 ]
 
 export function SecurityHubTab({ subscriptions, initialSubTab }: SecurityHubTabProps) {
@@ -67,6 +69,7 @@ export function SecurityHubTab({ subscriptions, initialSubTab }: SecurityHubTabP
         {activeSubTab === 'policy'          && <PolicyComplianceTab subscriptions={subscriptions} />}
         {activeSubTab === 'alert-coverage'  && <AlertCoverageTab subscriptionId={subscriptions[0]} />}
         {activeSubTab === 'vm-extensions'   && <VMExtensionAuditTab subscriptionId={subscriptions[0]} />}
+        {activeSubTab === 'cve-exposure'     && <CVEFleetTab subscriptions={subscriptions} />}
       </div>
     </div>
   )
