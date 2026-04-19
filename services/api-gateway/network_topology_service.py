@@ -50,6 +50,7 @@ class NetworkIssue(TypedDict, total=False):
     dest_nsg_id: Optional[str]
     port: Optional[int]
     description: Optional[str]
+    source: Optional[str]  # "rule" | "ai" | None — added Phase 109
 
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}

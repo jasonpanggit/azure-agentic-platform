@@ -26,6 +26,10 @@ from services.api_gateway.network_topology_service import (
     evaluate_path_check,
     fetch_network_topology,
 )
+from services.api_gateway.network_topology_ai import (
+    get_ai_issues,
+    trigger_ai_analysis,
+)
 from services.api_gateway import arg_cache
 from services.api_gateway.network_remediation import (
     SAFE_NETWORK_ACTIONS,
@@ -83,6 +87,9 @@ async def get_topology(
     subscription_ids = resolve_subscription_ids(subscription_id, request)
     result = fetch_network_topology(subscription_ids, credential=credential)
 
+    # Phase 109: kick off async AI analysis (fire-and-forget)
+    trigger_ai_analysis(subscription_ids, result)
+
     duration_ms = (time.monotonic() - start_time) * 1000
     logger.info(
         "GET /network-topology → nodes=%d edges=%d issues=%d (%.0fms)",
@@ -90,6 +97,29 @@ async def get_topology(
         len(result.get("edges", [])),
         len(result.get("issues", [])),
         duration_ms,
+    )
+    return result
+
+
+@router.get("/ai-issues")
+async def get_ai_issues_endpoint(
+    request: Request,
+    subscription_id: Optional[str] = Query(None, description="Filter by subscription ID"),
+    token: Dict[str, Any] = Depends(verify_token),
+) -> Dict[str, Any]:
+    """Return AI-detected network issues from the async analysis layer.
+
+    Returns {"status": "pending"|"ready"|"error", "issues": [...], "error": str|None}.
+    The client polls this endpoint every 3s after loading topology until status == "ready".
+    Issues have source="ai" and IDs prefixed with "ai-".
+    """
+    start_time = time.monotonic()
+    subscription_ids = resolve_subscription_ids(subscription_id, request)
+    result = get_ai_issues(subscription_ids)
+    duration_ms = (time.monotonic() - start_time) * 1000
+    logger.info(
+        "GET /network-topology/ai-issues → status=%s issues=%d (%.0fms)",
+        result.get("status"), len(result.get("issues", [])), duration_ms,
     )
     return result
 
