@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional
 
 from agent_framework import ai_function
 
-from shared.approval_manager import create_approval_record
 from shared.auth import get_agent_identity, get_credential
 from shared.otel import instrument_tool_call, setup_telemetry
 
@@ -375,7 +374,6 @@ def propose_remediation(
     description: str,
     risk_level: str,
     reversibility: str,
-    thread_id: str = "",
 ) -> Dict[str, Any]:
     """Produce a structured remediation proposal for operator review (REMEDI-001).
 
@@ -392,12 +390,10 @@ def propose_remediation(
         description: Human-readable description of the proposed action.
         risk_level: One of "low", "medium", "high", "critical".
         reversibility: Human-readable reversibility description.
-        thread_id: Foundry thread ID for tracing (optional).
 
     Returns:
         Dict with mandatory requires_approval=True (REMEDI-001) and all proposal fields.
     """
-    start_time = time.monotonic()
     agent_id = get_agent_identity()
     tool_params = {
         "incident_id": incident_id,
@@ -416,46 +412,8 @@ def propose_remediation(
         tool_name="propose_remediation",
         tool_parameters=tool_params,
         correlation_id="",
-        thread_id=thread_id,
+        thread_id="",
     ):
-        proposal = {
-            "action": action_type,
-            "description": description,
-            "affected_resources": affected_resources,
-            "target_resources": affected_resources,
-            "hypothesis": hypothesis,
-            "reversibility": reversibility,
-            "estimated_impact": "Review required before any action is taken.",
-            "reversible": True,
-        }
-
-        try:
-            record = create_approval_record(
-                container=None,
-                thread_id=thread_id,
-                incident_id=incident_id,
-                agent_name="sre-agent",
-                proposal=proposal,
-                resource_snapshot={
-                    "affected_resources": affected_resources,
-                    "hypothesis": hypothesis,
-                },
-                risk_level=risk_level,
-            )
-            approval_id = record.get("id", "") if isinstance(record, dict) else getattr(record, "id", "")
-            logger.info(
-                "propose_remediation: approval written | approval_id=%s incident_id=%s",
-                approval_id, incident_id,
-            )
-        except Exception as exc:
-            logger.warning(
-                "propose_remediation: cosmos write failed (returning log-only) | error=%s",
-                exc,
-            )
-            approval_id = ""
-
-        duration_ms = int((time.monotonic() - start_time) * 1000)
-
         return {
             "incident_id": incident_id,
             "hypothesis": hypothesis,
@@ -467,9 +425,6 @@ def propose_remediation(
             # REMEDI-001: All remediation proposals require explicit human approval.
             # The SRE Agent MUST NOT execute any action without operator confirmation.
             "requires_approval": True,
-            "approval_id": approval_id,
-            "status": "pending_approval" if approval_id else "pending_review",
-            "duration_ms": duration_ms,
         }
 
 

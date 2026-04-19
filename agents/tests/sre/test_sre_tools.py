@@ -7,7 +7,7 @@ Pattern follows agents/tests/patch/test_patch_tools.py.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import os
 
@@ -293,9 +293,8 @@ class TestProposeRemediation:
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_test-uuid"})
     def test_returns_success_with_approval_required(
-        self, mock_create_approval, mock_identity, mock_instrument
+        self, mock_identity, mock_instrument
     ):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
@@ -314,14 +313,11 @@ class TestProposeRemediation:
 
         assert result["requires_approval"] is True
         assert result["incident_id"] == "inc-001"
-        assert "approval_id" in result
-        assert result["status"] in ("pending_approval", "pending_review")
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_test-uuid"})
     def test_contains_all_required_fields(
-        self, mock_create_approval, mock_identity, mock_instrument
+        self, mock_identity, mock_instrument
     ):
         mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
@@ -345,62 +341,6 @@ class TestProposeRemediation:
         ]
         for field in required_fields:
             assert field in result, f"Missing field: {field}"
-
-    @patch("agents.sre.tools.instrument_tool_call")
-    @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_xyz"})
-    def test_cosmos_write_called_with_correct_args(
-        self, mock_create_approval, mock_identity, mock_instrument
-    ):
-        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
-        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
-
-        from agents.sre.tools import propose_remediation
-
-        propose_remediation(
-            incident_id="inc-003",
-            hypothesis="CPU spike",
-            affected_resources=["/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1"],
-            action_type="scale_up",
-            description="Scale up VM to handle load spike",
-            risk_level="medium",
-            reversibility="Fully reversible — scale back down after load normalises",
-            thread_id="thread-abc",
-        )
-
-        mock_create_approval.assert_called_once()
-        call_kwargs = mock_create_approval.call_args
-        assert call_kwargs.kwargs["agent_name"] == "sre-agent"
-        assert call_kwargs.kwargs["incident_id"] == "inc-003"
-        assert call_kwargs.kwargs["risk_level"] == "medium"
-        assert call_kwargs.kwargs["thread_id"] == "thread-abc"
-        assert call_kwargs.kwargs["container"] is None
-
-    @patch("agents.sre.tools.instrument_tool_call")
-    @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, side_effect=ValueError("COSMOS_ENDPOINT not set"))
-    def test_cosmos_write_failure_is_non_fatal(
-        self, mock_create_approval, mock_identity, mock_instrument
-    ):
-        mock_instrument.return_value.__enter__ = MagicMock(return_value=MagicMock())
-        mock_instrument.return_value.__exit__ = MagicMock(return_value=False)
-
-        from agents.sre.tools import propose_remediation
-
-        result = propose_remediation(
-            incident_id="inc-004",
-            hypothesis="Disk full",
-            affected_resources=["/sub/disk-1"],
-            action_type="escalate",
-            description="Escalate disk full to storage team",
-            risk_level="high",
-            reversibility="N/A",
-        )
-
-        # Must not raise — fallback to log-only mode
-        assert result["requires_approval"] is True
-        assert result["approval_id"] == ""
-        assert result["status"] == "pending_review"
 
 
 # ---------------------------------------------------------------------------
