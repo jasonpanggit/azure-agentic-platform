@@ -127,10 +127,12 @@ export function CVEFleetTab({ subscriptions, onViewDetails }: CVEFleetTabProps) 
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
-      subscriptions.forEach(s => params.append('subscriptions', s))
+      // Backend expects comma-separated subscriptions (Optional[str])
+      const subParam = subscriptions.length > 0
+        ? `?subscriptions=${encodeURIComponent(subscriptions.join(','))}`
+        : ''
 
-      const res = await fetch(`/api/proxy/cve/fleet?${params}`)
+      const res = await fetch(`/api/proxy/cve/fleet${subParam}`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error ?? `HTTP ${res.status}`)

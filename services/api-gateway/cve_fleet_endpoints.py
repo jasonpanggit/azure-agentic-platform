@@ -186,7 +186,7 @@ def _summarise_cve_list(cve_list: List[Dict[str, Any]]) -> Dict[str, Any]:
             2
         )
     )
-    top_cves = [c["cve_id"] for c in unpatched[:3]]
+    top_cves = [c.get("cve_id", "") for c in unpatched[:3] if c.get("cve_id")]
 
     # Patch status: worst unpatched severity
     if critical > 0:
