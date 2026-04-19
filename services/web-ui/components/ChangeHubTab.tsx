@@ -1,10 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { ShieldCheck, GitPullRequest, GitBranch, Wrench } from 'lucide-react'
+import { ShieldCheck, GitPullRequest, GitBranch, Wrench, Zap } from 'lucide-react'
 import { PatchTab } from './PatchTab'
 import { DeploymentTab } from './DeploymentTab'
 import { DriftTab } from './DriftTab'
 import { MaintenanceTab } from './MaintenanceTab'
+import { ChangeIntelligenceTab } from './ChangeIntelligenceTab'
 
 interface ChangeHubTabProps {
   subscriptions: string[]
@@ -12,10 +13,11 @@ interface ChangeHubTabProps {
 }
 
 const subTabs = [
-  { id: 'patch', label: 'Patch Management', icon: ShieldCheck },
-  { id: 'deployments', label: 'Deployments', icon: GitPullRequest },
-  { id: 'drift', label: 'IaC Drift', icon: GitBranch },
-  { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+  { id: 'patch',              label: 'Patch Management',    icon: ShieldCheck   },
+  { id: 'deployments',        label: 'Deployments',         icon: GitPullRequest },
+  { id: 'drift',              label: 'IaC Drift',           icon: GitBranch     },
+  { id: 'maintenance',        label: 'Maintenance',         icon: Wrench        },
+  { id: 'change-intelligence', label: 'Change Intelligence', icon: Zap          },
 ]
 
 export function ChangeHubTab({ subscriptions, initialSubTab }: ChangeHubTabProps) {
@@ -48,6 +50,7 @@ export function ChangeHubTab({ subscriptions, initialSubTab }: ChangeHubTabProps
       {activeSubTab === 'deployments' && <DeploymentTab resourceGroup={undefined} />}
       {activeSubTab === 'drift' && <DriftTab subscriptionId={subscriptions[0]} />}
       {activeSubTab === 'maintenance' && <MaintenanceTab subscriptions={subscriptions} />}
+      {activeSubTab === 'change-intelligence' && <ChangeIntelligenceTab subscriptions={subscriptions} />}
     </div>
   )
 }

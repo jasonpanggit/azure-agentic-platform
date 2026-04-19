@@ -62,15 +62,15 @@ const TAB_GROUPS: TabDef[][] = [
     { id: 'alerts',     label: 'Alerts',     Icon: Bell },
     { id: 'resources',  label: 'Resources',  Icon: Server },
     { id: 'network',    label: 'Network',    Icon: Network },
+    { id: 'security',   label: 'Security',   Icon: ShieldCheck },
   ],
-  // Security / cost / change
+  // Cost / change / databases
   [
-    { id: 'security',   label: 'Security',         Icon: ShieldCheck },
-    { id: 'cost',       label: 'Cost',             Icon: DollarSign  },
-    { id: 'capacity',   label: 'Capacity & Quota', Icon: Layers      },
-    { id: 'change',     label: 'Change',           Icon: GitBranch   },
-    { id: 'database',   label: 'Databases',        Icon: Database    },
-    { id: 'operations', label: 'Operations',       Icon: Wrench      },
+    { id: 'cost',       label: 'Cost',       Icon: DollarSign  },
+    { id: 'capacity',   label: 'Capacity',   Icon: Layers      },
+    { id: 'change',     label: 'Change',     Icon: GitBranch   },
+    { id: 'database',   label: 'Databases',  Icon: Database    },
+    { id: 'operations', label: 'Operations', Icon: Wrench      },
   ],
   // Audit / admin
   [
