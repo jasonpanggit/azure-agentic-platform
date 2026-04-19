@@ -76,7 +76,7 @@ class TestAuditTrail:
             "snapshot_hash": "b" * 64,
         }
 
-        await create_approval_record(
+        create_approval_record(
             container=mock_cosmos_approvals,
             thread_id="thread-test-001",
             incident_id="inc-test-001",
