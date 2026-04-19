@@ -292,17 +292,17 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     style: { 'line-color': '#0f172a', 'target-arrow-shape': 'none', width: 0.5, opacity: 0.3 },
   },
   // Subnet member edges — subtle dashes, no arrow
-  { selector: 'edge[type="subnet-vm"]',    style: { 'line-color': '#22c55e',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-vmss"]',  style: { 'line-color': '#34d399',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-nsg"]',   style: { 'line-color': '#f43f5e',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
-  { selector: 'edge[type="subnet-aks"]',   style: { 'line-color': '#0ea5e9',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-lb"]',    style: { 'line-color': '#a78bfa',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-appgw"]', style: { 'line-color': '#fb923c',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-pe"]',    style: { 'line-color': '#818cf8',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-gateway"]',style:{ 'line-color': '#fbbf24',  'line-style': 'dashed', width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
-  { selector: 'edge[type="subnet-firewall"]',style:{'line-color': '#ef4444',  'line-style': 'dashed', width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
-  { selector: 'edge[type="subnet-routetable"]', style: { 'line-color': '#4ade80', 'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
-  { selector: 'edge[type="subnet-natgw"]', style: { 'line-color': '#2dd4bf',  'line-style': 'dashed', width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-vm"]',    style: { 'line-color': '#22c55e',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-vmss"]',  style: { 'line-color': '#34d399',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-nsg"]',   style: { 'line-color': '#f43f5e',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
+  { selector: 'edge[type="subnet-aks"]',   style: { 'line-color': '#0ea5e9',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-lb"]',    style: { 'line-color': '#a78bfa',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-appgw"]', style: { 'line-color': '#fb923c',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-pe"]',    style: { 'line-color': '#818cf8',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-gateway"]',style:{ 'line-color': '#fbbf24',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-firewall"]',style:{'line-color': '#ef4444',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-routetable"]', style: { 'line-color': '#4ade80', 'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
+  { selector: 'edge[type="subnet-natgw"]', style: { 'line-color': '#2dd4bf',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
   // Traffic edges — solid with arrow
   { selector: 'edge[type="peering"]',            style: { 'line-color': '#3b82f6', 'target-arrow-color': '#3b82f6', width: 2, opacity: 1 } },
   { selector: 'edge[type="peering-disconnected"]',style: { 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'line-style': 'dashed', width: 2, opacity: 0.9 } },
@@ -914,6 +914,7 @@ interface NetworkTopologyTabProps {
 export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopologyTabProps) {
   const cyRef = useRef<Core | null>(null)
   const miniCanvasRef = useRef<HTMLCanvasElement>(null)
+  const animFrameRef = useRef<number | null>(null)
   const [elements, setElements] = useState<ElementDefinition[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1083,6 +1084,15 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
     const interval = setInterval(fetchData, REFRESH_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  // Cancel animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current)
+      }
+    }
+  }, [])
 
   // Apply search highlighting / dimming
   useEffect(() => {
@@ -1644,6 +1654,33 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               } as cytoscape.LayoutOptions}
               cy={(cy: Core) => {
                 cyRef.current = cy
+
+                // ── Edge animation loop ──────────────────────────────────────
+                // Tier 1: marching-ants on dashed membership edges (line-dash-offset)
+                // Tier 2: subtle width pulse on solid traffic edges (sine wave)
+                const DASHED_SELECTOR = [
+                  'edge[type="subnet-vm"]', 'edge[type="subnet-vmss"]', 'edge[type="subnet-nsg"]',
+                  'edge[type="subnet-aks"]', 'edge[type="subnet-lb"]', 'edge[type="subnet-appgw"]',
+                  'edge[type="subnet-pe"]', 'edge[type="subnet-gateway"]', 'edge[type="subnet-firewall"]',
+                  'edge[type="subnet-routetable"]', 'edge[type="subnet-natgw"]',
+                ].join(', ')
+                const TRAFFIC_SELECTOR = [
+                  'edge[type="peering"]', 'edge[type="vpn-connection"]',
+                  'edge[type="lb-backend"]', 'edge[type="resource-publicip"]', 'edge[type="firewall-policy"]',
+                ].join(', ')
+                let offset = 0
+                let tick = 0
+                const animate = () => {
+                  offset = (offset + 0.4) % 20
+                  tick += 0.04
+                  cy.batch(() => {
+                    cy.edges(DASHED_SELECTOR).style('line-dash-offset', -offset)
+                    const w = 1.5 + Math.sin(tick) * 0.4
+                    cy.edges(TRAFFIC_SELECTOR).style('width', w)
+                  })
+                  animFrameRef.current = requestAnimationFrame(animate)
+                }
+                animFrameRef.current = requestAnimationFrame(animate)
 
                 // Minimap
                 cy.on('render', () => renderMinimap(cy))
