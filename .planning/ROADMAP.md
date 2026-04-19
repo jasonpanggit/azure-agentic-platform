@@ -1976,13 +1976,12 @@ Plans:
 
 ### Phase 104: add azure firewall tab under resources tab. besides rules management, audit rules to show which are overlapped and can be consolidated, which are too wide and should be tightened up
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Add Azure Firewall sub-tab to Resources hub with Rules Management view (all firewall instances + policy rules via ARG) and Rule Audit view (overlap detection + too-wide rule classification with severity badges and remediation hints).
 **Depends on:** Phase 103
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 104 to break down)
+- [ ] 104-1: firewall_service.py + firewall_endpoints.py + FirewallTab.tsx + ResourcesHubTab wiring
 
 ---
 
