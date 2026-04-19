@@ -293,7 +293,7 @@ class TestProposeRemediation:
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_test-uuid"})
+    @patch("agents.sre.tools.create_approval_record", return_value={"id": "appr_test-uuid"})
     def test_returns_success_with_approval_required(
         self, mock_create_approval, mock_identity, mock_instrument
     ):
@@ -319,7 +319,7 @@ class TestProposeRemediation:
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_test-uuid"})
+    @patch("agents.sre.tools.create_approval_record", return_value={"id": "appr_test-uuid"})
     def test_contains_all_required_fields(
         self, mock_create_approval, mock_identity, mock_instrument
     ):
@@ -348,7 +348,7 @@ class TestProposeRemediation:
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, return_value={"id": "appr_xyz"})
+    @patch("agents.sre.tools.create_approval_record", return_value={"id": "appr_xyz"})
     def test_cosmos_write_called_with_correct_args(
         self, mock_create_approval, mock_identity, mock_instrument
     ):
@@ -378,7 +378,7 @@ class TestProposeRemediation:
 
     @patch("agents.sre.tools.instrument_tool_call")
     @patch("agents.sre.tools.get_agent_identity", return_value="test-entra-id")
-    @patch("agents.sre.tools.create_approval_record", new_callable=AsyncMock, side_effect=ValueError("COSMOS_ENDPOINT not set"))
+    @patch("agents.sre.tools.create_approval_record", side_effect=ValueError("COSMOS_ENDPOINT not set"))
     def test_cosmos_write_failure_is_non_fatal(
         self, mock_create_approval, mock_identity, mock_instrument
     ):

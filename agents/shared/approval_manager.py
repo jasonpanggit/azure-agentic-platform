@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 APPROVAL_TIMEOUT_MINUTES = int(os.environ.get("APPROVAL_TIMEOUT_MINUTES", "30"))
 
 
-async def create_approval_record(
+def create_approval_record(
     container: Optional[ContainerProxy],
     thread_id: str,
     incident_id: str,
