@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: Milestone complete
-last_updated: "2026-04-19T00:52:40.877Z"
+last_updated: "2026-04-19T05:26:19.498Z"
 progress:
   total_phases: 35
   completed_phases: 34
@@ -441,6 +441,9 @@ No blockers as of 2026-04-04. All production blockers resolved:
 
 ### Roadmap Evolution
 
+- Phase 105 added: Database Hub UI — surface Database agent's 12 tools (Cosmos, PostgreSQL, SQL) in a new DatabaseHubTab with Health Overview, Slow Queries, and Throughput sub-tabs; wire into main navigation
+- Phase 106 added: CVE Fleet View — fleet-level CVE exposure tab in SecurityHub calling GET /api/v1/cve/fleet; table of VMs × critical CVEs with severity heatmap and patch-now action links
+- Phase 107 added: SRE Approval Queue Wiring — write SRE propose_remediation output to Cosmos approvals collection so human-in-the-loop cards appear in the existing ApprovalQueueCard UI
 - Phase 9 added: Web UI Revamp — rebuild with Tailwind CSS + shadcn/ui
 - Phase 10 added: API Gateway Auth Audit Hardening
 - Phase 11 added: Patch Domain Agent — ARG-based patch assessment/installation agent using Azure Update Manager query-logs, wired into orchestrator routing

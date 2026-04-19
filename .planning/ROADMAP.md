@@ -1983,6 +1983,36 @@ Plans:
 Plans:
 - [ ] 104-1: firewall_service.py + firewall_endpoints.py + FirewallTab.tsx + ResourcesHubTab wiring
 
+### Phase 105: Database Hub UI — surface Database agent's 12 tools (Cosmos, PostgreSQL, SQL) in a new DatabaseHubTab with Health Overview, Slow Queries, and Throughput sub-tabs; wire into main navigation
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 104
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] TBD (run /gsd-plan-phase 105 to break down) (completed 2026-04-19)
+
+### Phase 106: CVE Fleet View — fleet-level CVE exposure tab in SecurityHub calling GET /api/v1/cve/fleet; table of VMs x critical CVEs with severity heatmap and patch-now action links
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 105
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 106 to break down)
+
+### Phase 107: SRE Approval Queue Wiring — write SRE propose_remediation output to Cosmos approvals collection so human-in-the-loop cards appear in the existing ApprovalQueueCard UI
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 106
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 107 to break down)
+
 ---
 
 ## World-Class v3.0 Success Criteria
