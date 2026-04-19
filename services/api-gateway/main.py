@@ -182,6 +182,7 @@ from services.api_gateway.disk_audit_endpoints import router as disk_audit_route
 from services.api_gateway.lb_health_endpoints import router as lb_health_router
 from services.api_gateway.network_topology_endpoints import router as network_topology_router
 from services.api_gateway.az_coverage_endpoints import router as az_coverage_router
+from services.api_gateway.firewall_endpoints import router as firewall_router
 
 # Configure root logger so all INFO+ messages appear in Container Apps log stream.
 # Override level with LOG_LEVEL env var (e.g. LOG_LEVEL=DEBUG for verbose mode).
@@ -854,6 +855,7 @@ app.include_router(disk_audit_router)
 app.include_router(lb_health_router)
 app.include_router(network_topology_router)
 app.include_router(az_coverage_router)
+app.include_router(firewall_router)
 app.include_router(subscription_credential_router)
 
 
