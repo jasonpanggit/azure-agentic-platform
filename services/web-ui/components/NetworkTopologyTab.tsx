@@ -175,7 +175,7 @@ function resolveExternalIconType(resourceId: string): string | null {
 }
 
 /** Truncate a resource name for display inside a fixed-width node card. */
-function truncateLabel(name: string, max = 22): string {
+function truncateLabel(name: string, max = 14): string {
   return name.length > max ? name.slice(0, max - 1) + '…' : name
 }
 
@@ -313,12 +313,11 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
     style: {
       'background-image': `url(/icons/azure/${iconType}.svg)`,
       'background-fit': 'none',
-      'background-width': '20px',
-      'background-height': '20px',
-      'background-position-x': '8px',
+      'background-width': '24px',
+      'background-height': '24px',
+      'background-position-x': '10px',
       'background-position-y': '50%',
       'background-image-opacity': 1,
-      'background-clip': 'node',
     } as Record<string, unknown>,
   }))),
   // VNet — light blue fill, more prominent
