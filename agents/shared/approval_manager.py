@@ -14,7 +14,16 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from azure.cosmos import ContainerProxy
+try:
+    from azure.cosmos import ContainerProxy, CosmosClient
+except ImportError:
+    ContainerProxy = None  # type: ignore[assignment,misc]
+    CosmosClient = None  # type: ignore[assignment,misc]
+
+try:
+    from azure.identity import DefaultAzureCredential
+except ImportError:
+    DefaultAzureCredential = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +31,7 @@ APPROVAL_TIMEOUT_MINUTES = int(os.environ.get("APPROVAL_TIMEOUT_MINUTES", "30"))
 
 
 async def create_approval_record(
-    container: ContainerProxy,
+    container: Optional[ContainerProxy],
     thread_id: str,
     incident_id: str,
     agent_name: str,
@@ -36,6 +45,17 @@ async def create_approval_record(
     and returns. The webhook callback (approve/reject endpoint) resumes
     the thread via a new Foundry run.
     """
+    if container is None:
+        endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+        database_name = os.environ.get("COSMOS_DATABASE_NAME", "aap")
+        if not endpoint:
+            raise ValueError("COSMOS_ENDPOINT environment variable is required.")
+        if CosmosClient is None or DefaultAzureCredential is None:
+            raise ImportError("azure-cosmos and azure-identity are required.")
+        cosmos_client = CosmosClient(url=endpoint, credential=DefaultAzureCredential())
+        database = cosmos_client.get_database_client(database_name)
+        container = database.get_container_client("approvals")
+
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=APPROVAL_TIMEOUT_MINUTES)
 

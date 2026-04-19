@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Server, Monitor, Layers, Box, HardDrive, Globe, GitBranch, AppWindow, MessageSquare, Flame } from 'lucide-react'
+import { Server, Monitor, Layers, Box, HardDrive, Globe, GitBranch, AppWindow, MessageSquare } from 'lucide-react'
 import { ResourcesTab } from './ResourcesTab'
 import { ResourceHierarchyTab } from './ResourceHierarchyTab'
 import { VMTab } from './VMTab'
@@ -11,7 +11,6 @@ import DiskAuditTab from './DiskAuditTab'
 import { AZCoverageTab } from './AZCoverageTab'
 import { AppServiceHealthTab } from './AppServiceHealthTab'
 import { QueueDepthTab } from './QueueDepthTab'
-import FirewallTab from './FirewallTab'
 
 interface ResourcesHubTabProps {
   subscriptions: string[]
@@ -22,16 +21,15 @@ interface ResourcesHubTabProps {
 }
 
 const subTabs = [
-  { id: 'all-resources', label: 'All Resources', icon: Server },
-  { id: 'vms',           label: 'Virtual Machines', icon: Monitor },
-  { id: 'vmss',          label: 'Scale Sets', icon: Layers },
-  { id: 'aks',           label: 'Kubernetes', icon: Box },
-  { id: 'disks',         label: 'Disks', icon: HardDrive },
-  { id: 'az-coverage',        label: 'AZ Coverage',        icon: Globe        },
-  { id: 'resource-hierarchy', label: 'Resource Hierarchy', icon: GitBranch    },
-  { id: 'app-services',       label: 'App Services',       icon: AppWindow    },
+  { id: 'all-resources',      label: 'All Resources',      icon: Server        },
+  { id: 'vms',                label: 'Virtual Machines',   icon: Monitor       },
+  { id: 'vmss',               label: 'Scale Sets',         icon: Layers        },
+  { id: 'aks',                label: 'Kubernetes',         icon: Box           },
+  { id: 'app-services',       label: 'App Services',       icon: AppWindow     },
+  { id: 'disks',              label: 'Disks',              icon: HardDrive     },
+  { id: 'az-coverage',        label: 'AZ Coverage',        icon: Globe         },
   { id: 'messaging',          label: 'Messaging',          icon: MessageSquare },
-  { id: 'firewall',           label: 'Firewall',           icon: Flame         },
+  { id: 'resource-hierarchy', label: 'Resource Hierarchy', icon: GitBranch     },
 ]
 
 export function ResourcesHubTab({
@@ -83,7 +81,6 @@ export function ResourcesHubTab({
       {activeSubTab === 'resource-hierarchy' && <ResourceHierarchyTab subscriptions={subscriptions} />}
       {activeSubTab === 'app-services'       && <AppServiceHealthTab subscriptions={subscriptions} />}
       {activeSubTab === 'messaging'          && <QueueDepthTab subscriptions={subscriptions} />}
-      {activeSubTab === 'firewall'           && <FirewallTab subscriptions={subscriptions} />}
     </div>
   )
 }
