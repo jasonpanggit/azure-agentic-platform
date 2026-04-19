@@ -90,6 +90,7 @@ interface NetworkIssue {
   dest_nsg_id?: string
   port?: number
   description?: string
+  source?: 'rule' | 'ai'
 }
 
 interface TopologyData {
@@ -232,6 +233,18 @@ function IssueCard({
         <div className="flex flex-col gap-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <SeverityBadge severity={issue.severity as SeverityKey} />
+            {issue.source === 'ai' && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent-blue) 15%, transparent)',
+                  color: 'var(--accent-blue)',
+                  border: '1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent)',
+                }}
+              >
+                🤖 AI
+              </span>
+            )}
             {resourceName && (
               <span className="font-mono text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
                 {resourceName}
@@ -1404,6 +1417,14 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
   const [issuesOpen, setIssuesOpen] = useState(false)
   const [focusedIssueIndex, setFocusedIssueIndex] = useState<number | null>(null)
+
+  // AI analysis polling state (Phase 109)
+  const [aiAnalysisPending, setAiAnalysisPending] = useState(false)
+  const aiPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const aiPollAttemptsRef = useRef(0)
+  const AI_POLL_MAX_ATTEMPTS = 5
+  const AI_POLL_INTERVAL_MS = 3000
+
   // Issues drawer resize state
   const [issuesWidth, setIssuesWidth] = useState(520)
   const issuesDragging = useRef(false)
@@ -1574,6 +1595,8 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       const data: TopologyData = await res.json()
       setTopologyData(data)
       setElements(buildCytoscapeElements(data.nodes, data.edges))
+      // Phase 109: kick off AI analysis polling
+      pollAiIssues()
 
       // If the backend returned zero nodes it may still be warming up.
       // Schedule one automatic retry after 8 seconds.
@@ -1614,7 +1637,46 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       if (tooltipHideTimer.current !== null) {
         clearTimeout(tooltipHideTimer.current)
       }
+      if (aiPollRef.current) clearInterval(aiPollRef.current)
     }
+  }, [])
+
+  // Poll for AI analysis results — called after topology loads
+  const pollAiIssues = useCallback(() => {
+    if (aiPollRef.current) clearInterval(aiPollRef.current)
+    aiPollAttemptsRef.current = 0
+    setAiAnalysisPending(true)
+    aiPollRef.current = setInterval(async () => {
+      aiPollAttemptsRef.current += 1
+      try {
+        // No subscription_id filter — backend resolves same set as trigger_ai_analysis
+        const res = await fetch('/api/proxy/network/topology/ai-issues')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (data.status === 'ready') {
+          const aiIssues: NetworkIssue[] = (data.issues ?? [])
+          setTopologyData((prev) => {
+            if (!prev) return prev
+            const existingIds = new Set(prev.issues.map((i) => i.id))
+            const newAiIssues = aiIssues.filter((i) => !existingIds.has(i.id))
+            return { ...prev, issues: [...prev.issues, ...newAiIssues] }
+          })
+          setAiAnalysisPending(false)
+          if (aiPollRef.current) clearInterval(aiPollRef.current)
+        } else if (data.status === 'error') {
+          setAiAnalysisPending(false)
+          if (aiPollRef.current) clearInterval(aiPollRef.current)
+        } else if (aiPollAttemptsRef.current >= AI_POLL_MAX_ATTEMPTS) {
+          setAiAnalysisPending(false)
+          if (aiPollRef.current) clearInterval(aiPollRef.current)
+        }
+      } catch {
+        if (aiPollAttemptsRef.current >= AI_POLL_MAX_ATTEMPTS) {
+          setAiAnalysisPending(false)
+          if (aiPollRef.current) clearInterval(aiPollRef.current)
+        }
+      }
+    }, AI_POLL_INTERVAL_MS)
   }, [])
 
   const handleRemediate = useCallback(async (issue: NetworkIssue, requireApproval: boolean) => {
@@ -2442,6 +2504,11 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
           <SheetHeader>
             <SheetTitle style={{ color: 'var(--text-primary)' }}>Network Issues ({issueCount})</SheetTitle>
           </SheetHeader>
+          {aiAnalysisPending && (
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              🤖 AI analysis in progress…
+            </p>
+          )}
 
           {/* Filter bar */}
           <div className="mt-3 mb-2 flex flex-col gap-2">
