@@ -112,6 +112,27 @@ const REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 min
 // buildCytoscapeElements
 // ---------------------------------------------------------------------------
 
+// Human-readable labels for each node type shown as the second line in nodes
+const TYPE_LABEL: Record<string, string> = {
+  vnet:           'VNet',
+  subnet:         'Subnet',
+  nsg:            'NSG',
+  vm:             'VM',
+  vmss:           'VMSS',
+  aks:            'AKS',
+  lb:             'Load Balancer',
+  appgw:          'App Gateway',
+  gateway:        'VPN/ER GW',
+  firewall:       'Firewall',
+  firewallpolicy: 'FW Policy',
+  pe:             'Private Endpoint',
+  publicip:       'Public IP',
+  routetable:     'Route Table',
+  localgw:        'Local GW',
+  natgw:          'NAT Gateway',
+  external:       'External',
+}
+
 function buildCytoscapeElements(
   apiNodes: TopologyNode[],
   apiEdges: TopologyEdge[]
@@ -120,11 +141,14 @@ function buildCytoscapeElements(
 
   // Flat graph — no compound nesting. Every relationship is an edge.
   for (const n of apiNodes) {
+    const typeTag = TYPE_LABEL[n.type] ?? n.type
     elements.push({
       data: {
         id: n.id,
-        label: n.label,
+        // Two-line label: name + type tag on second line (Cytoscape text-wrap: wrap)
+        label: `${n.label}\n${typeTag}`,
         type: n.type,
+        typeLabel: typeTag,
         ...n.data,
       },
     })
@@ -189,14 +213,15 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
   {
     selector: 'node',
     style: {
+      // Two-line label: resource name (bold) + type tag below
       label: 'data(label)',
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
       'font-weight': '500',
       'text-valign': 'center',
       'text-halign': 'center',
-      'text-wrap': 'ellipsis',
-      'text-max-width': '110px',
+      'text-wrap': 'wrap',
+      'text-max-width': '106px',
       'text-margin-x': '14px',
       color: '#1e293b',
       'background-color': '#ffffff',
@@ -204,21 +229,29 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'border-color': '#e2e8f0',
       shape: 'roundrectangle',
       width: NODE_W,
-      height: NODE_H,
-      // Simulate drop shadow via ghost/outline — Cytoscape doesn't have CSS box-shadow,
-      // so we use a transparent outline as a soft visual lift cue.
+      height: '56px',
       'outline-width': 0,
     },
   },
-  // ── Per-type: colored border accent + background icon (native Cytoscape background-image) ──
-  // Icons are rendered as Cytoscape background images, always inside the node boundary.
-  // background-position-x: 8px places the icon 8px from the node's left edge.
+  // ── Per-type: colored border accent ──────────────────────────────────────
   ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
       'border-color': color,
       'border-width': 2,
       'border-opacity': 0.8,
+    } as Record<string, unknown>,
+  })),
+  // ── Per-type: background icon — only for types with confirmed SVG icons ──
+  // 'external' type is intentionally excluded: external nodes represent
+  // arbitrary targets (Key Vault, Cosmos DB, ACR, etc.) with no single icon.
+  ...(([
+    'aks', 'appgw', 'firewall', 'firewallpolicy', 'gateway', 'lb',
+    'localgw', 'natgw', 'nsg', 'pe', 'publicip', 'routetable',
+    'subnet', 'vm', 'vmss', 'vnet',
+  ] as string[]).map((type) => ({
+    selector: `node[type="${type}"]`,
+    style: {
       'background-image': `url(/icons/azure/${type}.svg)`,
       'background-fit': 'none',
       'background-width': '20px',
@@ -226,9 +259,9 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'background-position-x': '8px',
       'background-position-y': '50%',
       'background-image-opacity': 1,
-      'background-clip': 'none',
+      'background-clip': 'node',
     } as Record<string, unknown>,
-  })),
+  }))),
   // VNet — light blue fill, more prominent
   {
     selector: 'node[type="vnet"]',
