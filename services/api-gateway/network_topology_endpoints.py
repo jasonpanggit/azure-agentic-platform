@@ -13,7 +13,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -54,13 +54,13 @@ class PathCheckRequest(BaseModel):
     source_resource_id: str
     destination_resource_id: str
     port: int = Field(ge=1, le=65535)
-    protocol: str = "TCP"
+    protocol: Literal["TCP", "UDP", "ICMP", "*"] = "TCP"
 
 
 class RemediateRequest(BaseModel):
     """Request body for network issue remediation."""
 
-    issue_id: str
+    issue_id: str = Field(min_length=16, max_length=16, pattern=r'^[0-9a-f]{16}$')
     subscription_id: Optional[str] = None
     require_approval: bool = False
 
@@ -261,12 +261,23 @@ async def _stream_network_chat(
         edge_count = ctx.get("edge_count", "unknown")
         selected_node = ctx.get("selected_node_id")
 
+        # Sanitise user-controlled context values to prevent prompt injection.
+        # Strip newlines, angle brackets, and truncate to a safe length.
+        def _sanitise_context(value: str, max_len: int = 200) -> str:
+            sanitised = value.replace("\n", " ").replace("\r", " ").replace("<", "").replace(">", "")
+            return sanitised[:max_len]
+
+        safe_subscription_ids = [
+            _sanitise_context(s) for s in request.subscription_ids
+        ]
+        safe_selected_node = _sanitise_context(str(selected_node)) if selected_node else None
+
         context_block = (
-            f"[Topology Context] Subscription IDs: {', '.join(request.subscription_ids) or 'all'}. "
+            f"[Topology Context] Subscription IDs: {', '.join(safe_subscription_ids) or 'all'}. "
             f"Current graph: {node_count} nodes, {edge_count} edges."
         )
-        if selected_node:
-            context_block += f" Selected node: {selected_node}."
+        if safe_selected_node:
+            context_block += f" Selected node: {safe_selected_node}."
 
         system_prompt = f"{base_instructions}\n\n{context_block}"
 
@@ -304,7 +315,9 @@ async def _stream_network_chat(
             reply_text += token
             yield f"data: {json.dumps({'token': token})}\n\n"
 
-        # Persist conversation turn
+        # Persist conversation turn with LRU eviction on the global dict.
+        # Cap total keys to _CONVERSATION_HISTORY_LIMIT to prevent unbounded memory growth.
+        _CONVERSATION_HISTORY_MAX_THREADS = 500
         new_history_key = history_key or response_id
         history = list(_CONVERSATION_HISTORY.get(new_history_key, []))
         history.append({"role": "user", "content": request.message})
@@ -313,6 +326,10 @@ async def _stream_network_chat(
         if len(history) > max_messages:
             history = history[-max_messages:]
         _CONVERSATION_HISTORY[new_history_key] = history
+        # Evict oldest entries when the global dict exceeds the thread cap
+        while len(_CONVERSATION_HISTORY) > _CONVERSATION_HISTORY_MAX_THREADS:
+            oldest_key = next(iter(_CONVERSATION_HISTORY))
+            del _CONVERSATION_HISTORY[oldest_key]
 
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.info(

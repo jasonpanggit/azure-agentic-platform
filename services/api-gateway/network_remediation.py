@@ -210,8 +210,10 @@ async def _fix_pe_approve(
 
     parts = resource_id.split("/")
     try:
+        sub_idx = parts.index("subscriptions") + 1
         rg_idx = parts.index("resourceGroups") + 1
         pe_idx = parts.index("privateEndpoints") + 1
+        resource_subscription_id = parts[sub_idx]
         resource_group = parts[rg_idx]
         pe_name = parts[pe_idx]
     except (ValueError, IndexError):
@@ -220,6 +222,24 @@ async def _fix_pe_approve(
             "status": "error",
             "execution_id": execution_id,
             "message": f"Cannot parse private endpoint resource ID: {resource_id}",
+            "duration_ms": round(duration_ms, 1),
+        }
+
+    # Verify the PE belongs to the caller-supplied subscription to prevent cross-subscription approval
+    if resource_subscription_id.lower() != subscription_id.lower():
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.warning(
+            "network_remediation: PE approve rejected — resource subscription %s does not match "
+            "caller subscription %s | pe=%s execution_id=%s",
+            resource_subscription_id, subscription_id, pe_name, execution_id,
+        )
+        return {
+            "status": "error",
+            "execution_id": execution_id,
+            "message": (
+                f"Resource subscription '{resource_subscription_id}' does not match "
+                f"caller subscription '{subscription_id}'. Approval rejected."
+            ),
             "duration_ms": round(duration_ms, 1),
         }
 
@@ -246,34 +266,59 @@ async def _fix_pe_approve(
     try:
         client = NetworkManagementClient(credential, subscription_id)
         # List all PE connections and approve the first pending one
-        connections = list(
-            client.private_endpoint_connections.list(resource_group, pe_name)
-        ) if hasattr(client, "private_endpoint_connections") else []
+        if not hasattr(client, "private_endpoint_connections"):
+            duration_ms = (time.monotonic() - start_time) * 1000
+            _write_wal(execution_id, cosmos_client, status="failed",
+                       update_fields={"error": "private_endpoint_connections API not available", "duration_ms": round(duration_ms, 1)})
+            return {
+                "status": "error",
+                "execution_id": execution_id,
+                "message": "private_endpoint_connections API not available in this SDK version",
+                "duration_ms": round(duration_ms, 1),
+            }
 
-        # Fall back: attempt a direct update with well-known connection name
+        connections = list(client.private_endpoint_connections.list(resource_group, pe_name))
+
         if not connections:
-            connection_name = f"{pe_name}-connection"
-            conn_body = PrivateEndpointConnection(
-                private_link_service_connection_state=PrivateLinkServiceConnectionState(
-                    status="Approved",
-                    description="Auto-approved by AAP remediation engine",
+            duration_ms = (time.monotonic() - start_time) * 1000
+            _write_wal(execution_id, cosmos_client, status="failed",
+                       update_fields={"error": "no PE connections found", "duration_ms": round(duration_ms, 1)})
+            return {
+                "status": "error",
+                "execution_id": execution_id,
+                "message": f"No private endpoint connections found for '{pe_name}'. Cannot approve.",
+                "duration_ms": round(duration_ms, 1),
+            }
+
+        approved_any = False
+        for conn in connections:
+            state = conn.private_link_service_connection_state
+            if state and state.status in ("Pending", "pending"):
+                conn.private_link_service_connection_state.status = "Approved"
+                conn.private_link_service_connection_state.description = (
+                    "Auto-approved by AAP remediation engine"
                 )
-            )
-            client.private_endpoint_connections.update(
-                resource_group, pe_name, connection_name, conn_body
-            )
-        else:
-            for conn in connections:
-                state = conn.private_link_service_connection_state
-                if state and state.status in ("Pending", "pending"):
-                    conn.private_link_service_connection_state.status = "Approved"
-                    conn.private_link_service_connection_state.description = (
-                        "Auto-approved by AAP remediation engine"
-                    )
-                    client.private_endpoint_connections.update(
-                        resource_group, pe_name, conn.name, conn
-                    )
-                    break
+                client.private_endpoint_connections.update(
+                    resource_group, pe_name, conn.name, conn
+                )
+                logger.info(
+                    "network_remediation: PE connection approved | "
+                    "pe=%s conn=%s rg=%s execution_id=%s",
+                    pe_name, conn.name, resource_group, execution_id,
+                )
+                approved_any = True
+                break
+
+        if not approved_any:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            _write_wal(execution_id, cosmos_client, status="failed",
+                       update_fields={"error": "no pending connections found", "duration_ms": round(duration_ms, 1)})
+            return {
+                "status": "error",
+                "execution_id": execution_id,
+                "message": f"No pending connections found for private endpoint '{pe_name}'.",
+                "duration_ms": round(duration_ms, 1),
+            }
 
         duration_ms = (time.monotonic() - start_time) * 1000
         _write_wal(execution_id, cosmos_client, status="complete",

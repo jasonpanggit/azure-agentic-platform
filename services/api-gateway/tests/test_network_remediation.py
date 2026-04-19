@@ -22,7 +22,13 @@ from fastapi.testclient import TestClient
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_firewall_issue(issue_id: str = "fw001") -> dict:
+# Valid 16-char hex IDs matching the _make_issue_id format enforced by RemediateRequest
+_FW_ISSUE_ID = "f001000000000001"
+_PE_ISSUE_ID = "e001000000000001"
+_SN_ISSUE_ID = "a001000000000001"
+
+
+def _make_firewall_issue(issue_id: str = _FW_ISSUE_ID) -> dict:
     return {
         "id": issue_id,
         "type": "firewall_threatintel_off",
@@ -43,7 +49,7 @@ def _make_firewall_issue(issue_id: str = "fw001") -> dict:
     }
 
 
-def _make_pe_issue(issue_id: str = "pe001") -> dict:
+def _make_pe_issue(issue_id: str = _PE_ISSUE_ID) -> dict:
     return {
         "id": issue_id,
         "type": "pe_not_approved",
@@ -64,7 +70,7 @@ def _make_pe_issue(issue_id: str = "pe001") -> dict:
     }
 
 
-def _make_subnet_issue(issue_id: str = "sn001") -> dict:
+def _make_subnet_issue(issue_id: str = _SN_ISSUE_ID) -> dict:
     return {
         "id": issue_id,
         "type": "subnet_no_nsg",
@@ -279,7 +285,7 @@ def _build_app(issues: list[dict]):
 @pytest.fixture()
 def client_with_fw_issue():
     """TestClient with a firewall issue pre-seeded in the topology."""
-    issue = _make_firewall_issue("fw001")
+    issue = _make_firewall_issue(_FW_ISSUE_ID)
     mock_cache = MagicMock()
 
     with (
@@ -307,7 +313,7 @@ def client_with_fw_issue():
 @pytest.fixture()
 def client_with_subnet_issue():
     """TestClient with a non-auto-fixable (subnet_no_nsg) issue."""
-    issue = _make_subnet_issue("sn001")
+    issue = _make_subnet_issue(_SN_ISSUE_ID)
     mock_approval = AsyncMock(return_value={"id": "appr-002"})
 
     with (
@@ -336,7 +342,7 @@ class TestRemediateEndpoint:
         client, mock_cache = client_with_fw_issue
         resp = client.post(
             "/api/v1/network-topology/remediate",
-            json={"issue_id": "fw001", "require_approval": False},
+            json={"issue_id": _FW_ISSUE_ID, "require_approval": False},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -347,7 +353,7 @@ class TestRemediateEndpoint:
         client, mock_cache = client_with_fw_issue
         client.post(
             "/api/v1/network-topology/remediate",
-            json={"issue_id": "fw001", "require_approval": False},
+            json={"issue_id": _FW_ISSUE_ID, "require_approval": False},
         )
         mock_cache.invalidate.assert_called_once_with("network_topology")
 
@@ -355,7 +361,7 @@ class TestRemediateEndpoint:
         client, mock_approval = client_with_subnet_issue
         resp = client.post(
             "/api/v1/network-topology/remediate",
-            json={"issue_id": "sn001", "require_approval": False},
+            json={"issue_id": _SN_ISSUE_ID, "require_approval": False},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -367,7 +373,7 @@ class TestRemediateEndpoint:
         client, _ = client_with_fw_issue
         resp = client.post(
             "/api/v1/network-topology/remediate",
-            json={"issue_id": "does-not-exist", "require_approval": False},
+            json={"issue_id": "ab12cd34ef56ab12", "require_approval": False},
         )
         assert resp.status_code == 404
 
@@ -382,7 +388,7 @@ class TestRemediateEndpoint:
         ) as mock_approval:
             resp = client.post(
                 "/api/v1/network-topology/remediate",
-                json={"issue_id": "fw001", "require_approval": True},
+                json={"issue_id": _FW_ISSUE_ID, "require_approval": True},
             )
 
         assert resp.status_code == 200

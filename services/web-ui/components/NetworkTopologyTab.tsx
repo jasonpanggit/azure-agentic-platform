@@ -310,7 +310,7 @@ function IssueCard({
                       {step.cli}
                     </code>
                     <button
-                      onClick={() => handleCopy(step.cli!, step.step)}
+                      onClick={() => handleCopy(step.cli ?? '', step.step)}
                       className="shrink-0"
                       title="Copy to clipboard"
                       style={{ color: copied === step.step ? 'var(--accent-green)' : 'var(--text-muted)' }}

@@ -413,17 +413,20 @@ def _get_cached_or_fetch(key: str, ttl: int, fetch_fn: Any) -> Any:
 
     Empty topology results (nodes=[]) are cached with a short 60s TTL so a
     transient startup race or a bad query doesn't poison the cache for 15 min.
+
+    Cache entry format: (insert_time, effective_ttl, value).
+    Expiry is checked as: time.monotonic() - insert_time >= effective_ttl.
     """
     cached_entry = _cache_get(key)
     if cached_entry is not None:
-        cached_time, cached_value = cached_entry
-        if time.monotonic() - cached_time < ttl:
+        cached_time, cached_effective_ttl, cached_value = cached_entry
+        if time.monotonic() - cached_time < cached_effective_ttl:
             return cached_value
 
     result = fetch_fn()
     # Don't cache empty topology for the full TTL — retry quickly on next request
     effective_ttl = 60 if (isinstance(result, dict) and not result.get("nodes")) else ttl
-    _cache_put(key, (time.monotonic() - (ttl - effective_ttl), result))
+    _cache_put(key, (time.monotonic(), effective_ttl, result))
     return result
 
 
@@ -580,6 +583,15 @@ def _detect_asymmetries(
         for nsg_id in nic_nsg_map.values():
             if nsg_id and nsg_id not in all_nsg_ids:
                 all_nsg_ids.append(nsg_id)
+
+    # Cap NSG list to avoid O(N²) explosion in large environments (>50 NSGs → 2,500+ pairs)
+    _NSG_ASYMMETRY_CAP = 50
+    if len(all_nsg_ids) > _NSG_ASYMMETRY_CAP:
+        logger.warning(
+            "_detect_asymmetries: NSG count %d exceeds cap %d; truncating to cap to limit O(N²) evaluation",
+            len(all_nsg_ids), _NSG_ASYMMETRY_CAP,
+        )
+        all_nsg_ids = all_nsg_ids[:_NSG_ASYMMETRY_CAP]
 
     for i, src_nsg_id in enumerate(all_nsg_ids):
         src_rules = nsg_rules_map.get(src_nsg_id, [])
@@ -2226,7 +2238,7 @@ def evaluate_path_check(
         nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
         nic_subnet_map: Dict[str, Dict[str, str]] = {}
         if cached_entry is not None:
-            _, cached_data = cached_entry
+            _, _effective_ttl, cached_data = cached_entry
             nsg_rules_map = cached_data.get("_nsg_rules_map", {})
             nic_subnet_map = cached_data.get("_nic_subnet_map", {})
 
@@ -2331,7 +2343,7 @@ def _resolve_resource_nsg(
 
     # Check if the resource is directly a subnet
     for node in nodes:
-        if node["type"] == "subnet" and resource_id_lower in node["id"]:
+        if node["type"] == "subnet" and resource_id_lower == node["id"].lower():
             nsg_id = node.get("data", {}).get("nsgId", "")
             if nsg_id:
                 return nsg_id
