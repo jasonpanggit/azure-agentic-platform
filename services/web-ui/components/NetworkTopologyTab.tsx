@@ -1013,6 +1013,10 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
   const [error, setError] = useState<string | null>(null)
   const [topologyData, setTopologyData] = useState<TopologyData | null>(null)
 
+  // Hover tooltip state
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null)
+  const tooltipHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Drill-down state
   const [selectedNode, setSelectedNode] = useState<SimpleNode | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<SimpleEdge | null>(null)
@@ -1178,11 +1182,14 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
     return () => clearInterval(interval)
   }, [fetchData])
 
-  // Cancel animation frame on unmount
+  // Cancel animation frame and tooltip timer on unmount
   useEffect(() => {
     return () => {
       if (animFrameRef.current !== null) {
         cancelAnimationFrame(animFrameRef.current)
+      }
+      if (tooltipHideTimer.current !== null) {
+        clearTimeout(tooltipHideTimer.current)
       }
     }
   }, [])
@@ -1782,6 +1789,28 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 // Minimap
                 cy.on('render', () => renderMinimap(cy))
 
+                // ── Hover tooltip ─────────────────────────────────────────────
+                cy.on('mouseover', 'node', (evt) => {
+                  const nodeData = evt.target.data() as Record<string, unknown>
+                  const fullLabel = (nodeData.fullLabel as string | undefined) ?? (nodeData.label as string ?? '')
+                  // Only show tooltip if the name was truncated
+                  if (!fullLabel || fullLabel === nodeData.label) return
+                  const renderedPos = evt.target.renderedPosition()
+                  const container = cy.container()
+                  if (!container) return
+                  const rect = container.getBoundingClientRect()
+                  setTooltip({
+                    x: rect.left + renderedPos.x,
+                    y: rect.top + renderedPos.y - 36,
+                    label: fullLabel,
+                  })
+                  if (tooltipHideTimer.current) clearTimeout(tooltipHideTimer.current)
+                })
+                cy.on('mouseout', 'node', () => {
+                  tooltipHideTimer.current = setTimeout(() => setTooltip(null), 80)
+                })
+                cy.on('drag', 'node', () => setTooltip(null))
+
                 cy.on('tap', 'node', (evt) => {
                   const nodeData = evt.target.data() as Record<string, unknown>
                   // Clear any issue focus so the panel renders against a clean graph
@@ -1852,6 +1881,30 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
       />
+
+      {/* Hover tooltip — fixed position over the canvas, shows full resource name */}
+      {tooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translateX(-50%)',
+            background: '#1e293b',
+            color: '#f1f5f9',
+            fontSize: 12,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            padding: '4px 10px',
+            borderRadius: 6,
+            pointerEvents: 'none',
+            zIndex: 9999,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          }}
+        >
+          {tooltip.label}
+        </div>
+      )}
 
       {/* Focused-issue banner — fixed bottom-center, always above everything */}
       {focusedIssueIndex !== null && topologyData?.issues[focusedIssueIndex] && (() => {
