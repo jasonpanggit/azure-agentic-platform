@@ -1666,7 +1666,7 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                   // center the label container on the node, then offset the icon
                   // left via a wrapper so it sits inside the card at the left edge
                   valign: 'center',
-                  halign: 'left',
+                  halign: 'center',
                   valignBox: 'center',
                   halignBox: 'center',
                   tpl: (data: Record<string, unknown>) => {
