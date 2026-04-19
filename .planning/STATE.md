@@ -14,6 +14,8 @@ progress:
 
 # Azure Agentic Platform (AAP) — Project State
 
+> Last activity: 2026-04-19 - Completed quick task 260419-isi: Reorganize tab/sub-tab arrangement — Firewall moved to Network hub, ChangeIntelligenceTab wired into Change hub, Resources sub-tabs reordered, "Capacity & Quota" renamed to "Capacity", Security moved to top nav row 1.
+
 > Last activity: 2026-04-19 - Completed quick task 260419-ikw: Animate edges in network topology map tab — marching-ants on dashed membership edges, width-pulse on solid traffic edges, all via RAF loop with cleanup on unmount.
 
 > Last activity: 2026-04-19 - Completed quick task 260419-c09: Fix Storage agent stub tools — query_storage_metrics, query_blob_diagnostics, query_file_sync_health now make real Azure SDK calls (MonitorManagementClient, LogsQueryClient, StorageSyncManagementClient).
@@ -438,6 +440,7 @@ No blockers as of 2026-04-04. All production blockers resolved:
 | 260419-bx5 | Wire 9 orphaned tabs into hub navigation | 2026-04-19 | e181100 | [260419-bx5-wire-9-orphaned-tabs-into-hub-navigation](./quick/260419-bx5-wire-9-orphaned-tabs-into-hub-navigation/) |
 | 260419-c09 | Fix Storage agent stub tools (query_storage_metrics, query_blob_diagnostics, query_file_sync_health) | 2026-04-19 | a955c90 | [260419-c09-fix-storage-agent-stub-tools](./quick/260419-c09-fix-storage-agent-stub-tools/) |
 | 260419-ikw | Animate edges in network topology map tab | 2026-04-19 | e749ba7 | [260419-ikw-animate-the-edges-in-network-topology-ma](./quick/260419-ikw-animate-the-edges-in-network-topology-ma/) |
+| 260419-isi | Reorganize tab/sub-tab arrangement — Firewall→Network, ChangeIntelligence→Change, reorder Resources, rename Capacity | 2026-04-19 | 7629a18 | [260419-isi-reorganize-tab-and-sub-tab-arrangement-m](./quick/260419-isi-reorganize-tab-and-sub-tab-arrangement-m/) |
 | 260418-nxb | Restructure web UI tab IA: split Cost tab into Cost (spend/budgets) and Capacity & Quota (resource limits/planning) | 2026-04-18 | b390e0d | [260418-nxb-restructure-web-ui-tab-information-archi](./quick/260418-nxb-restructure-web-ui-tab-information-archi/) |
 
 ---
