@@ -1663,18 +1663,17 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                 // so icons stay sharp no matter how far you zoom in.
                 ;(cy as Core & { nodeHtmlLabel: (cfg: unknown[]) => void }).nodeHtmlLabel([{
                   query: 'node[type]',
-                  // center the label container on the node, then offset the icon
-                  // left via a wrapper so it sits inside the card at the left edge
+                  // Anchor the HTML container to the node's left-center edge.
+                  // halignBox:'left' means the left edge of the element aligns to
+                  // that anchor, so margin-left places the icon inside the card.
                   valign: 'center',
-                  halign: 'center',
+                  halign: 'left',
                   valignBox: 'center',
-                  halignBox: 'center',
+                  halignBox: 'left',
                   tpl: (data: Record<string, unknown>) => {
                     const type = (data.type as string) ?? ''
                     const src = `/icons/azure/${type}.svg`
-                    // The container is centered on the node. We offset it to the left
-                    // so the icon lands at roughly x=8px from the node's left edge.
-                    return `<div style="width:22px;height:22px;transform:translateX(-72px);pointer-events:none;display:flex;align-items:center;justify-content:center;"><img src="${src}" width="20" height="20" style="display:block;pointer-events:none;" onerror="this.style.display='none'"></div>`
+                    return `<div style="width:22px;height:22px;margin-left:8px;pointer-events:none;display:flex;align-items:center;justify-content:center;"><img src="${src}" width="20" height="20" style="display:block;pointer-events:none;" onerror="this.style.display='none'"></div>`
                   },
                 }])
 
