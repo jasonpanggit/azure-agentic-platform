@@ -1404,6 +1404,30 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
   const [issuesOpen, setIssuesOpen] = useState(false)
   const [focusedIssueIndex, setFocusedIssueIndex] = useState<number | null>(null)
+  // Issues drawer resize state
+  const [issuesWidth, setIssuesWidth] = useState(520)
+  const issuesDragging = useRef(false)
+  const issuesDragStartX = useRef(0)
+  const issuesDragStartWidth = useRef(520)
+  const onIssuesDragHandleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    issuesDragging.current = true
+    issuesDragStartX.current = e.clientX
+    issuesDragStartWidth.current = issuesWidth
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!issuesDragging.current) return
+      const delta = issuesDragStartX.current - ev.clientX
+      const next = Math.min(900, Math.max(380, issuesDragStartWidth.current + delta))
+      setIssuesWidth(next)
+    }
+    const onMouseUp = () => {
+      issuesDragging.current = false
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [issuesWidth])
   // Issue filter state
   const [issueSearch, setIssueSearch] = useState('')
   const [issueSearchDebounced, setIssueSearchDebounced] = useState('')
@@ -2404,9 +2428,17 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
         <SheetContent
           side="right"
-          className="w-[520px] overflow-y-auto"
-          style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
+          className="p-0 sm:max-w-none overflow-hidden"
+          style={{ width: issuesWidth, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
         >
+          {/* Drag handle on left edge */}
+          <div
+            onMouseDown={onIssuesDragHandleMouseDown}
+            style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 10 }}
+            className="hover:bg-blue-500/30 transition-colors"
+            title="Drag to resize"
+          />
+          <div className="px-6 py-4 overflow-y-auto h-full">
           <SheetHeader>
             <SheetTitle style={{ color: 'var(--text-primary)' }}>Network Issues ({issueCount})</SheetTitle>
           </SheetHeader>
@@ -2520,6 +2552,7 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               </>
             )
           })()}
+          </div>
         </SheetContent>
       </Sheet>
 
