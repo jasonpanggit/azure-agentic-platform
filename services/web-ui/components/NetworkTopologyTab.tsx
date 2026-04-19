@@ -131,6 +131,47 @@ const TYPE_LABEL: Record<string, string> = {
   localgw:        'Local GW',
   natgw:          'NAT Gateway',
   external:       'External',
+  // Resolved external subtypes
+  keyvault:       'Key Vault',
+  cosmos:         'Cosmos DB',
+  acr:            'Container Registry',
+  postgres:       'PostgreSQL',
+  storage:        'Storage Account',
+  redis:          'Redis Cache',
+  servicebus:     'Service Bus',
+  eventhub:       'Event Hub',
+  sql:            'SQL Database',
+  appservice:     'App Service',
+  cognitive:      'Cognitive Services',
+  search:         'Search Service',
+  mysql:          'MySQL',
+}
+
+// Map ARM resource provider/type (lowercase) → icon file name
+// Used to resolve 'external' nodes to the correct icon based on their resource ID
+const ARM_PROVIDER_TO_ICON: Array<[string, string]> = [
+  ['microsoft.keyvault/vaults',                          'keyvault'],
+  ['microsoft.documentdb/databaseaccounts',              'cosmos'],
+  ['microsoft.containerregistry/registries',             'acr'],
+  ['microsoft.dbforpostgresql/',                         'postgres'],
+  ['microsoft.storage/storageaccounts',                  'storage'],
+  ['microsoft.cache/redis',                              'redis'],
+  ['microsoft.servicebus/',                              'servicebus'],
+  ['microsoft.eventhub/',                                'eventhub'],
+  ['microsoft.sql/',                                     'sql'],
+  ['microsoft.web/sites',                                'appservice'],
+  ['microsoft.cognitiveservices/',                       'cognitive'],
+  ['microsoft.search/searchservices',                    'search'],
+  ['microsoft.dbformysql/',                              'mysql'],
+]
+
+/** Resolve an ARM resource ID to an icon type name, or null if unknown. */
+function resolveExternalIconType(resourceId: string): string | null {
+  const lower = resourceId.toLowerCase()
+  for (const [provider, icon] of ARM_PROVIDER_TO_ICON) {
+    if (lower.includes(provider)) return icon
+  }
+  return null
 }
 
 function buildCytoscapeElements(
@@ -141,13 +182,20 @@ function buildCytoscapeElements(
 
   // Flat graph — no compound nesting. Every relationship is an edge.
   for (const n of apiNodes) {
-    const typeTag = TYPE_LABEL[n.type] ?? n.type
+    // For external nodes, try to resolve a specific icon type from the resource ID
+    const resolvedIconType = n.type === 'external'
+      ? (resolveExternalIconType(n.id) ?? null)
+      : null
+    const effectiveType = resolvedIconType ?? n.type
+    const typeTag = TYPE_LABEL[effectiveType] ?? n.type
     elements.push({
       data: {
         id: n.id,
         // Two-line label: name + type tag on second line (Cytoscape text-wrap: wrap)
         label: `${n.label}\n${typeTag}`,
         type: n.type,
+        // iconType drives background-image selection in the stylesheet
+        iconType: resolvedIconType ?? n.type,
         typeLabel: typeTag,
         ...n.data,
       },
@@ -242,17 +290,21 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'border-opacity': 0.8,
     } as Record<string, unknown>,
   })),
-  // ── Per-type: background icon — only for types with confirmed SVG icons ──
-  // 'external' type is intentionally excluded: external nodes represent
-  // arbitrary targets (Key Vault, Cosmos DB, ACR, etc.) with no single icon.
+  // ── Background icons — keyed on data(iconType), not data(type) ──────────
+  // Non-external nodes: iconType === type (set in buildCytoscapeElements)
+  // External nodes:     iconType is resolved from ARM resource ID (keyvault, cosmos, etc.)
+  // Unknown externals:  iconType === 'external' → no svg file → no icon shown
   ...(([
     'aks', 'appgw', 'firewall', 'firewallpolicy', 'gateway', 'lb',
     'localgw', 'natgw', 'nsg', 'pe', 'publicip', 'routetable',
     'subnet', 'vm', 'vmss', 'vnet',
-  ] as string[]).map((type) => ({
-    selector: `node[type="${type}"]`,
+    // Resolved external subtypes
+    'keyvault', 'cosmos', 'acr', 'postgres', 'storage', 'redis',
+    'servicebus', 'eventhub', 'sql', 'appservice', 'cognitive', 'search', 'mysql',
+  ] as string[]).map((iconType) => ({
+    selector: `node[iconType="${iconType}"]`,
     style: {
-      'background-image': `url(/icons/azure/${type}.svg)`,
+      'background-image': `url(/icons/azure/${iconType}.svg)`,
       'background-fit': 'none',
       'background-width': '20px',
       'background-height': '20px',
