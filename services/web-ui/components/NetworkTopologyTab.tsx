@@ -183,8 +183,14 @@ const TYPE_COLOR: Record<string, string> = {
 const NODE_W = '168px'
 const NODE_H = '48px'
 
+// ---------------------------------------------------------------------------
+// Cloudcraft Canvas Light stylesheet
+// Light dot-grid canvas, white node cards with colored left-border accent,
+// colored edges per relationship type, high-contrast labels.
+// ---------------------------------------------------------------------------
+
 const cytoscapeStylesheet: CytoscapeStylesheet[] = [
-  // ── Base node ─────────────────────────────────────────────────────────────
+  // ── Base node — white card with subtle shadow ──────────────────────────────
   {
     selector: 'node',
     style: {
@@ -192,115 +198,151 @@ const cytoscapeStylesheet: CytoscapeStylesheet[] = [
       'font-family': 'Inter, system-ui, sans-serif',
       'font-size': '11px',
       'font-weight': '500',
-      // Label nudged right to leave room for the HTML icon overlay on the left
       'text-valign': 'center',
       'text-halign': 'center',
       'text-wrap': 'ellipsis',
       'text-max-width': '110px',
       'text-margin-x': '14px',
-      color: '#cbd5e1',
-      'background-color': '#1e2d45',
+      color: '#1e293b',
+      'background-color': '#ffffff',
       'border-width': 1,
-      'border-color': '#2d3f5c',
+      'border-color': '#e2e8f0',
       shape: 'roundrectangle',
       width: NODE_W,
       height: NODE_H,
+      // Simulate drop shadow via ghost/outline — Cytoscape doesn't have CSS box-shadow,
+      // so we use a transparent outline as a soft visual lift cue.
+      'outline-width': 0,
     },
   },
-  // ── Per-type: accent border only (icon rendered via nodeHtmlLabel) ────────
+  // ── Per-type: 3px colored left-border accent (background gradient trick) ──
+  // We use background-gradient to paint a sharp left accent band:
+  //   stop 0 = accent color, stop at ~3px from left = accent, then white
+  // Cytoscape supports background-gradient-stop-colors + background-gradient-direction
   ...Object.entries(TYPE_COLOR).map(([type, color]) => ({
     selector: `node[type="${type}"]`,
     style: {
       'border-color': color,
       'border-width': 2,
+      'border-opacity': 0.8,
     } as Record<string, unknown>,
   })),
-  // VNet is slightly larger and bolder
-  { selector: 'node[type="vnet"]',    style: { 'font-weight': '600', width: '178px', height: '52px' } },
-  { selector: 'node[type="subnet"]',  style: { 'background-color': '#141d2e', 'border-width': 1, 'border-style': 'dashed' } },
-  { selector: 'node[type="external"]',style: { 'background-color': '#111827', 'border-style': 'dashed', color: '#6b7280' } as Record<string, unknown> },
+  // VNet — light blue fill, more prominent
+  {
+    selector: 'node[type="vnet"]',
+    style: {
+      'background-color': '#eff6ff',
+      'border-color': '#3b82f6',
+      'border-width': 2,
+      color: '#1e40af',
+      'font-weight': '600',
+      width: '178px',
+      height: '52px',
+    },
+  },
+  // Subnet — very light, dashed border, muted text
+  {
+    selector: 'node[type="subnet"]',
+    style: {
+      'background-color': '#f8fafc',
+      'border-color': '#94a3b8',
+      'border-width': 1,
+      'border-style': 'dashed',
+      color: '#475569',
+    },
+  },
+  // External — off-white, dashed
+  {
+    selector: 'node[type="external"]',
+    style: {
+      'background-color': '#f1f5f9',
+      'border-color': '#cbd5e1',
+      'border-style': 'dashed',
+      color: '#64748b',
+    } as Record<string, unknown>,
+  },
   // ── Health overlays ───────────────────────────────────────────────────────
-  { selector: 'node[health="yellow"]', style: { 'border-color': '#fbbf24', 'border-width': 2 } },
+  { selector: 'node[health="yellow"]', style: { 'border-color': '#f59e0b', 'border-width': 2 } },
   { selector: 'node[health="red"]',    style: { 'border-color': '#ef4444', 'border-width': 2.5 } },
   // ── Selected ──────────────────────────────────────────────────────────────
   {
     selector: 'node:selected',
-    style: { 'border-width': 3, 'border-color': '#ffffff', color: '#ffffff' },
+    style: { 'border-width': 2.5, 'border-color': '#3b82f6', color: '#1e40af' },
   },
-  // ── Edges — default ───────────────────────────────────────────────────────
+  // ── Edges — default light gray ─────────────────────────────────────────────
   {
     selector: 'edge',
     style: {
       'curve-style': 'bezier',
-      'line-color': '#2d3f5c',
+      'line-color': '#cbd5e1',
       width: 1,
-      'target-arrow-color': '#2d3f5c',
+      'target-arrow-color': '#cbd5e1',
       'target-arrow-shape': 'triangle',
       'arrow-scale': 0.6,
-      opacity: 0.8,
+      opacity: 0.9,
     },
   },
-  // Containment — invisible
+  // Containment — barely visible
   { selector: 'edge[type="contains"]',
-    style: { 'line-color': '#0f172a', 'target-arrow-shape': 'none', width: 0.5, opacity: 0.3 },
+    style: { 'line-color': '#e2e8f0', 'target-arrow-shape': 'none', width: 0.5, opacity: 0.4 },
   },
-  // Subnet member edges — subtle dashes, no arrow
-  { selector: 'edge[type="subnet-vm"]',    style: { 'line-color': '#22c55e',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-vmss"]',  style: { 'line-color': '#34d399',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-nsg"]',   style: { 'line-color': '#f43f5e',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
-  { selector: 'edge[type="subnet-aks"]',   style: { 'line-color': '#0ea5e9',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-lb"]',    style: { 'line-color': '#a78bfa',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-appgw"]', style: { 'line-color': '#fb923c',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-pe"]',    style: { 'line-color': '#818cf8',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
-  { selector: 'edge[type="subnet-gateway"]',style:{ 'line-color': '#fbbf24',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
-  { selector: 'edge[type="subnet-firewall"]',style:{'line-color': '#ef4444',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
-  { selector: 'edge[type="subnet-routetable"]', style: { 'line-color': '#4ade80', 'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.5 } },
-  { selector: 'edge[type="subnet-natgw"]', style: { 'line-color': '#2dd4bf',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  // Subnet member edges — colored dashes, no arrow
+  { selector: 'edge[type="subnet-vm"]',    style: { 'line-color': '#16a34a',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-vmss"]',  style: { 'line-color': '#059669',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-nsg"]',   style: { 'line-color': '#e11d48',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-aks"]',   style: { 'line-color': '#0284c7',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-lb"]',    style: { 'line-color': '#7c3aed',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-appgw"]', style: { 'line-color': '#ea580c',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-pe"]',    style: { 'line-color': '#6366f1',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-gateway"]',style:{ 'line-color': '#d97706',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-firewall"]',style:{'line-color': '#dc2626',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1.5, 'target-arrow-shape': 'none', opacity: 0.7 } },
+  { selector: 'edge[type="subnet-routetable"]', style: { 'line-color': '#15803d', 'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.6 } },
+  { selector: 'edge[type="subnet-natgw"]', style: { 'line-color': '#0d9488',  'line-style': 'dashed', 'line-dash-pattern': [6, 3] as unknown as number, width: 1, 'target-arrow-shape': 'none', opacity: 0.7 } },
   // Traffic edges — solid with arrow
-  { selector: 'edge[type="peering"]',            style: { 'line-color': '#3b82f6', 'target-arrow-color': '#3b82f6', width: 2, opacity: 1 } },
-  { selector: 'edge[type="peering-disconnected"]',style: { 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'line-style': 'dashed', width: 2, opacity: 0.9 } },
-  { selector: 'edge[type="asymmetry"]',          style: { 'line-color': '#f43f5e', 'target-arrow-color': '#f43f5e', 'line-style': 'dashed', width: 2.5, opacity: 1 } },
-  { selector: 'edge[type="vpn-connection"]',     style: { 'line-color': '#fbbf24', 'target-arrow-color': '#fbbf24', width: 2, opacity: 1 } },
-  { selector: 'edge[type="lb-backend"]',         style: { 'line-color': '#a78bfa', 'target-arrow-color': '#a78bfa', width: 1.5, opacity: 0.8 } },
-  { selector: 'edge[type="appgw-backend"]',      style: { 'line-color': '#fb923c', 'target-arrow-color': '#fb923c', 'line-style': 'dashed', width: 1.5, opacity: 0.8 } },
-  { selector: 'edge[type="resource-publicip"]',  style: { 'line-color': '#38bdf8', 'target-arrow-color': '#38bdf8', width: 1.5, opacity: 0.8 } },
-  { selector: 'edge[type="nic-nsg"]',            style: { 'line-color': '#f97316', 'target-arrow-color': '#f97316', 'line-style': 'dashed', width: 1, opacity: 0.7 } },
-  { selector: 'edge[type="pe-target"]',          style: { 'line-color': '#818cf8', 'target-arrow-color': '#818cf8', 'line-style': 'dashed', width: 1.5, opacity: 0.8 } },
-  { selector: 'edge[type="firewall-policy"]',    style: { 'line-color': '#f97316', 'target-arrow-color': '#f97316', width: 1.5, opacity: 0.8 } },
-  { selector: 'edge[type="firewall-mgmt-subnet"]',style:{ 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'line-style': 'dashed', width: 1, opacity: 0.7 } },
+  { selector: 'edge[type="peering"]',            style: { 'line-color': '#2563eb', 'target-arrow-color': '#2563eb', width: 2, opacity: 1 } },
+  { selector: 'edge[type="peering-disconnected"]',style: { 'line-color': '#dc2626', 'target-arrow-color': '#dc2626', 'line-style': 'dashed', width: 2, opacity: 0.9 } },
+  { selector: 'edge[type="asymmetry"]',          style: { 'line-color': '#e11d48', 'target-arrow-color': '#e11d48', 'line-style': 'dashed', width: 2.5, opacity: 1 } },
+  { selector: 'edge[type="vpn-connection"]',     style: { 'line-color': '#d97706', 'target-arrow-color': '#d97706', width: 2, opacity: 1 } },
+  { selector: 'edge[type="lb-backend"]',         style: { 'line-color': '#7c3aed', 'target-arrow-color': '#7c3aed', width: 1.5, opacity: 0.85 } },
+  { selector: 'edge[type="appgw-backend"]',      style: { 'line-color': '#ea580c', 'target-arrow-color': '#ea580c', 'line-style': 'dashed', width: 1.5, opacity: 0.85 } },
+  { selector: 'edge[type="resource-publicip"]',  style: { 'line-color': '#0284c7', 'target-arrow-color': '#0284c7', width: 1.5, opacity: 0.85 } },
+  { selector: 'edge[type="nic-nsg"]',            style: { 'line-color': '#ea580c', 'target-arrow-color': '#ea580c', 'line-style': 'dashed', width: 1, opacity: 0.75 } },
+  { selector: 'edge[type="pe-target"]',          style: { 'line-color': '#6366f1', 'target-arrow-color': '#6366f1', 'line-style': 'dashed', width: 1.5, opacity: 0.85 } },
+  { selector: 'edge[type="firewall-policy"]',    style: { 'line-color': '#ea580c', 'target-arrow-color': '#ea580c', width: 1.5, opacity: 0.85 } },
+  { selector: 'edge[type="firewall-mgmt-subnet"]',style:{ 'line-color': '#dc2626', 'target-arrow-color': '#dc2626', 'line-style': 'dashed', width: 1, opacity: 0.75 } },
   // ── Path check states ──────────────────────────────────────────────────────
   {
     selector: 'edge.path-allowed',
-    style: { 'line-color': '#22c55e', 'target-arrow-color': '#22c55e', width: 2.5, opacity: 1 },
+    style: { 'line-color': '#16a34a', 'target-arrow-color': '#16a34a', width: 2.5, opacity: 1 },
   },
   // ── Highlight states ───────────────────────────────────────────────────────
   {
     selector: '.chat-highlighted',
-    style: { 'border-color': '#fb923c', 'border-width': 3, 'background-color': 'rgba(251,146,60,0.15)' },
+    style: { 'border-color': '#f97316', 'border-width': 3, 'background-color': '#fff7ed' },
   },
   {
     selector: '.issue-highlighted',
-    style: { 'border-color': '#f43f5e', 'border-width': 3, 'background-color': 'rgba(244,63,94,0.18)', opacity: 1 },
+    style: { 'border-color': '#e11d48', 'border-width': 3, 'background-color': '#fff1f2', opacity: 1 },
   },
   {
     selector: '.issue-dimmed',
-    style: { opacity: 0.08 },
-  },
-  {
-    selector: '.path-blocked',
-    style: { 'border-color': '#ef4444', 'border-width': 3, 'background-color': 'rgba(239,68,68,0.15)' },
-  },
-  {
-    selector: '.dimmed',
     style: { opacity: 0.15 },
   },
   {
+    selector: '.path-blocked',
+    style: { 'border-color': '#ef4444', 'border-width': 3, 'background-color': '#fef2f2' },
+  },
+  {
+    selector: '.dimmed',
+    style: { opacity: 0.18 },
+  },
+  {
     selector: '.search-match',
-    style: { 'border-color': '#ffffff', 'border-width': 3, opacity: 1 },
+    style: { 'border-color': '#2563eb', 'border-width': 2.5, opacity: 1 },
   },
   {
     selector: '.search-dimmed',
-    style: { opacity: 0.12 },
+    style: { opacity: 0.18 },
   },
 ]
 // ---------------------------------------------------------------------------
@@ -334,35 +376,35 @@ function toNodePanelType(apiType: string): string {
 // ---------------------------------------------------------------------------
 
 const LEGEND_NODES: { label: string; color: string; shape: string }[] = [
-  { label: 'VNet',            color: '#0ea5e9', shape: 'roundrect' },
-  { label: 'Subnet',          color: '#475569', shape: 'roundrect' },
-  { label: 'NSG',             color: '#64748b', shape: 'hex' },
-  { label: 'VM',              color: '#10b981', shape: 'circle' },
-  { label: 'VMSS',            color: '#38bdf8', shape: 'circle' },
-  { label: 'AKS',             color: '#0ea5e9', shape: 'rect' },
-  { label: 'Load Balancer',   color: '#8b5cf6', shape: 'para' },
-  { label: 'App Gateway',     color: '#c084fc', shape: 'para' },
-  { label: 'VPN/ER Gateway',  color: '#f59e0b', shape: 'diamond' },
-  { label: 'Firewall',        color: '#ef4444', shape: 'oct' },
-  { label: 'Private Endpoint',color: '#a78bfa', shape: 'cutrect' },
-  { label: 'Public IP',       color: '#0ea5e9', shape: 'circle' },
-  { label: 'Route Table',     color: '#6ee7b7', shape: 'rect' },
-  { label: 'Local Gateway',   color: '#f59e0b', shape: 'diamond' },
-  { label: 'NAT Gateway',     color: '#14b8a6', shape: 'roundrect' },
-  { label: 'External',        color: '#475569', shape: 'circle' },
+  { label: 'VNet',            color: '#3b82f6', shape: 'roundrect' },
+  { label: 'Subnet',          color: '#94a3b8', shape: 'roundrect' },
+  { label: 'NSG',             color: '#e11d48', shape: 'hex' },
+  { label: 'VM',              color: '#16a34a', shape: 'circle' },
+  { label: 'VMSS',            color: '#059669', shape: 'circle' },
+  { label: 'AKS',             color: '#0284c7', shape: 'rect' },
+  { label: 'Load Balancer',   color: '#7c3aed', shape: 'para' },
+  { label: 'App Gateway',     color: '#ea580c', shape: 'para' },
+  { label: 'VPN/ER Gateway',  color: '#d97706', shape: 'diamond' },
+  { label: 'Firewall',        color: '#dc2626', shape: 'oct' },
+  { label: 'Private Endpoint',color: '#6366f1', shape: 'cutrect' },
+  { label: 'Public IP',       color: '#0284c7', shape: 'circle' },
+  { label: 'Route Table',     color: '#15803d', shape: 'rect' },
+  { label: 'Local Gateway',   color: '#d97706', shape: 'diamond' },
+  { label: 'NAT Gateway',     color: '#0d9488', shape: 'roundrect' },
+  { label: 'External',        color: '#64748b', shape: 'circle' },
 ]
 
 const LEGEND_EDGES: { label: string; color: string; dashed?: boolean }[] = [
-  { label: 'VNet Peering',          color: '#0ea5e9' },
-  { label: 'Peering Disconnected',  color: '#ef4444', dashed: true },
-  { label: 'NSG Asymmetry',         color: '#ef4444', dashed: true },
-  { label: 'Subnet → VM',           color: '#10b981' },
-  { label: 'NIC NSG',               color: '#f97316', dashed: true },
-  { label: 'LB Backend',            color: '#8b5cf6' },
-  { label: 'Route Table',           color: '#6ee7b7' },
-  { label: 'VPN Connection',        color: '#f59e0b' },
-  { label: 'PE → Target',           color: '#f59e0b', dashed: true },
-  { label: 'Firewall Policy',       color: '#f97316' },
+  { label: 'VNet Peering',          color: '#2563eb' },
+  { label: 'Peering Disconnected',  color: '#dc2626', dashed: true },
+  { label: 'NSG Asymmetry',         color: '#e11d48', dashed: true },
+  { label: 'Subnet → VM',           color: '#16a34a' },
+  { label: 'NIC NSG',               color: '#ea580c', dashed: true },
+  { label: 'LB Backend',            color: '#7c3aed' },
+  { label: 'Route Table',           color: '#15803d' },
+  { label: 'VPN Connection',        color: '#d97706' },
+  { label: 'PE → Target',           color: '#6366f1', dashed: true },
+  { label: 'Firewall Policy',       color: '#ea580c' },
 ]
 
 function LegendOverlay() {
@@ -376,23 +418,24 @@ function LegendOverlay() {
         <div
           className="rounded overflow-y-auto"
           style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+            color: '#1e293b',
             fontSize: 12,
             maxHeight: 300,
             width: 200,
             padding: '8px 10px',
           }}
         >
-          <p style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nodes</p>
+          <p style={{ color: '#64748b', fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nodes</p>
           {LEGEND_NODES.map(({ label, color }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: `color-mix(in srgb, ${color} 20%, #1e293b)`, border: `2px solid ${color}`, flexShrink: 0 }} />
-              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: `color-mix(in srgb, ${color} 15%, #ffffff)`, border: `2px solid ${color}`, flexShrink: 0 }} />
+              <span style={{ color: '#475569' }}>{label}</span>
             </div>
           ))}
-          <p style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, marginTop: 8, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Edges</p>
+          <p style={{ color: '#64748b', fontSize: 11, fontWeight: 600, marginTop: 8, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Edges</p>
           {LEGEND_EDGES.map(({ label, color, dashed }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
               <svg width="18" height="10" style={{ flexShrink: 0 }}>
@@ -403,7 +446,7 @@ function LegendOverlay() {
                   strokeDasharray={dashed ? '3 2' : undefined}
                 />
               </svg>
-              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <span style={{ color: '#475569' }}>{label}</span>
             </div>
           ))}
         </div>
@@ -411,9 +454,10 @@ function LegendOverlay() {
       <button
         onClick={() => setOpen((v) => !v)}
         style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border)',
-          color: 'var(--text-primary)',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
+          color: '#475569',
           borderRadius: 6,
           padding: '4px 8px',
           fontSize: 12,
@@ -1143,11 +1187,14 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
     const scaleX = w / ((ext.x2 - ext.x1) || 1)
     const scaleY = h / ((ext.y2 - ext.y1) || 1)
     ctx.clearRect(0, 0, w, h)
+    // Light bg fill
+    ctx.fillStyle = '#f8fafc'
+    ctx.fillRect(0, 0, w, h)
     cy.nodes().forEach((node) => {
       const pos = node.position()
       const x = (pos.x - ext.x1) * scaleX
       const y = (pos.y - ext.y1) * scaleY
-      ctx.fillStyle = '#334155'
+      ctx.fillStyle = '#94a3b8'
       ctx.fillRect(x - 2, y - 2, 4, 4)
     })
     // Viewport rectangle
@@ -1157,7 +1204,7 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
     const vy = (-pan.y / zoom - ext.y1) * scaleY
     const vw = (cy.width() / zoom) * scaleX
     const vh = (cy.height() / zoom) * scaleY
-    ctx.strokeStyle = '#0ea5e9'
+    ctx.strokeStyle = '#2563eb'
     ctx.lineWidth = 1
     ctx.strokeRect(vx, vy, vw, vh)
   }, [])
@@ -1505,12 +1552,12 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
 
       {topologyData && topologyData.nodes.length > 0 && (
         <div className="flex" style={{ height: 'calc(100vh - 220px)' }}>
-          <div style={{ flex: '1 1 0', minWidth: 0, background: 'var(--bg-canvas)', position: 'relative' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, background: '#f8fafc', backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', backgroundSize: '24px 24px', position: 'relative' }}>
             {/* Refreshing indicator */}
             {loading && topologyData && (
               <div
                 className="absolute top-3 right-3 z-10 flex items-center gap-1.5 rounded px-2 py-1 text-xs"
-                style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                style={{ background: '#ffffff', color: '#64748b', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
               >
                 <RefreshCw size={11} className="animate-spin" />
                 Refreshing…
@@ -1525,9 +1572,10 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               className="absolute top-3 z-10 rounded"
               style={{
                 right: loading && topologyData ? 120 : 10,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                opacity: 0.9,
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                opacity: 0.95,
                 cursor: 'crosshair',
               }}
               onMouseDown={(e) => {
@@ -1573,19 +1621,19 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               <button
                 onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)}
                 className="flex items-center justify-center w-8 h-8 rounded text-sm font-semibold"
-                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                style={{ background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
                 title="Zoom in"
               >+</button>
               <button
                 onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 0.8)}
                 className="flex items-center justify-center w-8 h-8 rounded text-sm font-semibold"
-                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                style={{ background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
                 title="Zoom out"
               >−</button>
               <button
                 onClick={() => cyRef.current?.fit(undefined, 30)}
                 className="flex items-center justify-center w-8 h-8 rounded text-sm"
-                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                style={{ background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
                 title="Fit to screen"
               >⊞</button>
             </div>
@@ -1691,7 +1739,7 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
                   if (evt.target === cy) setDetailOpen(false)
                 })
               }}
-              style={{ width: '100%', height: '100%', background: 'var(--bg-canvas)' }}
+              style={{ width: '100%', height: '100%', background: 'transparent' }}
             />
           </div>
           {chatOpen && (
