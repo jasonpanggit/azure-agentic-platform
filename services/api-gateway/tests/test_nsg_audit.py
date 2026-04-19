@@ -4,9 +4,9 @@ from __future__ import annotations
 Coverage:
 - classify_rule: risk classification for critical/high/medium/info/safe rules
 - scan_nsg_compliance: ARG integration with mocked results
-- get_findings: filtering by severity and subscription
-- get_summary: aggregation logic
-- API endpoints: GET findings, GET summary, POST scan
+- get_findings: filtering by severity and subscription (service-level, Cosmos)
+- get_summary: aggregation logic (service-level, Cosmos)
+- API endpoints: GET findings (live ARG), GET summary (live ARG)
 """
 import os
 
@@ -20,7 +20,6 @@ from services.api_gateway.nsg_audit_service import (
     classify_rule,
     get_findings,
     get_summary,
-    persist_findings,
     scan_nsg_compliance,
     _is_internet_source,
     _is_broad_cidr,
@@ -357,88 +356,120 @@ class TestGetSummary:
 
 
 # ---------------------------------------------------------------------------
-# API endpoint tests
+# API endpoint tests (live ARG via arg_cache)
 # ---------------------------------------------------------------------------
+
+
+def _make_finding(**kwargs: Any) -> NSGFinding:
+    defaults = dict(
+        finding_id="f1", nsg_id="nsg1", nsg_name="nsg1", resource_group="rg",
+        subscription_id="sub-001", location="eastus", rule_name="r1", priority=100,
+        direction="Inbound", access="Allow", source_address="*",
+        destination_port="22", severity="critical",
+        description="desc", remediation="rem", scanned_at="2026-01-01T00:00:00Z",
+    )
+    defaults.update(kwargs)
+    return NSGFinding(**defaults)
 
 
 @pytest.fixture()
 def app_client():
-    """Build a TestClient with mocked app.state dependencies."""
+    """Build a TestClient with mocked dependencies (no Cosmos required)."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from services.api_gateway.nsg_audit_endpoints import router
-    from services.api_gateway.dependencies import get_scoped_credential, get_cosmos_client
+    from services.api_gateway.dependencies import get_scoped_credential
 
     application = FastAPI()
     application.include_router(router)
 
-    cosmos_mock = MagicMock()
     credential_mock = MagicMock()
-
-    # Wire state
-    application.state.cosmos_client = cosmos_mock
     application.state.credential = credential_mock
 
-    # Override scoped credential — NSG endpoints don't have a /{subscription_id} path param,
-    # so get_scoped_credential would fail with 422. Return the flat credential instead.
     async def _mock_scoped_credential() -> object:
         return credential_mock
 
     application.dependency_overrides[get_scoped_credential] = _mock_scoped_credential
-    application.dependency_overrides[get_cosmos_client] = lambda: cosmos_mock
 
-    return TestClient(application), cosmos_mock, credential_mock
+    return TestClient(application), credential_mock
 
 
 class TestNsgEndpoints:
-    def test_get_findings_returns_200(self, app_client):
-        client, cosmos_mock, _ = app_client
-        container = _make_cosmos_container([])
-        db = MagicMock()
-        db.get_container_client.return_value = container
-        cosmos_mock.get_database_client.return_value = db
-
-        resp = client.get("/api/v1/nsg/findings")
+    def test_get_findings_returns_200_empty(self, app_client):
+        client, _ = app_client
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=[]):
+            resp = client.get("/api/v1/nsg/findings")
         assert resp.status_code == 200
         data = resp.json()
-        assert "findings" in data
-        assert "count" in data
+        assert data["findings"] == []
+        assert data["count"] == 0
+
+    def test_get_findings_returns_findings(self, app_client):
+        client, _ = app_client
+        finding = _make_finding()
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=[finding]):
+            resp = client.get("/api/v1/nsg/findings")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 1
+        assert data["findings"][0]["severity"] == "critical"
 
     def test_get_findings_invalid_severity_returns_422(self, app_client):
-        client, _, _ = app_client
-        resp = client.get("/api/v1/nsg/findings?severity=bogus")
+        client, _ = app_client
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=[]):
+            resp = client.get("/api/v1/nsg/findings?severity=bogus")
         assert resp.status_code == 422
+
+    def test_get_findings_severity_filter(self, app_client):
+        client, _ = app_client
+        findings = [
+            _make_finding(finding_id="f1", severity="critical"),
+            _make_finding(finding_id="f2", rule_name="r2", severity="high"),
+        ]
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=findings):
+            resp = client.get("/api/v1/nsg/findings?severity=high")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 1
+        assert data["findings"][0]["severity"] == "high"
+
+    def test_get_findings_subscription_filter(self, app_client):
+        client, _ = app_client
+        findings = [
+            _make_finding(finding_id="f1", subscription_id="sub-001"),
+            _make_finding(finding_id="f2", rule_name="r2", subscription_id="sub-002"),
+        ]
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=findings):
+            resp = client.get("/api/v1/nsg/findings?subscription_id=sub-001")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 1
+        assert data["findings"][0]["subscription_id"] == "sub-001"
 
     def test_get_summary_returns_200(self, app_client):
-        client, cosmos_mock, _ = app_client
-        container = _make_cosmos_container([])
-        db = MagicMock()
-        db.get_container_client.return_value = container
-        cosmos_mock.get_database_client.return_value = db
-
-        resp = client.get("/api/v1/nsg/findings/summary")
+        client, _ = app_client
+        findings = [
+            _make_finding(finding_id="f1", nsg_name="nsg-a", severity="critical"),
+            _make_finding(finding_id="f2", rule_name="r2", nsg_name="nsg-a", severity="high"),
+            _make_finding(finding_id="f3", rule_name="r3", nsg_name="nsg-b", severity="medium"),
+        ]
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=findings):
+            resp = client.get("/api/v1/nsg/findings/summary")
         assert resp.status_code == 200
         data = resp.json()
-        assert "counts" in data
-        assert "top_risky_nsgs" in data
+        assert data["counts"]["critical"] == 1
+        assert data["counts"]["high"] == 1
+        assert data["counts"]["medium"] == 1
+        assert data["counts"]["total"] == 3
+        assert data["top_risky_nsgs"][0]["nsg_name"] == "nsg-a"
+        assert data["top_risky_nsgs"][0]["finding_count"] == 2
+        assert "generated_at" in data
 
-    def test_post_scan_returns_queued(self, app_client):
-        client, cosmos_mock, _ = app_client
-        container = _make_cosmos_container([])
-        db = MagicMock()
-        db.get_container_client.return_value = container
-        cosmos_mock.get_database_client.return_value = db
-
-        with patch.dict("os.environ", {"SUBSCRIPTION_IDS": "sub-001,sub-002"}):
-            resp = client.post("/api/v1/nsg/scan")
+    def test_get_summary_empty(self, app_client):
+        client, _ = app_client
+        with patch("services.api_gateway.nsg_audit_endpoints.get_cached", return_value=[]):
+            resp = client.get("/api/v1/nsg/findings/summary")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "queued"
-        assert "scan_id" in data
-        assert data["subscription_count"] == 2
-
-    def test_post_scan_no_subscriptions_returns_422(self, app_client):
-        client, _, _ = app_client
-        with patch.dict("os.environ", {"SUBSCRIPTION_IDS": ""}):
-            resp = client.post("/api/v1/nsg/scan")
-        assert resp.status_code == 422
+        assert data["counts"]["total"] == 0
+        assert data["top_risky_nsgs"] == []
