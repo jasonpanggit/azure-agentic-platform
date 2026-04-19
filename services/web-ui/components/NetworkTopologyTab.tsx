@@ -174,6 +174,11 @@ function resolveExternalIconType(resourceId: string): string | null {
   return null
 }
 
+/** Truncate a resource name for display inside a fixed-width node card. */
+function truncateLabel(name: string, max = 22): string {
+  return name.length > max ? name.slice(0, max - 1) + '…' : name
+}
+
 function buildCytoscapeElements(
   apiNodes: TopologyNode[],
   apiEdges: TopologyEdge[]
@@ -188,11 +193,13 @@ function buildCytoscapeElements(
       : null
     const effectiveType = resolvedIconType ?? n.type
     const typeTag = TYPE_LABEL[effectiveType] ?? n.type
+    const displayName = truncateLabel(n.label)
     elements.push({
       data: {
         id: n.id,
-        // Two-line label: name + type tag on second line (Cytoscape text-wrap: wrap)
-        label: `${n.label}\n${typeTag}`,
+        // Two-line label: truncated name + type tag on second line (Cytoscape text-wrap: wrap)
+        label: `${displayName}\n${typeTag}`,
+        fullLabel: n.label,
         type: n.type,
         // iconType drives background-image selection in the stylesheet
         iconType: resolvedIconType ?? n.type,
@@ -683,13 +690,15 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
   const renderNodeContent = () => {
     if (!node) return null
     const d = node.data
+    // fullLabel is the untruncated name stored in node data; fall back to label
+    const fullName = (d.fullLabel as string | undefined) ?? (d.label as string)
 
     switch (node.type) {
       case 'nsgNode':
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NSG Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             <FieldRow label="Health" value={<HealthBadge health={(d.health as string) ?? 'green'} />} />
             {NSG_HEALTH_EXPLANATIONS[(d.health as string)]}
             {d.ruleCount != null && <FieldRow label="Rule Count" value={String(d.ruleCount)} />}
@@ -714,7 +723,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VNet Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.addressSpace && <FieldRow label="Address Space" value={<span className="font-mono">{d.addressSpace as string}</span>} />}
             {(d.subscriptionId || d.subscription) && <FieldRow label="Subscription" value={(d.subscriptionId || d.subscription) as string} />}
             {d.location && <FieldRow label="Location" value={d.location as string} />}
@@ -726,7 +735,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Subnet Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.prefix && <FieldRow label="CIDR" value={<span className="font-mono">{d.prefix as string}</span>} />}
             <FieldRow label="NSG" value={(d.nsgId as string) || 'None'} />
             {d.routeTable && <FieldRow label="Route Table" value={d.routeTable as string} />}
@@ -737,7 +746,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Load Balancer Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
             {d.publicIpId
               ? <FieldRow label="Public IP" value={<span className="font-mono text-xs break-all">{d.publicIpId as string}</span>} />
@@ -749,7 +758,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Private Endpoint Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.targetResourceId && <FieldRow label="Target Resource" value={<span className="font-mono text-xs break-all">{d.targetResourceId as string}</span>} />}
           </>
         )
@@ -758,7 +767,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Gateway Details</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.gatewayType && <FieldRow label="Type" value={d.gatewayType as string} />}
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
             <FieldRow label="BGP" value={(d.bgpEnabled as boolean) ? 'Enabled' : 'Disabled'} />
@@ -769,7 +778,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Virtual Machine</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.vmSize && <FieldRow label="Size" value={<span className="font-mono">{d.vmSize as string}</span>} />}
             {d.osType && <FieldRow label="OS Type" value={d.osType as string} />}
             {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
@@ -782,7 +791,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>VM Scale Set</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.sku && <FieldRow label="SKU" value={<span className="font-mono">{d.sku as string}</span>} />}
             {d.capacity != null && <FieldRow label="Capacity" value={`${d.capacity} instances`} />}
             {d.location && <FieldRow label="Location" value={d.location as string} />}
@@ -794,7 +803,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>AKS Cluster</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.kubernetesVersion && <FieldRow label="Kubernetes Version" value={<span className="font-mono">{d.kubernetesVersion as string}</span>} />}
             {d.nodeCount != null && <FieldRow label="Node Count" value={String(d.nodeCount)} />}
             {d.provisioningState && <FieldRow label="State" value={d.provisioningState as string} />}
@@ -807,7 +816,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Azure Firewall</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.skuTier && <FieldRow label="SKU Tier" value={d.skuTier as string} />}
             {d.threatIntelMode && <FieldRow label="Threat Intel Mode" value={d.threatIntelMode as string} />}
             {d.privateIp && <FieldRow label="Private IP" value={<span className="font-mono">{d.privateIp as string}</span>} />}
@@ -820,7 +829,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Application Gateway</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
             {d.skuTier && <FieldRow label="Tier" value={d.skuTier as string} />}
             {d.capacity != null && <FieldRow label="Capacity" value={String(d.capacity)} />}
@@ -833,7 +842,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Public IP Address</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.ipAddress && <FieldRow label="IP Address" value={<span className="font-mono">{d.ipAddress as string}</span>} />}
             {d.allocationMethod && <FieldRow label="Allocation" value={d.allocationMethod as string} />}
             {d.sku && <FieldRow label="SKU" value={d.sku as string} />}
@@ -844,7 +853,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Route Table</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.routeCount != null && <FieldRow label="Route Count" value={String(d.routeCount)} />}
             {d.location && <FieldRow label="Location" value={d.location as string} />}
             <FieldRow label="Resource ID" value={<span className="font-mono text-xs break-all">{node.id}</span>} />
@@ -855,7 +864,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>Local Network Gateway</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.gatewayIp && <FieldRow label="Gateway IP" value={<span className="font-mono">{d.gatewayIp as string}</span>} />}
             {d.addressPrefixes && <FieldRow label="Address Prefixes" value={d.addressPrefixes as string} />}
           </>
@@ -865,7 +874,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
         return (
           <>
             <p className="text-base font-semibold mt-4 mb-2" style={{ color: 'var(--text-primary)' }}>NAT Gateway</p>
-            <FieldRow label="Name" value={d.label as string} />
+            <FieldRow label="Name" value={fullName} />
             {d.idleTimeoutMinutes != null && <FieldRow label="Idle Timeout" value={`${d.idleTimeoutMinutes} min`} />}
           </>
         )
@@ -954,7 +963,7 @@ function NodeDetailPanel({ node, edge, open, onClose }: NodeDetailPanelProps) {
   const title = edge
     ? ((edge.label as string) || 'Connection Details')
     : node
-    ? (node.data.label as string)
+    ? ((node.data.fullLabel as string | undefined) ?? (node.data.label as string))
     : 'Details'
 
   return (
