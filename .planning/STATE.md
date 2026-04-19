@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Roadmap — World-Class AIOps
 status: Milestone complete
-last_updated: "2026-04-18T15:35:23.019Z"
+last_updated: "2026-04-18T16:20:09.258Z"
 progress:
   total_phases: 35
   completed_phases: 34
@@ -13,6 +13,10 @@ progress:
 ---
 
 # Azure Agentic Platform (AAP) — Project State
+
+> Last activity: 2026-04-19 - Completed quick task 260419-c09: Fix Storage agent stub tools — query_storage_metrics, query_blob_diagnostics, query_file_sync_health now make real Azure SDK calls (MonitorManagementClient, LogsQueryClient, StorageSyncManagementClient).
+
+> Last activity: 2026-04-19 - Completed quick task 260419-bx5: Wire 9 orphaned tabs into hub navigation — NsgAuditTab→NetworkHub, PolicyComplianceTab+AlertCoverageTab+VMExtensionAuditTab→SecurityHub, CostAnomalyTab→CostHub, LockAuditTab+TaggingComplianceTab→AuditHub, AppServiceHealthTab+QueueDepthTab→ResourcesHub.
 
 > Last activity: 2026-04-18 - Completed quick task 260418-jz2: Move TopologyTab to Resources hub as Resource Hierarchy sub-tab — TopologyTab.tsx renamed to ResourceHierarchyTab.tsx, added to ResourcesHubTab, removed from NetworkHubTab.
 
