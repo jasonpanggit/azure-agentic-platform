@@ -15,6 +15,10 @@ import {
   MessageSquare,
   Eye,
   EyeOff,
+  ExternalLink,
+  Copy,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import {
   Sheet,
@@ -61,10 +65,37 @@ interface TopologyEdge {
   data: Record<string, unknown>
 }
 
+interface RemediationStep {
+  step: number
+  action: string
+  cli?: string
+}
+
+interface NetworkIssue {
+  id: string
+  type: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  explanation: string
+  impact: string
+  affected_resource_id: string
+  affected_resource_name: string
+  related_resource_ids: string[]
+  remediation_steps: RemediationStep[]
+  portal_link: string
+  auto_fix_available: boolean
+  auto_fix_label: string | null
+  // Legacy backward compat
+  source_nsg_id?: string
+  dest_nsg_id?: string
+  port?: number
+  description?: string
+}
+
 interface TopologyData {
   nodes: TopologyNode[]
   edges: TopologyEdge[]
-  issues: Array<Record<string, unknown>>
+  issues: NetworkIssue[]
 }
 
 interface PathStep {
@@ -107,6 +138,343 @@ interface SimpleEdge {
 // ---------------------------------------------------------------------------
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 min
+
+// ---------------------------------------------------------------------------
+// Severity config + badge
+// ---------------------------------------------------------------------------
+
+const SEVERITY_CONFIG = {
+  critical: { color: 'var(--accent-red)',    label: 'Critical', icon: '🔴' },
+  high:     { color: 'var(--accent-orange)', label: 'High',     icon: '🟠' },
+  medium:   { color: 'var(--accent-yellow)', label: 'Medium',   icon: '🟡' },
+  low:      { color: 'var(--accent-blue)',   label: 'Low',      icon: '🔵' },
+} as const
+
+type SeverityKey = keyof typeof SEVERITY_CONFIG
+
+function SeverityBadge({ severity }: { severity: SeverityKey }) {
+  const cfg = SEVERITY_CONFIG[severity]
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      style={{
+        background: `color-mix(in srgb, ${cfg.color} 15%, transparent)`,
+        color: cfg.color,
+      }}
+    >
+      {cfg.icon} {cfg.label}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// IssueCard component
+// ---------------------------------------------------------------------------
+
+interface RemediationResult {
+  status: 'executed' | 'approval_pending' | 'error'
+  message: string
+  approval_id?: string | null
+  execution_id?: string | null
+}
+
+interface IssueCardProps {
+  issue: NetworkIssue
+  isFocused: boolean
+  defaultExpanded: boolean
+  onFocus: () => void
+  remediating?: boolean
+  remediationResult?: RemediationResult | null
+  onRemediate?: (issue: NetworkIssue, requireApproval: boolean) => void
+}
+
+function IssueCard({
+  issue,
+  isFocused,
+  defaultExpanded,
+  onFocus,
+  remediating = false,
+  remediationResult = null,
+  onRemediate,
+}: IssueCardProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [copied, setCopied] = useState<number | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'fix' | 'approve' | null>(null)
+  const cfg = SEVERITY_CONFIG[issue.severity as SeverityKey] ?? SEVERITY_CONFIG.low
+
+  const handleCopy = (text: string, stepIdx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(stepIdx)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  const resourceName = issue.affected_resource_name
+    ? (issue.affected_resource_name.length > 40
+        ? issue.affected_resource_name.slice(0, 39) + '…'
+        : issue.affected_resource_name)
+    : (issue.source_nsg_id ?? '').split('/').pop() ?? ''
+
+  return (
+    <div
+      className="rounded-lg text-xs overflow-hidden"
+      style={{
+        background: isFocused
+          ? `color-mix(in srgb, ${cfg.color} 12%, var(--bg-surface))`
+          : 'var(--bg-canvas)',
+        border: isFocused
+          ? `1px solid ${cfg.color}`
+          : '1px solid var(--border)',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 p-3 pb-2">
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <SeverityBadge severity={issue.severity as SeverityKey} />
+            {resourceName && (
+              <span className="font-mono text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                {resourceName}
+              </span>
+            )}
+          </div>
+          <p className="font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
+            {issue.title || `Port ${issue.port}/TCP blocked`}
+          </p>
+        </div>
+      </div>
+
+      {/* Explanation (collapsible) */}
+      {issue.explanation && (
+        <div className="px-3 pb-2">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-[10px] font-medium mb-1"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            Explanation
+          </button>
+          {expanded && (
+            <p className="leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+              {issue.explanation}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Impact */}
+      {issue.impact && (
+        <div
+          className="mx-3 mb-2 px-2 py-1.5 rounded text-[11px] leading-snug"
+          style={{
+            background: `color-mix(in srgb, var(--accent-orange) 10%, transparent)`,
+            color: 'var(--accent-orange)',
+            border: '1px solid color-mix(in srgb, var(--accent-orange) 20%, transparent)',
+          }}
+        >
+          ⚠️ {issue.impact}
+        </div>
+      )}
+
+      {/* Remediation steps */}
+      {issue.remediation_steps?.length > 0 && (
+        <div className="px-3 pb-2">
+          <p className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Remediation</p>
+          <ol className="flex flex-col gap-2 list-none">
+            {issue.remediation_steps.map((step) => (
+              <li key={step.step} className="flex flex-col gap-1">
+                <span style={{ color: 'var(--text-primary)' }}>
+                  <span className="font-semibold" style={{ color: cfg.color }}>{step.step}.</span>{' '}
+                  {step.action}
+                </span>
+                {step.cli && (
+                  <div
+                    className="flex items-center gap-2 rounded px-2 py-1"
+                    style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}
+                  >
+                    <code className="flex-1 text-[10px] font-mono break-all" style={{ color: 'var(--text-primary)' }}>
+                      {step.cli}
+                    </code>
+                    <button
+                      onClick={() => handleCopy(step.cli!, step.step)}
+                      className="shrink-0"
+                      title="Copy to clipboard"
+                      style={{ color: copied === step.step ? 'var(--accent-green)' : 'var(--text-muted)' }}
+                    >
+                      <Copy size={11} />
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* Inline remediation feedback */}
+      {remediationResult && (
+        <div
+          className="mx-3 mb-2 px-2 py-1.5 rounded text-[11px] leading-snug"
+          style={{
+            background: remediationResult.status === 'executed'
+              ? 'color-mix(in srgb, var(--accent-green) 10%, transparent)'
+              : remediationResult.status === 'approval_pending'
+                ? 'color-mix(in srgb, var(--accent-blue) 10%, transparent)'
+                : 'color-mix(in srgb, var(--accent-red) 10%, transparent)',
+            color: remediationResult.status === 'executed'
+              ? 'var(--accent-green)'
+              : remediationResult.status === 'approval_pending'
+                ? 'var(--accent-blue)'
+                : 'var(--accent-red)',
+            border: `1px solid ${
+              remediationResult.status === 'executed'
+                ? 'color-mix(in srgb, var(--accent-green) 20%, transparent)'
+                : remediationResult.status === 'approval_pending'
+                  ? 'color-mix(in srgb, var(--accent-blue) 20%, transparent)'
+                  : 'color-mix(in srgb, var(--accent-red) 20%, transparent)'
+            }`,
+          }}
+        >
+          {remediationResult.status === 'executed' && '✅ '}
+          {remediationResult.status === 'approval_pending' && '📋 '}
+          {remediationResult.status === 'error' && '❌ '}
+          {remediationResult.message}
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {confirmAction && (
+        <div
+          className="mx-3 mb-2 px-3 py-2 rounded text-[11px] flex flex-col gap-2"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <p style={{ color: 'var(--text-primary)' }}>
+            {confirmAction === 'fix'
+              ? `This will ${issue.auto_fix_label ?? 'apply an automatic fix'}. Proceed?`
+              : `Submit a remediation approval request for this issue? Risk level: ${issue.auto_fix_available ? 'low' : 'high'}.`}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setConfirmAction(null)
+                onRemediate?.(issue, confirmAction === 'approve')
+              }}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-medium"
+              style={{
+                background: cfg.color,
+                color: '#fff',
+                border: 'none',
+              }}
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => setConfirmAction(null)}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-subtle)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action row */}
+      <div
+        className="flex items-center justify-between gap-2 px-3 py-2"
+        style={{ borderTop: '1px solid var(--border)' }}
+      >
+        <div className="flex items-center gap-1.5">
+          {issue.portal_link && (
+            <a
+              href={issue.portal_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-subtle)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                textDecoration: 'none',
+              }}
+            >
+              <ExternalLink size={10} /> Azure Portal
+            </a>
+          )}
+          {issue.auto_fix_available ? (
+            <button
+              disabled={remediating || !!confirmAction}
+              onClick={() => setConfirmAction('fix')}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: `color-mix(in srgb, ${cfg.color} 20%, transparent)`,
+                color: cfg.color,
+                border: `1px solid color-mix(in srgb, ${cfg.color} 30%, transparent)`,
+                opacity: remediating || confirmAction ? 0.5 : 1,
+                cursor: remediating || confirmAction ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {remediating ? '⏳' : '⚡'} {issue.auto_fix_label ?? 'Fix Now'}
+            </button>
+          ) : (
+            <button
+              disabled={remediating || !!confirmAction}
+              onClick={() => setConfirmAction('approve')}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-subtle)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                opacity: remediating || confirmAction ? 0.5 : 1,
+                cursor: remediating || confirmAction ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {remediating ? '⏳' : '📋'} Request Approval
+            </button>
+          )}
+          {/* Request Approval also available for auto-fixable issues */}
+          {issue.auto_fix_available && (
+            <button
+              disabled={remediating || !!confirmAction}
+              onClick={() => setConfirmAction('approve')}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-subtle)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                opacity: remediating || confirmAction ? 0.5 : 1,
+                cursor: remediating || confirmAction ? 'not-allowed' : 'pointer',
+              }}
+            >
+              📋 Request Approval
+            </button>
+          )}
+        </div>
+        <button
+          onClick={onFocus}
+          className="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
+          style={{
+            background: isFocused
+              ? cfg.color
+              : `color-mix(in srgb, ${cfg.color} 15%, transparent)`,
+            color: isFocused ? '#fff' : cfg.color,
+            border: `1px solid color-mix(in srgb, ${cfg.color} 35%, transparent)`,
+          }}
+        >
+          {isFocused ? '✕ Clear focus' : '🔍 Focus in graph'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // buildCytoscapeElements
@@ -1036,25 +1404,40 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set())
   const [issuesOpen, setIssuesOpen] = useState(false)
   const [focusedIssueIndex, setFocusedIssueIndex] = useState<number | null>(null)
+  // Issue filter state
+  const [issueSearch, setIssueSearch] = useState('')
+  const [issueSearchDebounced, setIssueSearchDebounced] = useState('')
+  const [severityFilter, setSeverityFilter] = useState<Set<SeverityKey>>(new Set(['critical', 'high', 'medium', 'low']))
+  const issueSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Focus a specific issue — highlight its NSGs, their subnets, and connected resources
-  const focusIssue = useCallback((issue: Record<string, unknown>, index: number) => {
+  // Remediation state
+  const [remediatingIssueId, setRemediatingIssueId] = useState<string | null>(null)
+  const [remediationResults, setRemediationResults] = useState<Record<string, RemediationResult>>({})
+
+  // Focus a specific issue — highlight affected resource and related resources
+  const focusIssue = useCallback((issue: NetworkIssue, index: number) => {
     const cy = cyRef.current
     if (!cy) return
-    const srcNsgId = String(issue.source_nsg_id ?? '')
-    const dstNsgId = String(issue.dest_nsg_id ?? '')
 
-    // Collect relevant node IDs: the two NSGs, their subnets, and everything connected to those subnets
+    // Primary node: affected_resource_id (new schema), fallback to source_nsg_id
+    const primaryId = issue.affected_resource_id || issue.source_nsg_id || ''
+    // Secondary nodes: related_resource_ids (new schema), fallback to dest_nsg_id
+    const secondaryIds = new Set<string>(
+      issue.related_resource_ids?.length
+        ? issue.related_resource_ids
+        : issue.dest_nsg_id ? [issue.dest_nsg_id] : []
+    )
+
+    // Collect relevant node IDs
     const relevantIds = new Set<string>()
-    relevantIds.add(srcNsgId)
-    relevantIds.add(dstNsgId)
+    if (primaryId) relevantIds.add(primaryId)
+    secondaryIds.forEach(id => relevantIds.add(id))
 
-    // Find subnets linked to these NSGs via subnet-nsg edges
+    // Also expand to subnets linked to any NSG in relevant set
     cy.edges('[type="subnet-nsg"]').forEach((e) => {
-      if (e.target().id() === srcNsgId || e.target().id() === dstNsgId) {
+      if (relevantIds.has(e.target().id())) {
         const subnetId = e.source().id()
         relevantIds.add(subnetId)
-        // Add all nodes connected to those subnets
         cy.edges().filter((edge) => edge.source().id() === subnetId || edge.target().id() === subnetId).forEach((edge) => {
           relevantIds.add(edge.source().id())
           relevantIds.add(edge.target().id())
@@ -1062,7 +1445,6 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       }
     })
 
-    // Also find edges between NSGs (asymmetry edges)
     const relevantEdgeIds = new Set<string>()
     cy.edges().forEach((e) => {
       if (relevantIds.has(e.source().id()) && relevantIds.has(e.target().id())) {
@@ -1070,23 +1452,33 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       }
     })
 
+    // Clear previous highlights
+    cy.elements().removeClass('issue-highlighted issue-dimmed issue-primary issue-secondary')
+
     // Apply classes
-    cy.elements().removeClass('issue-highlighted issue-dimmed')
     cy.nodes().forEach((n) => {
-      if (relevantIds.has(n.id())) n.addClass('issue-highlighted')
-      else n.addClass('issue-dimmed')
+      const nid = n.id()
+      if (nid === primaryId) {
+        n.addClass('issue-highlighted issue-primary')
+      } else if (secondaryIds.has(nid)) {
+        n.addClass('issue-highlighted issue-secondary')
+      } else if (relevantIds.has(nid)) {
+        n.addClass('issue-highlighted')
+      } else {
+        n.addClass('issue-dimmed')
+      }
     })
     cy.edges().forEach((e) => {
       if (relevantEdgeIds.has(e.id())) e.addClass('issue-highlighted')
       else e.addClass('issue-dimmed')
     })
 
-    // Fit view to the highlighted nodes
+    // Fit view to highlighted nodes
     const highlighted = cy.nodes('.issue-highlighted')
     if (highlighted.length > 0) cy.fit(highlighted, 80)
 
     setFocusedIssueIndex(index)
-    setIssuesOpen(false) // close drawer so graph is fully visible
+    setIssuesOpen(false)
   }, [])
 
   const clearIssueFocus = useCallback(() => {
@@ -1100,6 +1492,14 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
 
   // Summary counts — all node types
   const issueCount = useMemo(() => topologyData?.issues.length ?? 0, [topologyData])
+  const severityCounts = useMemo(() => {
+    const counts: Record<SeverityKey, number> = { critical: 0, high: 0, medium: 0, low: 0 }
+    topologyData?.issues.forEach((issue) => {
+      const sev = issue.severity as SeverityKey
+      if (sev in counts) counts[sev]++
+    })
+    return counts
+  }, [topologyData])
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     topologyData?.nodes.forEach((n) => { counts[n.type] = (counts[n.type] ?? 0) + 1 })
@@ -1192,6 +1592,40 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       }
     }
   }, [])
+
+  const handleRemediate = useCallback(async (issue: NetworkIssue, requireApproval: boolean) => {
+    const issueId = issue.id
+    setRemediatingIssueId(issueId)
+    setRemediationResults((prev) => {
+      const next = { ...prev }
+      delete next[issueId]
+      return next
+    })
+    try {
+      const res = await fetch('/api/proxy/network/topology/remediate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issue_id: issueId,
+          subscription_id: subscriptionIds[0] ?? null,
+          require_approval: requireApproval,
+        }),
+      })
+      const data: RemediationResult = await res.json()
+      setRemediationResults((prev) => ({ ...prev, [issueId]: data }))
+      if (data.status === 'executed') {
+        setTimeout(() => fetchData(), 3000)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error'
+      setRemediationResults((prev) => ({
+        ...prev,
+        [issueId]: { status: 'error', message },
+      }))
+    } finally {
+      setRemediatingIssueId(null)
+    }
+  }, [subscriptionIds, fetchData])
 
   // Apply search highlighting / dimming
   useEffect(() => {
@@ -1562,23 +1996,36 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
           )
         })}
         {issueCount > 0 ? (
-          <button
-            onClick={() => setIssuesOpen(true)}
-            className="text-xs px-2 py-1 rounded cursor-pointer transition-opacity hover:opacity-80"
-            style={{
-              background: 'color-mix(in srgb, var(--accent-red) 15%, transparent)',
-              color: 'var(--accent-red)',
-              border: '1px solid color-mix(in srgb, var(--accent-red) 25%, transparent)',
-            }}
-          >
-            🚫 Issues: {issueCount} — click to view
-          </button>
+          <span className="flex items-center gap-1">
+            {(Object.entries(severityCounts) as [SeverityKey, number][])
+              .filter(([, count]) => count > 0)
+              .map(([sev, count]) => {
+                const cfg = SEVERITY_CONFIG[sev]
+                return (
+                  <button
+                    key={sev}
+                    onClick={() => {
+                      setSeverityFilter(new Set([sev]))
+                      setIssuesOpen(true)
+                    }}
+                    className="text-xs px-2 py-1 rounded cursor-pointer transition-opacity hover:opacity-80"
+                    style={{
+                      background: `color-mix(in srgb, ${cfg.color} 15%, transparent)`,
+                      color: cfg.color,
+                      border: `1px solid color-mix(in srgb, ${cfg.color} 25%, transparent)`,
+                    }}
+                  >
+                    {cfg.icon} {count}
+                  </button>
+                )
+              })}
+          </span>
         ) : (
           <span
             className="text-xs px-2 py-1 rounded"
-            style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
+            style={{ background: 'color-mix(in srgb, var(--accent-green) 15%, transparent)', color: 'var(--accent-green)' }}
           >
-            Issues: 0
+            ✅ No issues detected
           </span>
         )}
         {filterTypes.size > 0 && (
@@ -1908,26 +2355,24 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       {/* Focused-issue banner — fixed bottom-center, always above everything */}
       {focusedIssueIndex !== null && topologyData?.issues[focusedIssueIndex] && (() => {
         const issue = topologyData.issues[focusedIssueIndex]
-        const srcName = String(issue.source_nsg_id ?? '').split('/').pop()
-        const dstName = String(issue.dest_nsg_id ?? '').split('/').pop()
+        const cfg = SEVERITY_CONFIG[issue.severity as SeverityKey] ?? SEVERITY_CONFIG.low
         return (
           <div
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg px-4 py-2.5 text-xs shadow-xl"
             style={{
-              background: 'color-mix(in srgb, var(--accent-red) 18%, var(--bg-surface))',
-              border: '1px solid var(--accent-red)',
+              background: `color-mix(in srgb, ${cfg.color} 18%, var(--bg-surface))`,
+              border: `1px solid ${cfg.color}`,
               color: 'var(--text-primary)',
               maxWidth: '560px',
               backdropFilter: 'blur(6px)',
             }}
           >
-            <span style={{ color: 'var(--accent-red)' }}>🚫</span>
-            <span className="flex-1">
-              <strong>Port {String(issue.port)}/TCP blocked</strong>
-              {' · '}
-              <span className="font-mono">{srcName}</span>
-              {' → '}
-              <span className="font-mono">{dstName}</span>
+            <span>{cfg.icon}</span>
+            <span className="flex-1 truncate">
+              <strong>{issue.title || `Port ${issue.port}/TCP blocked`}</strong>
+              {issue.affected_resource_name && (
+                <> · <span className="font-mono">{issue.affected_resource_name}</span></>
+              )}
             </span>
             <button
               onClick={() => setIssuesOpen(true)}
@@ -1944,9 +2389,9 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
               onClick={clearIssueFocus}
               className="shrink-0 text-[10px] px-2 py-0.5 rounded"
               style={{
-                background: 'color-mix(in srgb, var(--accent-red) 25%, transparent)',
-                color: 'var(--accent-red)',
-                border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
+                background: `color-mix(in srgb, ${cfg.color} 25%, transparent)`,
+                color: cfg.color,
+                border: `1px solid color-mix(in srgb, ${cfg.color} 40%, transparent)`,
               }}
             >
               ✕ Clear
@@ -1959,68 +2404,122 @@ export default function NetworkTopologyTab({ subscriptionIds = [] }: NetworkTopo
       <Sheet open={issuesOpen} onOpenChange={setIssuesOpen}>
         <SheetContent
           side="right"
-          className="w-[480px] overflow-y-auto"
+          className="w-[520px] overflow-y-auto"
           style={{ background: 'var(--bg-surface)', borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}
         >
           <SheetHeader>
             <SheetTitle style={{ color: 'var(--text-primary)' }}>Network Issues ({issueCount})</SheetTitle>
           </SheetHeader>
-          <p className="text-xs mt-2 mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            An NSG asymmetry occurs when one subnet&apos;s NSG allows outbound traffic on a port, but the destination
-            subnet&apos;s NSG has no matching inbound allow rule — causing silent packet drops. Each issue below
-            identifies the two NSGs and the port affected.
-          </p>
-          {topologyData?.issues.length ? (
-            <div className="flex flex-col gap-3">
-              {topologyData.issues.map((issue, i) => {
-                const srcName = String(issue.source_nsg_id ?? '').split('/').pop() ?? String(issue.source_nsg_id)
-                const dstName = String(issue.dest_nsg_id ?? '').split('/').pop() ?? String(issue.dest_nsg_id)
-                const isFocused = focusedIssueIndex === i
+
+          {/* Filter bar */}
+          <div className="mt-3 mb-2 flex flex-col gap-2">
+            <div className="flex flex-wrap gap-1">
+              {(Object.keys(SEVERITY_CONFIG) as SeverityKey[]).map((sev) => {
+                const cfg = SEVERITY_CONFIG[sev]
+                const active = severityFilter.has(sev)
                 return (
-                  <div
-                    key={i}
-                    className="rounded p-3 text-xs"
+                  <button
+                    key={sev}
+                    onClick={() => {
+                      setSeverityFilter((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(sev)) { next.delete(sev) } else { next.add(sev) }
+                        return next
+                      })
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-full font-semibold transition-all"
                     style={{
-                      background: isFocused
-                        ? 'color-mix(in srgb, var(--accent-red) 18%, transparent)'
-                        : 'color-mix(in srgb, var(--accent-red) 8%, transparent)',
-                      border: isFocused
-                        ? '1px solid var(--accent-red)'
-                        : '1px solid color-mix(in srgb, var(--accent-red) 20%, transparent)',
+                      background: active ? `color-mix(in srgb, ${cfg.color} 25%, transparent)` : 'var(--bg-subtle)',
+                      color: active ? cfg.color : 'var(--text-muted)',
+                      border: active ? `1px solid color-mix(in srgb, ${cfg.color} 40%, transparent)` : '1px solid var(--border)',
                     }}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-semibold" style={{ color: 'var(--accent-red)' }}>
-                        Port {String(issue.port)}/TCP blocked
-                      </p>
-                      <button
-                        onClick={() => isFocused ? clearIssueFocus() : focusIssue(issue, i)}
-                        className="shrink-0 text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
-                        style={{
-                          background: isFocused
-                            ? 'var(--accent-red)'
-                            : 'color-mix(in srgb, var(--accent-red) 20%, transparent)',
-                          color: isFocused ? '#fff' : 'var(--accent-red)',
-                          border: '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)',
-                        }}
-                      >
-                        {isFocused ? '✕ Clear focus' : '🔍 Focus in graph'}
-                      </button>
-                    </div>
-                    <p className="mb-2" style={{ color: 'var(--text-primary)' }}>
-                      {String(issue.description)}
-                    </p>
-                    <div className="flex flex-col gap-0.5" style={{ color: 'var(--text-muted)' }}>
-                      <span><strong>Source NSG:</strong> <span className="font-mono">{srcName}</span></span>
-                      <span><strong>Dest NSG:</strong> <span className="font-mono">{dstName}</span></span>
-                    </div>
-                  </div>
+                    {cfg.icon} {cfg.label}
+                    {severityCounts[sev] > 0 && <span className="ml-1">({severityCounts[sev]})</span>}
+                  </button>
                 )
               })}
             </div>
-          ) : (
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No issues found.</p>
-          )}
+            <Input
+              placeholder="Search by title, resource, explanation…"
+              value={issueSearch}
+              onChange={(e) => {
+                const val = e.target.value
+                setIssueSearch(val)
+                if (issueSearchTimerRef.current) clearTimeout(issueSearchTimerRef.current)
+                issueSearchTimerRef.current = setTimeout(() => setIssueSearchDebounced(val), 300)
+              }}
+              className="text-xs h-7"
+            />
+          </div>
+
+          {/* Filtered issues grouped by severity */}
+          {(() => {
+            const allIssues = topologyData?.issues ?? []
+            const q = issueSearchDebounced.toLowerCase()
+            const filtered = allIssues.filter((issue) => {
+              if (!severityFilter.has(issue.severity as SeverityKey)) return false
+              if (q) {
+                const haystack = [issue.title, issue.affected_resource_name, issue.explanation, issue.description].join(' ').toLowerCase()
+                if (!haystack.includes(q)) return false
+              }
+              return true
+            })
+
+            if (allIssues.length === 0) {
+              return <p className="text-xs mt-4" style={{ color: 'var(--text-muted)' }}>No issues found.</p>
+            }
+
+            const groups = (['critical', 'high', 'medium', 'low'] as SeverityKey[])
+              .map((sev) => ({ sev, items: filtered.filter((iss) => iss.severity === sev) }))
+              .filter(({ items }) => items.length > 0)
+
+            return (
+              <>
+                <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+                  Showing {filtered.length} of {allIssues.length} issues
+                </p>
+                {groups.length === 0 ? (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No issues match the current filters.</p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {groups.map(({ sev, items }) => {
+                      const cfg = SEVERITY_CONFIG[sev]
+                      return (
+                        <div key={sev}>
+                          <div
+                            className="flex items-center gap-2 text-[11px] font-semibold mb-2 pb-1"
+                            style={{ color: cfg.color, borderBottom: `1px solid color-mix(in srgb, ${cfg.color} 25%, transparent)` }}
+                          >
+                            {cfg.icon} {cfg.label} <span className="font-normal" style={{ color: 'var(--text-muted)' }}>({items.length})</span>
+                          </div>
+                          <div className="flex flex-col gap-3">
+                            {items.map((issue) => {
+                              const globalIdx = allIssues.indexOf(issue)
+                              const isFocused = focusedIssueIndex === globalIdx
+                              const isExpanded = issue.severity === 'critical' || issue.severity === 'high'
+                              return (
+                                <IssueCard
+                                  key={issue.id || globalIdx}
+                                  issue={issue}
+                                  isFocused={isFocused}
+                                  defaultExpanded={isExpanded}
+                                  onFocus={() => isFocused ? clearIssueFocus() : focusIssue(issue, globalIdx)}
+                                  remediating={remediatingIssueId === issue.id}
+                                  remediationResult={remediationResults[issue.id] ?? null}
+                                  onRemediate={handleRemediate}
+                                />
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </SheetContent>
       </Sheet>
 

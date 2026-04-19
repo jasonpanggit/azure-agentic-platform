@@ -2015,6 +2015,19 @@ Plans:
 
 ---
 
+## Phase 108 — Network Topology: Full Issue Detection, Explanations, Remediation & One-Click Fix
+
+**Goal:** Evolve the Network Topology tab into a full-blown network health platform that detects 17+ issue categories (security, connectivity, configuration, availability), provides detailed plain-English explanations, severity classification, remediation steps with Azure Portal deep-links, and one-click remediation execution for safe automated fixes.
+
+**Requirements**: TBD
+**Depends on:** Phase 103
+**Plans:** 0/0 plans (run /gsd-plan-phase 108 to break down)
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 108 to break down)
+
+---
+
 ## World-Class v3.0 Success Criteria
 
 When all phases 44–64 complete:

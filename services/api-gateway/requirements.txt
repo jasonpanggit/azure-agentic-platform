@@ -67,6 +67,9 @@ azure-mgmt-containerservice>=41.0.0
 # Compute management — VMSS detail + VM remediation (restart/deallocate/start)
 azure-mgmt-compute>=37.0.0
 
+# Network management — firewall + private endpoint remediation (Phase 108-3)
+azure-mgmt-network>=25.0.0
+
 # Container Apps management — restart_container_app remediation (Phase 51)
 azure-mgmt-appcontainers>=4.0.0
 

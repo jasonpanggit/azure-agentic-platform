@@ -277,11 +277,10 @@ class TestFetchTopology:
         fetch_network_topology(["sub-cache"], credential="cred")
         fetch_network_topology(["sub-cache"], credential="cred")
 
-        # 20 queries per call (vnets, nsgs, lbs, pes, gateways, public_ips, nics, vms, vmss, aks,
-        # firewalls, app_gateways, peerings, nic_subnets, lb_backends, route_tables, local_gateways,
-        # vpn_connections, app_gw_backends, nat_gateways)
-        # but second call should be cached — so total == 20 not 40
-        assert mock_arg.call_count == 20
+        # 24 queries per call (20 original + 4 new Phase 108 queries:
+        # nic_public_ips, lb_empty_backends, aks_private, route_default_internet)
+        # but second call should be cached — so total == 24 not 48
+        assert mock_arg.call_count == 24
 
 
 class TestPathCheck:
@@ -551,3 +550,561 @@ class TestPeTargetEdge:
         nodes, _ = _assemble_graph([], [], [], pes, [], [], [])
         pe_node = next(n for n in nodes if n["id"] == pe_id)
         assert pe_node["data"]["health"] == "red"
+
+
+# ---------------------------------------------------------------------------
+# Phase 108 — Unified issue schema + 17 detector tests
+# ---------------------------------------------------------------------------
+
+
+NSG_ID_A = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networksecuritygroups/nsg-a"
+NSG_ID_B = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networksecuritygroups/nsg-b"
+VNET_ID_1 = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-1"
+VNET_ID_2 = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-2"
+
+
+class TestMakeIssueId:
+    def test_returns_16_char_hex(self):
+        from services.api_gateway.network_topology_service import _make_issue_id
+
+        result = _make_issue_id("nsg_asymmetry", "/subscriptions/.../nsg1")
+        assert len(result) == 16
+        assert all(c in "0123456789abcdef" for c in result)
+
+    def test_deterministic(self):
+        from services.api_gateway.network_topology_service import _make_issue_id
+
+        assert _make_issue_id("x", "y") == _make_issue_id("x", "y")
+
+    def test_different_inputs_differ(self):
+        from services.api_gateway.network_topology_service import _make_issue_id
+
+        assert _make_issue_id("a", "b") != _make_issue_id("a", "c")
+
+
+class TestPortalLink:
+    def test_default_blade(self):
+        from services.api_gateway.network_topology_service import _portal_link
+
+        link = _portal_link("/subscriptions/s/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/nsg1")
+        assert link.startswith("https://portal.azure.com/#resource")
+        assert "overview" in link
+
+    def test_custom_blade(self):
+        from services.api_gateway.network_topology_service import _portal_link
+
+        link = _portal_link("/subscriptions/s/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/nsg1", "securityRules")
+        assert link.endswith("securityRules")
+
+
+class TestDetectPortOpenInternet:
+    def test_ssh_open_to_internet_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_port_open_internet
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="Internet", dest_port_range="22", priority=100)]}
+        issues = _detect_port_open_internet(rules_map)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "port_open_internet"
+        assert issues[0]["severity"] == "critical"
+        assert issues[0]["affected_resource_id"] == NSG_ID_A
+
+    def test_rdp_open_to_wildcard_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_port_open_internet
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="*", dest_port_range="3389", priority=100)]}
+        issues = _detect_port_open_internet(rules_map)
+        assert any(i["type"] == "port_open_internet" for i in issues)
+
+    def test_port_range_covering_22_flagged(self):
+        """A1 edge case: dest port range '22-25' should trigger for port 22."""
+        from services.api_gateway.network_topology_service import _detect_port_open_internet
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="*", dest_port_range="22-25", priority=100)]}
+        issues = _detect_port_open_internet(rules_map)
+        assert len(issues) >= 1
+
+    def test_restricted_source_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_port_open_internet
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="10.0.0.0/8", dest_port_range="22", priority=100)]}
+        issues = _detect_port_open_internet(rules_map)
+        assert len(issues) == 0
+
+    def test_outbound_rule_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_port_open_internet
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Outbound", access="Allow",
+                                               source_prefix="*", dest_port_range="22", priority=100)]}
+        issues = _detect_port_open_internet(rules_map)
+        assert len(issues) == 0
+
+
+class TestDetectAnyToAnyAllow:
+    def test_any_to_any_inbound_allow_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_any_to_any_allow
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="*", dest_port_range="*", priority=100)]}
+        issues = _detect_any_to_any_allow(rules_map)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "any_to_any_allow"
+        assert issues[0]["severity"] == "high"
+
+    def test_specific_port_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_any_to_any_allow
+
+        rules_map = {NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Inbound", access="Allow",
+                                               source_prefix="*", dest_port_range="443", priority=100)]}
+        issues = _detect_any_to_any_allow(rules_map)
+        assert len(issues) == 0
+
+
+class TestDetectSubnetNoNsg:
+    def test_subnet_without_nsg_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_subnet_no_nsg
+
+        rows = [_make_vnet_row(subnet_name="app-subnet", subnet_nsg_id="")]
+        issues = _detect_subnet_no_nsg(rows)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "subnet_no_nsg"
+        assert issues[0]["severity"] == "high"
+
+    def test_gateway_subnet_excluded(self):
+        """A3 edge case: GatewaySubnet must be excluded even without NSG."""
+        from services.api_gateway.network_topology_service import _detect_subnet_no_nsg
+
+        rows = [_make_vnet_row(subnet_name="GatewaySubnet", subnet_nsg_id="")]
+        issues = _detect_subnet_no_nsg(rows)
+        assert len(issues) == 0
+
+    @pytest.mark.parametrize("system_subnet", [
+        "GatewaySubnet", "AzureBastionSubnet", "AzureFirewallSubnet", "AzureFirewallManagementSubnet"
+    ])
+    def test_all_system_subnets_excluded(self, system_subnet):
+        from services.api_gateway.network_topology_service import _detect_subnet_no_nsg
+
+        rows = [_make_vnet_row(subnet_name=system_subnet, subnet_nsg_id="")]
+        issues = _detect_subnet_no_nsg(rows)
+        assert len(issues) == 0
+
+    def test_subnet_with_nsg_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_subnet_no_nsg
+
+        rows = [_make_vnet_row(subnet_name="app-subnet", subnet_nsg_id=NSG_ID_A)]
+        issues = _detect_subnet_no_nsg(rows)
+        assert len(issues) == 0
+
+
+class TestDetectNsgRuleShadowing:
+    def test_shadowed_rule_detected(self):
+        """A4: Higher-priority rule with opposite access and * ports/source shadows lower rule."""
+        from services.api_gateway.network_topology_service import _detect_nsg_rule_shadowing
+
+        rules_map = {NSG_ID_A: [
+            _make_nsg_row(nsg_id=NSG_ID_A, rule_name="DenyAll", direction="Inbound", access="Deny",
+                          source_prefix="*", dest_port_range="*", priority=100),
+            _make_nsg_row(nsg_id=NSG_ID_A, rule_name="AllowHTTPS", direction="Inbound", access="Allow",
+                          source_prefix="*", dest_port_range="443", priority=200),
+        ]}
+        issues = _detect_nsg_rule_shadowing(rules_map)
+        assert any(i["type"] == "nsg_rule_shadowed" for i in issues)
+
+    def test_same_access_not_shadowed(self):
+        """A4 edge case: Two rules with same access are NOT shadowed."""
+        from services.api_gateway.network_topology_service import _detect_nsg_rule_shadowing
+
+        rules_map = {NSG_ID_A: [
+            _make_nsg_row(nsg_id=NSG_ID_A, rule_name="Allow1", direction="Inbound", access="Allow",
+                          source_prefix="*", dest_port_range="*", priority=100),
+            _make_nsg_row(nsg_id=NSG_ID_A, rule_name="Allow2", direction="Inbound", access="Allow",
+                          source_prefix="*", dest_port_range="443", priority=200),
+        ]}
+        issues = _detect_nsg_rule_shadowing(rules_map)
+        assert len(issues) == 0
+
+    def test_no_rules_no_issues(self):
+        from services.api_gateway.network_topology_service import _detect_nsg_rule_shadowing
+
+        issues = _detect_nsg_rule_shadowing({})
+        assert len(issues) == 0
+
+
+class TestDetectPeeringDisconnected:
+    def test_disconnected_peering_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_peering_disconnected
+
+        edges = [{"type": "peering-disconnected", "source": VNET_ID_1, "target": VNET_ID_2,
+                  "data": {"peeringState": "Disconnected"}}]
+        issues = _detect_peering_disconnected(edges)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "vnet_peering_disconnected"
+        assert issues[0]["severity"] == "critical"
+
+    def test_connected_peering_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_peering_disconnected
+
+        edges = [{"type": "peering", "source": VNET_ID_1, "target": VNET_ID_2,
+                  "data": {"peeringState": "Connected"}}]
+        issues = _detect_peering_disconnected(edges)
+        assert len(issues) == 0
+
+
+class TestDetectVpnBgpDisabled:
+    def test_bgp_disabled_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_vpn_bgp_disabled
+
+        nodes = [{"id": "/subs/s/rg/r/gw/gw1", "label": "gw1", "type": "gateway",
+                  "data": {"gatewayType": "Vpn", "bgpEnabled": False, "sku": "VpnGw2"}}]
+        issues = _detect_vpn_bgp_disabled(nodes)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "vpn_bgp_disabled"
+
+    def test_bgp_enabled_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_vpn_bgp_disabled
+
+        nodes = [{"id": "/subs/s/rg/r/gw/gw1", "label": "gw1", "type": "gateway",
+                  "data": {"gatewayType": "Vpn", "bgpEnabled": True, "sku": "VpnGw2AZ"}}]
+        issues = _detect_vpn_bgp_disabled(nodes)
+        assert len(issues) == 0
+
+
+class TestDetectGatewayNotZoneRedundant:
+    def test_non_az_sku_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_gateway_not_zone_redundant
+
+        nodes = [{"id": "/subs/s/rg/r/gw/gw1", "label": "gw1", "type": "gateway",
+                  "data": {"gatewayType": "Vpn", "bgpEnabled": False, "sku": "VpnGw2"}}]
+        issues = _detect_gateway_not_zone_redundant(nodes)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "gateway_not_zone_redundant"
+
+    def test_az_sku_not_flagged(self):
+        """B3 edge case: VpnGw2AZ should NOT be flagged."""
+        from services.api_gateway.network_topology_service import _detect_gateway_not_zone_redundant
+
+        nodes = [{"id": "/subs/s/rg/r/gw/gw1", "label": "gw1", "type": "gateway",
+                  "data": {"gatewayType": "Vpn", "bgpEnabled": True, "sku": "VpnGw2AZ"}}]
+        issues = _detect_gateway_not_zone_redundant(nodes)
+        assert len(issues) == 0
+
+
+class TestDetectPeNotApproved:
+    def test_unapproved_pe_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_pe_not_approved
+
+        nodes = [{"id": "/subs/s/pe/pe1", "label": "pe1", "type": "pe",
+                  "data": {"health": "red", "targetResourceId": "/subs/s/sql/sql1"}}]
+        issues = _detect_pe_not_approved(nodes)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "pe_not_approved"
+        assert issues[0]["auto_fix_available"] is True
+        assert issues[0]["severity"] == "critical"
+
+    def test_approved_pe_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_pe_not_approved
+
+        nodes = [{"id": "/subs/s/pe/pe1", "label": "pe1", "type": "pe",
+                  "data": {"health": "green", "targetResourceId": "/subs/s/sql/sql1"}}]
+        issues = _detect_pe_not_approved(nodes)
+        assert len(issues) == 0
+
+
+class TestDetectFirewallNoPolicy:
+    def test_firewall_no_policy_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_firewall_no_policy
+
+        nodes = [{"id": "/subs/s/fw/fw1", "label": "fw1", "type": "firewall",
+                  "data": {"firewallPolicyId": "", "threatIntelMode": "Alert"}}]
+        issues = _detect_firewall_no_policy(nodes)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "firewall_no_policy"
+        assert issues[0]["severity"] == "critical"
+
+    def test_firewall_with_policy_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_firewall_no_policy
+
+        nodes = [{"id": "/subs/s/fw/fw1", "label": "fw1", "type": "firewall",
+                  "data": {"firewallPolicyId": "/subs/s/fwp/policy1", "threatIntelMode": "Alert"}}]
+        issues = _detect_firewall_no_policy(nodes)
+        assert len(issues) == 0
+
+
+class TestDetectFirewallThreatIntelOff:
+    def test_threatintel_off_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_firewall_threatintel_off
+
+        nodes = [{"id": "/subs/s/fw/fw1", "label": "fw1", "type": "firewall",
+                  "data": {"firewallPolicyId": "/subs/s/fwp/p1", "threatIntelMode": "Off"}}]
+        issues = _detect_firewall_threatintel_off(nodes)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "firewall_threatintel_off"
+        assert issues[0]["auto_fix_available"] is True
+
+    def test_threatintel_alert_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_firewall_threatintel_off
+
+        nodes = [{"id": "/subs/s/fw/fw1", "label": "fw1", "type": "firewall",
+                  "data": {"firewallPolicyId": "/subs/s/fwp/p1", "threatIntelMode": "Alert"}}]
+        issues = _detect_firewall_threatintel_off(nodes)
+        assert len(issues) == 0
+
+
+class TestDetectVmPublicIp:
+    def test_vm_with_public_ip_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_vm_public_ip
+
+        nic_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networkinterfaces/nic-1"
+        vm_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.compute/virtualmachines/vm-1"
+        pip_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/publicipaddresses/pip-1"
+        nic_public_ip_rows = [{"nicId": nic_id, "publicIpId": pip_id}]
+        nic_vm_map = {nic_id: vm_id}
+        issues = _detect_vm_public_ip(nic_public_ip_rows, nic_vm_map)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "vm_public_ip"
+        assert issues[0]["severity"] == "critical"
+
+    def test_nic_without_vm_not_flagged(self):
+        """C1 edge case: NIC has public IP but not attached to any VM — not triggered."""
+        from services.api_gateway.network_topology_service import _detect_vm_public_ip
+
+        nic_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/networkinterfaces/nic-orphan"
+        pip_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/publicipaddresses/pip-1"
+        nic_public_ip_rows = [{"nicId": nic_id, "publicIpId": pip_id}]
+        nic_vm_map = {}  # no VM linked
+        issues = _detect_vm_public_ip(nic_public_ip_rows, nic_vm_map)
+        assert len(issues) == 0
+
+
+class TestDetectLbEmptyBackend:
+    def test_empty_backend_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_lb_empty_backend
+
+        lb_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/loadbalancers/lb-1"
+        rows = [{"lbId": lb_id, "lbName": "lb-1", "emptyPool": "pool-1"}]
+        issues = _detect_lb_empty_backend(rows)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "lb_empty_backend"
+
+    def test_no_rows_no_issues(self):
+        from services.api_gateway.network_topology_service import _detect_lb_empty_backend
+
+        issues = _detect_lb_empty_backend([])
+        assert len(issues) == 0
+
+
+class TestDetectLbPipSkuMismatch:
+    def test_sku_mismatch_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_lb_pip_sku_mismatch
+
+        lb_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/loadbalancers/lb-1"
+        pip_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/publicipaddresses/pip-1"
+        lb_nodes = [{"id": lb_id, "label": "lb-1", "type": "lb",
+                     "data": {"sku": "Standard", "publicIpId": pip_id}}]
+        public_ip_map = {pip_id: {"sku_name": "Basic"}}
+        issues = _detect_lb_pip_sku_mismatch(lb_nodes, public_ip_map)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "lb_pip_sku_mismatch"
+
+    def test_matching_sku_not_flagged(self):
+        """C3 edge case: both Standard → no mismatch."""
+        from services.api_gateway.network_topology_service import _detect_lb_pip_sku_mismatch
+
+        lb_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/loadbalancers/lb-1"
+        pip_id = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/publicipaddresses/pip-1"
+        lb_nodes = [{"id": lb_id, "label": "lb-1", "type": "lb",
+                     "data": {"sku": "Standard", "publicIpId": pip_id}}]
+        public_ip_map = {pip_id: {"sku_name": "Standard"}}
+        issues = _detect_lb_pip_sku_mismatch(lb_nodes, public_ip_map)
+        assert len(issues) == 0
+
+
+class TestDetectAksNotPrivate:
+    def test_non_private_aks_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_aks_not_private
+
+        rows = [{"aksId": "/subs/s/aks/aks-1", "aksName": "aks-1"}]
+        issues = _detect_aks_not_private(rows)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "aks_not_private"
+
+    def test_empty_rows_no_issues(self):
+        from services.api_gateway.network_topology_service import _detect_aks_not_private
+
+        issues = _detect_aks_not_private([])
+        assert len(issues) == 0
+
+
+class TestDetectRouteDefaultInternet:
+    def test_default_route_to_internet_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_route_default_internet
+
+        rows = [{"rtId": "/subs/s/rt/rt-1", "rtName": "rt-1", "routeName": "default"}]
+        issues = _detect_route_default_internet(rows)
+        assert len(issues) == 1
+        assert issues[0]["type"] == "route_default_internet"
+
+    def test_empty_rows_no_issues(self):
+        from services.api_gateway.network_topology_service import _detect_route_default_internet
+
+        issues = _detect_route_default_internet([])
+        assert len(issues) == 0
+
+
+class TestDetectSubnetOverlap:
+    def test_cross_vnet_overlap_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_subnet_overlap
+
+        rows = [
+            _make_vnet_row(vnet_name="vnet-1", subnet_name="sub-a", subnet_prefix="10.0.0.0/24",
+                           vnet_id=VNET_ID_1),
+            _make_vnet_row(vnet_name="vnet-2", subnet_name="sub-b", subnet_prefix="10.0.0.0/25",
+                           vnet_id=VNET_ID_2),
+        ]
+        issues = _detect_subnet_overlap(rows)
+        assert len(issues) >= 1
+        assert issues[0]["type"] == "subnet_overlap"
+
+    def test_same_vnet_not_flagged(self):
+        """D2 edge case: subnets in same VNet should NOT be flagged."""
+        from services.api_gateway.network_topology_service import _detect_subnet_overlap
+
+        rows = [
+            _make_vnet_row(vnet_name="vnet-1", subnet_name="sub-a", subnet_prefix="10.0.0.0/24", vnet_id=VNET_ID_1),
+            _make_vnet_row(vnet_name="vnet-1", subnet_name="sub-b", subnet_prefix="10.0.0.0/25", vnet_id=VNET_ID_1),
+        ]
+        issues = _detect_subnet_overlap(rows)
+        assert len(issues) == 0
+
+    def test_non_overlapping_not_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_subnet_overlap
+
+        rows = [
+            _make_vnet_row(vnet_name="vnet-1", subnet_name="sub-a", subnet_prefix="10.0.0.0/24", vnet_id=VNET_ID_1),
+            _make_vnet_row(vnet_name="vnet-2", subnet_name="sub-b", subnet_prefix="10.1.0.0/24", vnet_id=VNET_ID_2),
+        ]
+        issues = _detect_subnet_overlap(rows)
+        assert len(issues) == 0
+
+    def test_more_than_500_subnets_capped_with_warning(self):
+        """D2 edge case: more than 500 subnets → warning logged, processing continues."""
+        import logging
+        from services.api_gateway.network_topology_service import _detect_subnet_overlap
+
+        # Create 502 unique subnets across 2 vnets (non-overlapping to avoid false positives)
+        rows = []
+        for i in range(502):
+            vnet_id = VNET_ID_1 if i % 2 == 0 else VNET_ID_2
+            vnet_name = "vnet-1" if i % 2 == 0 else "vnet-2"
+            rows.append(_make_vnet_row(
+                vnet_name=vnet_name,
+                subnet_name=f"sub-{i}",
+                subnet_prefix=f"10.{i // 256}.{i % 256}.0/28",
+                vnet_id=vnet_id,
+            ))
+
+        # Result should be a list (no crash) — the cap is enforced via logger.warning (not a Python warning)
+        issues = _detect_subnet_overlap(rows)
+        assert isinstance(issues, list)
+
+
+class TestDetectMissingHubSpoke:
+    def test_hub_with_missing_spoke_return_flagged(self):
+        from services.api_gateway.network_topology_service import _detect_missing_hub_spoke
+
+        hub = VNET_ID_1
+        spoke1 = VNET_ID_2
+        spoke2 = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-3"
+        spoke3 = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-4"
+
+        vnet_nodes = [
+            {"id": hub, "type": "vnet", "label": "hub"},
+            {"id": spoke1, "type": "vnet", "label": "spoke1"},
+            {"id": spoke2, "type": "vnet", "label": "spoke2"},
+            {"id": spoke3, "type": "vnet", "label": "spoke3"},
+        ]
+        # hub → 3 spokes, but spokes don't peer back
+        peering_edges = [
+            {"type": "peering", "source": hub, "target": spoke1, "data": {}},
+            {"type": "peering", "source": hub, "target": spoke2, "data": {}},
+            {"type": "peering", "source": hub, "target": spoke3, "data": {}},
+        ]
+        issues = _detect_missing_hub_spoke(vnet_nodes, peering_edges)
+        assert len(issues) >= 1
+        assert all(i["type"] == "missing_hub_spoke" for i in issues)
+        assert all(i["severity"] == "low" for i in issues)
+
+    def test_exactly_2_peerings_not_a_hub(self):
+        """D3 edge case: VNet with exactly 2 peerings is NOT detected as hub."""
+        from services.api_gateway.network_topology_service import _detect_missing_hub_spoke
+
+        hub = VNET_ID_1
+        spoke1 = VNET_ID_2
+        spoke2 = "/subscriptions/sub-1/resourcegroups/rg-1/providers/microsoft.network/virtualnetworks/vnet-3"
+
+        vnet_nodes = [
+            {"id": hub, "type": "vnet", "label": "hub"},
+            {"id": spoke1, "type": "vnet", "label": "spoke1"},
+            {"id": spoke2, "type": "vnet", "label": "spoke2"},
+        ]
+        peering_edges = [
+            {"type": "peering", "source": hub, "target": spoke1, "data": {}},
+            {"type": "peering", "source": hub, "target": spoke2, "data": {}},
+        ]
+        issues = _detect_missing_hub_spoke(vnet_nodes, peering_edges)
+        assert len(issues) == 0
+
+
+class TestDetectAsymmetriesUnifiedSchema:
+    def test_asymmetry_has_unified_fields(self):
+        """Task 1.2: asymmetry issues must have all unified NetworkIssue fields."""
+        from services.api_gateway.network_topology_service import _detect_asymmetries
+
+        nsg_rules_map = {
+            NSG_ID_A: [_make_nsg_row(nsg_id=NSG_ID_A, direction="Outbound", access="Allow",
+                                     dest_port_range="443", priority=100)],
+            NSG_ID_B: [_make_nsg_row(nsg_id=NSG_ID_B, direction="Inbound", access="Deny",
+                                     dest_port_range="443", priority=100)],
+        }
+        subnet_nsg_map = {"subnet-a": NSG_ID_A, "subnet-b": NSG_ID_B}
+        vnet_subnets = {"vnet-1": ["subnet-a", "subnet-b"]}
+
+        issues = _detect_asymmetries(nsg_rules_map, subnet_nsg_map, vnet_subnets)
+        assert len(issues) >= 1
+        issue = issues[0]
+        # Unified fields
+        assert "id" in issue
+        assert issue["type"] == "nsg_asymmetry"
+        assert issue["severity"] == "high"
+        assert "title" in issue
+        assert "explanation" in issue
+        assert "impact" in issue
+        assert "affected_resource_id" in issue
+        assert "remediation_steps" in issue
+        assert "portal_link" in issue
+        assert isinstance(issue["auto_fix_available"], bool)
+        # Backward-compat fields
+        assert "source_nsg_id" in issue
+        assert "dest_nsg_id" in issue
+        assert "port" in issue
+        assert "description" in issue
+
+
+class TestFetchTopologyCacheCountAfterPhase108:
+    @patch("services.api_gateway.network_topology_service.run_arg_query")
+    def test_fetch_topology_cache_count_updated(self, mock_arg):
+        """After Phase 108, fetch_network_topology now issues 24 queries (20 original + 4 new)."""
+        from services.api_gateway.network_topology_service import fetch_network_topology, _cache
+
+        _cache.clear()
+        mock_arg.return_value = []
+
+        fetch_network_topology(["sub-p108"], credential="cred")
+        fetch_network_topology(["sub-p108"], credential="cred")
+
+        # 24 queries per call, second call cached → total == 24
+        assert mock_arg.call_count == 24
+

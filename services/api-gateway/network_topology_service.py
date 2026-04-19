@@ -10,11 +10,13 @@ Never raises from public functions — errors are logged and empty/partial
 results returned to keep the API gateway fault-tolerant.
 """
 
+import hashlib
+import ipaddress
 import logging
 import threading
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,67 @@ try:
     from services.api_gateway.arg_helper import run_arg_query
 except ImportError:
     run_arg_query = None  # type: ignore[assignment,misc]
+
+
+# ---------------------------------------------------------------------------
+# Unified NetworkIssue Schema (Phase 108)
+# ---------------------------------------------------------------------------
+
+
+class NetworkIssue(TypedDict, total=False):
+    id: str
+    type: str
+    severity: str
+    title: str
+    explanation: str
+    impact: str
+    affected_resource_id: str
+    affected_resource_name: str
+    related_resource_ids: List[str]
+    remediation_steps: List[Dict[str, Any]]
+    portal_link: str
+    auto_fix_available: bool
+    auto_fix_label: Optional[str]
+    # Backward-compat fields for focusIssue() on asymmetry issues
+    source_nsg_id: Optional[str]
+    dest_nsg_id: Optional[str]
+    port: Optional[int]
+    description: Optional[str]
+
+
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+_ISSUE_TYPES: Dict[str, Dict[str, str]] = {
+    "nsg_asymmetry":              {"severity": "high",     "title": "NSG Asymmetry"},
+    "port_open_internet":         {"severity": "critical",  "title": "Sensitive Port Open to Internet"},
+    "any_to_any_allow":           {"severity": "high",     "title": "Any-to-Any Allow Rule"},
+    "subnet_no_nsg":              {"severity": "high",     "title": "Subnet Without NSG"},
+    "nsg_rule_shadowed":          {"severity": "medium",   "title": "Shadowed NSG Rule"},
+    "vnet_peering_disconnected":  {"severity": "critical",  "title": "VNet Peering Disconnected"},
+    "vpn_bgp_disabled":           {"severity": "medium",   "title": "VPN BGP Disabled"},
+    "gateway_not_zone_redundant": {"severity": "medium",   "title": "Gateway Not Zone Redundant"},
+    "pe_not_approved":            {"severity": "critical",  "title": "Private Endpoint Not Approved"},
+    "vm_public_ip":               {"severity": "critical",  "title": "VM Has Direct Public IP"},
+    "lb_empty_backend":           {"severity": "high",     "title": "Load Balancer Has Empty Backend Pool"},
+    "lb_pip_sku_mismatch":        {"severity": "high",     "title": "LB and Public IP SKU Mismatch"},
+    "firewall_no_policy":         {"severity": "critical",  "title": "Firewall Has No Policy"},
+    "firewall_threatintel_off":   {"severity": "high",     "title": "Firewall Threat Intelligence Disabled"},
+    "aks_not_private":            {"severity": "high",     "title": "AKS API Server Not Private"},
+    "route_default_internet":     {"severity": "high",     "title": "Default Route Points to Internet"},
+    "subnet_overlap":             {"severity": "high",     "title": "Overlapping Subnet CIDRs"},
+    "missing_hub_spoke":          {"severity": "low",      "title": "Possible Missing Hub-Spoke Link"},
+}
+
+
+def _make_issue_id(issue_type: str, resource_id: str) -> str:
+    """Return a deterministic 16-char hex ID for a (type, resource_id) pair."""
+    return hashlib.sha256(f"{issue_type}:{resource_id}".encode()).hexdigest()[:16]
+
+
+def _portal_link(resource_id: str, blade: str = "overview") -> str:
+    """Return Azure Portal deep-link for a resource."""
+    return f"https://portal.azure.com/#resource{resource_id}/{blade}"
+
 
 # ---------------------------------------------------------------------------
 # ARG Query Constants
@@ -279,6 +342,43 @@ Resources
 | project natId, name, idleTimeoutMinutes, provisioningState
 """
 
+_NIC_PUBLIC_IP_QUERY = """
+Resources
+| where type =~ "microsoft.network/networkinterfaces"
+| mv-expand ipc = properties.ipConfigurations
+| extend publicIpId = tolower(tostring(ipc.properties.publicIPAddress.id))
+| where isnotempty(publicIpId)
+| project nicId = tolower(id), publicIpId
+"""
+
+_LB_EMPTY_BACKEND_QUERY = """
+Resources
+| where type == "microsoft.network/loadbalancers"
+| mv-expand pool = properties.backendAddressPools
+| extend memberCount = array_length(pool.properties.backendIPConfigurations)
+| extend addrCount = array_length(pool.properties.loadBalancerBackendAddresses)
+| where (memberCount == 0 or isnull(memberCount)) and (addrCount == 0 or isnull(addrCount))
+| project lbId = tolower(id), lbName = name, emptyPool = tostring(pool.name)
+"""
+
+_AKS_PRIVATE_QUERY = """
+Resources
+| where type =~ "microsoft.containerservice/managedclusters"
+| extend isPrivate = tobool(properties.apiServerAccessProfile.enablePrivateCluster)
+| where isPrivate != true
+| project aksId = tolower(id), aksName = name
+"""
+
+_ROUTE_DEFAULT_INTERNET_QUERY = """
+Resources
+| where type == "microsoft.network/routetables"
+| mv-expand route = properties.routes
+| extend addressPrefix = tostring(route.properties.addressPrefix)
+| extend nextHopType = tostring(route.properties.nextHopType)
+| where addressPrefix == "0.0.0.0/0" and nextHopType == "Internet"
+| project rtId = tolower(id), rtName = name, routeName = tostring(route.name)
+"""
+
 # ---------------------------------------------------------------------------
 # In-memory LRU Cache (H-10)
 # ---------------------------------------------------------------------------
@@ -465,20 +565,28 @@ def _detect_asymmetries(
     nsg_rules_map: Dict[str, List[Dict[str, Any]]],
     subnet_nsg_map: Dict[str, str],
     vnet_subnets: Dict[str, List[str]],
+    nic_nsg_map: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Detect NSG asymmetries: source allows outbound but dest denies inbound on common ports."""
-    issues: List[Dict[str, Any]] = []
-    subnet_ids = list(subnet_nsg_map.keys())
+    """Detect NSG asymmetries: source allows outbound but dest denies inbound on common ports.
 
-    for i, src_subnet_id in enumerate(subnet_ids):
-        src_nsg_id = subnet_nsg_map[src_subnet_id]
+    Returns unified NetworkIssue dicts with backward-compat fields.
+    """
+    issues: List[Dict[str, Any]] = []
+
+    # Merge subnet-level and NIC-level NSG mappings
+    all_nsg_ids = list(set(subnet_nsg_map.values()))
+    if nic_nsg_map:
+        for nsg_id in nic_nsg_map.values():
+            if nsg_id and nsg_id not in all_nsg_ids:
+                all_nsg_ids.append(nsg_id)
+
+    for i, src_nsg_id in enumerate(all_nsg_ids):
         src_rules = nsg_rules_map.get(src_nsg_id, [])
         if not src_rules:
             continue
 
-        for dst_subnet_id in subnet_ids[i + 1:]:
-            dst_nsg_id = subnet_nsg_map[dst_subnet_id]
-            if src_nsg_id == dst_nsg_id:
+        for j, dst_nsg_id in enumerate(all_nsg_ids):
+            if i == j or src_nsg_id == dst_nsg_id:
                 continue
             dst_rules = nsg_rules_map.get(dst_nsg_id, [])
             if not dst_rules:
@@ -489,13 +597,670 @@ def _detect_asymmetries(
                 inbound = _evaluate_nsg_rules(dst_rules, port, "TCP", "*", "*", "Inbound")
 
                 if outbound["result"] == "Allow" and inbound["result"] == "Deny":
-                    issues.append({
+                    src_name = src_nsg_id.rsplit("/", 1)[-1]
+                    dst_name = dst_nsg_id.rsplit("/", 1)[-1]
+                    desc = f"Port {port}/TCP: source NSG allows outbound but destination NSG denies inbound"
+                    issue: Dict[str, Any] = {
+                        "id": _make_issue_id("nsg_asymmetry", f"{src_nsg_id}:{dst_nsg_id}:{port}"),
+                        "type": "nsg_asymmetry",
+                        "severity": "high",
+                        "title": f"NSG Asymmetry on port {port}",
+                        "explanation": desc,
+                        "impact": "Traffic from the source subnet may be silently dropped at the destination, causing intermittent connectivity failures.",
+                        "affected_resource_id": dst_nsg_id,
+                        "affected_resource_name": dst_name,
+                        "related_resource_ids": [src_nsg_id],
+                        "remediation_steps": [
+                            {"step": 1, "action": "Open the destination NSG in the Azure portal", "cli": f"az network nsg show --ids {dst_nsg_id}"},
+                            {"step": 2, "action": f"Find the inbound deny rule blocking port {port}", "cli": None},
+                            {"step": 3, "action": f"Add an inbound Allow rule for port {port}/TCP to match the source NSG outbound rule", "cli": f"az network nsg rule create --nsg-name {dst_name} --name AllowInbound{port} --priority 200 --direction Inbound --access Allow --protocol TCP --destination-port-ranges {port}"},
+                        ],
+                        "portal_link": _portal_link(dst_nsg_id, "securityRules"),
+                        "auto_fix_available": False,
+                        "auto_fix_label": None,
+                        # backward-compat
                         "source_nsg_id": src_nsg_id,
                         "dest_nsg_id": dst_nsg_id,
                         "port": port,
-                        "description": f"Port {port}/TCP: source NSG allows outbound but destination NSG denies inbound",
-                    })
+                        "description": desc,
+                    }
+                    issues.append(issue)
 
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Quick-Win Detectors (Task 1.3) — no new ARG queries needed
+# ---------------------------------------------------------------------------
+
+_SENSITIVE_PORTS = [22, 3389, 1433, 3306, 5432]
+_SYSTEM_SUBNETS = {"gatewaysubnet", "azurebastionsubnet", "azurefirewallsubnet", "azurefirewallmanagementsubnet"}
+
+
+def _detect_port_open_internet(nsg_rules_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """A1: Inbound Allow where source=*/Internet and dest port covers sensitive ports."""
+    issues: List[Dict[str, Any]] = []
+    for nsg_id, rules in nsg_rules_map.items():
+        for rule in rules:
+            if str(rule.get("direction", "")).lower() != "inbound":
+                continue
+            if str(rule.get("access", "")).lower() != "allow":
+                continue
+            source = str(rule.get("sourcePrefix", ""))
+            if source not in ("*", "Internet"):
+                continue
+            dest_port = str(rule.get("destPortRange", ""))
+            dest_ranges = rule.get("destPortRanges")
+            for port in _SENSITIVE_PORTS:
+                if _port_in_range(port, dest_port, dest_ranges):
+                    nsg_name = nsg_id.rsplit("/", 1)[-1]
+                    rule_name = str(rule.get("ruleName", ""))
+                    issues.append({
+                        "id": _make_issue_id("port_open_internet", f"{nsg_id}:{port}"),
+                        "type": "port_open_internet",
+                        "severity": "critical",
+                        "title": f"Port {port} open to Internet on {nsg_name}",
+                        "explanation": f"NSG rule '{rule_name}' allows inbound traffic from the Internet on port {port}.",
+                        "impact": "Exposes the resource to brute-force, exploitation, and scanning attacks from the public internet.",
+                        "affected_resource_id": nsg_id,
+                        "affected_resource_name": nsg_name,
+                        "related_resource_ids": [],
+                        "remediation_steps": [
+                            {"step": 1, "action": f"Remove or restrict rule '{rule_name}' to specific source IP ranges", "cli": f"az network nsg rule delete --nsg-name {nsg_name} --name {rule_name}"},
+                        ],
+                        "portal_link": _portal_link(nsg_id, "securityRules"),
+                        "auto_fix_available": False,
+                        "auto_fix_label": None,
+                        "source_nsg_id": None, "dest_nsg_id": None, "port": port, "description": None,
+                    })
+    return issues
+
+
+def _detect_any_to_any_allow(nsg_rules_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """A2: NSG rules with source=*, destPort=*, access=Allow, direction=Inbound."""
+    issues: List[Dict[str, Any]] = []
+    for nsg_id, rules in nsg_rules_map.items():
+        for rule in rules:
+            if str(rule.get("direction", "")).lower() != "inbound":
+                continue
+            if str(rule.get("access", "")).lower() != "allow":
+                continue
+            if str(rule.get("sourcePrefix", "")) != "*":
+                continue
+            if str(rule.get("destPortRange", "")) != "*":
+                continue
+            nsg_name = nsg_id.rsplit("/", 1)[-1]
+            rule_name = str(rule.get("ruleName", ""))
+            issues.append({
+                "id": _make_issue_id("any_to_any_allow", f"{nsg_id}:{rule_name}"),
+                "type": "any_to_any_allow",
+                "severity": "high",
+                "title": f"Any-to-any allow rule '{rule_name}' on {nsg_name}",
+                "explanation": f"Rule '{rule_name}' allows all inbound traffic from any source on all ports.",
+                "impact": "Effectively disables the NSG, leaving all resources in the subnet accessible from anywhere.",
+                "affected_resource_id": nsg_id,
+                "affected_resource_name": nsg_name,
+                "related_resource_ids": [],
+                "remediation_steps": [
+                    {"step": 1, "action": f"Replace rule '{rule_name}' with specific allow rules for required ports and sources only", "cli": None},
+                ],
+                "portal_link": _portal_link(nsg_id, "securityRules"),
+                "auto_fix_available": False,
+                "auto_fix_label": None,
+                "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+            })
+    return issues
+
+
+def _detect_subnet_no_nsg(vnet_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A3: Subnets without an NSG (excluding system subnets)."""
+    issues: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in vnet_rows:
+        subnet_name = str(row.get("subnetName", ""))
+        if subnet_name.lower() in _SYSTEM_SUBNETS:
+            continue
+        nsg_id = str(row.get("subnetNsgId", ""))
+        if nsg_id:
+            continue
+        vnet_id = str(row.get("id", "")).lower()
+        subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower()
+        if subnet_id in seen:
+            continue
+        seen.add(subnet_id)
+        issues.append({
+            "id": _make_issue_id("subnet_no_nsg", subnet_id),
+            "type": "subnet_no_nsg",
+            "severity": "high",
+            "title": f"Subnet '{subnet_name}' has no NSG",
+            "explanation": f"Subnet '{subnet_name}' in VNet '{row.get('vnetName', '')}' has no Network Security Group attached.",
+            "impact": "All traffic to and from resources in this subnet is unrestricted by NSG rules.",
+            "affected_resource_id": subnet_id,
+            "affected_resource_name": subnet_name,
+            "related_resource_ids": [vnet_id],
+            "remediation_steps": [
+                {"step": 1, "action": "Create an NSG with appropriate rules", "cli": f"az network nsg create --name nsg-{subnet_name} --resource-group {row.get('resourceGroup', '')}"},
+                {"step": 2, "action": "Associate the NSG with the subnet", "cli": f"az network vnet subnet update --vnet-name {row.get('vnetName', '')} --name {subnet_name} --network-security-group nsg-{subnet_name} --resource-group {row.get('resourceGroup', '')}"},
+            ],
+            "portal_link": _portal_link(vnet_id, "subnets"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_nsg_rule_shadowing(nsg_rules_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """A4: Detect rules completely shadowed by a higher-priority rule with opposite access."""
+    issues: List[Dict[str, Any]] = []
+    for nsg_id, rules in nsg_rules_map.items():
+        for direction in ("Inbound", "Outbound"):
+            dir_rules = [r for r in rules if str(r.get("direction", "")).lower() == direction.lower()]
+            dir_rules.sort(key=lambda r: r.get("priority", 65500))
+            for i, lower_rule in enumerate(dir_rules):
+                for upper_rule in dir_rules[:i]:
+                    # Same access = not shadowed (both allow or both deny)
+                    if str(upper_rule.get("access", "")).lower() == str(lower_rule.get("access", "")).lower():
+                        continue
+                    # Check if upper_rule covers lower_rule's port and source
+                    up_port = str(upper_rule.get("destPortRange", ""))
+                    lo_port = str(lower_rule.get("destPortRange", ""))
+                    up_src = str(upper_rule.get("sourcePrefix", ""))
+                    lo_src = str(lower_rule.get("sourcePrefix", ""))
+                    # Simple shadowing: upper covers * ports and * sources
+                    if up_port == "*" and up_src == "*":
+                        nsg_name = nsg_id.rsplit("/", 1)[-1]
+                        rule_name = str(lower_rule.get("ruleName", ""))
+                        shadow_name = str(upper_rule.get("ruleName", ""))
+                        issues.append({
+                            "id": _make_issue_id("nsg_rule_shadowed", f"{nsg_id}:{rule_name}"),
+                            "type": "nsg_rule_shadowed",
+                            "severity": "medium",
+                            "title": f"Rule '{rule_name}' shadowed by '{shadow_name}' on {nsg_name}",
+                            "explanation": f"Rule '{rule_name}' (priority {lower_rule.get('priority')}) is completely shadowed by '{shadow_name}' (priority {upper_rule.get('priority')}) which has opposite access and covers all ports and sources.",
+                            "impact": "The shadowed rule has no effect. Traffic will always match the higher-priority rule first.",
+                            "affected_resource_id": nsg_id,
+                            "affected_resource_name": nsg_name,
+                            "related_resource_ids": [],
+                            "remediation_steps": [
+                                {"step": 1, "action": f"Review rule '{rule_name}' — if it is intended to override '{shadow_name}', assign it a lower priority number", "cli": None},
+                                {"step": 2, "action": "Remove the rule if it is dead code", "cli": f"az network nsg rule delete --nsg-name {nsg_name} --name {rule_name}"},
+                            ],
+                            "portal_link": _portal_link(nsg_id, "securityRules"),
+                            "auto_fix_available": False,
+                            "auto_fix_label": None,
+                            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+                        })
+    return issues
+
+
+def _detect_peering_disconnected(edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """B1: VNet peering edges with type=peering-disconnected."""
+    issues: List[Dict[str, Any]] = []
+    for edge in edges:
+        if edge.get("type") != "peering-disconnected":
+            continue
+        src = str(edge.get("source", ""))
+        tgt = str(edge.get("target", ""))
+        peering_state = str(edge.get("data", {}).get("peeringState", ""))
+        issues.append({
+            "id": _make_issue_id("vnet_peering_disconnected", f"{src}:{tgt}"),
+            "type": "vnet_peering_disconnected",
+            "severity": "critical",
+            "title": f"VNet peering disconnected ({peering_state})",
+            "explanation": f"VNet peering between '{src.rsplit('/', 1)[-1]}' and '{tgt.rsplit('/', 1)[-1]}' is in state '{peering_state}' instead of 'Connected'.",
+            "impact": "Resources in the two VNets cannot communicate over the peering link.",
+            "affected_resource_id": src,
+            "affected_resource_name": src.rsplit("/", 1)[-1],
+            "related_resource_ids": [tgt],
+            "remediation_steps": [
+                {"step": 1, "action": "Check the peering status on both VNets", "cli": f"az network vnet peering list --vnet-name {src.rsplit('/', 1)[-1]} --resource-group <rg>"},
+                {"step": 2, "action": "Re-initiate the peering from the Azure portal or re-run the peering creation command", "cli": None},
+            ],
+            "portal_link": _portal_link(src, "peerings"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_vpn_bgp_disabled(gateway_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """B2: VPN gateways with BGP disabled."""
+    issues: List[Dict[str, Any]] = []
+    for node in gateway_nodes:
+        if node.get("data", {}).get("gatewayType", "").lower() != "vpn":
+            continue
+        if node["data"].get("bgpEnabled") is not False:
+            continue
+        gw_id = node["id"]
+        gw_name = node.get("label", gw_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("vpn_bgp_disabled", gw_id),
+            "type": "vpn_bgp_disabled",
+            "severity": "medium",
+            "title": f"BGP disabled on VPN gateway '{gw_name}'",
+            "explanation": f"VPN gateway '{gw_name}' does not have BGP enabled.",
+            "impact": "Without BGP, dynamic routing is unavailable. Static routes must be managed manually, increasing operational risk.",
+            "affected_resource_id": gw_id,
+            "affected_resource_name": gw_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Enable BGP on the VPN gateway (requires gateway recreation)", "cli": f"az network vnet-gateway update --name {gw_name} --enable-bgp true --resource-group <rg>"},
+            ],
+            "portal_link": _portal_link(gw_id, "configuration"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_gateway_not_zone_redundant(gateway_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """B3: Gateways whose SKU does not end in 'AZ'."""
+    issues: List[Dict[str, Any]] = []
+    for node in gateway_nodes:
+        sku = str(node.get("data", {}).get("sku", ""))
+        if sku.upper().endswith("AZ"):
+            continue
+        gw_id = node["id"]
+        gw_name = node.get("label", gw_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("gateway_not_zone_redundant", gw_id),
+            "type": "gateway_not_zone_redundant",
+            "severity": "medium",
+            "title": f"Gateway '{gw_name}' is not zone redundant (SKU: {sku})",
+            "explanation": f"Gateway '{gw_name}' uses SKU '{sku}' which is not zone redundant.",
+            "impact": "A zonal outage can take down the gateway, disrupting all VPN/ExpressRoute connectivity.",
+            "affected_resource_id": gw_id,
+            "affected_resource_name": gw_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": f"Migrate to a zone-redundant SKU (e.g. {sku}AZ if available)", "cli": None},
+            ],
+            "portal_link": _portal_link(gw_id, "configuration"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_pe_not_approved(pe_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """B4: Private endpoints where connectionState != Approved."""
+    issues: List[Dict[str, Any]] = []
+    for node in pe_nodes:
+        conn_state = str(node.get("data", {}).get("health", "green"))
+        if conn_state != "red":
+            continue
+        pe_id = node["id"]
+        pe_name = node.get("label", pe_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("pe_not_approved", pe_id),
+            "type": "pe_not_approved",
+            "severity": "critical",
+            "title": f"Private endpoint '{pe_name}' connection not approved",
+            "explanation": f"Private endpoint '{pe_name}' has a connection that is not in 'Approved' state.",
+            "impact": "The private endpoint cannot route traffic to the target service until the connection is approved.",
+            "affected_resource_id": pe_id,
+            "affected_resource_name": pe_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Approve the private endpoint connection on the target resource", "cli": None},
+            ],
+            "portal_link": _portal_link(pe_id, "overview"),
+            "auto_fix_available": True,
+            "auto_fix_label": "Approve Connection",
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_firewall_no_policy(firewall_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """C4: Azure Firewalls with no firewall policy attached."""
+    issues: List[Dict[str, Any]] = []
+    for node in firewall_nodes:
+        policy_id = str(node.get("data", {}).get("firewallPolicyId", ""))
+        if policy_id:
+            continue
+        fw_id = node["id"]
+        fw_name = node.get("label", fw_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("firewall_no_policy", fw_id),
+            "type": "firewall_no_policy",
+            "severity": "critical",
+            "title": f"Firewall '{fw_name}' has no policy",
+            "explanation": f"Azure Firewall '{fw_name}' does not have a Firewall Policy attached.",
+            "impact": "Without a policy, the firewall may not enforce traffic filtering rules correctly.",
+            "affected_resource_id": fw_id,
+            "affected_resource_name": fw_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Create a Firewall Policy and attach it to the firewall", "cli": f"az network firewall policy create --name policy-{fw_name} --resource-group <rg>"},
+                {"step": 2, "action": "Associate the policy with the firewall", "cli": f"az network firewall update --name {fw_name} --resource-group <rg> --firewall-policy policy-{fw_name}"},
+            ],
+            "portal_link": _portal_link(fw_id, "overview"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_firewall_threatintel_off(firewall_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """C5: Azure Firewalls with ThreatIntel mode = Off."""
+    issues: List[Dict[str, Any]] = []
+    for node in firewall_nodes:
+        ti_mode = str(node.get("data", {}).get("threatIntelMode", ""))
+        if ti_mode.lower() != "off":
+            continue
+        fw_id = node["id"]
+        fw_name = node.get("label", fw_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("firewall_threatintel_off", fw_id),
+            "type": "firewall_threatintel_off",
+            "severity": "high",
+            "title": f"Threat Intelligence disabled on firewall '{fw_name}'",
+            "explanation": f"Azure Firewall '{fw_name}' has Threat Intelligence mode set to 'Off'.",
+            "impact": "Known malicious IPs and domains are not blocked, increasing exposure to external threats.",
+            "affected_resource_id": fw_id,
+            "affected_resource_name": fw_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Set Threat Intelligence mode to 'Alert' or 'Deny'", "cli": f"az network firewall update --name {fw_name} --resource-group <rg> --threat-intel-mode Deny"},
+            ],
+            "portal_link": _portal_link(fw_id, "configuration"),
+            "auto_fix_available": True,
+            "auto_fix_label": "Enable Threat Intelligence",
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Detectors Using New ARG Query Data (Task 1.5)
+# ---------------------------------------------------------------------------
+
+
+def _detect_vm_public_ip(
+    nic_public_ip_rows: List[Dict[str, Any]],
+    vm_nic_map: Dict[str, str],
+) -> List[Dict[str, Any]]:
+    """C1: VMs with a public IP directly attached to a NIC."""
+    issues: List[Dict[str, Any]] = []
+    nic_to_vm = {v_nic: v_vm for v_nic, v_vm in vm_nic_map.items()}
+    for row in nic_public_ip_rows:
+        nic_id = str(row.get("nicId", "")).lower()
+        vm_id = nic_to_vm.get(nic_id, "")
+        if not vm_id:
+            continue
+        pip_id = str(row.get("publicIpId", ""))
+        vm_name = vm_id.rsplit("/", 1)[-1]
+        issues.append({
+            "id": _make_issue_id("vm_public_ip", vm_id),
+            "type": "vm_public_ip",
+            "severity": "critical",
+            "title": f"VM '{vm_name}' has a direct public IP",
+            "explanation": f"VM '{vm_name}' has a public IP address attached directly to NIC '{nic_id.rsplit('/', 1)[-1]}'.",
+            "impact": "The VM is directly reachable from the internet. Use a load balancer or Azure Bastion instead.",
+            "affected_resource_id": vm_id,
+            "affected_resource_name": vm_name,
+            "related_resource_ids": [pip_id, nic_id],
+            "remediation_steps": [
+                {"step": 1, "action": "Disassociate the public IP from the NIC", "cli": f"az network nic ip-config update --nic-name {nic_id.rsplit('/', 1)[-1]} --name ipconfig1 --remove publicIpAddress --resource-group <rg>"},
+                {"step": 2, "action": "Use Azure Bastion or a load balancer for access", "cli": None},
+            ],
+            "portal_link": _portal_link(vm_id, "networking"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_lb_empty_backend(lb_empty_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """C2: Load balancers with empty backend pools."""
+    issues: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in lb_empty_rows:
+        lb_id = str(row.get("lbId", ""))
+        if lb_id in seen:
+            continue
+        seen.add(lb_id)
+        lb_name = str(row.get("lbName", lb_id.rsplit("/", 1)[-1]))
+        pool_name = str(row.get("emptyPool", ""))
+        issues.append({
+            "id": _make_issue_id("lb_empty_backend", lb_id),
+            "type": "lb_empty_backend",
+            "severity": "high",
+            "title": f"Load balancer '{lb_name}' has empty backend pool '{pool_name}'",
+            "explanation": f"Backend pool '{pool_name}' on load balancer '{lb_name}' has no members.",
+            "impact": "Traffic sent to this load balancer will not be forwarded to any backend. Service is effectively down.",
+            "affected_resource_id": lb_id,
+            "affected_resource_name": lb_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Add VMs or NICs to the backend pool", "cli": f"az network lb address-pool address add --lb-name {lb_name} --pool-name {pool_name} --resource-group <rg> --name <addr-name> --ip-address <ip>"},
+            ],
+            "portal_link": _portal_link(lb_id, "backendPools"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_lb_pip_sku_mismatch(
+    lb_nodes: List[Dict[str, Any]],
+    public_ip_map: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """C3: LB and its frontend Public IP have mismatched SKUs."""
+    issues: List[Dict[str, Any]] = []
+    for node in lb_nodes:
+        lb_id = node["id"]
+        lb_sku = str(node.get("data", {}).get("sku", "")).lower()
+        # Find any public IP edges from this LB node
+        pip_id = str(node.get("data", {}).get("publicIpId", "")).lower()
+        if not pip_id:
+            continue
+        pip_info = public_ip_map.get(pip_id, {})
+        pip_sku = str(pip_info.get("sku_name", "")).lower()
+        if not pip_sku or lb_sku == pip_sku:
+            continue
+        lb_name = node.get("label", lb_id.rsplit("/", 1)[-1])
+        issues.append({
+            "id": _make_issue_id("lb_pip_sku_mismatch", lb_id),
+            "type": "lb_pip_sku_mismatch",
+            "severity": "high",
+            "title": f"LB '{lb_name}' SKU ({lb_sku}) mismatches Public IP SKU ({pip_sku})",
+            "explanation": f"Load balancer '{lb_name}' uses SKU '{lb_sku}' but its frontend public IP uses SKU '{pip_sku}'.",
+            "impact": "SKU mismatch causes deployment failures or degraded functionality.",
+            "affected_resource_id": lb_id,
+            "affected_resource_name": lb_name,
+            "related_resource_ids": [pip_id],
+            "remediation_steps": [
+                {"step": 1, "action": f"Ensure the public IP SKU matches the load balancer SKU (both should be '{lb_sku}')", "cli": None},
+            ],
+            "portal_link": _portal_link(lb_id, "frontendIPConfigurations"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_aks_not_private(aks_private_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """C6: AKS clusters without a private API server."""
+    issues: List[Dict[str, Any]] = []
+    for row in aks_private_rows:
+        aks_id = str(row.get("aksId", ""))
+        aks_name = str(row.get("aksName", aks_id.rsplit("/", 1)[-1]))
+        issues.append({
+            "id": _make_issue_id("aks_not_private", aks_id),
+            "type": "aks_not_private",
+            "severity": "high",
+            "title": f"AKS cluster '{aks_name}' API server is not private",
+            "explanation": f"AKS cluster '{aks_name}' does not have the private cluster API server enabled.",
+            "impact": "The Kubernetes API server is publicly accessible, increasing attack surface.",
+            "affected_resource_id": aks_id,
+            "affected_resource_name": aks_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Enable private cluster (requires cluster recreation or use az aks update on supported versions)", "cli": f"az aks update --name {aks_name} --resource-group <rg> --enable-private-cluster"},
+            ],
+            "portal_link": _portal_link(aks_id, "overview"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_route_default_internet(route_default_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """D1: Route tables with 0.0.0.0/0 → Internet next hop."""
+    issues: List[Dict[str, Any]] = []
+    for row in route_default_rows:
+        rt_id = str(row.get("rtId", ""))
+        rt_name = str(row.get("rtName", rt_id.rsplit("/", 1)[-1]))
+        route_name = str(row.get("routeName", ""))
+        issues.append({
+            "id": _make_issue_id("route_default_internet", rt_id),
+            "type": "route_default_internet",
+            "severity": "high",
+            "title": f"Route table '{rt_name}' sends default traffic to Internet",
+            "explanation": f"Route '{route_name}' in route table '{rt_name}' sends 0.0.0.0/0 traffic directly to the Internet.",
+            "impact": "All outbound traffic bypasses Azure Firewall or NVA, potentially leaking data and avoiding security controls.",
+            "affected_resource_id": rt_id,
+            "affected_resource_name": rt_name,
+            "related_resource_ids": [],
+            "remediation_steps": [
+                {"step": 1, "action": "Update the default route to point to Azure Firewall or NVA instead of Internet", "cli": f"az network route-table route update --route-table-name {rt_name} --name {route_name} --next-hop-type VirtualAppliance --next-hop-ip-address <firewall-ip> --resource-group <rg>"},
+            ],
+            "portal_link": _portal_link(rt_id, "routes"),
+            "auto_fix_available": False,
+            "auto_fix_label": None,
+            "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+        })
+    return issues
+
+
+def _detect_subnet_overlap(vnet_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """D2: Detect overlapping subnet CIDRs across different VNets (capped at 500 subnets)."""
+    issues: List[Dict[str, Any]] = []
+    # Collect (vnet_id, subnet_id, cidr)
+    subnets: List[Tuple[str, str, str]] = []
+    seen_subnets: set = set()
+    for row in vnet_rows:
+        vnet_id = str(row.get("id", "")).lower()
+        subnet_name = str(row.get("subnetName", ""))
+        cidr = str(row.get("subnetPrefix", ""))
+        if not cidr:
+            continue
+        subnet_id = f"{vnet_id}/subnets/{subnet_name}".lower()
+        if subnet_id in seen_subnets:
+            continue
+        seen_subnets.add(subnet_id)
+        subnets.append((vnet_id, subnet_id, cidr))
+
+    if len(subnets) > 500:
+        logger.warning("network_topology_service: subnet overlap check capped at 500 subnets (found %d)", len(subnets))
+        subnets = subnets[:500]
+
+    seen_pairs: set = set()
+    for i, (vnet_a, subnet_a, cidr_a) in enumerate(subnets):
+        try:
+            net_a = ipaddress.ip_network(cidr_a, strict=False)
+        except ValueError:
+            continue
+        for vnet_b, subnet_b, cidr_b in subnets[i + 1:]:
+            if vnet_a == vnet_b:
+                continue  # Only flag cross-VNet overlaps
+            try:
+                net_b = ipaddress.ip_network(cidr_b, strict=False)
+            except ValueError:
+                continue
+            if net_a.overlaps(net_b):
+                pair_key = tuple(sorted([subnet_a, subnet_b]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+                issues.append({
+                    "id": _make_issue_id("subnet_overlap", f"{subnet_a}:{subnet_b}"),
+                    "type": "subnet_overlap",
+                    "severity": "high",
+                    "title": f"Subnet CIDR overlap: {cidr_a} and {cidr_b}",
+                    "explanation": f"Subnet '{subnet_a.rsplit('/', 1)[-1]}' ({cidr_a}) in VNet '{vnet_a.rsplit('/', 1)[-1]}' overlaps with subnet '{subnet_b.rsplit('/', 1)[-1]}' ({cidr_b}) in VNet '{vnet_b.rsplit('/', 1)[-1]}'.",
+                    "impact": "Overlapping CIDRs cause routing conflicts and prevent VNet peering between these VNets.",
+                    "affected_resource_id": subnet_a,
+                    "affected_resource_name": subnet_a.rsplit("/", 1)[-1],
+                    "related_resource_ids": [subnet_b],
+                    "remediation_steps": [
+                        {"step": 1, "action": "Re-IP one of the subnets to a non-overlapping CIDR range", "cli": None},
+                    ],
+                    "portal_link": _portal_link(vnet_a, "subnets"),
+                    "auto_fix_available": False,
+                    "auto_fix_label": None,
+                    "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+                })
+    return issues
+
+
+def _detect_missing_hub_spoke(
+    vnet_nodes: List[Dict[str, Any]],
+    peering_edges: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """D3: Heuristic — VNets with 3+ peerings are likely hubs; check spoke VNets have a return peering."""
+    issues: List[Dict[str, Any]] = []
+    # Count peerings per VNet
+    peering_count: Dict[str, int] = {}
+    peered_with: Dict[str, set] = {}
+    for edge in peering_edges:
+        if edge.get("type") not in ("peering", "peering-disconnected"):
+            continue
+        src = str(edge.get("source", ""))
+        tgt = str(edge.get("target", ""))
+        peering_count[src] = peering_count.get(src, 0) + 1
+        peering_count[tgt] = peering_count.get(tgt, 0) + 1
+        # Track one-directional peerings for hub-spoke asymmetry detection
+        peered_with.setdefault(src, set()).add(tgt)
+
+    # Identify hubs (3+ peerings)
+    hubs = {v for v, cnt in peering_count.items() if cnt >= 3}
+    if not hubs:
+        return issues
+
+    all_vnet_ids = {n["id"] for n in vnet_nodes if n.get("type") == "vnet"}
+    checked: set = set()
+    for hub_id in hubs:
+        spokes = peered_with.get(hub_id, set())
+        for spoke_id in spokes:
+            if spoke_id not in all_vnet_ids:
+                continue
+            if spoke_id in checked:
+                continue
+            # Spoke should peer back to hub
+            if hub_id not in peered_with.get(spoke_id, set()):
+                checked.add(spoke_id)
+                spoke_name = spoke_id.rsplit("/", 1)[-1]
+                hub_name = hub_id.rsplit("/", 1)[-1]
+                issues.append({
+                    "id": _make_issue_id("missing_hub_spoke", f"{hub_id}:{spoke_id}"),
+                    "type": "missing_hub_spoke",
+                    "severity": "low",
+                    "title": f"Possible missing hub-spoke link: '{spoke_name}' → '{hub_name}'",
+                    "explanation": f"(Heuristic) VNet '{hub_name}' appears to be a hub (≥3 peerings), but spoke VNet '{spoke_name}' does not have a return peering. This may indicate a misconfiguration.",
+                    "impact": "Asymmetric peering may cause connectivity issues in hub-spoke topology.",
+                    "affected_resource_id": spoke_id,
+                    "affected_resource_name": spoke_name,
+                    "related_resource_ids": [hub_id],
+                    "remediation_steps": [
+                        {"step": 1, "action": f"Verify that VNet '{spoke_name}' should peer with hub '{hub_name}' and add the peering if missing", "cli": None},
+                    ],
+                    "portal_link": _portal_link(spoke_id, "peerings"),
+                    "auto_fix_available": False,
+                    "auto_fix_label": None,
+                    "source_nsg_id": None, "dest_nsg_id": None, "port": None, "description": None,
+                })
     return issues
 
 
@@ -1208,6 +1973,11 @@ def fetch_network_topology(
             vpn_connections = _safe_query(_VPN_CONNECTION_QUERY, "vpn_connections")
             app_gw_backends = _safe_query(_APP_GATEWAY_BACKEND_QUERY, "app_gw_backends")
             nat_gateways = _safe_query(_NAT_GATEWAY_QUERY, "nat_gateways")
+            # Phase 108: 4 new queries for additional detectors
+            nic_public_ip_rows = _safe_query(_NIC_PUBLIC_IP_QUERY, "nic_public_ips")
+            lb_empty_rows = _safe_query(_LB_EMPTY_BACKEND_QUERY, "lb_empty_backends")
+            aks_private_rows = _safe_query(_AKS_PRIVATE_QUERY, "aks_private")
+            route_default_rows = _safe_query(_ROUTE_DEFAULT_INTERNET_QUERY, "route_default_internet")
 
             # Build NSG rules map keyed by nsg_id (lower)
             nsg_rules_map: Dict[str, List[Dict[str, Any]]] = {}
@@ -1309,25 +2079,86 @@ def fetch_network_topology(
                     rules = nsg_rules_map.get(node["id"], [])
                     node["data"]["health"] = _score_nsg_health(rules)
 
-            # Detect asymmetries
-            issues = _detect_asymmetries(nsg_rules_map, subnet_nsg_map, vnet_subnets)
+            # Build NIC-level NSG map for asymmetry detection
+            nic_nsg_map: Dict[str, str] = {
+                nic_id: info["nsgId"]
+                for nic_id, info in nic_subnet_map.items()
+                if info.get("nsgId")
+            }
+
+            # Detect asymmetries (unified NetworkIssue schema)
+            issues: List[Dict[str, Any]] = _detect_asymmetries(
+                nsg_rules_map, subnet_nsg_map, vnet_subnets, nic_nsg_map
+            )
 
             # Mark affected NSGs as red and add asymmetry edges
             red_nsgs = set()
             for issue in issues:
-                red_nsgs.add(issue["source_nsg_id"])
-                red_nsgs.add(issue["dest_nsg_id"])
-                edges.append({
-                    "id": f"edge-asymmetry-{issue['source_nsg_id']}-{issue['dest_nsg_id']}-{issue['port']}",
-                    "source": issue["source_nsg_id"],
-                    "target": issue["dest_nsg_id"],
-                    "type": "asymmetry",
-                    "data": {"port": issue["port"], "description": issue["description"]},
-                })
+                src_nsg = issue.get("source_nsg_id")
+                dst_nsg = issue.get("dest_nsg_id")
+                port = issue.get("port")
+                desc = issue.get("description", "")
+                if src_nsg:
+                    red_nsgs.add(src_nsg)
+                if dst_nsg:
+                    red_nsgs.add(dst_nsg)
+                if src_nsg and dst_nsg and port is not None:
+                    edges.append({
+                        "id": f"edge-asymmetry-{src_nsg}-{dst_nsg}-{port}",
+                        "source": src_nsg,
+                        "target": dst_nsg,
+                        "type": "asymmetry",
+                        "data": {"port": port, "description": desc},
+                    })
 
             for node in nodes:
                 if node["type"] == "nsg" and node["id"] in red_nsgs:
                     node["data"]["health"] = "red"
+
+            # Extract typed node lists for detectors
+            gateway_nodes = [n for n in nodes if n.get("type") == "gateway"]
+            pe_nodes = [n for n in nodes if n.get("type") == "pe"]
+            firewall_nodes = [n for n in nodes if n.get("type") == "firewall"]
+            lb_nodes = [n for n in nodes if n.get("type") == "lb"]
+            vnet_nodes = [n for n in nodes if n.get("type") == "vnet"]
+            peering_edges = [e for e in edges if e.get("type") in ("peering", "peering-disconnected")]
+
+            # Build public IP lookup map
+            public_ip_map: Dict[str, Dict[str, Any]] = {
+                str(row.get("id", "")).lower(): row for row in public_ips
+            }
+
+            # Run all 17 detectors and collect issues
+            all_issues: List[Dict[str, Any]] = list(issues)  # start with asymmetries
+            all_issues.extend(_detect_port_open_internet(nsg_rules_map))
+            all_issues.extend(_detect_any_to_any_allow(nsg_rules_map))
+            all_issues.extend(_detect_subnet_no_nsg(vnets))
+            all_issues.extend(_detect_nsg_rule_shadowing(nsg_rules_map))
+            all_issues.extend(_detect_peering_disconnected(edges))
+            all_issues.extend(_detect_vpn_bgp_disabled(gateway_nodes))
+            all_issues.extend(_detect_gateway_not_zone_redundant(gateway_nodes))
+            all_issues.extend(_detect_pe_not_approved(pe_nodes))
+            all_issues.extend(_detect_firewall_no_policy(firewall_nodes))
+            all_issues.extend(_detect_firewall_threatintel_off(firewall_nodes))
+            all_issues.extend(_detect_vm_public_ip(nic_public_ip_rows, nic_vm_map))
+            all_issues.extend(_detect_lb_empty_backend(lb_empty_rows))
+            all_issues.extend(_detect_lb_pip_sku_mismatch(lb_nodes, public_ip_map))
+            all_issues.extend(_detect_aks_not_private(aks_private_rows))
+            all_issues.extend(_detect_route_default_internet(route_default_rows))
+            all_issues.extend(_detect_subnet_overlap(vnets))
+            all_issues.extend(_detect_missing_hub_spoke(vnet_nodes, peering_edges))
+
+            # De-duplicate by id, sort by severity
+            seen_ids: set = set()
+            deduped: List[Dict[str, Any]] = []
+            for issue in all_issues:
+                issue_id = issue.get("id", "")
+                if issue_id and issue_id in seen_ids:
+                    continue
+                seen_ids.add(issue_id)
+                deduped.append(issue)
+
+            deduped.sort(key=lambda i: _SEVERITY_ORDER.get(i.get("severity", "low"), 99))
 
             # Update peeringCount on VNet nodes (M-6)
             vnet_peering_counts: Dict[str, int] = {}
@@ -1339,7 +2170,7 @@ def fetch_network_topology(
                 if node["type"] == "vnet":
                     node["data"]["peeringCount"] = vnet_peering_counts.get(node["id"], 0)
 
-            result = {"nodes": nodes, "edges": edges, "issues": issues, "_nsg_rules_map": nsg_rules_map, "_nic_subnet_map": nic_subnet_map}
+            result = {"nodes": nodes, "edges": edges, "issues": deduped, "_nsg_rules_map": nsg_rules_map, "_nic_subnet_map": nic_subnet_map}
             return result
         except Exception as exc:
             logger.warning("network_topology_service: ARG query failed | error=%s", exc)
